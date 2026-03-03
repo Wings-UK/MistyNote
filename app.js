@@ -182,6 +182,21 @@ function navTo(pageId) {
   }
 }
 
+function animateCount(el, newVal) {
+  if (!el) return;
+  const current = parseInt(el.textContent.replace(/[^0-9]/g,'')) || 0;
+  el.textContent = newVal > 0 ? fmtNum(newVal) : '';
+
+  if (newVal === current) return;
+
+  const scale = newVal > current ? 1.35 : 0.75;
+  el.style.transition = 'none';
+  el.style.transform = `scale(${scale})`;
+  void el.offsetWidth; // force reflow
+  el.style.transition = 'transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+  el.style.transform = 'scale(1)';
+}
+
 function slideTo(pageId, setupFn) {
   slideStack.push(pageId);
   const el = document.getElementById('page-' + pageId);
@@ -536,6 +551,7 @@ function createFeedPost(p) {
 
   el.innerHTML = `
     ${isRepost ? `<div class="repost-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3" stroke="#00c48c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>${escHtml(user.username)} reposted</div>` : ''}
+    
     <div class="post-header">
       <div class="post-avatar-wrap">
         <img class="post-avatar" src="${user.avatar || ''}" onerror="this.style.display='none'" alt="" data-user-id="${p.user_id}">
@@ -551,44 +567,71 @@ function createFeedPost(p) {
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="5" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="19" r="1.5" fill="currentColor"/></svg>
       </button>
     </div>
+
     <div class="post-content">
       ${text ? `<p class="post-text">${escHtml(displayText)}${truncated ? `<span class="see-more"> See more</span>` : ''}</p>` : ''}
     </div>
+
     ${mediaHtml}
     ${originalCardHtml}
+
     <div class="post-actions">
       <button class="post-action comment-action" data-post-id="${p.id}">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
         <span>${commentCount > 0 ? fmtNum(commentCount) : ''}</span>
       </button>
       <button class="post-action repost-action" data-post-id="${p.id}" data-reposted="false">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
         <span>${p.repost_count > 0 ? fmtNum(p.repost_count) : ''}</span>
       </button>
       <button class="post-action like-action" data-post-id="${p.id}" data-liked="false">
-        <svg class="action-heart" width="18" height="18" viewBox="0 0 24 24" fill="none"><path class="heart-path" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" stroke="currentColor" stroke-width="2"/></svg>
+        <svg class="action-heart" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path class="heart-path" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
         <span>${p.like_count > 0 ? fmtNum(p.like_count) : ''}</span>
       </button>
       <button class="post-action share-action" data-post-id="${p.id}">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"/></svg>
       </button>
     </div>
   `;
 
-  // Events
+  // ── Event listeners ── (this part is identical to your original — just copy-paste it over)
   el.addEventListener('click', e => {
-    if (e.target.closest('.post-more-btn')) { showPostMenu(p, el, e.target.closest('.post-more-btn')); return; }
-    if (e.target.closest('.like-action')) { toggleLike(p.id, e.target.closest('.like-action')); return; }
-    if (e.target.closest('.repost-action')) { handleRepost(p.id, e.target.closest('.repost-action')); return; }
-    if (e.target.closest('.comment-action')) { openDetail(p.id, true); return; }
-    if (e.target.closest('.share-action')) { sharePost(p); return; }
-    if (e.target.closest('.see-more')) { expandText(e.target.closest('.post-text'), p.content); e.stopPropagation(); return; }
-    if (e.target.closest('.post-avatar') || e.target.closest('.post-name')) { showUserProfile(p.user_id); return; }
-    if (e.target.closest('.original-card')) { openDetail(e.target.closest('.original-card').dataset.originalId); return; }
+    if (e.target.closest('.post-more-btn')) {
+      showPostMenu(p, el, e.target.closest('.post-more-btn'));
+      return;
+    }
+    if (e.target.closest('.like-action')) {
+      toggleLike(p.id, e.target.closest('.like-action'));
+      return;
+    }
+    if (e.target.closest('.repost-action')) {
+      handleRepost(p.id, e.target.closest('.repost-action'));
+      return;
+    }
+    if (e.target.closest('.comment-action')) {
+      openDetail(p.id, true);
+      return;
+    }
+    if (e.target.closest('.share-action')) {
+      sharePost(p);
+      return;
+    }
+    if (e.target.closest('.see-more')) {
+      expandText(e.target.closest('.post-text'), p.content);
+      e.stopPropagation();
+      return;
+    }
+    if (e.target.closest('.post-avatar') || e.target.closest('.post-name')) {
+      showUserProfile(p.user_id);
+      return;
+    }
+    if (e.target.closest('.original-card')) {
+      openDetail(e.target.closest('.original-card').dataset.originalId);
+      return;
+    }
     openDetail(p.id);
   });
 
-  // Long press
   let lpTimer;
   el.addEventListener('touchstart', e => {
     if (e.target.closest('button')) return;
@@ -703,12 +746,12 @@ async function toggleLike(postId, btn) {
 }
 
 function setLikeUI(postId, liked, count) {
-  document.querySelectorAll(`.like-action[data-post-id="${postId}"],.detail-action[data-post-id="${postId}"]`).forEach(btn => {
+  document.querySelectorAll(`.like-action[data-post-id="${postId}"], .detail-action.like-action[data-post-id="${postId}"]`).forEach(btn => {
     btn.dataset.liked = liked ? 'true' : 'false';
     btn.classList.toggle('liked', liked);
     if (count !== null) {
       const sp = btn.querySelector('span');
-      if (sp) sp.textContent = count > 0 ? fmtNum(count) : '';
+      if (sp) animateCount(sp, count);
     }
     const path = btn.querySelector('.heart-path');
     if (path) {
@@ -719,17 +762,14 @@ function setLikeUI(postId, liked, count) {
 }
 
 function syncLikeCount(postId, count) {
-  document.querySelectorAll(`[data-post-id="${postId}"] span, .detail-action[data-post-id="${postId}"] span`).forEach(sp => {
-    if (sp.closest('.like-action') || sp.closest('.detail-action.liked-family')) {
-      sp.textContent = count > 0 ? fmtNum(count) : '';
-    }
+  document.querySelectorAll(`.like-action[data-post-id="${postId}"] span`).forEach(sp => {
+    animateCount(sp, count);
   });
-  document.querySelectorAll(`.like-action[data-post-id="${postId}"] span,.detail-like[data-post-id="${postId}"] span`).forEach(sp => {
-    sp.textContent = count > 0 ? fmtNum(count) : '';
-  });
-  // Detail stats
-  const statEl = document.querySelector('.detail-stat-n[data-type="likes"]');
-  if (statEl && detailPostId === postId) statEl.textContent = fmtNum(count);
+  // Also update detail view if open
+  const statEl = document.querySelector(`.detail-stat-n[data-type="likes"]`);
+  if (statEl && detailPostId === postId) {
+    animateCount(statEl, count);
+  }
 }
 
 // ══════════════════════════════════════════
@@ -1789,4 +1829,5 @@ function gradientFor(id) {
 function debounce(fn, ms) {
   let timer;
   return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
+
 }
