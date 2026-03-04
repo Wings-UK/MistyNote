@@ -51,6 +51,8 @@ async function bootApp() {
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').classList.remove('hidden');
 
+  injectFeedPostStyles();
+
   await loadMyProfile();
   updateNavAvatar();
   loadFeed();
@@ -512,103 +514,202 @@ function createFeedPost(p) {
   const isRepost = !!p.reposted_post_id && !!p.reposted_post;
   const orig = isRepost ? p.reposted_post : null;
   const origUser = orig?.user || { username: '@unknown', avatar: '' };
+  const isOwnPost = currentUser && p.user_id === currentUser.id;
 
-  const el = document.createElement('article');
-  el.className = 'feed-post' + (isRepost ? ' is-repost' : '');
+  const el = document.createElement('div');
+  el.className = 'poster' + (isRepost ? ' is-repost' : '');
   el.dataset.postId = p.id;
 
   const commentCount = p.comments?.[0]?.count || 0;
   const text = p.content || '';
-  const truncated = text.length > 280;
-  const displayText = truncated ? text.slice(0, 280) : text;
+  const textLimit = (p.image || p.video) ? 150 : 300;
+  const truncated = text.length > textLimit;
+  const displayText = truncated
+    ? text.slice(0, textLimit).trimEnd() + `...<br><span class="reer">see more</span>`
+    : escHtml(text);
 
-  let mediaHtml = '';
-  if (!isRepost) {
-    if (p.image) {
-      mediaHtml = `<div class="post-media"><img src="${p.image}" loading="lazy" alt=""></div>`;
-    } else if (p.video) {
-      mediaHtml = `<div class="post-media"><div class="video-thumb-wrap" onclick="openVideoFS('${p.video}');event.stopPropagation()"><video class="video-thumb" preload="metadata"><source src="${p.video}#t=0.5" type="video/mp4"></video><div class="video-play-overlay"><div class="play-circle"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M5 3l14 9L5 21V3z"/></svg></div></div></div></div>`;
-    }
-  }
+  // ── Main content: repost vs normal ──
+  let mainContentHTML = '';
 
-  let originalCardHtml = '';
-  if (isRepost && orig) {
-    const origImg = orig.image ? `<img class="original-card-img" src="${orig.image}" loading="lazy">` : '';
-    const origText = orig.content ? `<p class="original-card-text">${escHtml(orig.content.slice(0, 120))}${orig.content.length > 120 ? '…' : ''}</p>` : '';
-    originalCardHtml = `
-      <div class="original-card" data-original-id="${orig.id}">
-        <div class="original-card-inner">
-          <div class="original-card-header">
-            <img class="original-card-avatar" src="${origUser.avatar || ''}" onerror="this.style.display='none'" alt="">
-            <span class="original-card-name">${escHtml(origUser.username)}</span>
-            <span class="original-card-time">${timeSince(orig.created_at)}</span>
-          </div>
-          ${origText}
+  if (isRepost) {
+    const origText = orig.content || '';
+    const origTruncated = origText.length > textLimit;
+    const origDisplay = origTruncated
+      ? origText.slice(0, textLimit).trimEnd() + `...<span class="reer">see more</span>`
+      : escHtml(origText);
+
+    mainContentHTML = `
+      ${text ? `<div class="tir repost-commentary"><p class="tired">${displayText}</p></div>` : ''}
+
+      <div class="original-post-card" data-original-id="${orig.id}">
+        <div class="repost-indicator" style="display:flex;align-items:center;gap:6px;padding:8px 10px 4px;font-size:13px;color:#888;">
+          <img src="pics/retweet.svg" alt="Repost" style="width:14px;height:14px;opacity:0.6;">
+          <span>Reposted from ${escHtml(origUser.username)}</span>
         </div>
-        ${origImg}
-      </div>`;
+
+        <div class="cust-name" style="padding:0 10px;">
+          <div class="heading">
+            <div class="small-photo1">
+              <a class="lino" onclick="showUserProfile('${orig.user_id}');event.stopPropagation()">
+                <img class="small-photo" src="${origUser.avatar || ''}" onerror="this.style.display='none'" alt="">
+              </a>
+            </div>
+            <div class="pos">
+              <div class="link-wrapper">
+                <a class="home-click" onclick="showUserProfile('${orig.user_id}');event.stopPropagation()">
+                  <div class="post1">
+                    <div class="jerr"><p class="jerry">${escHtml(origUser.username)}</p></div>
+                    <div><img class="verif" src="pics/very.svg"></div>
+                  </div>
+                </a>
+              </div>
+              <div class="comp1">
+                <div class="cll"><p class="time">${timeSince(orig.created_at)}</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        ${orig.content ? `<div class="tir" style="margin:0 10px;"><p class="tired">${origDisplay}</p></div>` : ''}
+
+        ${orig.image ? `<div class="laptop1"><img src="${orig.image}" class="laptop" alt="" loading="lazy"></div>` : ''}
+
+        ${orig.video && !orig.image ? `
+          <div class="video-container laptop1" data-post-id="${orig.id}">
+            <video class="video-thumbnail" preload="metadata">
+              <source src="${orig.video}" type="video/mp4">
+            </video>
+            <div class="video-overlay">
+              <div class="play-button">
+                <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                  <circle cx="24" cy="24" r="22" fill="rgba(244,7,82,0.5)" stroke="white" stroke-width="3"/>
+                  <path d="M34 24L18 34V14L34 24Z" fill="white"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+        ` : ''}
+
+        <div class="view-original" style="padding:8px 12px;color:#1d9bf0;font-size:13px;cursor:pointer;">
+          View original post →
+        </div>
+      </div>
+    `;
+  } else {
+    mainContentHTML = `
+      ${p.image ? `<div class="laptop1"><img src="${p.image}" class="laptop" alt="" loading="lazy"></div>` : ''}
+
+      ${p.video && !p.image ? `
+        <div class="video-container laptop1" data-post-id="${p.id}">
+          <video class="video-thumbnail" preload="metadata">
+            <source src="${p.video}" type="video/mp4">
+          </video>
+          <div class="video-overlay">
+            <div class="play-button">
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                <circle cx="24" cy="24" r="22" fill="rgba(244,7,82,0.5)" stroke="white" stroke-width="3"/>
+                <path d="M34 24L18 34V14L34 24Z" fill="white"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+      ` : ''}
+
+      <div class="tir">
+        <p class="tired">${displayText}</p>
+      </div>
+    `;
   }
 
   el.innerHTML = `
-    ${isRepost ? `<div class="repost-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3" stroke="#00c48c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>${escHtml(user.username)} reposted</div>` : ''}
-    
-    <div class="post-header">
-      <div class="post-avatar-wrap">
-        <img class="post-avatar" src="${user.avatar || ''}" onerror="this.style.display='none'" alt="" data-user-id="${p.user_id}">
-      </div>
-      <div class="post-meta">
-        <div class="post-name-row">
-          <span class="post-name">${escHtml(user.username)}</span>
-          <span class="verified-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 12l2 2 4-4M22 12a10 10 0 11-20 0 10 10 0 0120 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    <div class="cust-name">
+      <div class="heading">
+        <div class="small-photo1">
+          <a class="lino" onclick="${isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}')`};event.stopPropagation()">
+            <img class="small-photo" src="${user.avatar || ''}" onerror="this.style.display='none'" alt="">
+          </a>
         </div>
-        <span class="post-time">${timeSince(p.created_at)}</span>
+        <div class="pos">
+          <div class="link-wrapper">
+            <a class="home-click" onclick="${isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}')`};event.stopPropagation()">
+              <div class="post1">
+                <div class="jerr"><p class="jerry">${escHtml(user.username)}</p></div>
+                <div><img class="verif" src="pics/very.svg"></div>
+              </div>
+            </a>
+          </div>
+          <div class="comp1">
+            <div class="cll">
+              <p class="time">${timeSince(p.created_at)}</p>
+            </div>
+          </div>
+        </div>
       </div>
-      <button class="post-more-btn" data-post-id="${p.id}" aria-label="More options">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="5" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="19" r="1.5" fill="currentColor"/></svg>
-      </button>
+      <div class="dots">
+        <img class="dot" src="pics/dots.svg">
+      </div>
     </div>
 
-    <div class="post-content">
-      ${text ? `<p class="post-text">${escHtml(displayText)}${truncated ? `<span class="see-more"> See more</span>` : ''}</p>` : ''}
+    ${mainContentHTML}
+
+    <div class="lefto">
+      <div class="dick">
+        <div><img class="lefti" src="pics/bounce.svg"></div>
+        <div><p class="viewe">View all ${commentCount || 0} discuss</p></div>
+      </div>
+      <div class="twits">
+        <div><img class="lefti" src="pics/stats.svg"></div>
+        <div><p class="viewe">${p.views || 0} views</p></div>
+      </div>
     </div>
 
-    ${mediaHtml}
-    ${originalCardHtml}
+    <div class="reaction">
+      <div class="reaction-container">
+        <div class="call">
+          <div class="mee">
+            <div class="comment-btn" data-post-id="${p.id}">
+              <img class="feeling" src="pics/comment.svg" alt="Comment">
+              <span>${commentCount > 0 ? fmtNum(commentCount) : ''}</span>
+            </div>
 
-    <div class="post-actions">
-      <button class="post-action comment-action" data-post-id="${p.id}">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-        <span>${commentCount > 0 ? fmtNum(commentCount) : ''}</span>
-      </button>
-      <button class="post-action repost-action" data-post-id="${p.id}" data-reposted="false">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
-        <span>${p.repost_count > 0 ? fmtNum(p.repost_count) : ''}</span>
-      </button>
-      <button class="post-action like-action" data-post-id="${p.id}" data-liked="false">
-        <svg class="action-heart" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path class="heart-path" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-        <span>${p.like_count > 0 ? fmtNum(p.like_count) : ''}</span>
-      </button>
-      <button class="post-action share-action" data-post-id="${p.id}">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"/></svg>
-      </button>
+            <div class="repost-btn" data-post-id="${p.id}" data-reposted="false">
+              <img class="feeling repost-icon" src="pics/retweet.svg" alt="Repost">
+              <span>${p.repost_count > 0 ? fmtNum(p.repost_count) : ''}</span>
+            </div>
+
+            <div class="heart-ai" data-post-id="${p.id}" data-liked="false">
+              <svg class="heart-icon heart-clickable" width="22" height="22" viewBox="0 0 24 24">
+                <path class="heart-path" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="none" stroke="currentColor" stroke-width="2"/>
+              </svg>
+              <span class="like-count heart-clickable">${p.like_count > 0 ? fmtNum(p.like_count) : ''}</span>
+            </div>
+          </div>
+          <div class="mee">
+            <div class="donate-btn"><img class="feeling" src="pics/bookmark.svg" alt="Bookmark"></div>
+            <div class="donate-btn share-action" data-post-id="${p.id}"><img class="feeling" src="pics/share.svg" alt="Share"></div>
+          </div>
+        </div>
+      </div>
     </div>
   `;
 
-  // ── Event listeners ── (this part is identical to your original — just copy-paste it over)
+  // ── Event listeners ──
   el.addEventListener('click', e => {
-    if (e.target.closest('.post-more-btn')) {
-      showPostMenu(p, el, e.target.closest('.post-more-btn'));
+    if (el.dataset.blockNavigation === 'true') return;
+
+    if (e.target.closest('.dots')) {
+      showPostMenu(p, el, e.target.closest('.dots'));
       return;
     }
-    if (e.target.closest('.like-action')) {
-      toggleLike(p.id, e.target.closest('.like-action'));
+    if (e.target.closest('.heart-ai')) {
+      toggleLike(p.id, e.target.closest('.heart-ai'));
       return;
     }
-    if (e.target.closest('.repost-action')) {
-      handleRepost(p.id, e.target.closest('.repost-action'));
+    if (e.target.closest('.repost-btn')) {
+      handleRepost(p.id, e.target.closest('.repost-btn'));
       return;
     }
-    if (e.target.closest('.comment-action')) {
+    if (e.target.closest('.comment-btn')) {
       openDetail(p.id, true);
       return;
     }
@@ -616,31 +717,229 @@ function createFeedPost(p) {
       sharePost(p);
       return;
     }
-    if (e.target.closest('.see-more')) {
-      expandText(e.target.closest('.post-text'), p.content);
-      e.stopPropagation();
-      return;
+    if (e.target.closest('.reer')) {
+      const tired = e.target.closest('.tired');
+      if (tired) { tired.innerHTML = escHtml(text); e.stopPropagation(); return; }
     }
-    if (e.target.closest('.post-avatar') || e.target.closest('.post-name')) {
-      showUserProfile(p.user_id);
-      return;
-    }
-    if (e.target.closest('.original-card')) {
-      openDetail(e.target.closest('.original-card').dataset.originalId);
+    if (e.target.closest('.lino') || e.target.closest('.home-click')) return;
+    if (e.target.closest('.view-original') || e.target.closest('.original-post-card')) {
+      openDetail(e.target.closest('[data-original-id]')?.dataset.originalId || orig?.id);
       return;
     }
     openDetail(p.id);
   });
 
+  // Repost button — check initial state
+  const repostBtn = el.querySelector('.repost-btn');
+  if (repostBtn && repostedPosts.has(p.id)) {
+    repostBtn.setAttribute('data-reposted', 'true');
+    repostBtn.classList.add('reposted');
+  }
+
+  // Like button — check initial state
+  const heartContainer = el.querySelector('.heart-ai');
+  if (heartContainer && likedPosts.has(p.id)) {
+    heartContainer.setAttribute('data-liked', 'true');
+    heartContainer.querySelector('.heart-icon')?.classList.add('liked');
+    heartContainer.querySelector('.like-count')?.classList.add('liked');
+  }
+
+  // Long-press for post menu
   let lpTimer;
   el.addEventListener('touchstart', e => {
-    if (e.target.closest('button')) return;
+    if (e.target.closest('.heart-ai, .repost-btn, .comment-btn, .donate-btn, .dots, a')) return;
     lpTimer = setTimeout(() => showPostMenu(p, el, null, true), 550);
   }, { passive: true });
   el.addEventListener('touchmove', () => clearTimeout(lpTimer), { passive: true });
   el.addEventListener('touchend', () => clearTimeout(lpTimer), { passive: true });
 
   return el;
+}
+
+
+// ══════════════════════════════════════════
+// FEED POST STYLES (view.js UI)
+// ══════════════════════════════════════════
+
+function injectFeedPostStyles() {
+  if (document.getElementById('feed-post-view-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'feed-post-view-styles';
+  style.textContent = `
+    #feed-list { display: flex; flex-direction: column; gap: 0; }
+
+    .poster {
+      display: block;
+      width: 100%;
+      border-bottom: 0.5px solid rgb(220,220,220);
+      padding: 10px;
+      transition: background-color 0.2s;
+      position: relative;
+      cursor: pointer;
+    }
+    .poster:hover { background-color: rgb(250,250,250); }
+
+    .cust-name {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-top: 5px;
+    }
+    .heading { display: flex; align-items: flex-start; }
+    .small-photo1 { width: 50px; vertical-align: middle; position: relative; flex-shrink: 0; }
+    .lino, .lino:active { text-decoration: none; color: inherit; }
+    .small-photo {
+      width: 40px;
+      height: 40px;
+      object-fit: cover;
+      object-position: center;
+      border-radius: 10px;
+      transition: filter 0.15s;
+    }
+    .small-photo:hover { filter: brightness(0.9); }
+    .pos { display: flex; flex-direction: column; gap: 1px; }
+    .link-wrapper { display: inline-block; cursor: pointer; }
+    .post1 { display: flex; margin-left: 5px; font-size: 15px; align-items: center; }
+    .jerr {}
+    .jerry { display: flex; font-weight: 600; font-size: 16px; cursor: pointer; font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; color: var(--text); }
+    .post1:hover .jerry { text-decoration: underline; text-decoration-thickness: 2px; }
+    .verif { width: 15px; display: block; margin-left: 3px; }
+    .comp1 {}
+    .cll { position: relative; }
+    .time { font-size: 14px; margin-left: 5px; color: var(--text2); cursor: pointer; }
+    .time:hover { text-decoration: underline; }
+    .dots { display: flex; align-items: center; padding: 4px; }
+    .dot { width: 14px; vertical-align: middle; opacity: 0.5; }
+
+    .tir {
+      padding: 10px 5px 8px;
+      border-bottom: 1px solid rgb(220,220,220);
+    }
+    .tired { width: 100%; font-size: 15px; white-space: pre-wrap; word-break: break-word; color: var(--text); }
+    .reer { color: rgba(244,7,82,0.7); cursor: pointer; }
+
+    .laptop1 { max-width: 100%; margin-top: 10px; padding: 0; overflow: hidden; border-radius: 12px; }
+    .laptop { max-height: 700px; margin: 0; width: 100%; object-fit: contain; height: 100%; display: block; }
+
+    /* Video */
+    .video-container { position: relative; background: #000; border-radius: 12px; overflow: hidden; margin-top: 10px; }
+    .video-thumbnail { width: 100%; display: block; max-height: 400px; }
+    .video-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.15); }
+    .play-button { display: flex; align-items: center; justify-content: center; }
+
+    /* Stats row */
+    .lefto {
+      display: flex;
+      flex-direction: row;
+      gap: 5px;
+      width: 100%;
+      justify-content: space-between;
+      margin-top: 10px;
+      padding-bottom: 10px;
+      border-bottom: 0.5px solid rgb(220,220,220);
+    }
+    .dick { display: flex; gap: 5px; margin-left: 10px; align-items: center; }
+    .twits { display: flex; align-items: center; gap: 5px; margin-right: 10px; }
+    .lefti { width: 18px; }
+    .viewe { font-size: 13px; color: var(--text2); }
+    .werey { font-weight: 600; }
+
+    /* Reaction bar */
+    .reaction {
+      display: flex;
+      justify-content: space-between;
+      padding: 13px 10px 3px;
+    }
+    .reaction-container { width: 100%; display: flex; align-items: center; }
+    .call { width: 100%; display: flex; justify-content: space-between; }
+    .mee { display: flex; gap: 20px; align-items: center; }
+    .feeling { width: 22px; }
+
+    .comment-btn { display: flex; width: 55px; align-items: center; gap: 5px; cursor: pointer; font-size: 15px; font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; color: var(--text2); }
+    .comment-btn:hover { color: var(--text); }
+
+    .repost-btn { display: flex; width: 55px; align-items: center; gap: 5px; cursor: pointer; font-size: 15px; font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; color: var(--text2); }
+    .repost-btn:hover { color: var(--text); }
+    .repost-icon { transition: filter 0.2s ease; }
+    .repost-btn.reposted .repost-icon {
+      filter: invert(29%) sepia(89%) saturate(400%) hue-rotate(110deg) brightness(90%) contrast(130%) drop-shadow(0 0 0.6px #065f46);
+    }
+    .repost-btn.reposted span { color: #065f46; font-weight: 500; }
+
+    .heart-ai { width: 55px; gap: 5px; display: flex; align-items: center; cursor: pointer; }
+    .heart-clickable { cursor: pointer; }
+    .heart-icon { transition: all 0.3s ease; }
+    .heart-icon .heart-path { stroke: var(--text); fill: none; transition: all 0.3s ease; }
+    .heart-icon.liked .heart-path { fill: rgb(244,7,82); stroke: rgb(244,7,82); }
+    .like-count { font-size: 14px; font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; color: var(--text2); }
+    .like-count.liked { font-weight: 500; color: rgb(244,7,82); }
+    .like-count:empty { display: none; }
+
+    @keyframes heartBeat {
+      0% { transform: scale(0.5); }
+      50% { transform: scale(1.7); }
+      100% { transform: scale(1); }
+    }
+    .heart-animation { animation: heartBeat 0.7s ease-in-out; }
+    @keyframes pop {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.5); }
+      100% { transform: scale(1); }
+    }
+    @keyframes shrinkFade {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(0.5); opacity: 0.5; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .unfill-animation { animation: shrinkFade 0.3s ease forwards; }
+
+    .donate-btn { display: flex; align-items: center; cursor: pointer; }
+    .donate-btn img { width: 22px; opacity: 0.7; }
+    .donate-btn:hover img { opacity: 1; }
+
+    /* Repost card inside feed */
+    .original-post-card {
+      border: 1px solid rgb(220,220,220);
+      border-radius: 12px;
+      margin-top: 10px;
+      overflow: hidden;
+      background: rgb(250,250,250);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .original-post-card:hover { background: rgb(245,245,245); }
+    .repost-commentary .tir { border-bottom: none; padding-bottom: 2px; }
+
+    /* Post action menu */
+    .post-action-bar {
+      position: absolute;
+      bottom: 20%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255,255,255,0.94);
+      backdrop-filter: blur(20px);
+      border-radius: 14px;
+      padding: 6px 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: fit-content;
+      height: auto;
+      z-index: 10;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    @keyframes slideUpFromBottom {
+      0%   { transform: translateX(-50%) translateY(40px); opacity: 0; scale: 0.92; }
+      60%  { transform: translateX(-50%) translateY(-6px); opacity: 1; scale: 1.04; }
+      100% { transform: translateX(-50%) translateY(0);   opacity: 1; scale: 1; }
+    }
+    @keyframes slideOutFromBottom {
+      0%   { transform: translateX(-50%) translateY(0);    opacity: 1; scale: 1; }
+      100% { transform: translateX(-50%) translateY(34px); opacity: 0; scale: 0.94; }
+    }
+  `;
+  document.head.appendChild(style);
 }
 
 function expandText(el, fullText) {
@@ -746,7 +1045,22 @@ async function toggleLike(postId, btn) {
 }
 
 function setLikeUI(postId, liked, count) {
-  document.querySelectorAll(`.like-action[data-post-id="${postId}"], .detail-action.like-action[data-post-id="${postId}"]`).forEach(btn => {
+  // Feed posts (view.js-style .heart-ai divs)
+  document.querySelectorAll(`.heart-ai[data-post-id="${postId}"]`).forEach(container => {
+    container.dataset.liked = liked ? 'true' : 'false';
+    const icon = container.querySelector('.heart-icon');
+    const countEl = container.querySelector('.like-count');
+    icon?.classList.toggle('liked', liked);
+    countEl?.classList.toggle('liked', liked);
+    const path = container.querySelector('.heart-path');
+    if (path) {
+      path.setAttribute('fill', liked ? 'rgb(244,7,82)' : 'none');
+      path.setAttribute('stroke', liked ? 'rgb(244,7,82)' : 'currentColor');
+    }
+    if (count !== null && countEl) animateCount(countEl, count);
+  });
+  // Detail page like button
+  document.querySelectorAll(`.detail-action.like-action[data-post-id="${postId}"]`).forEach(btn => {
     btn.dataset.liked = liked ? 'true' : 'false';
     btn.classList.toggle('liked', liked);
     if (count !== null) {
@@ -762,10 +1076,11 @@ function setLikeUI(postId, liked, count) {
 }
 
 function syncLikeCount(postId, count) {
-  document.querySelectorAll(`.like-action[data-post-id="${postId}"] span`).forEach(sp => {
+  // Feed hearts
+  document.querySelectorAll(`.heart-ai[data-post-id="${postId}"] .like-count`).forEach(sp => {
     animateCount(sp, count);
   });
-  // Also update detail view if open
+  // Detail view stat
   const statEl = document.querySelector(`.detail-stat-n[data-type="likes"]`);
   if (statEl && detailPostId === postId) {
     animateCount(statEl, count);
@@ -829,7 +1144,7 @@ async function undoRepost(postId, btn) {
   repostedPosts.delete(postId);
 
   // Remove from feed
-  document.querySelector(`.feed-post[data-post-id="${myRepostId}"]`)?.remove();
+  document.querySelector(`.poster[data-post-id="${myRepostId}"]`)?.remove();
   showToast('Repost removed');
 }
 
