@@ -559,7 +559,7 @@ function createFeedPost(p) {
                 <a class="home-click" onclick="showUserProfile('${orig.user_id}');event.stopPropagation()">
                   <div class="post1">
                     <div class="jerr"><p class="jerry">${escHtml(origUser.username)}</p></div>
-                    <div><img class="verif" src="pics/very.svg"></div>
+                    <div><svg xmlns="http://www.w3.org/2000/svg" class="verif" viewBox="0 0 24 24" width="15" height="15"><path d="M12 2L3 7v5c0 5 4 9 9 10 5-1 9-5 9-10V7z" fill="#6C47FF"/><polyline points="8,12 11,15 16,9" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
                   </div>
                 </a>
               </div>
@@ -631,7 +631,7 @@ function createFeedPost(p) {
             <a class="home-click" onclick="${isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}')`};event.stopPropagation()">
               <div class="post1">
                 <div class="jerr"><p class="jerry">${escHtml(user.username)}</p></div>
-                <div><img class="verif" src="pics/very.svg"></div>
+                <div><svg xmlns="http://www.w3.org/2000/svg" class="verif" viewBox="0 0 24 24" width="15" height="15"><path d="M12 2L3 7v5c0 5 4 9 9 10 5-1 9-5 9-10V7z" fill="#6C47FF"/><polyline points="8,12 11,15 16,9" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
               </div>
             </a>
           </div>
@@ -2145,3 +2145,4 @@ function debounce(fn, ms) {
   return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
 
 }
+
