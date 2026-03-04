@@ -766,16 +766,18 @@ function injectFeedPostStyles() {
   const style = document.createElement('style');
   style.id = 'feed-post-view-styles';
   style.textContent = `
-    #feed-list { display: flex; flex-direction: column; gap: 0; }
+    #feed-list { display: flex; flex-direction: column; gap: 5px; }
 
     .poster {
       display: block;
       width: 100%;
-      border-bottom: 0.5px solid rgb(220,220,220);
+      border: 0.5px solid rgb(220,220,220);
+      border-radius: 10px;
       padding: 10px 10px 0px;
       transition: background-color 0.2s;
       position: relative;
       cursor: pointer;
+      overflow: hidden;
     }
     .poster:hover { background-color: rgb(250,250,250); }
 
