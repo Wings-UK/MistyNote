@@ -548,25 +548,15 @@ function createFeedPost(p) {
         </div>
 
         <div class="cust-name" style="padding:0 10px;">
-          <div class="heading">
-            <div class="small-photo1">
-              <a class="lino" onclick="showUserProfile('${orig.user_id}');event.stopPropagation()">
-                <img class="small-photo" src="${origUser.avatar || ''}" onerror="this.style.display='none'" alt="" style="width:35px;height:35px;">
-              </a>
-            </div>
-            <div class="pos">
-              <div class="link-wrapper">
-                <a class="home-click" onclick="showUserProfile('${orig.user_id}');event.stopPropagation()">
-                  <div class="post1">
-                    <div class="jerr"><p class="jerry">${escHtml(origUser.username)}</p></div>
-                    <div><svg xmlns="http://www.w3.org/2000/svg" class="verif" viewBox="0 0 24 24" width="15" height="15"><path d="M12 2L3 7v5c0 5 4 9 9 10 5-1 9-5 9-10V7z" fill="#6C47FF"/><polyline points="8,12 11,15 16,9" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-                  </div>
-                </a>
-              </div>
-              <div class="comp1">
-                <div class="cll"><p class="time">${timeSince(orig.created_at)}</p></div>
-              </div>
-            </div>
+          <a class="post-avatar-link" onclick="showUserProfile('${orig.user_id}');event.stopPropagation()">
+            <img class="small-photo" src="${origUser.avatar || ''}" onerror="this.style.display='none'" alt="" style="width:35px;height:35px;">
+          </a>
+          <div class="post-meta">
+            <a class="post-author-link" onclick="showUserProfile('${orig.user_id}');event.stopPropagation()">
+              <span class="jerry">${escHtml(origUser.username)}</span>
+              <svg xmlns="http://www.w3.org/2000/svg" class="verif" viewBox="0 0 24 24" width="15" height="15"><path d="M12 2L3 7v5c0 5 4 9 9 10 5-1 9-5 9-10V7z" fill="#6C47FF"/><polyline points="8,12 11,15 16,9" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </a>
+            <span class="time">${timeSince(orig.created_at)}</span>
           </div>
         </div>
 
@@ -620,27 +610,15 @@ function createFeedPost(p) {
 
   el.innerHTML = `
     <div class="cust-name">
-      <div class="heading">
-        <div class="small-photo1">
-          <a class="lino" onclick="${isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}')`};event.stopPropagation()">
-            <img class="small-photo" src="${user.avatar || ''}" onerror="this.style.display='none'" alt="">
-          </a>
-        </div>
-        <div class="pos">
-          <div class="link-wrapper">
-            <a class="home-click" onclick="${isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}')`};event.stopPropagation()">
-              <div class="post1">
-                <div class="jerr"><p class="jerry">${escHtml(user.username)}</p></div>
-                <div><svg xmlns="http://www.w3.org/2000/svg" class="verif" viewBox="0 0 24 24" width="15" height="15"><path d="M12 2L3 7v5c0 5 4 9 9 10 5-1 9-5 9-10V7z" fill="#6C47FF"/><polyline points="8,12 11,15 16,9" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-              </div>
-            </a>
-          </div>
-          <div class="comp1">
-            <div class="cll">
-              <p class="time">${timeSince(p.created_at)}</p>
-            </div>
-          </div>
-        </div>
+      <a class="post-avatar-link" onclick="${isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}')`};event.stopPropagation()">
+        <img class="small-photo" src="${user.avatar || ''}" onerror="this.style.display='none'" alt="">
+      </a>
+      <div class="post-meta">
+        <a class="post-author-link" onclick="${isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}')`};event.stopPropagation()">
+          <span class="jerry">${escHtml(user.username)}</span>
+          <svg xmlns="http://www.w3.org/2000/svg" class="verif" viewBox="0 0 24 24" width="15" height="15"><path d="M12 2L3 7v5c0 5 4 9 9 10 5-1 9-5 9-10V7z" fill="#6C47FF"/><polyline points="8,12 11,15 16,9" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+        <span class="time">${timeSince(p.created_at)}</span>
       </div>
       <div class="dots">
         <img class="dot" src="pics/dots.svg">
@@ -718,7 +696,7 @@ function createFeedPost(p) {
       const tired = e.target.closest('.tired');
       if (tired) { tired.innerHTML = escHtml(text); e.stopPropagation(); return; }
     }
-    if (e.target.closest('.lino') || e.target.closest('.home-click')) return;
+    if (e.target.closest('.post-avatar-link') || e.target.closest('.post-author-link')) return;
     if (e.target.closest('.view-original') || e.target.closest('.original-post-card')) {
       openDetail(e.target.closest('[data-original-id]')?.dataset.originalId || orig?.id);
       return;
@@ -744,7 +722,7 @@ function createFeedPost(p) {
   // Long-press for post menu
   let lpTimer;
   el.addEventListener('touchstart', e => {
-    if (e.target.closest('.heart-ai, .repost-btn, .comment-btn, .donate-btn, .dots, a')) return;
+    if (e.target.closest('.heart-ai, .repost-btn, .comment-btn, .donate-btn, .dots, .post-avatar-link, .post-author-link')) return;
     lpTimer = setTimeout(() => showPostMenu(p, el, null, true), 550);
   }, { passive: true });
   el.addEventListener('touchmove', () => clearTimeout(lpTimer), { passive: true });
@@ -780,35 +758,30 @@ function injectFeedPostStyles() {
 
     .cust-name {
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      margin-top: 5px;
+      gap: 10px;
+      margin-bottom: 8px;
     }
-    .heading { display: flex; align-items: flex-start; }
-    .small-photo1 { width: 50px; vertical-align: middle; position: relative; flex-shrink: 0; }
-    .lino, .lino:active { text-decoration: none; color: inherit; }
+    .post-avatar-link { flex-shrink: 0; text-decoration: none; }
     .small-photo {
       width: 38px;
       height: 38px;
       object-fit: cover;
       object-position: center;
       border-radius: 10px;
+      display: block;
       transition: filter 0.15s;
     }
     .small-photo:hover { filter: brightness(0.9); }
-    .pos { display: flex; flex-direction: column; gap: 1px; }
-    .link-wrapper { display: inline-block; cursor: pointer; }
-    .post1 { display: flex; margin-left: 5px; font-size: 15px; align-items: center; }
-    .jerr {}
-    .jerry { display: flex; font-weight: 600; font-size: 16px; cursor: pointer; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: var(--text); margin: 0; }
-    .post1:hover .jerry { text-decoration: underline; text-decoration-thickness: 2px; }
-    .verif { width: 15px; display: block; margin-left: 3px; }
-    .comp1 {}
-    .cll { position: relative; }
-    .time { font-size: 14px; margin-left: 5px; color: var(--text2); cursor: pointer; margin-top: 0; margin-bottom: 0; }
+    .post-meta { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+    .post-author-link { display: flex; align-items: center; gap: 4px; text-decoration: none; cursor: pointer; width: fit-content; }
+    .post-author-link:hover .jerry { text-decoration: underline; text-decoration-thickness: 2px; }
+    .jerry { font-weight: 600; font-size: 15px; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: var(--text); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .verif { width: 15px; flex-shrink: 0; display: block; }
+    .time { font-size: 12px; color: var(--text2); margin: 0; line-height: 1; }
     .time:hover { text-decoration: underline; }
-    .dots { display: flex; align-items: center; padding: 4px; }
-    .dot { width: 14px; vertical-align: middle; opacity: 0.5; }
+    .dots { display: flex; align-items: center; padding: 4px; flex-shrink: 0; margin-left: auto; }
+    .dot { width: 14px; opacity: 0.5; display: block; }
 
     .tir {
       padding: 10px 5px 8px;
