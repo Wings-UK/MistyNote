@@ -655,7 +655,7 @@ function createFeedPost(p) {
         <div><p class="viewe">View all ${commentCount || 0} discuss</p></div>
       </div>
       <div class="twits">
-        <div><svg xmlns="http://www.w3.org/2000/svg" class="lefti" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div>
+        <div><svg xmlns="http://www.w3.org/2000/svg" class="lefti" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div>
         <div><p class="viewe">${p.views || 0} views</p></div>
       </div>
     </div>
@@ -832,14 +832,15 @@ function injectFeedPostStyles() {
       gap: 10px;
       width: 100%;
       justify-content: space-between;
+      align-items: center;
       margin-top: 10px;
       padding-bottom: 10px;
       border-bottom: 0.5px solid rgb(220,220,220);
     }
-    .dick { display: flex; gap: 10px; margin-left: 10px; align-items: center; }
-    .twits { display: flex; align-items: center; gap: 10px; margin-right: 10px; }
-    .lefti { width: 18px; }
-    .viewe { font-size: 13px; color: var(--text2); }
+    .dick { display: flex; gap: 5px; margin-left: 10px; align-items: center; }
+    .twits { display: flex; align-items: center; gap: 5px; margin-right: 10px; }
+    .lefti { width: 15px; height: 15px; display: block; }
+    .viewe { font-size: 13px; color: var(--text2); margin: 0; line-height: 1; }
     .werey { font-weight: 600; }
 
     /* Reaction bar */
