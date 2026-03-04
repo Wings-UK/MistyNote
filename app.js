@@ -801,7 +801,7 @@ function injectFeedPostStyles() {
     .link-wrapper { display: inline-block; cursor: pointer; }
     .post1 { display: flex; margin-left: 5px; font-size: 15px; align-items: center; }
     .jerr {}
-    .jerry { display: flex; font-weight: 600; font-size: 16px; cursor: pointer; font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; color: var(--text); }
+    .jerry { display: flex; font-weight: 600; font-size: 16px; cursor: pointer; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: var(--text); }
     .post1:hover .jerry { text-decoration: underline; text-decoration-thickness: 2px; }
     .verif { width: 15px; display: block; margin-left: 3px; }
     .comp1 {}
@@ -2146,3 +2146,4 @@ function debounce(fn, ms) {
   return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
 
 }
+
