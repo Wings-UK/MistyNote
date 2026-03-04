@@ -551,7 +551,7 @@ function createFeedPost(p) {
           <div class="heading">
             <div class="small-photo1">
               <a class="lino" onclick="showUserProfile('${orig.user_id}');event.stopPropagation()">
-                <img class="small-photo" src="${origUser.avatar || ''}" onerror="this.style.display='none'" alt="">
+                <img class="small-photo" src="${origUser.avatar || ''}" onerror="this.style.display='none'" alt="" style="width:35px;height:35px;">
               </a>
             </div>
             <div class="pos">
@@ -788,8 +788,8 @@ function injectFeedPostStyles() {
     .small-photo1 { width: 50px; vertical-align: middle; position: relative; flex-shrink: 0; }
     .lino, .lino:active { text-decoration: none; color: inherit; }
     .small-photo {
-      width: 40px;
-      height: 40px;
+      width: 38px;
+      height: 38px;
       object-fit: cover;
       object-position: center;
       border-radius: 10px;
