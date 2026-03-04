@@ -772,7 +772,7 @@ function injectFeedPostStyles() {
       display: block;
       width: 100%;
       border-bottom: 0.5px solid rgb(220,220,220);
-      padding: 10px;
+      padding: 10px 10px 0px;
       transition: background-color 0.2s;
       position: relative;
       cursor: pointer;
@@ -848,7 +848,7 @@ function injectFeedPostStyles() {
     .reaction {
       display: flex;
       justify-content: space-between;
-      padding: 13px 10px 3px;
+      padding: 3px 10px 3px;
     }
     .reaction-container { width: 100%; display: flex; align-items: center; }
     .call { width: 100%; display: flex; justify-content: space-between; }
