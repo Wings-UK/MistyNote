@@ -854,10 +854,10 @@ function injectFeedPostStyles() {
     .mee { display: flex; gap: 20px; align-items: center; }
     .feeling { width: 22px; }
 
-    .comment-btn { display: flex; width: 55px; align-items: center; gap: 10px; cursor: pointer; font-size: 15px; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: var(--text2); }
+    .comment-btn { display: flex; width: 55px; align-items: center; gap: 10px; cursor: pointer; font-size: 15px; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: #000000; }
     .comment-btn:hover { color: var(--text); }
 
-    .repost-btn { display: flex; width: 55px; align-items: center; gap: 10px; cursor: pointer; font-size: 15px; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: var(--text2); }
+    .repost-btn { display: flex; width: 55px; align-items: center; gap: 10px; cursor: pointer; font-size: 15px; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: #000000; }
     .repost-btn:hover { color: var(--text); }
     .repost-icon { transition: filter 0.2s ease; }
     .repost-btn.reposted .repost-icon {
@@ -870,7 +870,7 @@ function injectFeedPostStyles() {
     .heart-icon { transition: all 0.3s ease; }
     .heart-icon .heart-path { stroke: var(--text); fill: none; transition: all 0.3s ease; }
     .heart-icon.liked .heart-path { fill: rgb(244,7,82); stroke: rgb(244,7,82); }
-    .like-count { font-size: 14px; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: var(--text2); }
+    .like-count { font-size: 14px; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: #000000; }
     .like-count.liked { font-weight: 500; color: rgb(244,7,82); }
     .like-count:empty { display: none; }
 
