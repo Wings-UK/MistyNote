@@ -781,7 +781,7 @@ function injectFeedPostStyles() {
     .cust-name {
       display: flex;
       justify-content: space-between;
-      align-items: flex-start;
+      align-items: center;
       margin-top: 5px;
     }
     .heading { display: flex; align-items: flex-start; }
