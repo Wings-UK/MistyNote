@@ -800,12 +800,12 @@ function injectFeedPostStyles() {
     .link-wrapper { display: inline-block; cursor: pointer; }
     .post1 { display: flex; margin-left: 5px; font-size: 15px; align-items: center; }
     .jerr {}
-    .jerry { display: flex; font-weight: 600; font-size: 16px; cursor: pointer; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: var(--text); }
+    .jerry { display: flex; font-weight: 600; font-size: 16px; cursor: pointer; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: var(--text); margin: 0; }
     .post1:hover .jerry { text-decoration: underline; text-decoration-thickness: 2px; }
     .verif { width: 15px; display: block; margin-left: 3px; }
     .comp1 {}
     .cll { position: relative; }
-    .time { font-size: 14px; margin-left: 5px; color: var(--text2); cursor: pointer; }
+    .time { font-size: 14px; margin-left: 5px; color: var(--text2); cursor: pointer; margin-top: 0; margin-bottom: 0; }
     .time:hover { text-decoration: underline; }
     .dots { display: flex; align-items: center; padding: 4px; }
     .dot { width: 14px; vertical-align: middle; opacity: 0.5; }
