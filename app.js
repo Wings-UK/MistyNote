@@ -572,7 +572,7 @@ function createFeedPost(p) {
 
         ${orig.content ? `<div class="tir" style="margin:0 10px;"><p class="tired">${origDisplay}</p></div>` : ''}
 
-        ${orig.image ? `<div class="laptop1"><img src="${orig.image}" class="laptop" alt="" loading="lazy"></div>` : ''}
+        ${orig.image ? `<div class="repost-img-wrap"><img src="${orig.image}" class="repost-img" alt="" loading="lazy"></div>` : ''}
 
         ${orig.video && !orig.image ? `
           <div class="video-container laptop1" data-post-id="${orig.id}">
@@ -907,6 +907,8 @@ function injectFeedPostStyles() {
       transition: background 0.15s;
     }
     .original-post-card:hover { background: rgb(245,245,245); }
+    .repost-img-wrap { width: 100%; aspect-ratio: 1/1; overflow: hidden; }
+    .repost-img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
     .repost-commentary .tir { padding-bottom: 2px; }
 
     /* Post action menu */
