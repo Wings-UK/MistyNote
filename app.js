@@ -682,8 +682,8 @@ function createFeedPost(p) {
             </div>
           </div>
           <div class="mee">
-            <div class="donate-btn"><img class="feeling" src="pics/bookmark.svg" alt="Bookmark"></div>
-            <div class="donate-btn share-action" data-post-id="${p.id}"><img class="feeling" src="pics/share.svg" alt="Share"></div>
+            <div class="donate-btn"><svg xmlns="http://www.w3.org/2000/svg" class="feeling" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>
+            <div class="donate-btn share-action" data-post-id="${p.id}"><svg xmlns="http://www.w3.org/2000/svg" class="feeling" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg></div>
           </div>
         </div>
       </div>
