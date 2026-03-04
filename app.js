@@ -543,7 +543,7 @@ function createFeedPost(p) {
 
       <div class="original-post-card" data-original-id="${orig.id}">
         <div class="repost-indicator" style="display:flex;align-items:center;gap:6px;padding:8px 10px 4px;font-size:13px;color:#888;">
-          <img src="pics/retweet.svg" alt="Repost" style="width:14px;height:14px;opacity:0.6;">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.6;"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
           <span>Reposted from ${escHtml(origUser.username)}</span>
         </div>
 
@@ -673,7 +673,7 @@ function createFeedPost(p) {
             </div>
 
             <div class="repost-btn" data-post-id="${p.id}" data-reposted="false">
-              <img class="feeling repost-icon" src="pics/retweet.svg" alt="Repost">
+              <svg xmlns="http://www.w3.org/2000/svg" class="feeling repost-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
               <span>${p.repost_count > 0 ? fmtNum(p.repost_count) : ''}</span>
             </div>
 
@@ -1114,7 +1114,7 @@ async function handleRepost(postId, btn) {
       const preview = document.getElementById('composer-repost-preview');
       preview.innerHTML = `<div class="composer-repost-card">
         <div class="composer-repost-label">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M17 1l4 4-4 4M7 23l-4-4 4-4" stroke="#00c48c" stroke-width="2" stroke-linecap="round"/><path d="M3 11V9a4 4 0 014-4h14M21 13v2a4 4 0 01-4 4H3" stroke="#00c48c" stroke-width="2" stroke-linecap="round"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#00c48c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
           Reposting from ${escHtml(orig.user?.username || '')}
         </div>
         ${orig.content ? `<p class="composer-repost-text">${escHtml(orig.content.slice(0,100))}${orig.content.length>100?'…':''}</p>` : ''}
@@ -2146,4 +2146,5 @@ function debounce(fn, ms) {
   return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
 
 }
+
 
