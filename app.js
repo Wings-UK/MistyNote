@@ -816,8 +816,8 @@ function injectFeedPostStyles() {
     .tired { width: 100%; font-size: 15px; white-space: pre-wrap; word-break: break-word; color: var(--text); }
     .reer { color: rgba(244,7,82,0.7); cursor: pointer; }
 
-    .laptop1 { max-width: 100%; margin-top: 10px; padding: 0; overflow: hidden; border-radius: 12px; }
-    .laptop { max-height: 700px; margin: 0; width: 100%; object-fit: contain; height: 100%; display: block; }
+    .laptop1 { max-width: 100%; margin-top: 10px; padding: 0; overflow: hidden; border-radius: 12px; background: #f0f0f0; max-height: 400px; display: flex; align-items: center; justify-content: center; }
+    .laptop { max-height: 400px; width: 100%; object-fit: contain; display: block; margin: 0; }
 
     /* Video */
     .video-container { position: relative; background: #000; border-radius: 12px; overflow: hidden; margin-top: 10px; }
