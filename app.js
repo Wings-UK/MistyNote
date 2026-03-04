@@ -654,7 +654,7 @@ function createFeedPost(p) {
 
     <div class="lefto">
       <div class="dick">
-        <div><img class="lefti" src="pics/bounce.svg"></div>
+        <div><svg xmlns="http://www.w3.org/2000/svg" class="lefti" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></div>
         <div><p class="viewe">View all ${commentCount || 0} discuss</p></div>
       </div>
       <div class="twits">
@@ -668,7 +668,7 @@ function createFeedPost(p) {
         <div class="call">
           <div class="mee">
             <div class="comment-btn" data-post-id="${p.id}">
-              <img class="feeling" src="pics/comment.svg" alt="Comment">
+              <svg xmlns="http://www.w3.org/2000/svg" class="feeling" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
               <span>${commentCount > 0 ? fmtNum(commentCount) : ''}</span>
             </div>
 
@@ -1387,7 +1387,7 @@ async function openDetail(postId, scrollToComments = false) {
 
         <div class="detail-actions">
           <button class="detail-action comment-action" data-post-id="${postId}" onclick="focusCommentBar()">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
             Reply
           </button>
           <button class="detail-action repost-action" data-post-id="${postId}" data-reposted="false" onclick="handleRepost('${postId}',this)">
@@ -2146,5 +2146,3 @@ function debounce(fn, ms) {
   return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
 
 }
-
-
