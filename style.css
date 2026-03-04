@@ -30,8 +30,8 @@
     --radius-sm: 10px;
     --shadow: 0 2px 20px rgba(0,0,0,0.06);
     --shadow-lg: 0 8px 40px rgba(0,0,0,0.12);
-    --font: 'Plus Jakarta Sans', -apple-system, sans-serif;
-    --font-display: 'Syne', sans-serif;
+    --font: 'Noto Sans JP', -apple-system, sans-serif;
+    --font-display: 'Noto Sans JP', sans-serif;
   }
   
   [data-theme="dark"] {
@@ -1083,4 +1083,5 @@
     from { opacity: 0; }
     to { opacity: 1; }
   }
+
   .fade-in { animation: fadeIn 0.25s ease both; }
