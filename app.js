@@ -590,9 +590,6 @@ function createFeedPost(p) {
           </div>
         ` : ''}
 
-        <div class="view-original" style="padding:8px 12px;color:#1d9bf0;font-size:13px;cursor:pointer;">
-          View original post →
-        </div>
       </div>
     `;
   } else {
@@ -766,7 +763,7 @@ function injectFeedPostStyles() {
   const style = document.createElement('style');
   style.id = 'feed-post-view-styles';
   style.textContent = `
-    #feed-list { display: flex; flex-direction: column; gap: 5px; }
+    #feed-list { display: flex; flex-direction: column; gap: 10px; }
 
     .poster {
       display: block;
@@ -815,7 +812,6 @@ function injectFeedPostStyles() {
 
     .tir {
       padding: 10px 5px 8px;
-      border-bottom: 1px solid rgb(220,220,220);
     }
     .tired { width: 100%; font-size: 15px; white-space: pre-wrap; word-break: break-word; color: var(--text); }
     .reer { color: rgba(244,7,82,0.7); cursor: pointer; }
@@ -833,15 +829,15 @@ function injectFeedPostStyles() {
     .lefto {
       display: flex;
       flex-direction: row;
-      gap: 5px;
+      gap: 10px;
       width: 100%;
       justify-content: space-between;
       margin-top: 10px;
       padding-bottom: 10px;
       border-bottom: 0.5px solid rgb(220,220,220);
     }
-    .dick { display: flex; gap: 5px; margin-left: 10px; align-items: center; }
-    .twits { display: flex; align-items: center; gap: 5px; margin-right: 10px; }
+    .dick { display: flex; gap: 10px; margin-left: 10px; align-items: center; }
+    .twits { display: flex; align-items: center; gap: 10px; margin-right: 10px; }
     .lefti { width: 18px; }
     .viewe { font-size: 13px; color: var(--text2); }
     .werey { font-weight: 600; }
@@ -857,10 +853,10 @@ function injectFeedPostStyles() {
     .mee { display: flex; gap: 20px; align-items: center; }
     .feeling { width: 22px; }
 
-    .comment-btn { display: flex; width: 55px; align-items: center; gap: 5px; cursor: pointer; font-size: 15px; font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; color: var(--text2); }
+    .comment-btn { display: flex; width: 55px; align-items: center; gap: 10px; cursor: pointer; font-size: 15px; font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; color: var(--text2); }
     .comment-btn:hover { color: var(--text); }
 
-    .repost-btn { display: flex; width: 55px; align-items: center; gap: 5px; cursor: pointer; font-size: 15px; font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; color: var(--text2); }
+    .repost-btn { display: flex; width: 55px; align-items: center; gap: 10px; cursor: pointer; font-size: 15px; font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; color: var(--text2); }
     .repost-btn:hover { color: var(--text); }
     .repost-icon { transition: filter 0.2s ease; }
     .repost-btn.reposted .repost-icon {
@@ -868,7 +864,7 @@ function injectFeedPostStyles() {
     }
     .repost-btn.reposted span { color: #065f46; font-weight: 500; }
 
-    .heart-ai { width: 55px; gap: 5px; display: flex; align-items: center; cursor: pointer; }
+    .heart-ai { width: 55px; gap: 10px; display: flex; align-items: center; cursor: pointer; }
     .heart-clickable { cursor: pointer; }
     .heart-icon { transition: all 0.3s ease; }
     .heart-icon .heart-path { stroke: var(--text); fill: none; transition: all 0.3s ease; }
@@ -910,7 +906,7 @@ function injectFeedPostStyles() {
       transition: background 0.15s;
     }
     .original-post-card:hover { background: rgb(245,245,245); }
-    .repost-commentary .tir { border-bottom: none; padding-bottom: 2px; }
+    .repost-commentary .tir { padding-bottom: 2px; }
 
     /* Post action menu */
     .post-action-bar {
