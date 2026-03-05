@@ -835,12 +835,11 @@ function injectFeedPostStyles() {
 
     .repost-btn { display: flex; width: 55px; align-items: center; gap: 10px; cursor: pointer; font-size: 15px; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: #000000; }
     .repost-btn:hover { color: var(--text); }
-    .repost-icon { transition: stroke 0.2s ease; }
+    .repost-icon { transition: filter 0.2s ease; }
     .repost-btn.reposted .repost-icon {
-      stroke: #00c48c;
-      stroke-width: 2.5;
+      filter: invert(29%) sepia(89%) saturate(400%) hue-rotate(110deg) brightness(90%) contrast(130%) drop-shadow(0 0 0.6px #065f46);
     }
-    .repost-btn.reposted span { color: #00c48c; font-weight: 500; }
+    .repost-btn.reposted span { color: #065f46; font-weight: 500; }
 
     .heart-ai { width: 55px; gap: 10px; display: flex; align-items: center; cursor: pointer; }
     .heart-clickable { cursor: pointer; }
@@ -1138,11 +1137,6 @@ function setRepostUI(postId, reposted) {
   document.querySelectorAll(`.repost-btn[data-post-id="${postId}"]`).forEach(btn => {
     btn.dataset.reposted = reposted ? 'true' : 'false';
     btn.classList.toggle('reposted', reposted);
-    const svg = btn.querySelector('.repost-icon');
-    if (svg) {
-      svg.setAttribute('stroke', reposted ? '#00c48c' : '#000000');
-      svg.setAttribute('stroke-width', reposted ? '2.5' : '2');
-    }
   });
   // Detail page repost button
   document.querySelectorAll(`.detail-action.repost-action[data-post-id="${postId}"]`).forEach(btn => {
@@ -1161,7 +1155,7 @@ async function syncRepostCount(postId) {
 
     // Feed cards
     document.querySelectorAll(`.repost-btn[data-post-id="${postId}"] span`)
-      .forEach(sp => { sp.textContent = count > 0 ? fmtNum(count) : '0'; });
+      .forEach(sp => { sp.textContent = count > 0 ? fmtNum(count) : ''; });
 
     // Detail page stat
     document.querySelectorAll('.repost-count-display')
@@ -1171,6 +1165,18 @@ async function syncRepostCount(postId) {
   }
 }
 
+
+async function getMyRepostOfPost(originalPostId) {
+  if (!currentUser) return null;
+  const { data, error } = await supabase
+    .from('posts')
+    .select('id')
+    .eq('user_id', currentUser.id)
+    .eq('reposted_post_id', originalPostId)
+    .maybeSingle();
+  if (error) { console.error('getMyRepostOfPost failed:', error.message); return null; }
+  return data?.id || null;
+}
 
 async function handleRepost(postId, btn) {
   if (!currentUser) { showToast('Sign in to repost'); return; }
@@ -1214,27 +1220,44 @@ function clearRepost() {
 }
 
 async function undoRepost(postId, btn) {
-  const myRepostId = repostedPosts.get(postId);
-  if (!myRepostId) return;
-
-  // Optimistic UI — update all buttons for this post immediately
+  // Optimistic UI immediately
   setRepostUI(postId, false);
 
   try {
-    await supabase.from('posts').delete().eq('id', myRepostId).eq('user_id', currentUser.id);
+    // Always query DB directly — don't rely on Map which resets on refresh
+    const myRepostId = repostedPosts.get(postId) || await getMyRepostOfPost(postId);
+    if (!myRepostId) {
+      setRepostUI(postId, false);
+      showToast('Repost removed');
+      return;
+    }
+
+    const { error: deleteError } = await supabase
+      .from('posts').delete()
+      .eq('id', myRepostId)
+      .eq('user_id', currentUser.id);
+
+    if (deleteError) throw deleteError;
+
     await supabase.rpc('decrement_repost_count', { post_id: postId }).catch(() => {});
     repostedPosts.delete(postId);
 
-    // Sync real count from DB across all instances
-    await syncRepostCount(postId);
+    // Fetch real count and update DOM
+    const { data: updated } = await supabase
+      .from('posts').select('repost_count').eq('id', postId).single();
+    const newCount = updated?.repost_count ?? 0;
 
-    // Remove repost card from feed if visible
+    document.querySelectorAll(`.repost-btn[data-post-id="${postId}"] span`)
+      .forEach(sp => { sp.textContent = newCount > 0 ? fmtNum(newCount) : ''; });
+    document.querySelectorAll('.repost-count-display')
+      .forEach(el => { if (detailPostId === postId) el.textContent = newCount; });
+
+    // Remove repost card from feed
     document.querySelector(`.poster[data-post-id="${myRepostId}"]`)?.remove();
 
     showToast('Repost removed');
   } catch (err) {
     console.error('undoRepost failed:', err.message);
-    // Revert optimistic UI on failure
     setRepostUI(postId, true);
     showToast("Couldn't remove repost. Try again.");
   }
@@ -1337,7 +1360,10 @@ async function submitPost() {
   if (!content && !selectedFile && !repostTargetId) return;
   if (!currentUser) { showToast('Please sign in'); return; }
 
-  btn.disabled = true;
+  if (btn) btn.disabled = true;
+
+  // Capture these before closeComposer clears them
+  const targetId = repostTargetId;
 
   let imageUrl = null;
   if (selectedFile) {
@@ -1345,7 +1371,7 @@ async function submitPost() {
       imageUrl = await uploadImage(selectedFile, 'post-images');
     } catch (e) {
       showToast('Image upload failed: ' + e.message);
-      btn.disabled = false;
+      if (btn) btn.disabled = false;
       return;
     }
   }
@@ -1354,7 +1380,7 @@ async function submitPost() {
     user_id: currentUser.id,
     content: content || null,
     image: imageUrl || null,
-    reposted_post_id: repostTargetId || null
+    reposted_post_id: targetId || null
   };
 
   const { data: newPost, error } = await supabase
@@ -1367,32 +1393,15 @@ async function submitPost() {
 
   if (error) {
     showToast('Post failed: ' + error.message);
-    btn.disabled = false;
+    if (btn) btn.disabled = false;
     return;
   }
 
-  // Handle repost
-  if (repostTargetId) {
-    await supabase.rpc('increment_repost_count', { post_id: repostTargetId }).catch(() => {});
-    repostedPosts.set(repostTargetId, newPost.id);
-
-    // Update ALL buttons for this post across the feed
-    setRepostUI(repostTargetId, true);
-
-    // Sync real count from DB to DOM
-    await syncRepostCount(repostTargetId);
-
-    // Notify
-    const { data: orig } = await supabase.from('posts').select('user_id').eq('id', repostTargetId).single();
-    if (orig && orig.user_id !== currentUser.id) {
-      await supabase.from('notifications').insert({ user_id: orig.user_id, actor_id: currentUser.id, post_id: repostTargetId, type: 'repost', read: false });
-    }
-  }
-
+  // Close composer first so UI feels instant
   closeComposer();
   showToast('Posted! 🎉');
 
-  // Prepend to feed
+  // Prepend to feed immediately
   const adapted = { ...newPost, comments: [{ count: 0 }] };
   const el = createFeedPost(adapted);
   const list = document.getElementById('feed-list');
@@ -1403,8 +1412,35 @@ async function submitPost() {
     observePost(el);
   }
 
+  // Handle repost async after UI is already updated
+  if (targetId) {
+    await supabase.rpc('increment_repost_count', { post_id: targetId }).catch(() => {});
+    repostedPosts.set(targetId, newPost.id);
+
+    // Update ALL buttons for this post across the feed
+    setRepostUI(targetId, true);
+
+    // Fetch real count and update DOM
+    const { data: updated } = await supabase
+      .from('posts').select('repost_count').eq('id', targetId).single();
+    const newCount = updated?.repost_count ?? 0;
+    document.querySelectorAll(`.repost-btn[data-post-id="${targetId}"] span`)
+      .forEach(sp => { sp.textContent = newCount > 0 ? fmtNum(newCount) : String(newCount); });
+    document.querySelectorAll('.repost-count-display')
+      .forEach(el => { el.textContent = newCount; });
+
+    // Notify original post author
+    const { data: orig } = await supabase.from('posts').select('user_id').eq('id', targetId).single();
+    if (orig && orig.user_id !== currentUser.id) {
+      await supabase.from('notifications').insert({
+        user_id: orig.user_id, actor_id: currentUser.id,
+        post_id: targetId, type: 'repost', read: false
+      }).catch(() => {});
+    }
+  }
+
   // Update profile if on that page
-  if (document.getElementById('page-profile').classList.contains('active')) {
+  if (document.getElementById('page-profile')?.classList.contains('active')) {
     renderMyProfile();
   }
 }
