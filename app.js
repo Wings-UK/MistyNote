@@ -781,7 +781,7 @@ function injectFeedPostStyles() {
     .time { font-size: 12px; color: var(--text2); margin: 0; line-height: 1; }
     .time:hover { text-decoration: underline; }
     .dots { display: flex; align-items: center; padding: 4px; flex-shrink: 0; margin-left: auto; }
-    .dot { width: 14px; opacity: 0.5; display: block; }
+    .dot { display: block; }
 
     .tir {
       padding: 10px 5px 8px;
