@@ -712,6 +712,13 @@ function createFeedPost(p) {
   if (repostBtn && repostedPosts.has(p.id)) {
     repostBtn.setAttribute('data-reposted', 'true');
     repostBtn.classList.add('reposted');
+    const svg = repostBtn.querySelector('.repost-icon');
+    if (svg) {
+      svg.setAttribute('stroke', '#00c48c');
+      svg.setAttribute('stroke-width', '2.5');
+    }
+    const span = repostBtn.querySelector('span');
+    if (span) span.style.color = '#00c48c';
   }
 
   // Like button — check initial state
@@ -1137,11 +1144,24 @@ function setRepostUI(postId, reposted) {
   document.querySelectorAll(`.repost-btn[data-post-id="${postId}"]`).forEach(btn => {
     btn.dataset.reposted = reposted ? 'true' : 'false';
     btn.classList.toggle('reposted', reposted);
+    const svg = btn.querySelector('.repost-icon');
+    if (svg) {
+      svg.setAttribute('stroke', reposted ? '#00c48c' : '#000000');
+      svg.setAttribute('stroke-width', reposted ? '2.5' : '2');
+    }
+    const span = btn.querySelector('span');
+    if (span && reposted) span.style.color = '#00c48c';
+    else if (span) span.style.color = '';
   });
   // Detail page repost button
   document.querySelectorAll(`.detail-action.repost-action[data-post-id="${postId}"]`).forEach(btn => {
     btn.dataset.reposted = reposted ? 'true' : 'false';
     btn.classList.toggle('reposted', reposted);
+    const svg = btn.querySelector('.repost-icon');
+    if (svg) {
+      svg.setAttribute('stroke', reposted ? '#00c48c' : '#000000');
+      svg.setAttribute('stroke-width', reposted ? '2.5' : '2');
+    }
   });
 }
 
@@ -1412,13 +1432,15 @@ async function submitPost() {
     observePost(el);
   }
 
+  // Mark repost state immediately — before any async work
+  if (targetId) {
+    repostedPosts.set(targetId, newPost.id);
+    setRepostUI(targetId, true);
+  }
+
   // Handle repost async after UI is already updated
   if (targetId) {
     await supabase.rpc('increment_repost_count', { post_id: targetId }).catch(() => {});
-    repostedPosts.set(targetId, newPost.id);
-
-    // Update ALL buttons for this post across the feed
-    setRepostUI(targetId, true);
 
     // Fetch real count and update DOM
     const { data: updated } = await supabase
