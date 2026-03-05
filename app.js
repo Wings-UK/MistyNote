@@ -486,7 +486,7 @@ async function loadFeed(reset = false) {
       if (loadedPostIds.has(p.id)) continue;
       loadedPostIds.add(p.id);
       const el = createFeedPost(p);
-      if (el) list.appendChild(el);
+      if (el) { list.appendChild(el); observePost(el); }
     }
 
     feedOffset += posts.length;
@@ -496,6 +496,7 @@ async function loadFeed(reset = false) {
     const ids = [...loadedPostIds];
     checkLikedPosts(ids);
     checkRepostedPosts(ids);
+    reObserveAllFeedPosts();
 
   } catch (e) {
     console.error('Feed error:', e);
@@ -939,30 +940,75 @@ function skeletonPost() {
   </div>`;
 }
 
-// ── INTERSECTION OBSERVER (infinite scroll + views) ──
-let viewObserver;
+// ── INTERSECTION OBSERVER (infinite scroll only) ──
+let scrollObserver;
 function initIntersectionObserver() {
-  viewObserver = new IntersectionObserver(entries => {
+  scrollObserver = new IntersectionObserver(entries => {
     entries.forEach(entry => {
       if (!entry.isIntersecting) return;
-      const el = entry.target;
-      if (el.id === 'feed-load-trigger') { loadFeed(); return; }
-      const postId = el.dataset.postId;
-      if (!postId || el.dataset.viewed) return;
-      el.dataset.viewed = '1';
-      setTimeout(() => {
-        if (!document.contains(el)) return;
-        recordView(postId);
-      }, 1500);
+      if (entry.target.id === 'feed-load-trigger') loadFeed();
     });
-  }, { threshold: 0.6 });
+  }, { threshold: 0.1 });
 
   const trigger = document.getElementById('feed-load-trigger');
-  if (trigger) viewObserver.observe(trigger);
+  if (trigger) scrollObserver.observe(trigger);
+}
+
+// ── VIEW TRACKING (separate observer) ──
+let _viewObserver = null;
+
+function getViewObserver() {
+  if (_viewObserver) return _viewObserver;
+  _viewObserver = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      const el = entry.target;
+      const postId = el.dataset.postId;
+      if (!postId) return;
+      if (entry.isIntersecting) {
+        if (el.dataset.viewTracked === 'true') return;
+        el._viewTimer = setTimeout(async () => {
+          if (!document.contains(el)) return;
+          await recordView(postId);
+          await syncViewCount(postId);
+        }, 1000);
+      } else {
+        if (el._viewTimer) {
+          clearTimeout(el._viewTimer);
+          el._viewTimer = null;
+          el.dataset.viewTracked = 'false';
+        }
+      }
+    });
+  }, { threshold: 0.6 });
+  return _viewObserver;
 }
 
 function observePost(el) {
-  if (viewObserver && el) viewObserver.observe(el);
+  if (el && el.dataset.postId) getViewObserver().observe(el);
+}
+
+function reObserveAllFeedPosts() {
+  document.querySelectorAll('.poster[data-post-id]').forEach(el => {
+    if (el.dataset.viewTracked !== 'true') getViewObserver().observe(el);
+  });
+}
+
+async function syncViewCount(postId) {
+  if (!postId) return;
+  try {
+    const { data, error } = await supabase
+      .from('posts').select('views').eq('id', postId).single();
+    if (error || !data) return;
+    const count = data.views ?? 0;
+    document.querySelectorAll(`.poster[data-post-id="${postId}"] .twits .viewe`)
+      .forEach(el => { el.textContent = `${fmtNum(count) || 0} views`; });
+    if (detailPostId === postId) {
+      const el = document.querySelector(`.detail-stat-n[data-type="views"]`);
+      if (el) animateCount(el, count);
+    }
+  } catch (err) {
+    console.warn('syncViewCount error:', err.message);
+  }
 }
 
 // ══════════════════════════════════════════
@@ -1459,7 +1505,8 @@ async function openDetail(postId, scrollToComments = false) {
     document.getElementById('comment-input').placeholder = `Reply to ${user.username}…`;
 
     // Track view
-    recordView(postId);
+    await recordView(postId);
+    await syncViewCount(postId);
 
     // Load comments
     await loadComments(postId);
@@ -2047,7 +2094,17 @@ function walletAction(type) {
 
 async function recordView(postId) {
   if (!currentUser || !postId) return;
-  supabase.rpc('record_post_view', { p_post_id: postId, p_user_id: currentUser.id }).catch(() => {});
+  try {
+    const el = document.querySelector(`.poster[data-post-id="${postId}"]`);
+    if (el) el.dataset.viewTracked = 'true';
+    const { error } = await supabase.rpc('record_post_view', {
+      p_post_id: postId,
+      p_user_id: currentUser.id
+    });
+    if (error) console.warn('recordView error (non-fatal):', error.message);
+  } catch (err) {
+    console.warn('recordView error (non-fatal):', err.message);
+  }
 }
 
 // ══════════════════════════════════════════
