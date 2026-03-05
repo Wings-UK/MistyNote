@@ -486,16 +486,16 @@ async function loadFeed(reset = false) {
       if (loadedPostIds.has(p.id)) continue;
       loadedPostIds.add(p.id);
       const el = createFeedPost(p);
-      if (el) { list.appendChild(el); observePost(el); }
+      if (el) list.appendChild(el);
     }
 
     feedOffset += posts.length;
     if (posts.length < PER_PAGE) feedExhausted = true;
 
-    reObserveAllFeedPosts();
-
-    // Batch check likes
-    checkLikedPosts([...loadedPostIds]);
+    // Batch check likes and reposts
+    const ids = [...loadedPostIds];
+    checkLikedPosts(ids);
+    checkRepostedPosts(ids);
 
   } catch (e) {
     console.error('Feed error:', e);
@@ -939,84 +939,30 @@ function skeletonPost() {
   </div>`;
 }
 
-// ── INTERSECTION OBSERVER (infinite scroll) ──
-let scrollObserver;
+// ── INTERSECTION OBSERVER (infinite scroll + views) ──
+let viewObserver;
 function initIntersectionObserver() {
-  scrollObserver = new IntersectionObserver(entries => {
+  viewObserver = new IntersectionObserver(entries => {
     entries.forEach(entry => {
       if (!entry.isIntersecting) return;
-      if (entry.target.id === 'feed-load-trigger') loadFeed();
-    });
-  }, { threshold: 0.1 });
-
-  const trigger = document.getElementById('feed-load-trigger');
-  if (trigger) scrollObserver.observe(trigger);
-}
-
-// ── VIEW TRACKING ──
-let _viewObserver = null;
-
-function getViewObserver() {
-  if (_viewObserver) return _viewObserver;
-
-  _viewObserver = new IntersectionObserver(entries => {
-    entries.forEach(entry => {
       const el = entry.target;
+      if (el.id === 'feed-load-trigger') { loadFeed(); return; }
       const postId = el.dataset.postId;
-      if (!postId) return;
-
-      if (entry.isIntersecting) {
-        // Must be visible for 1s before counting — mirrors X's heuristic
-        if (el.dataset.viewTracked === 'true') return;
-        el._viewTimer = setTimeout(async () => {
-          if (!document.contains(el)) return;
-          await recordView(postId);
-          await syncViewCount(postId);
-        }, 1000);
-      } else {
-        // Scrolled away before 1s — cancel and reset so it can retry
-        if (el._viewTimer) {
-          clearTimeout(el._viewTimer);
-          el._viewTimer = null;
-          el.dataset.viewTracked = 'false';
-        }
-      }
+      if (!postId || el.dataset.viewed) return;
+      el.dataset.viewed = '1';
+      setTimeout(() => {
+        if (!document.contains(el)) return;
+        recordView(postId);
+      }, 1500);
     });
   }, { threshold: 0.6 });
 
-  return _viewObserver;
+  const trigger = document.getElementById('feed-load-trigger');
+  if (trigger) viewObserver.observe(trigger);
 }
 
 function observePost(el) {
-  if (el && el.dataset.postId) getViewObserver().observe(el);
-}
-
-function reObserveAllFeedPosts() {
-  document.querySelectorAll('.poster[data-post-id]').forEach(el => {
-    if (el.dataset.viewTracked !== 'true') getViewObserver().observe(el);
-  });
-}
-
-async function syncViewCount(postId) {
-  if (!postId) return;
-  try {
-    const { data, error } = await supabase
-      .from('posts').select('views').eq('id', postId).single();
-    if (error || !data) return;
-    const count = data.views ?? 0;
-
-    // Update feed card
-    document.querySelectorAll(`.poster[data-post-id="${postId}"] .twits .viewe`)
-      .forEach(el => { el.textContent = `${fmtNum(count) || 0} views`; });
-
-    // Update detail page if open for this post
-    if (detailPostId === postId) {
-      const detailViewEl = document.querySelector(`.detail-stat-n[data-type="views"]`);
-      if (detailViewEl) animateCount(detailViewEl, count);
-    }
-  } catch (err) {
-    console.warn('syncViewCount error:', err.message);
-  }
+  if (viewObserver && el) viewObserver.observe(el);
 }
 
 // ══════════════════════════════════════════
@@ -1030,6 +976,26 @@ async function checkLikedPosts(postIds) {
   (data || []).forEach(r => likedPosts.add(r.post_id));
   postIds.forEach(id => {
     if (likedPosts.has(id)) setLikeUI(id, true, null);
+  });
+}
+
+async function checkRepostedPosts(postIds) {
+  if (!currentUser || !postIds.length) return;
+  // Find any of the current user's reposts where the original is in our postIds
+  const { data } = await supabase
+    .from('posts')
+    .select('id, reposted_post_id')
+    .eq('user_id', currentUser.id)
+    .not('reposted_post_id', 'is', null)
+    .in('reposted_post_id', postIds);
+
+  (data || []).forEach(r => {
+    repostedPosts.set(r.reposted_post_id, r.id);
+  });
+
+  // Apply bold state to all matching buttons in DOM
+  postIds.forEach(id => {
+    if (repostedPosts.has(id)) setRepostUI(id, true);
   });
 }
 
@@ -1121,7 +1087,39 @@ function syncLikeCount(postId, count) {
 // REPOSTS
 // ══════════════════════════════════════════
 
-async function handleRepost(postId, btn) {
+function setRepostUI(postId, reposted) {
+  document.querySelectorAll(`.repost-btn[data-post-id="${postId}"]`).forEach(btn => {
+    btn.dataset.reposted = reposted ? 'true' : 'false';
+    btn.classList.toggle('reposted', reposted);
+  });
+  // Detail page repost button
+  document.querySelectorAll(`.detail-action.repost-action[data-post-id="${postId}"]`).forEach(btn => {
+    btn.dataset.reposted = reposted ? 'true' : 'false';
+    btn.classList.toggle('reposted', reposted);
+  });
+}
+
+async function syncRepostCount(postId) {
+  if (!postId) return;
+  try {
+    const { data, error } = await supabase
+      .from('posts').select('repost_count').eq('id', postId).single();
+    if (error || !data) return;
+    const count = data.repost_count ?? 0;
+
+    // Feed cards
+    document.querySelectorAll(`.repost-btn[data-post-id="${postId}"] span`)
+      .forEach(sp => { sp.textContent = count > 0 ? fmtNum(count) : ''; });
+
+    // Detail page stat
+    document.querySelectorAll('.repost-count-display')
+      .forEach(el => { if (detailPostId === postId) animateCount(el, count); });
+  } catch (err) {
+    console.warn('syncRepostCount error:', err.message);
+  }
+}
+
+
   if (!currentUser) { showToast('Sign in to repost'); return; }
   const alreadyReposted = btn?.dataset.reposted === 'true';
 
@@ -1166,16 +1164,27 @@ async function undoRepost(postId, btn) {
   const myRepostId = repostedPosts.get(postId);
   if (!myRepostId) return;
 
-  btn.dataset.reposted = 'false';
-  btn.classList.remove('reposted');
+  // Optimistic UI — update all buttons for this post immediately
+  setRepostUI(postId, false);
 
-  await supabase.from('posts').delete().eq('id', myRepostId).eq('user_id', currentUser.id);
-  await supabase.rpc('decrement_repost_count', { post_id: postId }).catch(() => {});
-  repostedPosts.delete(postId);
+  try {
+    await supabase.from('posts').delete().eq('id', myRepostId).eq('user_id', currentUser.id);
+    await supabase.rpc('decrement_repost_count', { post_id: postId }).catch(() => {});
+    repostedPosts.delete(postId);
 
-  // Remove from feed
-  document.querySelector(`.poster[data-post-id="${myRepostId}"]`)?.remove();
-  showToast('Repost removed');
+    // Sync real count from DB across all instances
+    await syncRepostCount(postId);
+
+    // Remove repost card from feed if visible
+    document.querySelector(`.poster[data-post-id="${myRepostId}"]`)?.remove();
+
+    showToast('Repost removed');
+  } catch (err) {
+    console.error('undoRepost failed:', err.message);
+    // Revert optimistic UI on failure
+    setRepostUI(postId, true);
+    showToast("Couldn't remove repost. Try again.");
+  }
 }
 
 // ══════════════════════════════════════════
@@ -1312,11 +1321,13 @@ async function submitPost() {
   // Handle repost
   if (repostTargetId) {
     await supabase.rpc('increment_repost_count', { post_id: repostTargetId }).catch(() => {});
-    if (repostTargetBtn) {
-      repostTargetBtn.dataset.reposted = 'true';
-      repostTargetBtn.classList.add('reposted');
-    }
     repostedPosts.set(repostTargetId, newPost.id);
+
+    // Update ALL buttons for this post across the feed
+    setRepostUI(repostTargetId, true);
+
+    // Sync real count from DB to DOM
+    await syncRepostCount(repostTargetId);
 
     // Notify
     const { data: orig } = await supabase.from('posts').select('user_id').eq('id', repostTargetId).single();
@@ -1336,6 +1347,7 @@ async function submitPost() {
     list.prepend(el);
     loadedPostIds.add(newPost.id);
     el.classList.add('fade-up');
+    observePost(el);
   }
 
   // Update profile if on that page
@@ -1412,7 +1424,7 @@ async function openDetail(postId, scrollToComments = false) {
         <div class="detail-stats">
           <div class="detail-stat"><span class="detail-stat-n" data-type="likes">${fmtNum(p.like_count||0)}</span><span class="detail-stat-l">Likes</span></div>
           <div class="detail-stat"><span class="detail-stat-n repost-count-display">${fmtNum(p.repost_count||0)}</span><span class="detail-stat-l">Reposts</span></div>
-          <div class="detail-stat"><span class="detail-stat-n" data-type="views">${fmtNum(p.views||0)}</span><span class="detail-stat-l">Views</span></div>
+          <div class="detail-stat"><span class="detail-stat-n">${fmtNum(p.views||0)}</span><span class="detail-stat-l">Views</span></div>
         </div>
 
         <div class="detail-actions">
@@ -1447,8 +1459,7 @@ async function openDetail(postId, scrollToComments = false) {
     document.getElementById('comment-input').placeholder = `Reply to ${user.username}…`;
 
     // Track view
-    await recordView(postId);
-    await syncViewCount(postId);
+    recordView(postId);
 
     // Load comments
     await loadComments(postId);
@@ -2036,17 +2047,7 @@ function walletAction(type) {
 
 async function recordView(postId) {
   if (!currentUser || !postId) return;
-  try {
-    const el = document.querySelector(`.poster[data-post-id="${postId}"]`);
-    if (el) el.dataset.viewTracked = 'true';
-    const { error } = await supabase.rpc('record_post_view', {
-      p_post_id: postId,
-      p_user_id: currentUser.id
-    });
-    if (error) console.warn('recordView error (non-fatal):', error.message);
-  } catch (err) {
-    console.warn('recordView error (non-fatal):', err.message);
-  }
+  supabase.rpc('record_post_view', { p_post_id: postId, p_user_id: currentUser.id }).catch(() => {});
 }
 
 // ══════════════════════════════════════════
