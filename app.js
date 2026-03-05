@@ -1259,7 +1259,7 @@ async function undoRepost(postId, btn) {
 
     if (deleteError) throw deleteError;
 
-    await supabase.rpc('decrement_repost_count', { post_id: postId }).catch(() => {});
+    const { error: _e_decrement_repost_count } = await supabase.rpc('decrement_repost_count', { post_id: postId }); // ignore error
     repostedPosts.delete(postId);
 
     // Fetch real count and update DOM
@@ -1440,7 +1440,7 @@ async function submitPost() {
 
   // Handle repost async after UI is already updated
   if (targetId) {
-    await supabase.rpc('increment_repost_count', { post_id: targetId }).catch(() => {});
+    const { error: _e_increment_repost_count } = await supabase.rpc('increment_repost_count', { post_id: targetId }); // ignore error
 
     // Fetch real count and update DOM
     const { data: updated } = await supabase
@@ -1732,7 +1732,7 @@ function buildCommentEl(c, parentId, likedSet, postId) {
     wrap.style.transition = 'opacity 0.25s, transform 0.25s';
     wrap.style.opacity = '0'; wrap.style.transform = 'scale(0.95)';
     setTimeout(() => wrap.remove(), 250);
-    supabase.rpc('increment_post_comment_count', { pid: postId, delta: -1 }).catch(() => {});
+    supabase.rpc('increment_post_comment_count', { pid: postId, delta: -1 });
     updateCommentCountDelta(-1);
   });
 
@@ -1782,7 +1782,7 @@ async function submitComment(postId, parentId, content) {
   }).select(`id,content,created_at,like_count,parent_id,user_id,user:users(id,username,avatar)`).single();
 
   if (!error) {
-    supabase.rpc('increment_post_comment_count', { pid: postId, delta: 1 }).catch(() => {});
+    supabase.rpc('increment_post_comment_count', { pid: postId, delta: 1 });
     if (!parentId) {
       updateCommentCountDelta(1);
       const list = document.getElementById('comments-list');
@@ -1826,11 +1826,11 @@ async function toggleCommentLike(commentId, btn) {
 
   if (newLiked) {
     supabase.from('comment_likes').insert({ comment_id: commentId, user_id: currentUser.id }).then(({ error }) => {
-      if (!error) supabase.rpc('increment_comment_like', { cid: commentId, delta: 1 }).catch(() => {});
+      if (!error) supabase.rpc('increment_comment_like', { cid: commentId, delta: 1 });
     });
   } else {
     supabase.from('comment_likes').delete().eq('comment_id', commentId).eq('user_id', currentUser.id).then(() => {
-      supabase.rpc('increment_comment_like', { cid: commentId, delta: -1 }).catch(() => {});
+      supabase.rpc('increment_comment_like', { cid: commentId, delta: -1 });
     });
   }
 }
