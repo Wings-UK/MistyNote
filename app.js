@@ -126,7 +126,7 @@ async function handleAuth() {
           await bootApp();
           return;
         }
-        errorEl.style.color = '#00c48c';
+        errorEl.style.color = '#6C47FF';
         errorEl.textContent = 'Account created! Check your email to verify, then sign in.';
       }
     } else {
@@ -714,11 +714,11 @@ function createFeedPost(p) {
     repostBtn.classList.add('reposted');
     const svg = repostBtn.querySelector('.repost-icon');
     if (svg) {
-      svg.setAttribute('stroke', '#00c48c');
+      svg.setAttribute('stroke', '#6C47FF');
       svg.setAttribute('stroke-width', '2.5');
     }
     const span = repostBtn.querySelector('span');
-    if (span) span.style.color = '#00c48c';
+    if (span) span.style.color = '#6C47FF';
   }
 
   // Like button — check initial state
@@ -842,11 +842,9 @@ function injectFeedPostStyles() {
 
     .repost-btn { display: flex; width: 55px; align-items: center; gap: 10px; cursor: pointer; font-size: 15px; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: #000000; }
     .repost-btn:hover { color: var(--text); }
-    .repost-icon { transition: filter 0.2s ease; }
-    .repost-btn.reposted .repost-icon {
-      filter: invert(29%) sepia(89%) saturate(400%) hue-rotate(110deg) brightness(90%) contrast(130%) drop-shadow(0 0 0.6px #065f46);
-    }
-    .repost-btn.reposted span { color: #065f46; font-weight: 500; }
+    .repost-icon { transition: stroke 0.2s ease; }
+    .repost-btn.reposted .repost-icon { stroke: #6C47FF; stroke-width: 2.5; }
+    .repost-btn.reposted span { color: #6C47FF; font-weight: 600; }
 
     .heart-ai { width: 55px; gap: 10px; display: flex; align-items: center; cursor: pointer; }
     .heart-clickable { cursor: pointer; }
@@ -1146,11 +1144,11 @@ function setRepostUI(postId, reposted) {
     btn.classList.toggle('reposted', reposted);
     const svg = btn.querySelector('.repost-icon');
     if (svg) {
-      svg.setAttribute('stroke', reposted ? '#00c48c' : '#000000');
+      svg.setAttribute('stroke', reposted ? '#6C47FF' : '#000000');
       svg.setAttribute('stroke-width', reposted ? '2.5' : '2');
     }
     const span = btn.querySelector('span');
-    if (span && reposted) span.style.color = '#00c48c';
+    if (span && reposted) span.style.color = '#6C47FF';
     else if (span) span.style.color = '';
   });
   // Detail page repost button
@@ -1159,7 +1157,7 @@ function setRepostUI(postId, reposted) {
     btn.classList.toggle('reposted', reposted);
     const svg = btn.querySelector('.repost-icon');
     if (svg) {
-      svg.setAttribute('stroke', reposted ? '#00c48c' : '#000000');
+      svg.setAttribute('stroke', reposted ? '#6C47FF' : '#000000');
       svg.setAttribute('stroke-width', reposted ? '2.5' : '2');
     }
   });
@@ -1221,7 +1219,7 @@ async function handleRepost(postId, btn) {
       const preview = document.getElementById('composer-repost-preview');
       preview.innerHTML = `<div class="composer-repost-card">
         <div class="composer-repost-label">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#00c48c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#6C47FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
           Reposting from ${escHtml(orig.user?.username || '')}
         </div>
         ${orig.content ? `<p class="composer-repost-text">${escHtml(orig.content.slice(0,100))}${orig.content.length>100?'…':''}</p>` : ''}
