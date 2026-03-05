@@ -835,11 +835,12 @@ function injectFeedPostStyles() {
 
     .repost-btn { display: flex; width: 55px; align-items: center; gap: 10px; cursor: pointer; font-size: 15px; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: #000000; }
     .repost-btn:hover { color: var(--text); }
-    .repost-icon { transition: filter 0.2s ease; }
+    .repost-icon { transition: stroke 0.2s ease; }
     .repost-btn.reposted .repost-icon {
-      filter: invert(29%) sepia(89%) saturate(400%) hue-rotate(110deg) brightness(90%) contrast(130%) drop-shadow(0 0 0.6px #065f46);
+      stroke: #00c48c;
+      stroke-width: 2.5;
     }
-    .repost-btn.reposted span { color: #065f46; font-weight: 500; }
+    .repost-btn.reposted span { color: #00c48c; font-weight: 500; }
 
     .heart-ai { width: 55px; gap: 10px; display: flex; align-items: center; cursor: pointer; }
     .heart-clickable { cursor: pointer; }
@@ -1137,6 +1138,11 @@ function setRepostUI(postId, reposted) {
   document.querySelectorAll(`.repost-btn[data-post-id="${postId}"]`).forEach(btn => {
     btn.dataset.reposted = reposted ? 'true' : 'false';
     btn.classList.toggle('reposted', reposted);
+    const svg = btn.querySelector('.repost-icon');
+    if (svg) {
+      svg.setAttribute('stroke', reposted ? '#00c48c' : '#000000');
+      svg.setAttribute('stroke-width', reposted ? '2.5' : '2');
+    }
   });
   // Detail page repost button
   document.querySelectorAll(`.detail-action.repost-action[data-post-id="${postId}"]`).forEach(btn => {
@@ -1155,7 +1161,7 @@ async function syncRepostCount(postId) {
 
     // Feed cards
     document.querySelectorAll(`.repost-btn[data-post-id="${postId}"] span`)
-      .forEach(sp => { sp.textContent = count > 0 ? fmtNum(count) : ''; });
+      .forEach(sp => { sp.textContent = count > 0 ? fmtNum(count) : '0'; });
 
     // Detail page stat
     document.querySelectorAll('.repost-count-display')
