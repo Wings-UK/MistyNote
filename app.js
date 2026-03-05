@@ -1166,6 +1166,7 @@ async function syncRepostCount(postId) {
 }
 
 
+async function handleRepost(postId, btn) {
   if (!currentUser) { showToast('Sign in to repost'); return; }
   const alreadyReposted = btn?.dataset.reposted === 'true';
 
