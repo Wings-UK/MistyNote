@@ -486,11 +486,13 @@ async function loadFeed(reset = false) {
       if (loadedPostIds.has(p.id)) continue;
       loadedPostIds.add(p.id);
       const el = createFeedPost(p);
-      if (el) list.appendChild(el);
+      if (el) { list.appendChild(el); observePost(el); }
     }
 
     feedOffset += posts.length;
     if (posts.length < PER_PAGE) feedExhausted = true;
+
+    reObserveAllFeedPosts();
 
     // Batch check likes
     checkLikedPosts([...loadedPostIds]);
@@ -937,30 +939,84 @@ function skeletonPost() {
   </div>`;
 }
 
-// ── INTERSECTION OBSERVER (infinite scroll + views) ──
-let viewObserver;
+// ── INTERSECTION OBSERVER (infinite scroll) ──
+let scrollObserver;
 function initIntersectionObserver() {
-  viewObserver = new IntersectionObserver(entries => {
+  scrollObserver = new IntersectionObserver(entries => {
     entries.forEach(entry => {
       if (!entry.isIntersecting) return;
+      if (entry.target.id === 'feed-load-trigger') loadFeed();
+    });
+  }, { threshold: 0.1 });
+
+  const trigger = document.getElementById('feed-load-trigger');
+  if (trigger) scrollObserver.observe(trigger);
+}
+
+// ── VIEW TRACKING ──
+let _viewObserver = null;
+
+function getViewObserver() {
+  if (_viewObserver) return _viewObserver;
+
+  _viewObserver = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
       const el = entry.target;
-      if (el.id === 'feed-load-trigger') { loadFeed(); return; }
       const postId = el.dataset.postId;
-      if (!postId || el.dataset.viewed) return;
-      el.dataset.viewed = '1';
-      setTimeout(() => {
-        if (!document.contains(el)) return;
-        recordView(postId);
-      }, 1500);
+      if (!postId) return;
+
+      if (entry.isIntersecting) {
+        // Must be visible for 1s before counting — mirrors X's heuristic
+        if (el.dataset.viewTracked === 'true') return;
+        el._viewTimer = setTimeout(async () => {
+          if (!document.contains(el)) return;
+          await recordView(postId);
+          await syncViewCount(postId);
+        }, 1000);
+      } else {
+        // Scrolled away before 1s — cancel and reset so it can retry
+        if (el._viewTimer) {
+          clearTimeout(el._viewTimer);
+          el._viewTimer = null;
+          el.dataset.viewTracked = 'false';
+        }
+      }
     });
   }, { threshold: 0.6 });
 
-  const trigger = document.getElementById('feed-load-trigger');
-  if (trigger) viewObserver.observe(trigger);
+  return _viewObserver;
 }
 
 function observePost(el) {
-  if (viewObserver && el) viewObserver.observe(el);
+  if (el && el.dataset.postId) getViewObserver().observe(el);
+}
+
+function reObserveAllFeedPosts() {
+  document.querySelectorAll('.poster[data-post-id]').forEach(el => {
+    if (el.dataset.viewTracked !== 'true') getViewObserver().observe(el);
+  });
+}
+
+async function syncViewCount(postId) {
+  if (!postId) return;
+  try {
+    const { data, error } = await supabase
+      .from('posts').select('views').eq('id', postId).single();
+    if (error || !data) return;
+    const count = data.views ?? 0;
+
+    // Update feed card
+    document.querySelectorAll(`.poster[data-post-id="${postId}"] .twits .viewe`)
+      .forEach(el => { el.textContent = `${fmtNum(count) || 0} views`; });
+
+    // Update detail page if open for this post
+    if (detailPostId === postId) {
+      const detailViewEl = document.querySelector(`.detail-stat-n[data-type="views"]`);
+      if (detailViewEl) animateCount(detailViewEl, count);
+    }
+  } catch (err) {
+    console.warn('syncViewCount error:', err.message);
+  }
 }
 
 // ══════════════════════════════════════════
@@ -1356,7 +1412,7 @@ async function openDetail(postId, scrollToComments = false) {
         <div class="detail-stats">
           <div class="detail-stat"><span class="detail-stat-n" data-type="likes">${fmtNum(p.like_count||0)}</span><span class="detail-stat-l">Likes</span></div>
           <div class="detail-stat"><span class="detail-stat-n repost-count-display">${fmtNum(p.repost_count||0)}</span><span class="detail-stat-l">Reposts</span></div>
-          <div class="detail-stat"><span class="detail-stat-n">${fmtNum(p.views||0)}</span><span class="detail-stat-l">Views</span></div>
+          <div class="detail-stat"><span class="detail-stat-n" data-type="views">${fmtNum(p.views||0)}</span><span class="detail-stat-l">Views</span></div>
         </div>
 
         <div class="detail-actions">
@@ -1391,7 +1447,8 @@ async function openDetail(postId, scrollToComments = false) {
     document.getElementById('comment-input').placeholder = `Reply to ${user.username}…`;
 
     // Track view
-    recordView(postId);
+    await recordView(postId);
+    await syncViewCount(postId);
 
     // Load comments
     await loadComments(postId);
@@ -1979,7 +2036,17 @@ function walletAction(type) {
 
 async function recordView(postId) {
   if (!currentUser || !postId) return;
-  supabase.rpc('record_post_view', { p_post_id: postId, p_user_id: currentUser.id }).catch(() => {});
+  try {
+    const el = document.querySelector(`.poster[data-post-id="${postId}"]`);
+    if (el) el.dataset.viewTracked = 'true';
+    const { error } = await supabase.rpc('record_post_view', {
+      p_post_id: postId,
+      p_user_id: currentUser.id
+    });
+    if (error) console.warn('recordView error (non-fatal):', error.message);
+  } catch (err) {
+    console.warn('recordView error (non-fatal):', err.message);
+  }
 }
 
 // ══════════════════════════════════════════
