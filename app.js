@@ -411,7 +411,34 @@ function injectProfileStyles() {
     .prf-btn-icon { width:36px; height:36px; padding:0; border-radius:50%; justify-content:center; background:var(--bg2); border:1.5px solid var(--border,#e5e7eb); color:var(--text); }
     .prf-btn-icon:active { transform:scale(.94); }
 
-    /* ── STOREFRONT ── */
+    /* ── STICKY TRANSPARENT HEADER ── */
+    #user-profile-header {
+      position:fixed; top:0; left:0; right:0;
+      background:transparent !important;
+      backdrop-filter:none !important;
+      border:none !important;
+      transition:background .25s, backdrop-filter .25s;
+      z-index:200;
+    }
+    #user-profile-header.scrolled {
+      background:var(--bg,.95) !important;
+      backdrop-filter:blur(12px) !important;
+      border-bottom:1px solid var(--border,#e5e7eb) !important;
+    }
+    #user-profile-header .back-btn,
+    #user-profile-header .header-action {
+      background:rgba(0,0,0,0.3);
+      backdrop-filter:blur(8px);
+      border-radius:50%;
+      transition:background .25s;
+    }
+    #user-profile-header.scrolled .back-btn,
+    #user-profile-header.scrolled .header-action {
+      background:var(--bg2,#f3f4f6);
+      backdrop-filter:none;
+    }
+
+
     .prf-storefront-banner { margin:18px 16px 0; background:linear-gradient(135deg,#f4f3ff,#fdf2ff); border:1.5px solid #ddd6fe; border-radius:16px; padding:14px 16px; display:flex; align-items:center; gap:12px; cursor:pointer; transition:all .18s; }
     .prf-storefront-banner:active { transform:scale(.98); }
     .prf-storefront-icon { font-size:28px; flex-shrink:0; }
@@ -426,7 +453,7 @@ function injectProfileStyles() {
       border-top:1px solid var(--border,#e5e7eb);
       border-bottom:1px solid var(--border,#e5e7eb);
       background:var(--bg);
-      position:sticky; top:0; z-index:10;
+      position:sticky; top:56px; z-index:10;
       backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
     }
     .prf-icon-tab {
@@ -758,14 +785,8 @@ async function showUserProfile(userId) {
             ? `<img src="${escHtml(profile.cover)}" alt="" class="prf-cover-img">`
             : `<div class="prf-cover-gradient"></div>`}
           <div class="prf-cover-bar">
-            <button class="prf-back-btn" onclick="slideBack()">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
-            </button>
-            <div class="prf-cover-actions">
-              <button class="prf-cover-action-btn" onclick="showToast('More options coming soon')">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/><circle cx="5" cy="12" r="1.5"/></svg>
-              </button>
-            </div>
+            <div></div>
+            <div class="prf-cover-actions"></div>
           </div>
         </div>
 
@@ -842,6 +863,14 @@ async function showUserProfile(userId) {
     body._uprfData = { posts: allPosts, mediaPosts, likedPosts };
     renderPrfPosts(allPosts, `uprf-list-${userId}`, false);
     document.getElementById(`uprf-list-${userId}`)._loaded = true;
+
+    // Transparent header becomes opaque on scroll
+    const upPage = document.getElementById('page-user-profile');
+    const upHeader = document.getElementById('user-profile-header');
+    const onScroll = () => upHeader.classList.toggle('scrolled', upPage.scrollTop > 160);
+    upPage.removeEventListener('scroll', upPage._uprfScroll || null);
+    upPage._uprfScroll = onScroll;
+    upPage.addEventListener('scroll', onScroll);
   });
 }
 
