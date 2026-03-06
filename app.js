@@ -642,7 +642,7 @@ function createFeedPost(p) {
     <div class="lefto">
       <div class="dick">
         <div><svg xmlns="http://www.w3.org/2000/svg" class="lefti" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><path d="M8 8 Q18 10 17 20"/></svg></div>
-        <div><p class="viewe echoes-btn" data-post-id="${p.id}" onclick="openEchoes('${p.id}', event)"><span class="echoes-count">${commentCount || 0}</span> Echoes</p></div>
+        <div><p class="viewe echoes-btn" data-post-id="${p.id}" onclick="openEchoes('${p.id}', event)"><span class="echoes-count">${commentCount || 0}</span> echoes</p></div>
       </div>
       <div class="twits">
         <div><svg xmlns="http://www.w3.org/2000/svg" class="lefti" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div>
@@ -796,6 +796,8 @@ function injectFeedPostStyles() {
     .post-author-link { display: flex; align-items: center; gap: 4px; text-decoration: none; cursor: pointer; width: fit-content; }
     .post-author-link:hover .jerry { text-decoration: underline; text-decoration-thickness: 2px; }
     .jerry { font-weight: 600; font-size: 15px; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: var(--text); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* Consistent username weight across all pages */
+    .detail-name, .profile-name, .original-card-name { font-weight: 600; }
     .verif { width: 15px; flex-shrink: 0; display: block; }
     .time { font-size: 12px; color: var(--text2); margin: 0; line-height: 1; }
     .time:hover { text-decoration: underline; }
@@ -834,7 +836,7 @@ function injectFeedPostStyles() {
     .lefti { width: 15px; height: 15px; display: block; }
     .viewe { font-size: 13px; color: var(--text2); margin: 0; line-height: 1; }
     .werey { font-weight: 600; }
-    .echoes-count { font-weight: 700; color: var(--text); }
+    .echoes-count { font-weight: 400; color: var(--text2); }
     .echoes-btn { cursor: pointer; transition: color 0.15s; }
     .echoes-btn:hover { color: #6C47FF; }
     .echoes-btn:hover .echoes-count { color: #6C47FF; }
@@ -897,7 +899,7 @@ function injectFeedPostStyles() {
     }
     .echo-content { flex: 1; min-width: 0; }
     .echo-header { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
-    .echo-username { font-weight: 700; font-size: 14px; color: var(--text); }
+    .echo-username { font-weight: 600; font-size: 14px; color: var(--text); }
     .echo-time { font-size: 12px; color: var(--text2); }
     .echo-type-badge {
       font-size: 11px; font-weight: 600; padding: 2px 7px;
@@ -2156,7 +2158,7 @@ function injectEchoesPanel() {
   el.innerHTML = `
     <div class="echoes-sheet" id="echoes-sheet">
       <div class="echoes-handle-row">
-        <span class="echoes-title">✦ Echoes</span>
+        <span class="echoes-title">✦ echoes</span>
         <button class="echoes-close" onclick="closeEchoes()">✕</button>
       </div>
       <div class="echoes-tabs">
