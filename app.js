@@ -303,16 +303,16 @@ function injectProfileStyles() {
 
     /* ── AVATAR — half over cover, half out, colourful ring ── */
     .prf-avatar-wrap {
-      position:absolute; bottom:-44px; left:20px;
+      position:absolute; bottom:-44px; right:20px;
       width:88px; height:88px; border-radius:50%;
-      z-index:3; transition:transform .2s;
+      z-index:100; transition:transform .2s;
     }
     .prf-avatar-wrap:active { transform:scale(.97); }
     .prf-avatar {
       width:100%; height:100%; border-radius:50%;
       object-fit:cover; object-position:top; display:block;
       border:4px solid var(--bg,#fff);
-      position:relative; z-index:1;
+      position:relative; z-index:100;
     }
     .prf-avatar-ring {
       position:absolute; inset:-3px; border-radius:50%;
@@ -344,7 +344,7 @@ function injectProfileStyles() {
     .prf-cover-action-btn:active { background:rgba(0,0,0,.55); }
 
     /* ── IDENTITY — left-aligned, space top for avatar overlap ── */
-    .prf-identity { padding:52px 16px 0 16px; position:relative; z-index:2; }
+    .prf-identity { padding:20px 16px 0 16px; position:relative; z-index:2; }
     .prf-name { font-size:21px; font-weight:700; color:var(--text); margin:0; line-height:1.2; }
     .prf-name-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
     .prf-verified svg { display:block; }
