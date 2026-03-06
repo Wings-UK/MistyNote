@@ -370,7 +370,7 @@ function injectProfileStyles() {
     .prf-masonry-stat { font-size:12px; color:#fff; font-weight:600; display:flex; align-items:center; gap:3px; }
 
     /* List posts panel — reuses .poster cards */
-    #prf-panel-posts, #prf-panel-likes { display:flex; flex-direction:column; gap:10px; padding:10px 0; }
+    #prf-panel-posts, #prf-panel-likes, .prf-posts-panel { display:flex; flex-direction:column; gap:10px; padding:10px 0; }
 
     /* Saved / Bookmarks placeholder */
     .prf-saved-placeholder { margin:20px 16px; background:linear-gradient(135deg,#f0fdf4,#dcfce7); border:1.5px solid #bbf7d0; border-radius:18px; padding:24px 20px; display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center; }
@@ -732,7 +732,7 @@ async function showUserProfile(userId) {
           <button class="prf-tab" onclick="switchUPrfTab('media','${userId}',this)">Media</button>
         </div>
 
-        <div id="uprf-posts-${userId}"   class="prf-panel"></div>
+        <div id="uprf-posts-${userId}"   class="prf-panel prf-posts-panel"></div>
         <div id="uprf-masonry-${userId}" class="prf-panel" style="display:none"></div>
         <div id="uprf-media-${userId}"   class="prf-panel" style="display:none"></div>
       </div>
@@ -1919,7 +1919,7 @@ async function openDetail(postId, scrollToComments = false) {
     if (isRepost && orig) {
       origCardHtml = `<div class="original-card" style="margin-left:0;cursor:pointer" onclick="openDetail('${orig.id}')">
         <div class="original-card-inner">
-          <div class="original-card-header"><img class="original-card-avatar" src="${origUser.avatar||''}" onerror="this.style.display='none'"><span class="original-card-name">${escHtml(origUser.username)}</span></div>
+          <div class="original-card-header"><img class="original-card-avatar" src="${origUser.avatar||''}" onerror="this.style.display='none'"><span class="original-card-name">${escHtml(origUser.username)}</span>${orig.created_at ? `<span style="font-size:12px;color:var(--text2);margin-left:auto">${timeSince(orig.created_at)}</span>` : ''}</div>
           ${orig.content ? `<p class="original-card-text">${escHtml(orig.content.slice(0,200))}</p>` : ''}
         </div>
         ${orig.image ? `<img class="original-card-img" src="${orig.image}">` : ''}
@@ -2927,7 +2927,8 @@ function timeSince(dateStr) {
 }
 
 function fmtNum(n) {
-  if (!n || n === 0) return '';
+  if (n === null || n === undefined) return '0';
+  if (n === 0) return '0';
   if (n >= 1000000) return (n/1000000).toFixed(1).replace(/\.0$/,'') + 'M';
   if (n >= 1000) return (n/1000).toFixed(1).replace(/\.0$/,'') + 'K';
   return String(n);
