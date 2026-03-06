@@ -502,6 +502,8 @@ async function renderMyProfile() {
   const posts         = postsRes.data || [];
   const likedPostsArr = (likedRes.data || []).map(r => r.post).filter(Boolean);
   const mediaPosts    = posts.filter(p => p.image || p.video || p.reposted_post?.image);
+  const totalViews    = posts.reduce((s, p) => s + (p.views || 0), 0);
+  const totalLikes    = posts.reduce((s, p) => s + (p.like_count || 0), 0);
 
   likedPostsArr.forEach(p => { if (p?.id) likedPosts.add(p.id); });
 
