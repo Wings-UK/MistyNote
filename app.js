@@ -303,9 +303,10 @@ function injectProfileStyles() {
 
     /* ── AVATAR — half over cover, half out, colourful ring ── */
     .prf-avatar-wrap {
-      position:absolute; bottom:-44px; right:20px;
+      float:right; margin-right:20px; margin-top:-44px;
       width:88px; height:88px; border-radius:50%;
-      z-index:100; transition:transform .2s;
+      z-index:100; position:relative;
+      transition:transform .2s;
     }
     .prf-avatar-wrap:active { transform:scale(.97); }
     .prf-avatar {
@@ -486,10 +487,10 @@ async function renderMyProfile() {
           <div class="prf-cover-actions">
           </div>
         </div>
-        <div class="prf-avatar-wrap">
-          <div class="prf-avatar-ring"></div>
-          <img class="prf-avatar" src="${escHtml(profile.avatar||'')}" onerror="this.src=''" alt="">
-        </div>
+      </div>
+      <div class="prf-avatar-wrap">
+        <div class="prf-avatar-ring"></div>
+        <img class="prf-avatar" src="${escHtml(profile.avatar||'')}" onerror="this.src=''" alt="">
       </div>
 
       <!-- IDENTITY -->
@@ -719,10 +720,10 @@ async function showUserProfile(userId) {
               </button>
             </div>
           </div>
-          <div class="prf-avatar-wrap">
-            <div class="prf-avatar-ring"></div>
-            <img class="prf-avatar" src="${escHtml(profile.avatar||'')}" onerror="this.src=''" alt="">
-          </div>
+        </div>
+        <div class="prf-avatar-wrap">
+          <div class="prf-avatar-ring"></div>
+          <img class="prf-avatar" src="${escHtml(profile.avatar||'')}" onerror="this.src=''" alt="">
         </div>
 
         <div class="prf-identity">
@@ -750,25 +751,42 @@ async function showUserProfile(userId) {
           </div>
         </div>
 
-        <div class="prf-icon-tabs" id="uprf-tabs-${userId}">
-          <div class="prf-icon-tab active" onclick="switchUPrfTab('posts','${userId}',this)">
-            <div class="prf-icon-tab-dot"></div>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        <!-- STOREFRONT TEASER -->
+        <div class="prf-storefront-banner" onclick="showToast('Storefronts coming soon 🛍️')">
+          <div class="prf-storefront-icon">🛍️</div>
+          <div class="prf-storefront-text">
+            <div class="prf-storefront-title">Open your storefront</div>
+            <div class="prf-storefront-sub">Sell anything. Get paid safely.</div>
           </div>
-          <div class="prf-icon-tab" onclick="switchUPrfTab('list','${userId}',this)">
+          <span class="prf-storefront-pill">Soon</span>
+        </div>
+
+        <!-- ICON TABS: List · Media · Likes (no Saved on other profiles) -->
+        <div class="prf-icon-tabs" id="uprf-tabs-${userId}">
+          <div class="prf-icon-tab active" onclick="switchUPrfTab('list','${userId}',this)">
             <div class="prf-icon-tab-dot"></div>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
           </div>
+          <div class="prf-icon-tab" onclick="switchUPrfTab('media','${userId}',this)">
+            <div class="prf-icon-tab-dot"></div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          </div>
+          <div class="prf-icon-tab" onclick="switchUPrfTab('likes','${userId}',this)">
+            <div class="prf-icon-tab-dot"></div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+          </div>
         </div>
 
-        <div id="uprf-posts-${userId}" class="prf-panel"></div>
-        <div id="uprf-list-${userId}"  class="prf-panel prf-posts-panel" style="display:none"></div>
+        <div id="uprf-list-${userId}"  class="prf-panel prf-posts-panel"></div>
+        <div id="uprf-media-${userId}" class="prf-panel" style="display:none"></div>
+        <div id="uprf-likes-${userId}" class="prf-panel prf-posts-panel" style="display:none"></div>
       </div>
     `;
 
-    body._uprfData = { posts: allPosts };
-    renderPrfMasonry(allPosts, `uprf-posts-${userId}`);
-    document.getElementById(`uprf-posts-${userId}`)._loaded = true;
+    const mediaPosts = allPosts.filter(p => p.image || p.video || p.reposted_post?.image);
+    body._uprfData = { posts: allPosts, mediaPosts };
+    renderPrfPosts(allPosts, `uprf-list-${userId}`, false);
+    document.getElementById(`uprf-list-${userId}`)._loaded = true;
   });
 }
 
@@ -776,16 +794,17 @@ function switchUPrfTab(tab, userId, el) {
   const body = document.getElementById('user-profile-body');
   document.querySelectorAll(`#uprf-tabs-${userId} .prf-icon-tab`).forEach(t => t.classList.remove('active'));
   el.classList.add('active');
-  ['posts','list'].forEach(t => {
+  ['list','media','likes'].forEach(t => {
     const p = document.getElementById(`uprf-${t}-${userId}`);
     if (p) p.style.display = 'none';
   });
   const panel = document.getElementById(`uprf-${tab}-${userId}`);
   if (!panel) return;
-  panel.style.display = tab === 'list' ? 'flex' : 'block';
+  panel.style.display = (tab === 'list' || tab === 'likes') ? 'flex' : 'block';
   if (panel._loaded) return;
-  const { posts } = body._uprfData || {};
-  if (tab === 'list') renderPrfPosts(posts || [], `uprf-list-${userId}`, false);
+  const { posts, mediaPosts } = body._uprfData || {};
+  if (tab === 'media') renderPrfMasonry(mediaPosts || [], `uprf-media-${userId}`, true);
+  if (tab === 'likes') renderPrfPosts([], `uprf-likes-${userId}`, false); // no liked data on other profiles
   panel._loaded = true;
 }
 
