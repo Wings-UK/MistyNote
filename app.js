@@ -414,28 +414,23 @@ function injectProfileStyles() {
     /* ── STICKY TRANSPARENT HEADER ── */
     #user-profile-header {
       position:fixed; top:0; left:0; right:0;
-      background:transparent !important;
+      background:rgba(0,0,0,0) !important;
       backdrop-filter:none !important;
       border:none !important;
-      transition:background .25s, backdrop-filter .25s;
+      transition:background .2s ease;
       z-index:200;
-    }
-    #user-profile-header.scrolled {
-      background:var(--bg,.95) !important;
-      backdrop-filter:blur(12px) !important;
-      border-bottom:1px solid var(--border,#e5e7eb) !important;
     }
     #user-profile-header .back-btn,
     #user-profile-header .header-action {
-      background:rgba(0,0,0,0.3);
-      backdrop-filter:blur(8px);
-      border-radius:50%;
-      transition:background .25s;
+      background:transparent !important;
+      backdrop-filter:none !important;
+      border:none !important;
+      box-shadow:none !important;
     }
-    #user-profile-header.scrolled .back-btn,
-    #user-profile-header.scrolled .header-action {
-      background:var(--bg2,#f3f4f6);
-      backdrop-filter:none;
+    #user-profile-header .back-btn svg,
+    #user-profile-header .header-action svg {
+      stroke:white;
+      fill:white;
     }
 
 
@@ -864,10 +859,13 @@ async function showUserProfile(userId) {
     renderPrfPosts(allPosts, `uprf-list-${userId}`, false);
     document.getElementById(`uprf-list-${userId}`)._loaded = true;
 
-    // Transparent header becomes opaque on scroll
+    // Header fades from transparent to black as user scrolls
     const upPage = document.getElementById('page-user-profile');
     const upHeader = document.getElementById('user-profile-header');
-    const onScroll = () => upHeader.classList.toggle('scrolled', upPage.scrollTop > 160);
+    const onScroll = () => {
+      const opacity = Math.min(upPage.scrollTop / 80, 1);
+      upHeader.style.background = `rgba(0,0,0,${opacity})`;
+    };
     upPage.removeEventListener('scroll', upPage._uprfScroll || null);
     upPage._uprfScroll = onScroll;
     upPage.addEventListener('scroll', onScroll);
