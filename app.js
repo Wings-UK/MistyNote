@@ -240,6 +240,14 @@ function slideBack() {
   // Hide floating header
   const floatingHeader = document.getElementById('user-profile-header');
   if (floatingHeader) floatingHeader.style.display = 'none';
+  // Reset mini elements
+  const miniIdentity = document.getElementById('uprf-header-identity');
+  const miniFollow   = document.getElementById('uprf-header-follow');
+  if (miniIdentity) { miniIdentity.style.opacity='0'; miniIdentity.style.pointerEvents='none'; }
+  if (miniFollow)   { miniFollow.style.opacity='0'; miniFollow.style.display='none'; }
+  if (document.getElementById('page-user-profile')?._uprfAvatarObs) {
+    document.getElementById('page-user-profile')._uprfAvatarObs.disconnect();
+  }
 
   // Restore last main page
   const lastMain = slideStack.length > 0 ? slideStack[slideStack.length - 1] : 'feed';
@@ -876,11 +884,68 @@ async function showUserProfile(userId) {
     const upPage   = document.getElementById('page-user-profile');
     const upHeader = document.getElementById('user-profile-header');
     if (upPage._uprfScroll) upPage.removeEventListener('scroll', upPage._uprfScroll);
+
+    // ── 1. Sample dominant colour from cover photo ──
+    let headerR = 0, headerG = 0, headerB = 0; // default black
+    const coverImg = body.querySelector('.prf-cover-img');
+    if (coverImg) {
+      const sampleColour = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = 50; canvas.height = 10;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(coverImg, 0, 0, 50, 10);
+          const d = ctx.getImageData(0, 0, 50, 10).data;
+          let r=0,g=0,b=0,count=0;
+          for (let i=0;i<d.length;i+=4){ r+=d[i];g+=d[i+1];b+=d[i+2];count++; }
+          r=Math.round(r/count*0.4); // darken by 60%
+          g=Math.round(g/count*0.4);
+          b=Math.round(b/count*0.4);
+          headerR=r; headerG=g; headerB=b;
+        } catch(e) { /* CORS fallback — stays black */ }
+      };
+      if (coverImg.complete) sampleColour();
+      else coverImg.addEventListener('load', sampleColour, {once:true});
+    }
+
+    // ── 2. Scroll → header bg colour ──
     upPage._uprfScroll = () => {
       const opacity = Math.min(upPage.scrollTop / 60, 1);
-      upHeader.style.background = `rgba(0,0,0,${opacity})`;
+      upHeader.style.background = `rgba(${headerR},${headerG},${headerB},${opacity})`;
     };
     upPage.addEventListener('scroll', upPage._uprfScroll);
+
+    // ── 3. Mini avatar + follow in header via IntersectionObserver ──
+    const miniIdentity = document.getElementById('uprf-header-identity');
+    const miniAvatar   = document.getElementById('uprf-header-avatar');
+    const miniFollow   = document.getElementById('uprf-header-follow');
+
+    // Set mini avatar src and wire follow button to main follow btn
+    miniAvatar.src = profile.avatar || '';
+    const mainFollowBtn = document.getElementById(`follow-btn-${userId}`);
+    miniFollow.onclick = () => mainFollowBtn?.click();
+    // Sync follow label
+    const syncFollowLabel = () => {
+      if (!mainFollowBtn) return;
+      const isFollowing = mainFollowBtn.classList.contains('prf-btn-following');
+      miniFollow.textContent = isFollowing ? 'Following' : 'Follow';
+    };
+    syncFollowLabel();
+    const followObserver = new MutationObserver(syncFollowLabel);
+    if (mainFollowBtn) followObserver.observe(mainFollowBtn, { attributes:true, attributeFilter:['class'] });
+
+    // Watch avatar element — when it leaves viewport top, show mini
+    const avatarWrap = body.querySelector('.prf-avatar-wrap');
+    if (upPage._uprfAvatarObs) upPage._uprfAvatarObs.disconnect();
+    upPage._uprfAvatarObs = new IntersectionObserver(([entry]) => {
+      const visible = entry.isIntersecting;
+      miniIdentity.style.opacity  = visible ? '0' : '1';
+      miniIdentity.style.pointerEvents = visible ? 'none' : 'auto';
+      miniFollow.style.display    = 'block';
+      miniFollow.style.opacity    = visible ? '0' : '1';
+      miniFollow.style.pointerEvents = visible ? 'none' : 'auto';
+    }, { root: upPage, threshold: 0 });
+    if (avatarWrap) upPage._uprfAvatarObs.observe(avatarWrap);
   });
 }
 
