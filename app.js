@@ -1265,10 +1265,13 @@ async function undoRepost(postId, btn) {
 
     if (deleteError) throw deleteError;
 
-    const { error: _e_decrement_repost_count } = await supabase.rpc('decrement_repost_count', { post_id: postId }); // ignore error
+    // NOTE: No manual decrement here — the DB trigger handles it automatically
+    // calling decrement_repost_count manually too would double-decrement the count
     repostedPosts.delete(postId);
 
-    // Fetch real count and update DOM
+    // Wait briefly for trigger to fire before fetching real count
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     const { data: updated } = await supabase
       .from('posts').select('repost_count').eq('id', postId).single();
     const newCount = updated?.repost_count ?? 0;
