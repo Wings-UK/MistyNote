@@ -370,7 +370,7 @@ function injectProfileStyles() {
     .prf-masonry-stat { font-size:12px; color:#fff; font-weight:600; display:flex; align-items:center; gap:3px; }
 
     /* List posts panel — reuses .poster cards */
-    #prf-panel-posts, #prf-panel-likes { display:flex; flex-direction:column; gap:0; }
+    #prf-panel-posts, #prf-panel-likes { display:flex; flex-direction:column; gap:10px; padding:10px 0; }
 
     /* Saved / Bookmarks placeholder */
     .prf-saved-placeholder { margin:20px 16px; background:linear-gradient(135deg,#f0fdf4,#dcfce7); border:1.5px solid #bbf7d0; border-radius:18px; padding:24px 20px; display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center; }
@@ -403,6 +403,7 @@ async function renderMyProfile() {
   const [postsRes, likedRes] = await Promise.all([
     supabase.from('posts')
       .select(`id,content,image,video,created_at,like_count,repost_count,views,reposted_post_id,
+               user:users(id,username,avatar),
                reposted_post:reposted_post_id(id,content,image,video,user_id,user:users(id,username,avatar))`)
       .eq('user_id', currentUser.id)
       .order('created_at', { ascending: false })
@@ -658,6 +659,7 @@ async function showUserProfile(userId) {
     const [postsRes] = await Promise.all([
       supabase.from('posts')
         .select(`id,content,image,video,created_at,like_count,repost_count,views,reposted_post_id,
+                 user:users(id,username,avatar),
                  reposted_post:reposted_post_id(id,content,image,video,user_id,user:users(id,username,avatar))`)
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
