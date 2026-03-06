@@ -404,7 +404,7 @@ async function renderMyProfile() {
     supabase.from('posts')
       .select(`id,content,image,video,created_at,like_count,repost_count,views,reposted_post_id,
                user:users(id,username,avatar),
-               reposted_post:reposted_post_id(id,content,image,video,user_id,user:users(id,username,avatar))`)
+               reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar))`)
       .eq('user_id', currentUser.id)
       .order('created_at', { ascending: false })
       .limit(60),
@@ -416,11 +416,14 @@ async function renderMyProfile() {
       .limit(60)
   ]);
 
-  const posts      = postsRes.data || [];
-  const likedPosts = (likedRes.data || []).map(r => r.post).filter(Boolean);
-  const mediaPosts = posts.filter(p => p.image || p.video || p.reposted_post?.image);
-  const totalViews = posts.reduce((s, p) => s + (p.views || 0), 0);
-  const totalLikes = posts.reduce((s, p) => s + (p.like_count || 0), 0);
+  const posts           = postsRes.data || [];
+  const likedPostsArr   = (likedRes.data || []).map(r => r.post).filter(Boolean);
+  const mediaPosts      = posts.filter(p => p.image || p.video || p.reposted_post?.image);
+  const totalViews      = posts.reduce((s, p) => s + (p.views || 0), 0);
+  const totalLikes      = posts.reduce((s, p) => s + (p.like_count || 0), 0);
+
+  // Populate global likedPosts Set so createFeedPost renders hearts filled
+  likedPostsArr.forEach(p => { if (p?.id) likedPosts.add(p.id); });
 
   container.innerHTML = `
     <div class="prf-wrap">
@@ -533,7 +536,7 @@ async function renderMyProfile() {
   }
 
   // Cache data on container for lazy tab loads
-  container._prfData = { posts, likedPosts, mediaPosts };
+  container._prfData = { posts, likedPosts: likedPostsArr, mediaPosts };
 
   // Render default tab immediately
   renderPrfPosts(posts, 'prf-panel-posts', true);
@@ -551,15 +554,16 @@ function switchPrfTab(tab, btn) {
   });
   const panel = document.getElementById('prf-panel-' + tab);
   if (!panel) return;
-  panel.style.display = 'block';
+  // posts and likes are flex containers — must use flex not block
+  panel.style.display = (tab === 'posts' || tab === 'likes') ? 'flex' : 'block';
 
-  if (panel._loaded) return; // already rendered
+  if (panel._loaded) return;
   const { posts, likedPosts, mediaPosts } = container._prfData || {};
 
-  if (tab === 'posts')   renderPrfPosts(posts || [],  'prf-panel-posts',   true);
-  if (tab === 'masonry') renderPrfMasonry(posts || [], 'prf-panel-masonry');
+  if (tab === 'posts')   renderPrfPosts(posts || [],      'prf-panel-posts',   true);
+  if (tab === 'masonry') renderPrfMasonry(posts || [],    'prf-panel-masonry');
   if (tab === 'media')   renderPrfMasonry(mediaPosts || [], 'prf-panel-media', true);
-  if (tab === 'likes')   renderPrfPosts(likedPosts || [], 'prf-panel-likes', false);
+  if (tab === 'likes')   renderPrfPosts(likedPosts || [], 'prf-panel-likes',   false);
   if (tab === 'saved')   renderPrfSaved('prf-panel-saved');
   panel._loaded = true;
 }
@@ -580,7 +584,10 @@ function renderPrfPosts(posts, containerId, isOwn) {
   container.innerHTML = '';
   posts.forEach(p => {
     const el = createFeedPost(p);
-    if (el) container.appendChild(el);
+    if (el) {
+      container.appendChild(el);
+      observePost(el); // track views from profile too
+    }
   });
 }
 
@@ -660,7 +667,7 @@ async function showUserProfile(userId) {
       supabase.from('posts')
         .select(`id,content,image,video,created_at,like_count,repost_count,views,reposted_post_id,
                  user:users(id,username,avatar),
-                 reposted_post:reposted_post_id(id,content,image,video,user_id,user:users(id,username,avatar))`)
+                 reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar))`)
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(60)
