@@ -297,32 +297,11 @@ function injectProfileStyles() {
     .prf-wrap { display:flex; flex-direction:column; padding-bottom:120px; }
 
     /* ── COVER ── */
-    .prf-cover { position:relative; width:100%; height:200px; overflow:hidden; flex-shrink:0; }
+    .prf-cover { position:relative; width:100%; height:190px; overflow:hidden; flex-shrink:0; }
     .prf-cover-img { width:100%; height:100%; object-fit:cover; display:block; }
     .prf-cover-gradient { width:100%; height:100%; background:linear-gradient(135deg,#6C47FF 0%,#a855f7 50%,#ff3b5c 100%); }
 
-    /* ── AVATAR — half over cover, half out, colourful ring ── */
-    .prf-avatar-wrap {
-      float:right; margin-right:20px; margin-top:-44px;
-      width:88px; height:88px; border-radius:50%;
-      z-index:100; position:relative;
-      transition:transform .2s;
-    }
-    .prf-avatar-wrap:active { transform:scale(.97); }
-    .prf-avatar {
-      width:100%; height:100%; border-radius:50%;
-      object-fit:cover; object-position:top; display:block;
-      border:4px solid var(--bg,#fff);
-      position:relative; z-index:100;
-    }
-    .prf-avatar-ring {
-      position:absolute; inset:-3px; border-radius:50%;
-      background:conic-gradient(#6C47FF,#ff3b5c,#ff9500,#6C47FF);
-      z-index:0; animation:prfRingSpin 6s linear infinite;
-    }
-    @keyframes prfRingSpin { to { transform:rotate(360deg); } }
-
-    /* ── TOP BAR OVER COVER — no settings, just placeholder left ── */
+    /* ── TOP BAR OVER COVER ── */
     .prf-cover-bar {
       position:absolute; top:0; left:0; right:0;
       display:flex; align-items:center; justify-content:space-between;
@@ -344,14 +323,41 @@ function injectProfileStyles() {
     }
     .prf-cover-action-btn:active { background:rgba(0,0,0,.55); }
 
-    /* ── IDENTITY — left-aligned, space top for avatar overlap ── */
-    .prf-identity { padding:20px 16px 0 16px; position:relative; z-index:2; }
+    /* ── AVATAR ROW — sits between cover and identity ── */
+    .prf-avatar-row {
+      display:flex; justify-content:space-between; align-items:flex-end;
+      padding:0 16px; margin-top:-44px; position:relative; z-index:10;
+    }
+    .prf-avatar-wrap {
+      width:88px; height:88px; border-radius:50%;
+      position:relative; flex-shrink:0;
+    }
+    .prf-avatar-wrap:active { transform:scale(.97); }
+    .prf-avatar {
+      width:100%; height:100%; border-radius:50%;
+      object-fit:cover; object-position:top; display:block;
+      border:4px solid var(--bg,#fff);
+      position:relative; z-index:2;
+    }
+    .prf-avatar-ring {
+      position:absolute; inset:-3px; border-radius:50%;
+      background:conic-gradient(#6C47FF,#ff3b5c,#ff9500,#6C47FF);
+      z-index:1; animation:prfRingSpin 6s linear infinite;
+    }
+    @keyframes prfRingSpin { to { transform:rotate(360deg); } }
+    .prf-avatar-action-btns {
+      display:flex; gap:8px; align-items:center; padding-bottom:8px;
+    }
+
+    /* ── IDENTITY ── */
+    .prf-identity { padding:12px 16px 0; position:relative; z-index:2; }
     .prf-name { font-size:21px; font-weight:700; color:var(--text); margin:0; line-height:1.2; }
-    .prf-name-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .prf-name-row { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
     .prf-verified svg { display:block; }
+    .prf-handle { font-size:14px; color:var(--text2); margin-top:3px; }
 
     /* ── LOCATION + QR ── */
-    .prf-location-row { display:flex; align-items:center; justify-content:space-between; margin-top:14px; }
+    .prf-location-row { display:flex; align-items:center; justify-content:space-between; margin-top:10px; }
     .prf-location { display:flex; align-items:center; gap:5px; font-size:14px; color:var(--text2); }
     .prf-qr-chip {
       display:flex; align-items:center; gap:5px;
@@ -362,22 +368,47 @@ function injectProfileStyles() {
     }
     .prf-qr-chip:active { background:var(--border); }
 
-    /* ── FOLLOWING · FOLLOWERS inline (original nin/bld/rkl DNA) ── */
+    /* ── FOLLOWING · FOLLOWERS inline ── */
     .prf-follow-line { margin-top:10px; font-size:15px; color:var(--text2); }
     .prf-bld { color:var(--text); font-weight:700; cursor:pointer; margin-right:2px; }
     .prf-bld:hover { text-decoration:underline; }
     .prf-follow-sep { margin:0 5px; }
 
     /* ── BIO ── */
-    .prf-bio { margin-top:14px; font-size:15px; color:var(--text); line-height:1.55; white-space:pre-wrap; word-break:break-word; }
+    .prf-bio { margin-top:10px; font-size:15px; color:var(--text); line-height:1.55; white-space:pre-wrap; word-break:break-word; }
+
+    /* ── STATS BAR ── */
+    .prf-stats-row {
+      display:flex; margin:16px 12px 0;
+      background:var(--bg2,#f9fafb);
+      border-radius:16px; overflow:hidden;
+      border:1px solid var(--border,#e5e7eb);
+    }
+    .prf-stat-card {
+      flex:1; display:flex; flex-direction:column;
+      align-items:center; padding:12px 4px; gap:3px;
+      position:relative; transition:background .15s;
+    }
+    .prf-stat-card + .prf-stat-card::before {
+      content:''; position:absolute; left:0; top:20%;
+      height:60%; width:1px; background:var(--border,#e5e7eb);
+    }
+    .prf-stat-card.clickable { cursor:pointer; }
+    .prf-stat-card.clickable:active { background:rgba(108,71,255,.06); }
+    .prf-stat-n { font-size:17px; font-weight:700; color:var(--text); line-height:1; }
+    .prf-stat-l { font-size:10px; color:var(--text2); text-transform:uppercase; letter-spacing:.04em; }
 
     /* ── BUTTONS ── */
-    .prf-btn-row { display:flex; gap:10px; margin-top:18px; flex-wrap:wrap; }
-    .prf-btn { height:38px; padding:0 20px; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer; border:none; transition:all .18s; display:flex; align-items:center; gap:7px; font-family:inherit; }
+    .prf-btn-row { display:flex; gap:10px; margin-top:16px; flex-wrap:wrap; }
+    .prf-btn { height:36px; padding:0 18px; border-radius:20px; font-size:14px; font-weight:600; cursor:pointer; border:none; transition:all .18s; display:flex; align-items:center; gap:6px; font-family:inherit; }
+    .prf-btn-primary { background:#6C47FF; color:#fff; box-shadow:0 2px 12px rgba(108,71,255,.3); }
+    .prf-btn-primary:active { transform:scale(.96); opacity:.9; }
     .prf-btn-dark { background:var(--text); color:var(--bg); }
     .prf-btn-dark:active { transform:scale(.96); opacity:.85; }
-    .prf-btn-following { background:transparent; color:var(--text); border:1.5px solid var(--border,#e5e7eb); border-radius:10px; }
-    .prf-btn-icon { width:38px; height:38px; padding:0; border-radius:10px; justify-content:center; background:var(--bg2); border:1.5px solid var(--border,#e5e7eb); color:var(--text); }
+    .prf-btn-outline { background:transparent; color:var(--text); border:1.5px solid var(--border,#e5e7eb); }
+    .prf-btn-outline:active { transform:scale(.96); }
+    .prf-btn-following { background:transparent; color:var(--text); border:1.5px solid var(--border,#e5e7eb); border-radius:20px; }
+    .prf-btn-icon { width:36px; height:36px; padding:0; border-radius:50%; justify-content:center; background:var(--bg2); border:1.5px solid var(--border,#e5e7eb); color:var(--text); }
     .prf-btn-icon:active { transform:scale(.94); }
 
     /* ── STOREFRONT ── */
@@ -477,20 +508,29 @@ async function renderMyProfile() {
   container.innerHTML = `
     <div class="prf-wrap">
 
-      <!-- COVER + floating avatar -->
+      <!-- COVER -->
       <div class="prf-cover">
         ${profile.cover
           ? `<img src="${escHtml(profile.cover)}" alt="" class="prf-cover-img">`
           : `<div class="prf-cover-gradient"></div>`}
         <div class="prf-cover-bar">
           <div></div>
-          <div class="prf-cover-actions">
-          </div>
+          <div class="prf-cover-actions"></div>
         </div>
       </div>
-      <div class="prf-avatar-wrap">
-        <div class="prf-avatar-ring"></div>
-        <img class="prf-avatar" src="${escHtml(profile.avatar||'')}" onerror="this.src=''" alt="">
+
+      <!-- AVATAR ROW -->
+      <div class="prf-avatar-row">
+        <div class="prf-avatar-wrap">
+          <div class="prf-avatar-ring"></div>
+          <img class="prf-avatar" src="${escHtml(profile.avatar||'')}" onerror="this.src=''" alt="">
+        </div>
+        <div class="prf-avatar-action-btns">
+          <button class="prf-btn prf-btn-icon" onclick="showSettings()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          </button>
+          <button class="prf-btn prf-btn-primary" onclick="openEditProfile()">Edit Profile</button>
+        </div>
       </div>
 
       <!-- IDENTITY -->
@@ -515,11 +555,29 @@ async function renderMyProfile() {
           <span class="prf-bld">${fmtNum(profile.followers||0)}</span>followers
         </div>
         ${profile.bio ? `<p class="prf-bio">${escHtml(profile.bio)}</p>` : ''}
-        <div class="prf-btn-row">
-          <button class="prf-btn prf-btn-dark" onclick="openEditProfile()">Edit Profile</button>
-          <button class="prf-btn prf-btn-icon" onclick="showSettings()">
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-          </button>
+      </div>
+
+      <!-- STATS BAR -->
+      <div class="prf-stats-row">
+        <div class="prf-stat-card">
+          <span class="prf-stat-n">${fmtNum(posts.length)}</span>
+          <span class="prf-stat-l">Posts</span>
+        </div>
+        <div class="prf-stat-card clickable">
+          <span class="prf-stat-n">${fmtNum(profile.followers||0)}</span>
+          <span class="prf-stat-l">Followers</span>
+        </div>
+        <div class="prf-stat-card clickable">
+          <span class="prf-stat-n">${fmtNum(profile.following||0)}</span>
+          <span class="prf-stat-l">Following</span>
+        </div>
+        <div class="prf-stat-card">
+          <span class="prf-stat-n">${fmtNum(totalViews)}</span>
+          <span class="prf-stat-l">Views</span>
+        </div>
+        <div class="prf-stat-card">
+          <span class="prf-stat-n">${fmtNum(totalLikes)}</span>
+          <span class="prf-stat-l">Likes</span>
         </div>
       </div>
 
@@ -702,7 +760,9 @@ async function showUserProfile(userId) {
       .order('created_at', { ascending: false })
       .limit(60);
 
-    const allPosts = posts || [];
+    const allPosts   = posts || [];
+    const likedPosts = [];
+    const mediaPosts = allPosts.filter(p => p.image || p.video || p.reposted_post?.image);
 
     body.innerHTML = `
       <div class="prf-wrap">
@@ -721,11 +781,22 @@ async function showUserProfile(userId) {
             </div>
           </div>
         </div>
-        <div class="prf-avatar-wrap">
-          <div class="prf-avatar-ring"></div>
-          <img class="prf-avatar" src="${escHtml(profile.avatar||'')}" onerror="this.src=''" alt="">
+
+        <!-- AVATAR ROW -->
+        <div class="prf-avatar-row">
+          <div class="prf-avatar-wrap">
+            <div class="prf-avatar-ring"></div>
+            <img class="prf-avatar" src="${escHtml(profile.avatar||'')}" onerror="this.src=''" alt="">
+          </div>
+          <div class="prf-avatar-action-btns">
+            <button class="prf-btn prf-btn-icon" onclick="showToast('DMs coming soon 💬')">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+            </button>
+            <button class="prf-btn prf-btn-primary" id="follow-btn-${userId}" onclick="toggleFollow('${userId}',this)">Follow</button>
+          </div>
         </div>
 
+        <!-- IDENTITY -->
         <div class="prf-identity">
           <div class="prf-name-row">
             <h1 class="prf-name">${escHtml(profile.username || 'User')}</h1>
@@ -743,11 +814,25 @@ async function showUserProfile(userId) {
             <span class="prf-bld">${fmtNum(profile.followers||0)}</span>followers
           </div>
           ${profile.bio ? `<p class="prf-bio">${escHtml(profile.bio)}</p>` : ''}
-          <div class="prf-btn-row">
-            <button class="prf-btn prf-btn-dark" id="follow-btn-${userId}" onclick="toggleFollow('${userId}',this)">Follow</button>
-            <button class="prf-btn prf-btn-icon" onclick="showToast('DMs coming soon 💬')">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-            </button>
+        </div>
+
+        <!-- STATS BAR -->
+        <div class="prf-stats-row">
+          <div class="prf-stat-card">
+            <span class="prf-stat-n">${fmtNum(allPosts.length)}</span>
+            <span class="prf-stat-l">Posts</span>
+          </div>
+          <div class="prf-stat-card clickable">
+            <span class="prf-stat-n">${fmtNum(profile.followers||0)}</span>
+            <span class="prf-stat-l">Followers</span>
+          </div>
+          <div class="prf-stat-card clickable">
+            <span class="prf-stat-n">${fmtNum(profile.following||0)}</span>
+            <span class="prf-stat-l">Following</span>
+          </div>
+          <div class="prf-stat-card">
+            <span class="prf-stat-n">${fmtNum(allPosts.reduce((s,p)=>s+(p.views||0),0))}</span>
+            <span class="prf-stat-l">Views</span>
           </div>
         </div>
 
@@ -761,7 +846,7 @@ async function showUserProfile(userId) {
           <span class="prf-storefront-pill">Soon</span>
         </div>
 
-        <!-- ICON TABS: List · Media · Likes (no Saved on other profiles) -->
+        <!-- ICON TABS: List · Media only on other profiles -->
         <div class="prf-icon-tabs" id="uprf-tabs-${userId}">
           <div class="prf-icon-tab active" onclick="switchUPrfTab('list','${userId}',this)">
             <div class="prf-icon-tab-dot"></div>
@@ -771,20 +856,14 @@ async function showUserProfile(userId) {
             <div class="prf-icon-tab-dot"></div>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
           </div>
-          <div class="prf-icon-tab" onclick="switchUPrfTab('likes','${userId}',this)">
-            <div class="prf-icon-tab-dot"></div>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
-          </div>
         </div>
 
         <div id="uprf-list-${userId}"  class="prf-panel prf-posts-panel"></div>
         <div id="uprf-media-${userId}" class="prf-panel" style="display:none"></div>
-        <div id="uprf-likes-${userId}" class="prf-panel prf-posts-panel" style="display:none"></div>
       </div>
     `;
 
-    const mediaPosts = allPosts.filter(p => p.image || p.video || p.reposted_post?.image);
-    body._uprfData = { posts: allPosts, mediaPosts };
+    body._uprfData = { posts: allPosts, mediaPosts, likedPosts };
     renderPrfPosts(allPosts, `uprf-list-${userId}`, false);
     document.getElementById(`uprf-list-${userId}`)._loaded = true;
   });
@@ -794,17 +873,16 @@ function switchUPrfTab(tab, userId, el) {
   const body = document.getElementById('user-profile-body');
   document.querySelectorAll(`#uprf-tabs-${userId} .prf-icon-tab`).forEach(t => t.classList.remove('active'));
   el.classList.add('active');
-  ['list','media','likes'].forEach(t => {
+  ['list','media'].forEach(t => {
     const p = document.getElementById(`uprf-${t}-${userId}`);
     if (p) p.style.display = 'none';
   });
   const panel = document.getElementById(`uprf-${tab}-${userId}`);
   if (!panel) return;
-  panel.style.display = (tab === 'list' || tab === 'likes') ? 'flex' : 'block';
+  panel.style.display = tab === 'list' ? 'flex' : 'block';
   if (panel._loaded) return;
   const { posts, mediaPosts } = body._uprfData || {};
   if (tab === 'media') renderPrfMasonry(mediaPosts || [], `uprf-media-${userId}`, true);
-  if (tab === 'likes') renderPrfPosts([], `uprf-likes-${userId}`, false); // no liked data on other profiles
   panel._loaded = true;
 }
 
