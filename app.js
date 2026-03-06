@@ -522,6 +522,7 @@ function createFeedPost(p) {
   const el = document.createElement('div');
   el.className = 'poster' + (isRepost ? ' is-repost' : '');
   el.dataset.postId = p.id;
+  if (isRepost && p.reposted_post_id) el.dataset.repostedPostId = p.reposted_post_id;
 
   const commentCount = p.comments?.[0]?.count || 0;
   const text = p.content || '';
@@ -2044,12 +2045,34 @@ function showActionSheet(actions) {
 
 async function deletePost(postId, el) {
   if (!currentUser) return;
+
+  // Check if this is a repost before deleting
+  const originalPostId = el?.dataset.repostedPostId || null;
+
   const { error } = await supabase.from('posts').delete().eq('id', postId).eq('user_id', currentUser.id);
   if (error) { showToast('Delete failed'); return; }
+
+  // Animate out
   el.style.transition = 'opacity .3s, transform .3s';
   el.style.opacity = '0'; el.style.transform = 'scale(0.96)';
   setTimeout(() => el.remove(), 300);
   loadedPostIds.delete(postId);
+  repostedPosts.delete(originalPostId);
+
+  // If this was a repost — clean up UI on the original post
+  if (originalPostId) {
+    setRepostUI(originalPostId, false);
+
+    // Fetch real count from DB (trigger already decremented it) and update DOM
+    const { data } = await supabase
+      .from('posts').select('repost_count').eq('id', originalPostId).single();
+    const newCount = data?.repost_count ?? 0;
+    document.querySelectorAll(`.repost-btn[data-post-id="${originalPostId}"] span`)
+      .forEach(sp => { sp.textContent = newCount > 0 ? fmtNum(newCount) : ''; });
+    document.querySelectorAll('.repost-count-display')
+      .forEach(sp => { if (detailPostId === originalPostId) sp.textContent = newCount; });
+  }
+
   showToast('Post deleted');
 }
 
