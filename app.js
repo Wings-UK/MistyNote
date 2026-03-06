@@ -282,119 +282,371 @@ function updateNavAvatar() {
   if (commentBarAv && currentProfile.avatar) commentBarAv.src = currentProfile.avatar;
 }
 
+// ══════════════════════════════════════════
+// PROFILE STYLES — injected once
+// ══════════════════════════════════════════
+function injectProfileStyles() {
+  if (document.getElementById('prf-styles')) return;
+  const s = document.createElement('style');
+  s.id = 'prf-styles';
+  s.textContent = `
+    .prf-wrap { display:flex; flex-direction:column; padding-bottom:120px; }
+
+    /* Cover */
+    .prf-cover { position:relative; height:190px; overflow:hidden; flex-shrink:0; background:var(--bg2); }
+    .prf-cover-img { width:100%; height:100%; object-fit:cover; display:block; }
+    .prf-cover-gradient { width:100%; height:100%; background:linear-gradient(135deg,#6C47FF 0%,#a855f7 50%,#ff3b5c 100%); }
+    .prf-cover-fade { position:absolute; inset:0; background:linear-gradient(to bottom,transparent 50%,rgba(0,0,0,0.22)); pointer-events:none; }
+
+    /* Avatar row */
+    .prf-avatar-row { display:flex; justify-content:space-between; align-items:flex-end; padding:0 16px; margin-top:-44px; position:relative; z-index:2; }
+    .prf-avatar-wrap { position:relative; }
+    .prf-avatar { width:88px; height:88px; border-radius:50%; object-fit:cover; border:4px solid var(--bg,#fff); background:var(--bg2); display:block; }
+    .prf-avatar-ring { position:absolute; inset:-3px; border-radius:50%; background:conic-gradient(#6C47FF,#ff3b5c,#ff9500,#6C47FF); z-index:-1; animation:prfRingSpin 6s linear infinite; }
+    @keyframes prfRingSpin { to { transform:rotate(360deg); } }
+    .prf-action-btns { display:flex; gap:8px; align-items:center; padding-bottom:8px; }
+
+    /* Buttons */
+    .prf-btn { height:36px; padding:0 18px; border-radius:20px; font-size:14px; font-weight:600; cursor:pointer; border:none; transition:all .18s; white-space:nowrap; display:flex; align-items:center; gap:6px; font-family:inherit; }
+    .prf-btn-primary { background:#6C47FF; color:#fff; box-shadow:0 2px 12px rgba(108,71,255,.3); }
+    .prf-btn-primary:active { transform:scale(.96); opacity:.9; }
+    .prf-btn-outline { background:transparent; color:var(--text); border:1.5px solid var(--border,#e5e7eb); }
+    .prf-btn-outline:active { transform:scale(.96); }
+    .prf-btn-following { background:transparent; color:var(--text); border:1.5px solid var(--border,#e5e7eb); }
+    .prf-btn-icon { width:36px; padding:0; justify-content:center; background:var(--bg2,#f3f4f6); color:var(--text); border:1.5px solid var(--border,#e5e7eb); }
+    .prf-btn-icon:active { transform:scale(.94); }
+
+    /* Identity */
+    .prf-identity { padding:12px 16px 0; }
+    .prf-name-row { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+    .prf-name { font-size:21px; font-weight:700; color:var(--text); margin:0; line-height:1.2; }
+    .prf-verified svg { display:block; }
+    .prf-handle { font-size:14px; color:var(--text2,#6b7280); margin-top:3px; }
+    .prf-bio { font-size:15px; color:var(--text); line-height:1.55; margin:9px 0 0; white-space:pre-wrap; word-break:break-word; }
+    .prf-meta-row { display:flex; flex-wrap:wrap; gap:12px; margin-top:10px; }
+    .prf-meta-item { display:flex; align-items:center; gap:4px; font-size:13px; color:var(--text2,#6b7280); }
+    .prf-meta-link { color:#6C47FF; cursor:pointer; }
+
+    /* Stats */
+    .prf-stats-row { display:flex; margin:16px 12px 0; background:var(--bg2,#f9fafb); border-radius:16px; overflow:hidden; border:1px solid var(--border,#e5e7eb); }
+    .prf-stat-card { flex:1; display:flex; flex-direction:column; align-items:center; padding:12px 4px; gap:3px; position:relative; transition:background .15s; }
+    .prf-stat-card + .prf-stat-card::before { content:''; position:absolute; left:0; top:20%; height:60%; width:1px; background:var(--border,#e5e7eb); }
+    .prf-stat-card.clickable { cursor:pointer; }
+    .prf-stat-card.clickable:active { background:rgba(108,71,255,.06); }
+    .prf-stat-n { font-size:18px; font-weight:700; color:var(--text); line-height:1; }
+    .prf-stat-l { font-size:11px; color:var(--text2,#6b7280); text-transform:uppercase; letter-spacing:.04em; }
+
+    /* Storefront banner */
+    .prf-storefront-banner { margin:14px 16px 0; background:linear-gradient(135deg,#f4f3ff,#fdf2ff); border:1.5px solid #ddd6fe; border-radius:18px; padding:14px 16px; display:flex; align-items:center; gap:12px; cursor:pointer; transition:all .18s; }
+    .prf-storefront-banner:active { transform:scale(.98); opacity:.9; }
+    .prf-storefront-icon { font-size:30px; flex-shrink:0; }
+    .prf-storefront-text { flex:1; }
+    .prf-storefront-title { font-size:15px; font-weight:700; color:#6C47FF; }
+    .prf-storefront-sub { font-size:12px; color:#9b87f5; margin-top:2px; }
+    .prf-storefront-coming { font-size:11px; font-weight:600; color:#fff; background:#6C47FF; border-radius:20px; padding:2px 9px; margin-left:auto; white-space:nowrap; flex-shrink:0; }
+
+    /* Tabs */
+    .prf-tabs { display:flex; border-bottom:1.5px solid var(--border,#e5e7eb); margin-top:18px; overflow-x:auto; scrollbar-width:none; }
+    .prf-tabs::-webkit-scrollbar { display:none; }
+    .prf-tab { flex:1; min-width:44px; padding:12px 6px 11px; font-size:13px; font-weight:600; color:var(--text2,#6b7280); background:none; border:none; border-bottom:2.5px solid transparent; cursor:pointer; transition:all .18s; display:flex; align-items:center; justify-content:center; gap:5px; white-space:nowrap; margin-bottom:-1.5px; font-family:inherit; }
+    .prf-tab.active { color:#6C47FF; border-bottom-color:#6C47FF; }
+    .prf-tab:hover:not(.active) { color:var(--text); }
+
+    /* Panels */
+    .prf-panel { min-height:160px; }
+
+    /* True masonry via CSS columns */
+    .prf-masonry { columns:2; column-gap:2px; padding:2px; }
+    .prf-masonry-tile { break-inside:avoid; margin-bottom:2px; border-radius:3px; overflow:hidden; position:relative; cursor:pointer; display:block; background:var(--bg2); }
+    .prf-masonry-tile:nth-child(4n+2) { margin-top:20px; }
+    .prf-masonry-tile:nth-child(4n+4) { margin-top:-20px; }
+    .prf-masonry-img { width:100%; display:block; object-fit:cover; transition:transform .22s; }
+    .prf-masonry-tile:hover .prf-masonry-img { transform:scale(1.03); }
+    .prf-masonry-text-tile { width:100%; min-height:130px; display:flex; align-items:center; justify-content:center; padding:16px 12px; position:relative; }
+    .prf-masonry-text-tile p { font-size:13px; color:#fff; line-height:1.45; text-align:center; font-weight:600; margin:0; }
+    .prf-masonry-overlay { position:absolute; inset:0; background:linear-gradient(to top,rgba(0,0,0,.6) 0%,transparent 55%); opacity:0; transition:opacity .18s; display:flex; align-items:flex-end; gap:8px; padding:8px 10px; }
+    .prf-masonry-tile:hover .prf-masonry-overlay,
+    .prf-masonry-tile:active .prf-masonry-overlay { opacity:1; }
+    .prf-masonry-stat { font-size:12px; color:#fff; font-weight:600; display:flex; align-items:center; gap:3px; }
+
+    /* List posts panel — reuses .poster cards */
+    #prf-panel-posts, #prf-panel-likes { display:flex; flex-direction:column; gap:0; }
+
+    /* Saved / Bookmarks placeholder */
+    .prf-saved-placeholder { margin:20px 16px; background:linear-gradient(135deg,#f0fdf4,#dcfce7); border:1.5px solid #bbf7d0; border-radius:18px; padding:24px 20px; display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center; }
+    .prf-saved-placeholder-icon { font-size:36px; }
+    .prf-saved-placeholder h3 { font-size:16px; font-weight:700; color:#15803d; margin:0; }
+    .prf-saved-placeholder p { font-size:13px; color:#16a34a; margin:0; line-height:1.5; }
+
+    /* Empty state */
+    .prf-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:56px 24px; gap:10px; text-align:center; }
+    .prf-empty-icon { font-size:40px; opacity:.35; }
+    .prf-empty p { font-size:16px; font-weight:600; color:var(--text); margin:0; }
+    .prf-empty span { font-size:14px; color:var(--text2); }
+  `;
+  document.head.appendChild(s);
+}
+
+// ══════════════════════════════════════════
+// MY PROFILE
+// ══════════════════════════════════════════
 async function renderMyProfile() {
   const container = document.getElementById('my-profile-content');
   if (!container) return;
 
+  injectProfileStyles();
   await loadMyProfile();
   const profile = currentProfile;
   if (!profile) return;
 
-  // Fetch posts
-  const { data: posts } = await supabase
-    .from('posts')
-    .select(`id, content, image, video, created_at, like_count, reposted_post_id,
-             reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar))`)
-    .eq('user_id', currentUser.id)
-    .order('created_at', { ascending: false })
-    .limit(30);
+  // Fetch posts + liked posts in parallel
+  const [postsRes, likedRes] = await Promise.all([
+    supabase.from('posts')
+      .select(`id,content,image,video,created_at,like_count,repost_count,views,reposted_post_id,
+               reposted_post:reposted_post_id(id,content,image,video,user_id,user:users(id,username,avatar))`)
+      .eq('user_id', currentUser.id)
+      .order('created_at', { ascending: false })
+      .limit(60),
+    supabase.from('likes')
+      .select(`post:posts(id,content,image,video,created_at,like_count,repost_count,views,user_id,
+               user:users(id,username,avatar))`)
+      .eq('user_id', currentUser.id)
+      .order('created_at', { ascending: false })
+      .limit(60)
+  ]);
 
-  const hasMedia = (posts || []).some(p => p.image || p.video || (p.reposted_post?.image));
+  const posts      = postsRes.data || [];
+  const likedPosts = (likedRes.data || []).map(r => r.post).filter(Boolean);
+  const mediaPosts = posts.filter(p => p.image || p.video || p.reposted_post?.image);
+  const totalViews = posts.reduce((s, p) => s + (p.views || 0), 0);
+  const totalLikes = posts.reduce((s, p) => s + (p.like_count || 0), 0);
 
   container.innerHTML = `
-    <div class="profile-cover">
-      <img class="profile-cover-img" src="${profile.cover || ''}" onerror="this.style.display='none'" alt="">
-      ${!profile.cover ? `<div style="height:180px;background:linear-gradient(135deg,var(--accent),#ff3b5c)"></div>` : ''}
-    </div>
-    <div style="display:flex;justify-content:space-between;align-items:flex-end;padding:0 16px 0">
-      <div class="profile-avatar-outer">
-        <img class="profile-avatar" src="${profile.avatar || ''}" onerror="this.src=''" alt="">
+    <div class="prf-wrap">
+
+      <!-- COVER -->
+      <div class="prf-cover">
+        ${profile.cover
+          ? `<img src="${escHtml(profile.cover)}" alt="" class="prf-cover-img">`
+          : `<div class="prf-cover-gradient"></div>`}
+        <div class="prf-cover-fade"></div>
       </div>
-      <div class="profile-buttons" style="margin-bottom:8px">
-        <button class="profile-btn outline" onclick="showSettings()">Settings</button>
-        <button class="profile-btn" onclick="openEditProfile()">Edit</button>
+
+      <!-- AVATAR + BUTTONS -->
+      <div class="prf-avatar-row">
+        <div class="prf-avatar-wrap">
+          <img class="prf-avatar" src="${escHtml(profile.avatar||'')}" onerror="this.src=''" alt="">
+          <div class="prf-avatar-ring"></div>
+        </div>
+        <div class="prf-action-btns">
+          <button class="prf-btn prf-btn-icon" onclick="showSettings()" title="Settings">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          </button>
+          <button class="prf-btn prf-btn-primary" onclick="openEditProfile()">Edit profile</button>
+        </div>
       </div>
-    </div>
-    <div class="profile-info-section">
-      <div class="profile-name">${profile.username || 'User'}</div>
-      ${profile.bio ? `<div class="profile-bio">${escHtml(profile.bio)}</div>` : ''}
-      ${profile.location ? `<div class="profile-location"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="10" r="3" stroke="currentColor" stroke-width="2"/></svg>${escHtml(profile.location)}</div>` : ''}
-      <div class="profile-stats">
-        <div class="profile-stat"><span class="profile-stat-n">${fmtNum(profile.following || 0)}</span><span class="profile-stat-l">Following</span></div>
-        <div class="profile-stat"><span class="profile-stat-n">${fmtNum(profile.followers || 0)}</span><span class="profile-stat-l">Followers</span></div>
-        <div class="profile-stat"><span class="profile-stat-n">${fmtNum((posts || []).length)}</span><span class="profile-stat-l">Posts</span></div>
+
+      <!-- IDENTITY -->
+      <div class="prf-identity">
+        <div class="prf-name-row">
+          <h1 class="prf-name">${escHtml(profile.username || 'User')}</h1>
+          ${profile.verified ? `<span class="prf-verified"><svg width="17" height="17" viewBox="0 0 24 24" fill="#6C47FF"><path d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg></span>` : ''}
+        </div>
+        <div class="prf-handle">@${escHtml(profile.username || 'user')}</div>
+        ${profile.bio ? `<p class="prf-bio">${escHtml(profile.bio)}</p>` : ''}
+        <div class="prf-meta-row">
+          ${profile.location ? `<span class="prf-meta-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>${escHtml(profile.location)}</span>` : ''}
+          ${profile.website ? `<span class="prf-meta-item prf-meta-link"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>${escHtml(profile.website)}</span>` : ''}
+          <span class="prf-meta-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Joined ${new Date(profile.created_at||Date.now()).toLocaleDateString('en-GB',{month:'long',year:'numeric'})}</span>
+        </div>
       </div>
+
+      <!-- STATS -->
+      <div class="prf-stats-row">
+        <div class="prf-stat-card">
+          <span class="prf-stat-n">${fmtNum(posts.length)}</span>
+          <span class="prf-stat-l">Posts</span>
+        </div>
+        <div class="prf-stat-card clickable">
+          <span class="prf-stat-n">${fmtNum(profile.followers||0)}</span>
+          <span class="prf-stat-l">Followers</span>
+        </div>
+        <div class="prf-stat-card clickable">
+          <span class="prf-stat-n">${fmtNum(profile.following||0)}</span>
+          <span class="prf-stat-l">Following</span>
+        </div>
+        <div class="prf-stat-card">
+          <span class="prf-stat-n">${fmtNum(totalViews)}</span>
+          <span class="prf-stat-l">Views</span>
+        </div>
+        <div class="prf-stat-card">
+          <span class="prf-stat-n">${fmtNum(totalLikes)}</span>
+          <span class="prf-stat-l">Likes</span>
+        </div>
+      </div>
+
+      <!-- STOREFRONT TEASER -->
+      <div class="prf-storefront-banner" onclick="showToast('Storefronts coming soon 🛍️')">
+        <div class="prf-storefront-icon">🛍️</div>
+        <div class="prf-storefront-text">
+          <div class="prf-storefront-title">Open your storefront</div>
+          <div class="prf-storefront-sub">Sell anything. Get paid safely.</div>
+        </div>
+        <span class="prf-storefront-coming">Soon</span>
+      </div>
+
+      <!-- TABS -->
+      <div class="prf-tabs" id="prf-tabs">
+        <button class="prf-tab active" data-tab="posts" onclick="switchPrfTab('posts',this)">Posts</button>
+        <button class="prf-tab" data-tab="masonry" onclick="switchPrfTab('masonry',this)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        </button>
+        <button class="prf-tab" data-tab="media" onclick="switchPrfTab('media',this)">Media</button>
+        <button class="prf-tab" data-tab="likes" onclick="switchPrfTab('likes',this)">Likes</button>
+        <button class="prf-tab" data-tab="saved" onclick="switchPrfTab('saved',this)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
+          Saved
+        </button>
+      </div>
+
+      <!-- PANELS -->
+      <div id="prf-panel-posts"   class="prf-panel"></div>
+      <div id="prf-panel-masonry" class="prf-panel" style="display:none"></div>
+      <div id="prf-panel-media"   class="prf-panel" style="display:none"></div>
+      <div id="prf-panel-likes"   class="prf-panel" style="display:none"></div>
+      <div id="prf-panel-saved"   class="prf-panel" style="display:none"></div>
+
     </div>
-    <div class="profile-tabs" id="my-profile-tabs">
-      <button class="profile-tab active" onclick="switchProfileTab('grid',this)">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" stroke="currentColor" stroke-width="2" rx="1"/><rect x="14" y="3" width="7" height="7" stroke="currentColor" stroke-width="2" rx="1"/><rect x="3" y="14" width="7" height="7" stroke="currentColor" stroke-width="2" rx="1"/><rect x="14" y="14" width="7" height="7" stroke="currentColor" stroke-width="2" rx="1"/></svg>
-      </button>
-      <button class="profile-tab" onclick="switchProfileTab('list',this)">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      </button>
-    </div>
-    <div id="my-profile-posts" class="masonry-grid"></div>
+
     <div class="wing-fab" onclick="openComposer()">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>
     </div>
   `;
 
-  // Add FAB styles if needed
-  const fabStyle = document.getElementById('fab-style');
-  if (!fabStyle) {
-    const s = document.createElement('style');
-    s.id = 'fab-style';
-    s.textContent = `.wing-fab{position:fixed;bottom:calc(var(--nav-h) + 20px + var(--safe-bottom));right:20px;width:52px;height:52px;border-radius:16px;background:linear-gradient(135deg,var(--accent),#ff3b5c);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(108,71,255,.4);cursor:pointer;z-index:50;transition:transform .2s}.wing-fab:active{transform:scale(.92)}`;
-    document.head.appendChild(s);
+  // FAB style
+  if (!document.getElementById('fab-style')) {
+    const fs = document.createElement('style');
+    fs.id = 'fab-style';
+    fs.textContent = `.wing-fab{position:fixed;bottom:calc(var(--nav-h,60px) + 20px + var(--safe-bottom,0px));right:20px;width:52px;height:52px;border-radius:16px;background:linear-gradient(135deg,var(--accent),#ff3b5c);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(108,71,255,.4);cursor:pointer;z-index:50;transition:transform .2s}.wing-fab:active{transform:scale(.92)}`;
+    document.head.appendChild(fs);
   }
 
-  renderProfileGrid(posts || [], currentProfile, 'my-profile-posts', true);
+  // Cache data on container for lazy tab loads
+  container._prfData = { posts, likedPosts, mediaPosts };
+
+  // Render default tab immediately
+  renderPrfPosts(posts, 'prf-panel-posts', true);
+  document.getElementById('prf-panel-posts')._loaded = true;
 }
 
-function switchProfileTab(mode, btn) {
-  document.querySelectorAll('#my-profile-tabs .profile-tab').forEach(t => t.classList.remove('active'));
+// ── Tab switcher ──
+function switchPrfTab(tab, btn) {
+  const container = document.getElementById('my-profile-content');
+  document.querySelectorAll('#prf-tabs .prf-tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
-  const postsContainer = document.getElementById('my-profile-posts');
-  if (!postsContainer) return;
-  if (mode === 'grid') {
-    postsContainer.className = 'masonry-grid';
-  } else {
-    postsContainer.className = 'profile-posts-list';
-  }
+  ['posts','masonry','media','likes','saved'].forEach(t => {
+    const p = document.getElementById('prf-panel-' + t);
+    if (p) p.style.display = 'none';
+  });
+  const panel = document.getElementById('prf-panel-' + tab);
+  if (!panel) return;
+  panel.style.display = 'block';
+
+  if (panel._loaded) return; // already rendered
+  const { posts, likedPosts, mediaPosts } = container._prfData || {};
+
+  if (tab === 'posts')   renderPrfPosts(posts || [],  'prf-panel-posts',   true);
+  if (tab === 'masonry') renderPrfMasonry(posts || [], 'prf-panel-masonry');
+  if (tab === 'media')   renderPrfMasonry(mediaPosts || [], 'prf-panel-media', true);
+  if (tab === 'likes')   renderPrfPosts(likedPosts || [], 'prf-panel-likes', false);
+  if (tab === 'saved')   renderPrfSaved('prf-panel-saved');
+  panel._loaded = true;
 }
 
-function renderProfileGrid(posts, profile, containerId, isOwn = false) {
+// Legacy alias kept for any lingering calls
+function switchProfileTab(mode, btn) {
+  switchPrfTab(mode === 'grid' ? 'masonry' : 'posts', btn);
+}
+
+// ── List posts (reuse feed cards) ──
+function renderPrfPosts(posts, containerId, isOwn) {
   const container = document.getElementById(containerId);
   if (!container) return;
   if (!posts.length) {
-    container.innerHTML = '<div class="empty-state"><div class="empty-icon">✍️</div><p>No posts yet</p><span>Start sharing your world</span></div>';
+    container.innerHTML = `<div class="prf-empty"><div class="prf-empty-icon">${isOwn ? '✍️' : '🔍'}</div><p>${isOwn ? "You haven't posted yet" : 'No posts yet'}</p>${isOwn ? '<span>Share your first thought</span>' : ''}</div>`;
     return;
   }
   container.innerHTML = '';
-  posts.forEach((post, i) => {
-    const img = post.image || post.reposted_post?.image || '';
-    const text = post.content || post.reposted_post?.content || '';
-    const tile = document.createElement('div');
-    tile.className = 'masonry-tile fade-up';
-    tile.style.animationDelay = (i * 0.04) + 's';
-    tile.innerHTML = `
-      ${img ? `<img src="${img}" alt="" loading="lazy">` : `<div style="background:${gradientFor(post.id)};width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:12px;"><p style="font-size:13px;line-height:1.4;color:white;text-align:center;font-weight:600;">${escHtml(text.slice(0,80))}</p></div>`}
-      <div class="masonry-tile-overlay">
-        <div class="masonry-tile-likes">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="white" stroke="none"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-          ${fmtNum(post.like_count || 0)}
-        </div>
-        ${text ? `<div class="masonry-tile-text">${escHtml(text.slice(0,50))}</div>` : ''}
-      </div>
-    `;
-    tile.addEventListener('click', () => openDetail(post.id));
-    container.appendChild(tile);
+  posts.forEach(p => {
+    const el = createFeedPost(p);
+    if (el) container.appendChild(el);
   });
 }
 
+// ── True masonry grid ──
+function renderPrfMasonry(posts, containerId, mediaOnly = false) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const items = mediaOnly ? posts.filter(p => p.image || p.video || p.reposted_post?.image) : posts;
+  if (!items.length) {
+    container.innerHTML = `<div class="prf-empty"><div class="prf-empty-icon">${mediaOnly ? '🖼️' : '✍️'}</div><p>${mediaOnly ? 'No media yet' : 'No posts yet'}</p></div>`;
+    return;
+  }
+  const grid = document.createElement('div');
+  grid.className = 'prf-masonry';
+  items.forEach((post, i) => {
+    const img  = post.image || post.reposted_post?.image || '';
+    const text = post.content || post.reposted_post?.content || '';
+    const tile = document.createElement('div');
+    tile.className = 'prf-masonry-tile';
+    if (img) {
+      tile.innerHTML = `
+        <img src="${escHtml(img)}" alt="" loading="lazy" class="prf-masonry-img">
+        <div class="prf-masonry-overlay">
+          <span class="prf-masonry-stat">❤️ ${fmtNum(post.like_count||0)}</span>
+          <span class="prf-masonry-stat">👁 ${fmtNum(post.views||0)}</span>
+        </div>`;
+    } else {
+      tile.innerHTML = `
+        <div class="prf-masonry-text-tile" style="background:${gradientFor(post.id)}">
+          <p>${escHtml(text.slice(0,100))}</p>
+          <div class="prf-masonry-overlay">
+            <span class="prf-masonry-stat">❤️ ${fmtNum(post.like_count||0)}</span>
+          </div>
+        </div>`;
+    }
+    tile.addEventListener('click', () => openDetail(post.id));
+    grid.appendChild(tile);
+  });
+  container.innerHTML = '';
+  container.appendChild(grid);
+}
+
+// ── Saved / Bookmarks ──
+function renderPrfSaved(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = `
+    <div class="prf-saved-placeholder">
+      <div class="prf-saved-placeholder-icon">🔖</div>
+      <h3>Bookmarks coming soon</h3>
+      <p>Save any post from your feed using the bookmark button.<br>Everything you save will appear here — private and organised.</p>
+    </div>`;
+}
+
+// Legacy alias
+function renderProfileGrid(posts, profile, containerId, isOwn) {
+  renderPrfMasonry(posts, containerId);
+}
+
+// ══════════════════════════════════════════
+// OTHER USER PROFILE
+// ══════════════════════════════════════════
 async function showUserProfile(userId) {
   if (!userId) return;
   if (userId === currentUser?.id) { navTo('profile'); return; }
+
+  injectProfileStyles();
 
   slideTo('user-profile', async () => {
     const body = document.getElementById('user-profile-body');
@@ -403,48 +655,117 @@ async function showUserProfile(userId) {
     const { data: profile } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
     if (!profile) { body.innerHTML = '<div class="empty-state"><p>User not found</p></div>'; return; }
 
-    const { data: posts } = await supabase
-      .from('posts')
-      .select(`id,content,image,video,created_at,like_count,reposted_post_id,
-               reposted_post:reposted_post_id(id,content,image,video)`)
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(30);
+    const [postsRes] = await Promise.all([
+      supabase.from('posts')
+        .select(`id,content,image,video,created_at,like_count,repost_count,views,reposted_post_id,
+                 reposted_post:reposted_post_id(id,content,image,video,user_id,user:users(id,username,avatar))`)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(60)
+    ]);
 
-    // Check if following
+    const posts      = postsRes.data || [];
+    const mediaPosts = posts.filter(p => p.image || p.video);
+    const totalViews = posts.reduce((s, p) => s + (p.views || 0), 0);
+
     body.innerHTML = `
-      <div class="profile-cover">
-        ${profile.cover ? `<img class="profile-cover-img" src="${profile.cover}" alt="">` : `<div style="height:180px;background:linear-gradient(135deg,var(--accent),#ff3b5c)"></div>`}
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:flex-end;padding:0 16px 0">
-        <div class="profile-avatar-outer">
-          <img class="profile-avatar" src="${profile.avatar || ''}" onerror="this.src=''" alt="">
+      <div class="prf-wrap">
+
+        <div class="prf-cover">
+          ${profile.cover
+            ? `<img src="${escHtml(profile.cover)}" alt="" class="prf-cover-img">`
+            : `<div class="prf-cover-gradient"></div>`}
+          <div class="prf-cover-fade"></div>
         </div>
-        <div class="profile-buttons" style="margin-bottom:8px">
-          <button class="profile-btn outline follow-btn" id="follow-btn-${userId}" onclick="toggleFollow('${userId}',this)">Follow</button>
+
+        <div class="prf-avatar-row">
+          <div class="prf-avatar-wrap">
+            <img class="prf-avatar" src="${escHtml(profile.avatar||'')}" onerror="this.src=''" alt="">
+            <div class="prf-avatar-ring"></div>
+          </div>
+          <div class="prf-action-btns">
+            <button class="prf-btn prf-btn-icon" onclick="showToast('DMs coming soon 💬')" title="Message">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+            </button>
+            <button class="prf-btn prf-btn-primary" id="follow-btn-${userId}" onclick="toggleFollow('${userId}',this)">Follow</button>
+          </div>
         </div>
-      </div>
-      <div class="profile-info-section">
-        <div class="profile-name">${escHtml(profile.username || 'User')}</div>
-        ${profile.bio ? `<div class="profile-bio">${escHtml(profile.bio)}</div>` : ''}
-        ${profile.location ? `<div class="profile-location">${escHtml(profile.location)}</div>` : ''}
-        <div class="profile-stats">
-          <div class="profile-stat"><span class="profile-stat-n">${fmtNum(profile.following||0)}</span><span class="profile-stat-l">Following</span></div>
-          <div class="profile-stat"><span class="profile-stat-n">${fmtNum(profile.followers||0)}</span><span class="profile-stat-l">Followers</span></div>
+
+        <div class="prf-identity">
+          <div class="prf-name-row">
+            <h1 class="prf-name">${escHtml(profile.username || 'User')}</h1>
+            ${profile.verified ? `<span class="prf-verified"><svg width="17" height="17" viewBox="0 0 24 24" fill="#6C47FF"><path d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg></span>` : ''}
+          </div>
+          <div class="prf-handle">@${escHtml(profile.username || 'user')}</div>
+          ${profile.bio ? `<p class="prf-bio">${escHtml(profile.bio)}</p>` : ''}
+          <div class="prf-meta-row">
+            ${profile.location ? `<span class="prf-meta-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>${escHtml(profile.location)}</span>` : ''}
+          </div>
         </div>
+
+        <div class="prf-stats-row">
+          <div class="prf-stat-card">
+            <span class="prf-stat-n">${fmtNum(posts.length)}</span>
+            <span class="prf-stat-l">Posts</span>
+          </div>
+          <div class="prf-stat-card clickable">
+            <span class="prf-stat-n">${fmtNum(profile.followers||0)}</span>
+            <span class="prf-stat-l">Followers</span>
+          </div>
+          <div class="prf-stat-card clickable">
+            <span class="prf-stat-n">${fmtNum(profile.following||0)}</span>
+            <span class="prf-stat-l">Following</span>
+          </div>
+          <div class="prf-stat-card">
+            <span class="prf-stat-n">${fmtNum(totalViews)}</span>
+            <span class="prf-stat-l">Views</span>
+          </div>
+        </div>
+
+        <div class="prf-tabs" id="uprf-tabs-${userId}">
+          <button class="prf-tab active" onclick="switchUPrfTab('posts','${userId}',this)">Posts</button>
+          <button class="prf-tab" onclick="switchUPrfTab('masonry','${userId}',this)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          </button>
+          <button class="prf-tab" onclick="switchUPrfTab('media','${userId}',this)">Media</button>
+        </div>
+
+        <div id="uprf-posts-${userId}"   class="prf-panel"></div>
+        <div id="uprf-masonry-${userId}" class="prf-panel" style="display:none"></div>
+        <div id="uprf-media-${userId}"   class="prf-panel" style="display:none"></div>
       </div>
-      <div class="masonry-grid" id="user-profile-posts" style="margin-top:12px"></div>
     `;
 
-    renderProfileGrid(posts || [], profile, 'user-profile-posts', false);
+    body._uprfData = { posts, mediaPosts };
+    renderPrfPosts(posts, `uprf-posts-${userId}`, false);
+    document.getElementById(`uprf-posts-${userId}`)._loaded = true;
   });
 }
 
+function switchUPrfTab(tab, userId, btn) {
+  const body = document.getElementById('user-profile-body');
+  document.querySelectorAll(`#uprf-tabs-${userId} .prf-tab`).forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  ['posts','masonry','media'].forEach(t => {
+    const p = document.getElementById(`uprf-${t}-${userId}`);
+    if (p) p.style.display = 'none';
+  });
+  const panel = document.getElementById(`uprf-${tab}-${userId}`);
+  if (!panel) return;
+  panel.style.display = 'block';
+  if (panel._loaded) return;
+  const { posts, mediaPosts } = body._uprfData || {};
+  if (tab === 'masonry') renderPrfMasonry(posts || [],      `uprf-masonry-${userId}`);
+  if (tab === 'media')   renderPrfMasonry(mediaPosts || [], `uprf-media-${userId}`, true);
+  panel._loaded = true;
+}
+
 function toggleFollow(userId, btn) {
-  const isFollowing = btn.classList.contains('following');
-  btn.classList.toggle('following', !isFollowing);
+  const isFollowing = btn.classList.contains('prf-btn-following');
+  btn.classList.toggle('prf-btn-following', !isFollowing);
+  btn.classList.toggle('prf-btn-primary', isFollowing);
   btn.textContent = !isFollowing ? 'Following' : 'Follow';
-  showToast(!isFollowing ? 'Following' : 'Unfollowed');
+  showToast(!isFollowing ? 'Following ✓' : 'Unfollowed');
 }
 
 // ══════════════════════════════════════════
