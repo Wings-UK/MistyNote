@@ -53,6 +53,7 @@ async function bootApp() {
   document.getElementById('app').classList.remove('hidden');
 
   injectFeedPostStyles();
+  injectEchoesPanel();
 
   await loadMyProfile();
   updateNavAvatar();
@@ -641,11 +642,11 @@ function createFeedPost(p) {
     <div class="lefto">
       <div class="dick">
         <div><svg xmlns="http://www.w3.org/2000/svg" class="lefti" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2.5"/><path d="M8 8 Q18 10 17 20"/></svg></div>
-        <div><p class="viewe">View all ${commentCount || 0} discuss</p></div>
+        <div><p class="viewe echoes-btn" data-post-id="${p.id}" onclick="openEchoes('${p.id}', event)"><span class="echoes-count">${commentCount || 0}</span> Echoes</p></div>
       </div>
       <div class="twits">
         <div><svg xmlns="http://www.w3.org/2000/svg" class="lefti" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div>
-        <div><p class="viewe">${p.views || 0} views</p></div>
+        <div><p class="viewe"><span class="echoes-count">${fmtNum(p.views) || 0}</span> views</p></div>
       </div>
     </div>
 
@@ -833,6 +834,80 @@ function injectFeedPostStyles() {
     .lefti { width: 15px; height: 15px; display: block; }
     .viewe { font-size: 13px; color: var(--text2); margin: 0; line-height: 1; }
     .werey { font-weight: 600; }
+    .echoes-count { font-weight: 700; color: var(--text); }
+    .echoes-btn { cursor: pointer; transition: color 0.15s; }
+    .echoes-btn:hover { color: #6C47FF; }
+    .echoes-btn:hover .echoes-count { color: #6C47FF; }
+
+    /* ── ECHOES PANEL ── */
+    .echoes-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+      z-index: 9000; display: flex; align-items: flex-end;
+      opacity: 0; transition: opacity 0.25s ease;
+      pointer-events: none;
+    }
+    .echoes-overlay.open { opacity: 1; pointer-events: all; }
+    .echoes-sheet {
+      width: 100%; max-height: 82vh; background: var(--bg);
+      border-radius: 20px 20px 0 0; display: flex; flex-direction: column;
+      transform: translateY(100%); transition: transform 0.3s cubic-bezier(.32,.72,0,1);
+      overflow: hidden;
+    }
+    .echoes-overlay.open .echoes-sheet { transform: translateY(0); }
+    .echoes-handle-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px 10px; border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .echoes-title { font-size: 16px; font-weight: 700; color: var(--text); }
+    .echoes-close {
+      width: 30px; height: 30px; border-radius: 50%; border: none;
+      background: var(--bg2); cursor: pointer; display: flex;
+      align-items: center; justify-content: center; color: var(--text);
+      font-size: 16px; flex-shrink: 0;
+    }
+    .echoes-tabs {
+      display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .echoes-tab {
+      flex: 1; padding: 11px 8px; font-size: 14px; font-weight: 600;
+      color: var(--text2); background: none; border: none; cursor: pointer;
+      border-bottom: 3px solid transparent; transition: all 0.2s;
+    }
+    .echoes-tab.active { color: #6C47FF; border-bottom-color: #6C47FF; }
+    .echoes-body {
+      flex: 1; overflow-y: auto; padding: 0;
+    }
+    .echoes-empty {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; padding: 60px 20px; gap: 12px;
+      color: var(--text2); font-size: 14px; text-align: center;
+    }
+    .echoes-empty-icon { font-size: 36px; opacity: 0.4; }
+    .echo-item {
+      display: flex; gap: 10px; padding: 14px 16px;
+      border-bottom: 1px solid var(--border); cursor: pointer;
+      transition: background 0.15s;
+    }
+    .echo-item:hover { background: var(--bg2); }
+    .echo-avatar {
+      width: 38px; height: 38px; border-radius: 50%;
+      object-fit: cover; flex-shrink: 0;
+      background: var(--bg2);
+    }
+    .echo-content { flex: 1; min-width: 0; }
+    .echo-header { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+    .echo-username { font-weight: 700; font-size: 14px; color: var(--text); }
+    .echo-time { font-size: 12px; color: var(--text2); }
+    .echo-type-badge {
+      font-size: 11px; font-weight: 600; padding: 2px 7px;
+      border-radius: 20px; margin-left: auto; flex-shrink: 0;
+    }
+    .echo-type-repost { background: #f0eeff; color: #6C47FF; }
+    .echo-type-reply  { background: #f0fdf4; color: #16a34a; }
+    .echo-text { font-size: 14px; color: var(--text); line-height: 1.4; word-break: break-word; }
+    .echo-stats { display: flex; gap: 14px; margin-top: 6px; }
+    .echo-stat { font-size: 12px; color: var(--text2); display: flex; align-items: center; gap: 4px; }
 
     /* Reaction bar */
     .reaction {
@@ -2067,6 +2142,148 @@ function subscribeToPostUpdates() {
         console.log('✓ Realtime post updates active');
       }
     });
+}
+
+// ══════════════════════════════════════════
+// ECHOES PANEL
+// ══════════════════════════════════════════
+
+function injectEchoesPanel() {
+  if (document.getElementById('echoes-overlay')) return;
+  const el = document.createElement('div');
+  el.id = 'echoes-overlay';
+  el.className = 'echoes-overlay';
+  el.innerHTML = `
+    <div class="echoes-sheet" id="echoes-sheet">
+      <div class="echoes-handle-row">
+        <span class="echoes-title">✦ Echoes</span>
+        <button class="echoes-close" onclick="closeEchoes()">✕</button>
+      </div>
+      <div class="echoes-tabs">
+        <button class="echoes-tab active" data-tab="all"     onclick="switchEchoTab('all',this)">All</button>
+        <button class="echoes-tab"        data-tab="reposts" onclick="switchEchoTab('reposts',this)">Reposts</button>
+        <button class="echoes-tab"        data-tab="replies" onclick="switchEchoTab('replies',this)">Replies</button>
+      </div>
+      <div class="echoes-body" id="echoes-body">
+        <div class="echoes-empty"><div class="echoes-empty-icon">🔇</div><p>No echoes yet</p></div>
+      </div>
+    </div>
+  `;
+  el.addEventListener('click', e => { if (e.target === el) closeEchoes(); });
+  document.body.appendChild(el);
+}
+
+let echoesPostId   = null;
+let echoesAllData  = { reposts: [], replies: [] };
+let echoesActiveTab = 'all';
+
+async function openEchoes(postId, e) {
+  e?.stopPropagation();
+  echoesPostId = postId;
+  echoesActiveTab = 'all';
+
+  // Reset tabs UI
+  document.querySelectorAll('.echoes-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector('.echoes-tab[data-tab="all"]')?.classList.add('active');
+
+  const overlay = document.getElementById('echoes-overlay');
+  const body    = document.getElementById('echoes-body');
+  overlay.classList.add('open');
+
+  // Loading state
+  body.innerHTML = `<div class="echoes-empty"><div class="echoes-empty-icon" style="font-size:28px;animation:spin 1s linear infinite">⟳</div><p>Loading echoes…</p></div>`;
+
+  // Fetch reposts and replies in parallel
+  const [repostsRes, repliesRes] = await Promise.all([
+    supabase
+      .from('posts')
+      .select(`id, content, created_at, like_count, repost_count, user_id,
+               user:users(id, username, avatar)`)
+      .eq('reposted_post_id', postId)
+      .order('created_at', { ascending: false })
+      .limit(50),
+    supabase
+      .from('comments')
+      .select(`id, content, created_at, like_count, user_id,
+               user:users(id, username, avatar)`)
+      .eq('post_id', postId)
+      .is('parent_id', null)
+      .order('created_at', { ascending: false })
+      .limit(50)
+  ]);
+
+  echoesAllData = {
+    reposts: repostsRes.data || [],
+    replies: repliesRes.data || []
+  };
+
+  renderEchoTab('all');
+}
+
+function closeEchoes() {
+  const overlay = document.getElementById('echoes-overlay');
+  overlay?.classList.remove('open');
+  echoesPostId = null;
+}
+
+function switchEchoTab(tab, btn) {
+  echoesActiveTab = tab;
+  document.querySelectorAll('.echoes-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  renderEchoTab(tab);
+}
+
+function renderEchoTab(tab) {
+  const body = document.getElementById('echoes-body');
+  const { reposts, replies } = echoesAllData;
+
+  let items = [];
+  if (tab === 'all') {
+    // Merge and sort by date
+    const r = reposts.map(p => ({ ...p, _type: 'repost' }));
+    const c = replies.map(p => ({ ...p, _type: 'reply' }));
+    items = [...r, ...c].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  } else if (tab === 'reposts') {
+    items = reposts.map(p => ({ ...p, _type: 'repost' }));
+  } else {
+    items = replies.map(p => ({ ...p, _type: 'reply' }));
+  }
+
+  if (!items.length) {
+    const labels = { all: 'No echoes yet', reposts: 'No reposts yet', replies: 'No replies yet' };
+    const icons  = { all: '🔇', reposts: '🔁', replies: '💬' };
+    body.innerHTML = `<div class="echoes-empty"><div class="echoes-empty-icon">${icons[tab]}</div><p>${labels[tab]}</p></div>`;
+    return;
+  }
+
+  body.innerHTML = items.map(item => {
+    const user    = item.user || { username: '@unknown', avatar: '' };
+    const isRepost = item._type === 'repost';
+    const badge   = isRepost
+      ? `<span class="echo-type-badge echo-type-repost">🔁 Repost</span>`
+      : `<span class="echo-type-badge echo-type-reply">💬 Reply</span>`;
+    const text    = item.content
+      ? `<p class="echo-text">${escHtml(item.content.slice(0, 200))}${item.content.length > 200 ? '…' : ''}</p>`
+      : `<p class="echo-text" style="color:var(--text2);font-style:italic">Reposted without comment</p>`;
+    const stats   = isRepost
+      ? `<span class="echo-stat">❤️ ${fmtNum(item.like_count||0)}</span><span class="echo-stat">🔁 ${fmtNum(item.repost_count||0)}</span>`
+      : `<span class="echo-stat">❤️ ${fmtNum(item.like_count||0)}</span>`;
+
+    return `
+      <div class="echo-item" onclick="${isRepost ? `openDetail('${item.id}')` : `openDetail('${echoesPostId}', true)`}; closeEchoes();">
+        <img class="echo-avatar" src="${escHtml(user.avatar||'')}" onerror="this.src=''" alt="">
+        <div class="echo-content">
+          <div class="echo-header">
+            <span class="echo-username">${escHtml(user.username)}</span>
+            <span class="echo-time">${timeSince(item.created_at)}</span>
+            ${badge}
+          </div>
+          ${text}
+          <div class="echo-stats">${stats}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 async function markAllRead() {
