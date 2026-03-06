@@ -219,9 +219,14 @@ function slideTo(pageId, setupFn) {
 
   if (setupFn) setupFn();
 
+  // Show floating header only for user-profile
+  const floatingHeader = document.getElementById('user-profile-header');
+  if (floatingHeader) floatingHeader.style.display = pageId === 'user-profile' ? 'flex' : 'none';
+
   requestAnimationFrame(() => {
     el.classList.add('active');
     el.scrollTop = 0;
+    if (floatingHeader) floatingHeader.style.background = 'rgba(0,0,0,0)';
   });
 }
 
@@ -231,6 +236,10 @@ function slideBack() {
     const el = document.getElementById('page-' + pageId);
     el?.classList.remove('active');
   }
+
+  // Hide floating header
+  const floatingHeader = document.getElementById('user-profile-header');
+  if (floatingHeader) floatingHeader.style.display = 'none';
 
   // Restore last main page
   const lastMain = slideStack.length > 0 ? slideStack[slideStack.length - 1] : 'feed';
@@ -411,26 +420,31 @@ function injectProfileStyles() {
     .prf-btn-icon { width:36px; height:36px; padding:0; border-radius:50%; justify-content:center; background:var(--bg2); border:1.5px solid var(--border,#e5e7eb); color:var(--text); }
     .prf-btn-icon:active { transform:scale(.94); }
 
-    /* ── STICKY TRANSPARENT HEADER ── */
+    /* ── OTHER USER PROFILE FLOATING HEADER ── */
     #user-profile-header {
       position:fixed; top:0; left:0; right:0;
-      background:rgba(0,0,0,0) !important;
-      backdrop-filter:none !important;
+      background:rgba(0,0,0,0);
       border:none !important;
-      transition:background .2s ease;
+      box-shadow:none !important;
+      transition:background .25s ease;
       z-index:200;
     }
-    #user-profile-header .back-btn,
-    #user-profile-header .header-action {
+    #user-profile-header .back-btn {
       background:transparent !important;
-      backdrop-filter:none !important;
       border:none !important;
       box-shadow:none !important;
     }
-    #user-profile-header .back-btn svg,
-    #user-profile-header .header-action svg {
-      stroke:white;
-      fill:white;
+    #user-profile-header .header-action {
+      background:transparent !important;
+      border:none !important;
+      box-shadow:none !important;
+    }
+    #user-profile-header .back-btn path,
+    #user-profile-header .back-btn polyline {
+      stroke:#fff !important;
+    }
+    #user-profile-header .header-action circle {
+      fill:#fff !important;
     }
 
 
@@ -859,16 +873,14 @@ async function showUserProfile(userId) {
     renderPrfPosts(allPosts, `uprf-list-${userId}`, false);
     document.getElementById(`uprf-list-${userId}`)._loaded = true;
 
-    // Header fades from transparent to black as user scrolls
-    const upPage = document.getElementById('page-user-profile');
+    const upPage   = document.getElementById('page-user-profile');
     const upHeader = document.getElementById('user-profile-header');
-    const onScroll = () => {
-      const opacity = Math.min(upPage.scrollTop / 80, 1);
+    if (upPage._uprfScroll) upPage.removeEventListener('scroll', upPage._uprfScroll);
+    upPage._uprfScroll = () => {
+      const opacity = Math.min(upPage.scrollTop / 60, 1);
       upHeader.style.background = `rgba(0,0,0,${opacity})`;
     };
-    upPage.removeEventListener('scroll', upPage._uprfScroll || null);
-    upPage._uprfScroll = onScroll;
-    upPage.addEventListener('scroll', onScroll);
+    upPage.addEventListener('scroll', upPage._uprfScroll);
   });
 }
 
