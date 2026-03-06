@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>MistyNote</title>
+  <title>Winged</title>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@100..900&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -176,16 +176,18 @@
     <!-- ══════════════════════════════════════════
          PAGE: OTHER USER PROFILE  
     ══════════════════════════════════════════ -->
+    <!-- FLOATING HEADER: outside scroll container so position:fixed works -->
+    <header id="user-profile-header" style="display:none; position:fixed; top:0; left:0; right:0; z-index:200; background:rgba(0,0,0,0); transition:background .25s ease; display:flex; align-items:center; justify-content:space-between; padding:10px 16px; box-sizing:border-box;">
+      <button class="back-btn" onclick="slideBack()" style="background:transparent !important; border:none; box-shadow:none;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M12 5l-7 7 7 7" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div id="user-profile-header-info"></div>
+      <button class="header-action" id="user-profile-more" style="background:transparent !important; border:none; box-shadow:none;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="5" r="1.5" fill="white"/><circle cx="12" cy="12" r="1.5" fill="white"/><circle cx="12" cy="19" r="1.5" fill="white"/></svg>
+      </button>
+    </header>
+
     <section class="page slide-page no-header-page" id="page-user-profile">
-      <header class="page-header transparent-header" id="user-profile-header">
-        <button class="back-btn" onclick="slideBack()">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M12 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
-        <div id="user-profile-header-info" style="opacity:0"></div>
-        <button class="header-action" id="user-profile-more">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="5" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="19" r="1.5" fill="currentColor"/></svg>
-        </button>
-      </header>
       <div id="user-profile-body"></div>
     </section>
 
