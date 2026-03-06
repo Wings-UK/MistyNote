@@ -13,6 +13,7 @@ let feedLoading = false;
 let feedExhausted = false;
 let unreadCount = 0;
 let notifChannel = null;
+let postsChannel = null;
 let selectedFile = null;
 let repostTargetId = null;
 let repostTargetBtn = null;
@@ -59,6 +60,7 @@ async function bootApp() {
   loadNotifications();
   loadInitialNotifCount();
   subscribeToNotifs();
+  subscribeToPostUpdates();
   initComposerFile();
   initIntersectionObserver();
   initCommentBarInput();
@@ -148,6 +150,11 @@ async function handleLogout() {
       await supabase.auth.signOut();
       currentUser = null; currentProfile = null;
       loadedPostIds.clear(); likedPosts.clear(); repostedPosts.clear();
+
+      // Clean up realtime channels
+      if (notifChannel) { supabase.removeChannel(notifChannel); notifChannel = null; }
+      if (postsChannel) { supabase.removeChannel(postsChannel); postsChannel = null; }
+
       document.getElementById('app').classList.add('hidden');
       showAuthScreen();
     }}
@@ -1984,6 +1991,79 @@ function subscribeToNotifs() {
       if (navigator.vibrate) navigator.vibrate(40);
     })
     .subscribe();
+}
+
+function subscribeToPostUpdates() {
+  if (postsChannel) return;
+
+  postsChannel = supabase
+    .channel('posts-realtime')
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'posts'
+    }, (payload) => {
+      const post = payload.new;
+      if (!post?.id) return;
+
+      const postId = post.id;
+      const likeCount    = post.like_count    ?? 0;
+      const repostCount  = post.repost_count  ?? 0;
+      const viewCount    = post.views         ?? 0;
+
+      // ── Like count ──
+      // Only update if this user didn't trigger it (they already have optimistic UI)
+      document.querySelectorAll(`.heart-ai[data-post-id="${postId}"] .like-count`)
+        .forEach(el => {
+          const currentVal = parseInt(el.textContent || '0') || 0;
+          if (currentVal !== likeCount) animateCount(el, likeCount);
+        });
+
+      // Detail page like stat
+      if (detailPostId === postId) {
+        const statEl = document.querySelector(`.detail-stat-n[data-type="likes"]`);
+        if (statEl) {
+          const currentVal = parseInt(statEl.textContent || '0') || 0;
+          if (currentVal !== likeCount) animateCount(statEl, likeCount);
+        }
+      }
+
+      // ── Repost count ──
+      document.querySelectorAll(`.repost-btn[data-post-id="${postId}"] span`)
+        .forEach(el => {
+          const currentVal = parseInt(el.textContent || '0') || 0;
+          if (currentVal !== repostCount) {
+            el.textContent = repostCount > 0 ? fmtNum(repostCount) : '';
+          }
+        });
+
+      // Detail page repost stat
+      if (detailPostId === postId) {
+        document.querySelectorAll('.repost-count-display').forEach(el => {
+          const currentVal = parseInt(el.textContent || '0') || 0;
+          if (currentVal !== repostCount) animateCount(el, repostCount);
+        });
+      }
+
+      // ── View count ──
+      document.querySelectorAll(`.poster[data-post-id="${postId}"] .twits .viewe`)
+        .forEach(el => {
+          el.textContent = `${fmtNum(viewCount) || 0} views`;
+        });
+
+      if (detailPostId === postId) {
+        const viewEl = document.querySelector(`.detail-stat-n[data-type="views"]`);
+        if (viewEl) {
+          const currentVal = parseInt(viewEl.textContent || '0') || 0;
+          if (currentVal !== viewCount) animateCount(viewEl, viewCount);
+        }
+      }
+    })
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('✓ Realtime post updates active');
+      }
+    });
 }
 
 async function markAllRead() {
