@@ -326,7 +326,7 @@ function injectProfileStyles() {
     /* ── AVATAR ROW — sits between cover and identity ── */
     .prf-avatar-row {
       display:flex; justify-content:space-between; align-items:flex-end;
-      padding:0 16px; margin-top:-44px; position:relative; z-index:10;
+      padding:10px 16px 0; margin-top:-44px; position:relative; z-index:10;
     }
     .prf-avatar-wrap {
       width:88px; height:88px; border-radius:50%;
@@ -540,21 +540,6 @@ async function renderMyProfile() {
         <div class="prf-name-row">
           <h1 class="prf-name">${escHtml(profile.username || 'User')}</h1>
           ${profile.verified ? `<span class="prf-verified"><svg width="18" height="18" viewBox="0 0 24 24" fill="#6C47FF"><path d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg></span>` : ''}
-        </div>
-        <div class="prf-location-row">
-          <div class="prf-location">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
-            <span>${escHtml(profile.location || 'No location')}</span>
-          </div>
-          <div class="prf-qr-chip" onclick="showToast('QR code coming soon')">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3M17 14v3h3M14 17h3"/></svg>
-            QR
-          </div>
-        </div>
-        <div class="prf-follow-line">
-          <span class="prf-bld">${fmtNum(profile.following||0)}</span>following
-          <span class="prf-follow-sep">·</span>
-          <span class="prf-bld">${fmtNum(profile.followers||0)}</span>followers
         </div>
         ${profile.bio ? `<p class="prf-bio">${escHtml(profile.bio)}</p>` : ''}
       </div>
@@ -799,21 +784,10 @@ async function showUserProfile(userId) {
         </div>
 
         <!-- IDENTITY -->
-        <div class="prf-identity">
+        <div class="prf-identity" style="padding-top:8px">
           <div class="prf-name-row">
             <h1 class="prf-name">${escHtml(profile.username || 'User')}</h1>
             ${profile.verified ? `<span class="prf-verified"><svg width="18" height="18" viewBox="0 0 24 24" fill="#6C47FF"><path d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg></span>` : ''}
-          </div>
-          <div class="prf-location-row">
-            <div class="prf-location">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
-              <span>${escHtml(profile.location || 'No location')}</span>
-            </div>
-          </div>
-          <div class="prf-follow-line">
-            <span class="prf-bld">${fmtNum(profile.following||0)}</span>following
-            <span class="prf-follow-sep">·</span>
-            <span class="prf-bld">${fmtNum(profile.followers||0)}</span>followers
           </div>
           ${profile.bio ? `<p class="prf-bio">${escHtml(profile.bio)}</p>` : ''}
         </div>
@@ -838,12 +812,12 @@ async function showUserProfile(userId) {
           </div>
         </div>
 
-        <!-- STOREFRONT TEASER -->
-        <div class="prf-storefront-banner" onclick="showToast('Storefronts coming soon 🛍️')">
+        <!-- CREATOR STOREFRONT BANNER -->
+        <div class="prf-storefront-banner" onclick="showToast('Creator storefronts coming soon 🛍️')">
           <div class="prf-storefront-icon">🛍️</div>
           <div class="prf-storefront-text">
-            <div class="prf-storefront-title">Open your storefront</div>
-            <div class="prf-storefront-sub">Sell anything. Get paid safely.</div>
+            <div class="prf-storefront-title">Shop ${escHtml(profile.username || 'this creator')}'s store</div>
+            <div class="prf-storefront-sub">Browse their products & support their hustle.</div>
           </div>
           <span class="prf-storefront-pill">Soon</span>
         </div>
