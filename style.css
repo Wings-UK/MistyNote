@@ -703,14 +703,8 @@
     object-fit: cover; flex-shrink: 0; cursor: pointer;
     position: relative; z-index: 1;
   }
-  /* Trunk rope — continuous vertical line from avatar down through all replies */
-  .thread-trunk {
-    width: 2px; flex: 1; min-height: 0;
-    background: var(--border);
-    border-radius: 99px;
-    margin-top: 5px;
-  }
-  .thread-trunk.hidden { visibility: hidden; }
+  /* Trunk rope removed — kept as hidden placeholder for JS refs */
+  .thread-trunk { display: none !important; }
 
   /* Comment content */
   .comment-body { flex: 1; min-width: 0; padding-bottom: 14px; }
@@ -793,34 +787,13 @@
   .comment-item.reply {
     padding: 10px 0 0;
   }
-  /* Reply left col — narrower avatar, with rope connector lines via pseudo-elements */
+  /* Reply left col */
   .comment-item.reply .comment-thread-col {
-    width: 38px; margin-right: 8px;
-    position: relative; justify-content: flex-end; align-items: flex-end;
+    width: 28px; margin-right: 8px;
+    align-items: center;
   }
   .comment-item.reply .comment-avatar { width: 28px; height: 28px; }
-  /* Vertical rope segment from top of reply row down to avatar centre */
-  .comment-item.reply .comment-thread-col::before {
-    content: '';
-    position: absolute;
-    left: 17px; /* trunk centre: 36px col / 2 - 1px = 17px, offset by -20px margin = aligns with parent trunk */
-    top: 0;
-    height: 15px; /* reaches avatar centre (28px/2) */
-    width: 2px;
-    background: var(--border);
-    border-radius: 99px;
-  }
-  /* Horizontal arm from rope to avatar */
-  .comment-item.reply .comment-thread-col::after {
-    content: '';
-    position: absolute;
-    left: 17px;
-    top: 13px; /* avatar centre */
-    width: 11px;
-    height: 2px;
-    background: var(--border);
-    border-radius: 99px;
-  }
+  /* Rope connectors removed */
   .comment-item.reply .comment-name { font-size: 13px; }
   .comment-item.reply .comment-text { font-size: 15px; }
   .comment-item.reply .comment-body { padding-bottom: 10px; }
