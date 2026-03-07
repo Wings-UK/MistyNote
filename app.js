@@ -538,16 +538,21 @@ function injectProfileStyles() {
     #prf-panel-masonry-list, #prf-panel-likes, .prf-posts-panel { display:flex; flex-direction:column; gap:10px; padding:10px 0; }
 
     /* ── TWO-COLUMN MASONRY (original left/right column split) ── */
-    .prf-masonry { display:flex; gap:5px; padding:5px; align-items:flex-start; width:100%; }
-    .prf-masonry-col { flex:1; display:flex; flex-direction:column; gap:5px; }
-    .prf-masonry-tile { border-radius:12px; overflow:hidden; position:relative; cursor:pointer; background:var(--bg2); transition:transform .18s; }
+    .prf-masonry { display:flex; gap:8px; padding:8px; align-items:flex-start; width:100%; box-sizing:border-box; }
+    .prf-masonry-col { flex:1; display:flex; flex-direction:column; gap:8px; }
+    .prf-masonry-tile { border-radius:12px; overflow:hidden; cursor:pointer; background:var(--surface); transition:transform .18s; box-shadow:0 1px 4px rgba(0,0,0,.08); }
     .prf-masonry-tile:active { transform:scale(.97); }
     .prf-masonry-img { width:100%; display:block; object-fit:cover; }
-    .prf-masonry-text-tile { width:100%; min-height:120px; display:flex; align-items:center; justify-content:center; padding:16px 12px; position:relative; }
+    .prf-masonry-text-tile { width:100%; min-height:120px; display:flex; align-items:center; justify-content:center; padding:16px 12px; }
     .prf-masonry-text-tile p { font-size:13px; color:#fff; line-height:1.45; text-align:center; font-weight:600; margin:0; }
-    .prf-masonry-overlay { position:absolute; inset:0; background:linear-gradient(to top,rgba(0,0,0,.55) 0%,transparent 55%); opacity:0; transition:opacity .18s; display:flex; align-items:flex-end; gap:8px; padding:8px 10px; }
-    .prf-masonry-tile:hover .prf-masonry-overlay, .prf-masonry-tile:active .prf-masonry-overlay { opacity:1; }
-    .prf-masonry-stat { font-size:12px; color:#fff; font-weight:600; }
+    .prf-masonry-caption { font-size:12px; color:var(--text); line-height:1.4; padding:8px 10px 4px; }
+    .prf-masonry-footer { display:flex; align-items:center; justify-content:space-between; padding:6px 10px 10px; gap:6px; }
+    .prf-masonry-author { display:flex; align-items:center; gap:5px; min-width:0; flex:1; }
+    .prf-masonry-avatar { width:20px; height:20px; border-radius:50%; object-fit:cover; flex-shrink:0; }
+    .prf-masonry-username { font-size:11px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .prf-masonry-like { display:flex; align-items:center; gap:3px; background:none; border:none; cursor:pointer; flex-shrink:0; padding:2px 0; color:var(--text3); -webkit-tap-highlight-color:transparent; }
+    .prf-masonry-like.liked { color:rgb(244,7,82); }
+    .prf-masonry-like-count { font-size:11px; font-weight:500; color:inherit; }
 
     /* ── PLACEHOLDERS ── */
     .prf-placeholder { margin:20px 16px; border-radius:18px; padding:24px 20px; display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center; }
@@ -818,22 +823,35 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false) {
   right.className = 'prf-masonry-col';
 
   items.forEach((post, i) => {
-    const img  = post.image || post.reposted_post?.image || '';
-    const text = post.content || post.reposted_post?.content || '';
+    const img    = post.image || post.reposted_post?.image || '';
+    const text   = post.content || post.reposted_post?.content || '';
+    const user   = post.user || post.reposted_post?.user || {};
+    const avatar = user.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${user.username}`;
+    const uname  = user.username || '';
+    const liked  = likedPosts.has(post.id);
+    const likes  = post.like_count || 0;
+
     const tile = document.createElement('div');
     tile.className = 'prf-masonry-tile';
-    if (img) {
-      tile.innerHTML = `<img src="${escHtml(img)}" alt="" loading="lazy" class="prf-masonry-img">
-        <div class="prf-masonry-overlay">
-          <span class="prf-masonry-stat">❤️ ${fmtNum(post.like_count||0)}</span>
-          <span class="prf-masonry-stat">👁 ${fmtNum(post.views||0)}</span>
-        </div>`;
-    } else {
-      tile.innerHTML = `<div class="prf-masonry-text-tile" style="background:${gradientFor(post.id)}">
-          <p>${escHtml(text.slice(0,100))}</p>
-          <div class="prf-masonry-overlay"><span class="prf-masonry-stat">❤️ ${fmtNum(post.like_count||0)}</span></div>
-        </div>`;
-    }
+    tile.innerHTML = `
+      ${img
+        ? `<img src="${escHtml(img)}" alt="" loading="lazy" class="prf-masonry-img">`
+        : `<div class="prf-masonry-text-tile" style="background:${gradientFor(post.id)}"><p>${escHtml(text.slice(0,120))}</p></div>`
+      }
+      ${text && img ? `<div class="prf-masonry-caption">${escHtml(text.slice(0,80))}${text.length > 80 ? '…' : ''}</div>` : ''}
+      <div class="prf-masonry-footer">
+        <div class="prf-masonry-author">
+          <img class="prf-masonry-avatar" src="${escHtml(avatar)}" onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(uname)}'">
+          <span class="prf-masonry-username">${escHtml(uname)}</span>
+        </div>
+        <button class="prf-masonry-like ${liked ? 'liked' : ''}" data-post-id="${post.id}" onclick="event.stopPropagation(); toggleMasonryLike(this, '${post.id}')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="${liked ? 'rgb(244,7,82)' : 'none'}" stroke="${liked ? 'rgb(244,7,82)' : 'currentColor'}" stroke-width="2">
+            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+          </svg>
+          <span class="prf-masonry-like-count">${likes > 0 ? fmtNum(likes) : ''}</span>
+        </button>
+      </div>`;
+
     tile.addEventListener('click', () => openDetail(post.id));
     if (i % 2 === 0) left.appendChild(tile);
     else             right.appendChild(tile);
@@ -3920,6 +3938,33 @@ function fmtNum(n) {
 function escHtml(str) {
   if (!str) return '';
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function toggleMasonryLike(btn, postId) {
+  if (!currentUser) { showToast('Sign in to like'); return; }
+  const liked = btn.classList.contains('liked');
+  const newLiked = !liked;
+  const svg = btn.querySelector('svg');
+  const countEl = btn.querySelector('.prf-masonry-like-count');
+  const current = parseInt(countEl?.textContent?.replace(/[^0-9]/g,'')) || 0;
+  const newCount = Math.max(0, current + (newLiked ? 1 : -1));
+
+  btn.classList.toggle('liked', newLiked);
+  if (svg) {
+    svg.setAttribute('fill', newLiked ? 'rgb(244,7,82)' : 'none');
+    svg.setAttribute('stroke', newLiked ? 'rgb(244,7,82)' : 'currentColor');
+  }
+  if (countEl) countEl.textContent = newCount > 0 ? fmtNum(newCount) : '';
+  if (newLiked) likedPosts.add(postId); else likedPosts.delete(postId);
+
+  // Sync with DB
+  if (newLiked) {
+    supabase.from('likes').insert({ post_id: postId, user_id: currentUser.id }).then(({ error }) => {
+      if (error && error.code !== '23505') { btn.classList.remove('liked'); }
+    });
+  } else {
+    supabase.from('likes').delete().eq('post_id', postId).eq('user_id', currentUser.id);
+  }
 }
 
 function gradientFor(id) {
