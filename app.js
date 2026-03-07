@@ -8,6 +8,7 @@
 // ── STATE ──────────────────────────────────────────────────
 let currentUser = null;
 let currentProfile = null;
+let viewingProfile = null; // other user currently being viewed
 let feedOffset = 0;
 let feedLoading = false;
 let feedExhausted = false;
@@ -1016,8 +1017,7 @@ async function showUserProfile(userId) {
     upPage.addEventListener('scroll', upPage._uprfScroll);
 
     // ── Wire 3-dots more button ──
-    const moreBtn = document.getElementById('user-profile-more');
-    if (moreBtn) moreBtn.onclick = () => openProfileShare(profile);
+    viewingProfile = profile;
 
     // ── 3. Mini avatar + follow in header via IntersectionObserver ──
     const miniIdentity = document.getElementById('uprf-header-identity');
