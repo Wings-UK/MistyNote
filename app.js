@@ -1166,6 +1166,9 @@ async function loadFeed(reset = false) {
 function setFeedTab(tab, btn) {
   document.querySelectorAll('.feed-tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
+  // Slide the bar
+  const bar = document.getElementById('feed-tab-bar');
+  if (bar) bar.classList.toggle('right', tab === 'following');
   loadFeed(true);
 }
 
