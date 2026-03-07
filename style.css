@@ -355,7 +355,7 @@
   .post-meta { flex: 1; min-width: 0; }
   .post-name-row { display: flex; align-items: center; gap: 5px; }
   .post-name {
-    font-size: 15px; font-weight: 700; color: var(--text);
+    font-size: 14px; font-weight: 700; color: var(--text);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     max-width: 160px;
   }
