@@ -2182,7 +2182,7 @@ async function openDetail(postId, scrollToComments = false) {
       /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
          DETAIL PAGE
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-      #detail-body { padding-bottom: 140px; }
+      #detail-body { padding-bottom: 160px; }
 
       /* ── Post wrapper ── */
       .dp-wrap { background: var(--bg); }
@@ -2481,57 +2481,50 @@ async function openDetail(postId, scrollToComments = false) {
          COMMENT BAR (fixed bottom)
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
       .comment-bar {
-        display: none; /* shown only on detail page */
+        display: none;
         position: fixed; bottom: 0; left: 0; right: 0;
         flex-direction: column;
-        background: var(--bg);
-        border-top: 1px solid var(--border, #e5e7eb);
-        padding: 10px 14px 14px;
-        padding-bottom: calc(14px + env(safe-area-inset-bottom));
-        z-index: 100;
-        box-shadow: 0 -4px 20px rgba(0,0,0,.06);
-      }
-      .cb-top {
-        display: flex; align-items: flex-end; gap: 10px; margin-bottom: 8px;
-      }
-      .comment-bar-avatar {
-        width: 32px; height: 32px; border-radius: 50%;
-        object-fit: cover; flex-shrink: 0;
-        border: 1.5px solid var(--border, #e5e7eb);
+        background: #f0f0f5;
+        padding: 10px 14px;
+        padding-bottom: calc(10px + env(safe-area-inset-bottom));
+        z-index: 200;
+        border-top: 1px solid rgba(0,0,0,0.08);
       }
       .comment-bar-input {
-        flex: 1; border: 1.5px solid var(--border, #e5e7eb);
-        border-radius: 20px; padding: 8px 14px;
-        font-size: 15px; line-height: 1.4; color: var(--text);
-        background: var(--bg2, #f3f4f6);
-        resize: none; outline: none;
-        font-family: inherit; max-height: 100px;
-        transition: border-color .2s;
+        width: 100%; border: none; outline: none;
+        background: transparent; resize: none;
+        font-size: 16px; line-height: 1.4;
+        color: var(--text); font-family: inherit;
+        max-height: 120px; margin-bottom: 10px;
       }
-      .comment-bar-input:focus { border-color: #6C47FF; background: var(--bg); }
-
-      /* actions row */
+      .comment-bar-input::placeholder { color: #999; }
       .cb-actions {
         display: flex; align-items: center;
         justify-content: space-between;
       }
-      .cb-left, .cb-right { display: flex; align-items: center; gap: 4px; }
+      .cb-left { display: flex; align-items: center; gap: 2px; }
+      .cb-right { display: flex; align-items: center; gap: 2px; }
       .cb-action-btn {
-        width: 38px; height: 38px; border-radius: 50%;
+        width: 40px; height: 40px; border-radius: 50%;
         border: none; background: transparent; cursor: pointer;
         display: flex; align-items: center; justify-content: center;
-        color: var(--text2); transition: all .18s;
-        -webkit-tap-highlight-color: transparent;
+        color: #333; transition: all .15s;
+        -webkit-tap-highlight-color: transparent; flex-shrink: 0;
       }
-      .cb-action-btn:active { background: var(--bg2); transform: scale(.9); }
+      .cb-action-btn:active { transform: scale(.85); }
+      .cb-like-btn { display: flex; align-items: center; gap: 3px; width: auto; padding: 0 6px; border-radius: 20px; }
+      .cb-like-count { font-size: 14px; font-weight: 600; color: #333; }
       .cb-action-btn.cb-liked { color: rgb(244,7,82); }
       .cb-action-btn.cb-liked .cb-heart-path { fill: rgb(244,7,82); stroke: rgb(244,7,82); }
       .cb-action-btn.cb-reposted { color: #6C47FF; }
       .cb-action-btn.cb-reposted .cb-repost-svg { stroke: #6C47FF; }
       .cb-heart-path { transition: all .25s; }
-      .cb-send-btn { color: #6C47FF; }
-      .cb-send-btn:disabled { opacity: .35; cursor: not-allowed; }
-      .cb-send-btn:not(:disabled):active { background: rgba(108,71,255,.1); }
+      .cb-send-btn {
+        width: 44px; height: 44px;
+        background: rgb(244,7,82); color: #fff; border-radius: 50%;
+      }
+      .cb-send-btn:disabled { opacity: .4; cursor: not-allowed; background: rgb(244,7,82); }
+      .cb-send-btn:not(:disabled):active { transform: scale(.88); }
     `;
     document.head.appendChild(s);
   }
@@ -2648,21 +2641,19 @@ async function openDetail(postId, scrollToComments = false) {
       <div id="comments-container"></div>
     `;
 
-    // Wire share (header button)
+    // Share btn (header)
     document.getElementById('detail-share-btn').onclick = () => sharePost(p);
 
-    // Comment bar — avatar + placeholder
-    if (currentProfile?.avatar) {
-      document.getElementById('comment-bar-avatar').src = currentProfile.avatar;
-    }
-    document.getElementById('comment-input').placeholder = `Reply to ${user.username}…`;
+    // Comment bar placeholder
+    document.getElementById('comment-input').placeholder = `Reply to ${user.username} 💜...`;
 
-    // Comment bar — wire like button to this post
+    // Comment bar — wire like button
     const cbLike = document.getElementById('cb-like-btn');
     if (cbLike) {
       cbLike.dataset.postId = postId;
       cbLike.dataset.liked = isLiked ? 'true' : 'false';
       const cbPath = cbLike.querySelector('.cb-heart-path');
+      const cbCount = document.getElementById('cb-like-count');
       if (isLiked) {
         cbPath?.setAttribute('fill', 'rgb(244,7,82)');
         cbPath?.setAttribute('stroke', 'rgb(244,7,82)');
@@ -2672,10 +2663,11 @@ async function openDetail(postId, scrollToComments = false) {
         cbPath?.setAttribute('stroke', 'currentColor');
         cbLike.classList.remove('cb-liked');
       }
+      if (cbCount) cbCount.textContent = p.like_count > 0 ? fmtNum(p.like_count) : '';
       cbLike.onclick = () => toggleLike(postId, cbLike);
     }
 
-    // Comment bar — wire repost button to this post
+    // Comment bar — wire repost button
     const cbRepost = document.getElementById('cb-repost-btn');
     if (cbRepost) {
       cbRepost.dataset.postId = postId;
