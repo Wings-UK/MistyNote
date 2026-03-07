@@ -1534,7 +1534,7 @@ function injectFeedPostStyles() {
     }
     .echo-type-repost { background: #f0eeff; color: #6C47FF; }
     .echo-type-reply  { background: #f0fdf4; color: #16a34a; }
-    .echo-text { font-size: 14px; color: var(--text); line-height: 1.4; word-break: break-word; }
+    .echo-text { font-size: 16px; color: var(--text); line-height: 1.4; word-break: break-word; }
     .echo-stats { display: flex; gap: 14px; margin-top: 6px; }
     .echo-stat { font-size: 12px; color: var(--text2); display: flex; align-items: center; gap: 4px; }
 
@@ -2267,7 +2267,7 @@ async function openDetail(postId, scrollToComments = false) {
 
       /* ── Content text ── */
       .dp-text {
-        font-size: 18px; line-height: 1.65; color: var(--text);
+        font-size: 17px; line-height: 1.65; color: var(--text);
         padding: 14px 16px 4px; margin: 0;
         white-space: pre-wrap; word-break: break-word;
       }
@@ -2449,7 +2449,7 @@ async function openDetail(postId, scrollToComments = false) {
       .comment-name:hover { text-decoration: underline; }
       .comment-time { font-size: 11px; color: var(--text2); }
       .comment-text {
-        font-size: 14px; line-height: 1.55; color: var(--text);
+        font-size: 16px; line-height: 1.55; color: var(--text);
         white-space: pre-wrap; word-break: break-word; margin: 0;
       }
 
