@@ -463,7 +463,7 @@ function injectProfileStyles() {
     }
 
 
-    .prf-storefront-banner { margin:18px 16px 0; background:linear-gradient(135deg,#f4f3ff,#fdf2ff); border:1.5px solid #ddd6fe; border-radius:16px; padding:14px 16px; display:flex; align-items:center; gap:12px; cursor:pointer; transition:all .18s; }
+    .prf-storefront-banner { margin:18px 16px 18px; background:linear-gradient(135deg,#f4f3ff,#fdf2ff); border:1.5px solid #ddd6fe; border-radius:16px; padding:14px 16px; display:flex; align-items:center; gap:12px; cursor:pointer; transition:all .18s; }
     .prf-storefront-banner:active { transform:scale(.98); }
     .prf-storefront-icon { font-size:28px; flex-shrink:0; }
     .prf-storefront-text { flex:1; }
@@ -473,7 +473,7 @@ function injectProfileStyles() {
 
     /* ── ICON TAB BAR (original ewe/yeb DNA, elevated) ── */
     .prf-icon-tabs {
-      display:flex; width:100%; margin-top:18px;
+      display:flex; width:100%; margin-top:0;
       border-top:1px solid var(--border,#e5e7eb);
       border-bottom:1px solid var(--border,#e5e7eb);
       background:var(--bg);
