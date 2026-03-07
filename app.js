@@ -3713,13 +3713,15 @@ function shareMyProfile() {
 let shareSheetProfile = null; // stores the profile being shared
 
 async function openProfileShare(profile) {
+  console.log('openProfileShare called', profile);
   shareSheetProfile = profile;
   const overlay = document.getElementById('profile-share-overlay');
   const sheet   = document.getElementById('profile-share-sheet');
-  if (!overlay || !sheet) return;
+  console.log('overlay:', overlay, 'sheet:', sheet);
+  if (!overlay || !sheet) { console.log('EARLY EXIT - overlay or sheet not found'); return; }
 
   overlay.classList.remove('hidden');
-  requestAnimationFrame(() => sheet.classList.add('open'));
+  setTimeout(() => sheet.classList.add('open'), 10);
 
   // Load top followers of current user to share to
   const row = document.getElementById('share-followers-row');
