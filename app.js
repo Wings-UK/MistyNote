@@ -1458,7 +1458,7 @@ function injectFeedPostStyles() {
       height: 38px;
       object-fit: cover;
       object-position: center;
-      border-radius: 10px;
+      border-radius: 50%;
       display: block;
       transition: filter 0.15s;
     }
