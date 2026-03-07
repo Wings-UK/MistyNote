@@ -725,12 +725,13 @@
     -webkit-tap-highlight-color: transparent; flex-shrink: 0;
   }
   .cb-action-btn:active { transform: scale(0.85); }
-  .cb-like-btn { width: auto; padding: 0 6px; gap: 3px; border-radius: 20px; }
-  .cb-like-count { font-size: 14px; font-weight: 600; color: #333; }
+  .cb-like-btn { width: auto; padding: 0 6px; gap: 10px; border-radius: 20px; }
+  .cb-like-count { font-size: 14px; font-weight: 400; color: #000000; transition: color 0.25s, font-weight 0.25s; }
   .cb-action-btn.cb-liked { color: rgb(244,7,82); }
   .cb-action-btn.cb-liked .cb-heart-path { fill: rgb(244,7,82); stroke: rgb(244,7,82); }
+  .cb-action-btn.cb-liked .cb-like-count { color: rgb(244,7,82); font-weight: 500; }
   .cb-action-btn.cb-reposted { color: #6C47FF; }
-  .cb-action-btn.cb-reposted .cb-repost-svg { stroke: #6C47FF; }
+  .cb-action-btn.cb-reposted .cb-repost-svg { stroke: #6C47FF; stroke-width: 2.5; }
   .cb-heart-path { transition: all 0.25s; }
   .cb-send-btn {
     width: 46px; height: 46px;
