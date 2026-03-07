@@ -101,18 +101,55 @@
     <section class="page active" id="page-feed">
       <header class="page-header feed-header">
         <div class="feed-header-inner">
-          <div class="feed-logo">
-            <svg width="28" height="28" viewBox="0 0 48 48" fill="none">
-              <path d="M8 24C8 24 12 8 24 8C36 8 40 24 40 24" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-              <path d="M8 24C8 24 16 18 24 24C32 30 40 24 40 24" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-              <circle cx="24" cy="24" r="4" fill="currentColor"/>
+
+          <!-- Notification bell — top right -->
+          <button class="feed-notif-btn" onclick="navTo('notifications')" aria-label="Notifications">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path d="M13.73 21a2 2 0 01-3.46 0"/>
             </svg>
-            <span>Winged</span>
+            <span class="feed-notif-dot" id="feed-notif-dot"></span>
+          </button>
+
+          <!-- Centre sigil -->
+          <div class="feed-sigil">
+            <svg class="feed-sigil-svg" width="38" height="38" viewBox="0 0 48 48" fill="none">
+              <!-- mist arc -->
+              <path d="M5 29C5 29 10 9 24 9C38 9 43 29 43 29" stroke="url(#sh1)" stroke-width="3" stroke-linecap="round"/>
+              <!-- wave -->
+              <path d="M5 29C5 29 14 20 24 29C34 38 43 29 43 29" stroke="url(#sh2)" stroke-width="3" stroke-linecap="round"/>
+              <!-- note dot -->
+              <circle cx="24" cy="29" r="3.5" fill="url(#sh1)"/>
+              <!-- subtle second arc for depth -->
+              <path d="M10 29C10 29 14 15 24 15C34 15 38 29 38 29" stroke="url(#sh3)" stroke-width="1.2" stroke-linecap="round" opacity="0.35"/>
+              <defs>
+                <linearGradient id="sh1" x1="5" y1="29" x2="43" y2="29" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#7c5cfc"/>
+                  <stop offset="0.5" stop-color="#6C47FF"/>
+                  <stop offset="1" stop-color="#a78bfa"/>
+                </linearGradient>
+                <linearGradient id="sh2" x1="5" y1="29" x2="43" y2="29" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#b09ffe"/>
+                  <stop offset="1" stop-color="#6C47FF"/>
+                </linearGradient>
+                <linearGradient id="sh3" x1="10" y1="29" x2="38" y2="29" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#a78bfa"/>
+                  <stop offset="1" stop-color="#6C47FF"/>
+                </linearGradient>
+              </defs>
+            </svg>
           </div>
-          <div class="feed-header-tabs">
-            <button class="feed-tab active" onclick="setFeedTab('for-you', this)">For You</button>
-            <button class="feed-tab" onclick="setFeedTab('following', this)">Following</button>
-          </div>
+
+          <!-- Spacer for right balance -->
+          <div class="feed-header-right"></div>
+
+        </div>
+
+        <!-- Tabs row — full width below -->
+        <div class="feed-tabs-row">
+          <button class="feed-tab active" id="feed-tab-foryou" onclick="setFeedTab('for-you', this)">For You</button>
+          <button class="feed-tab" id="feed-tab-following" onclick="setFeedTab('following', this)">Following</button>
+          <div class="feed-tab-bar" id="feed-tab-bar"></div>
         </div>
       </header>
 
