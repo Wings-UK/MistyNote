@@ -170,6 +170,26 @@ async function handleLogout() {
 // ══════════════════════════════════════════
 
 function navTo(pageId) {
+  // If any slide panels are open, close them all cleanly before navigating
+  if (slideStack.length > 0) {
+    slideStack.forEach(id => {
+      document.getElementById('page-' + id)?.classList.remove('active');
+    });
+    slideStack.length = 0;
+    // Clean up all floating headers and comment bar
+    document.getElementById('comment-bar').style.display = 'none';
+    const floatingHeader = document.getElementById('user-profile-header');
+    if (floatingHeader) floatingHeader.style.display = 'none';
+    const miniIdentity = document.getElementById('uprf-header-identity');
+    const miniFollow   = document.getElementById('uprf-header-follow');
+    if (miniIdentity) { miniIdentity.style.opacity='0'; miniIdentity.style.pointerEvents='none'; }
+    if (miniFollow)   { miniFollow.style.opacity='0'; miniFollow.style.display='none'; }
+    document.getElementById('page-user-profile')?._uprfAvatarObs?.disconnect();
+    document.getElementById('page-profile')?._myprfAvatarObs?.disconnect();
+    const myHdr = document.getElementById('my-profile-header');
+    if (myHdr) myHdr.style.display = 'none';
+  }
+
   const pages = ['feed','discover','notifications','profile'];
   pages.forEach(id => {
     const el = document.getElementById('page-' + id);
