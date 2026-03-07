@@ -244,6 +244,10 @@ function slideBack() {
     el?.classList.remove('active');
   }
 
+  // Restore bottom nav, hide comment bar
+  document.getElementById('bottom-nav').style.display = '';
+  document.getElementById('comment-bar').style.display = 'none';
+
   // Hide floating header
   const floatingHeader = document.getElementById('user-profile-header');
   if (floatingHeader) floatingHeader.style.display = 'none';
@@ -1793,6 +1797,14 @@ function setLikeUI(postId, liked, count) {
       path.setAttribute('stroke', liked ? 'var(--red)' : 'currentColor');
     }
   });
+  // Sync comment bar like button
+  const cbLike = document.getElementById('cb-like-btn');
+  if (cbLike && cbLike.dataset.postId === postId) {
+    cbLike.dataset.liked = liked ? 'true' : 'false';
+    cbLike.classList.toggle('cb-liked', liked);
+    const cbPath = cbLike.querySelector('.cb-heart-path');
+    if (cbPath) { cbPath.setAttribute('fill', liked ? 'rgb(244,7,82)' : 'none'); cbPath.setAttribute('stroke', liked ? 'rgb(244,7,82)' : 'currentColor'); }
+  }
 }
 
 function syncLikeCount(postId, count) {
@@ -1835,6 +1847,14 @@ function setRepostUI(postId, reposted) {
       svg.setAttribute('stroke-width', reposted ? '2.5' : '2.2');
     }
   });
+  // Sync comment bar repost button
+  const cbRepost = document.getElementById('cb-repost-btn');
+  if (cbRepost && cbRepost.dataset.postId === postId) {
+    cbRepost.dataset.reposted = reposted ? 'true' : 'false';
+    cbRepost.classList.toggle('cb-reposted', reposted);
+    const cbSvg = cbRepost.querySelector('.cb-repost-svg');
+    if (cbSvg) cbSvg.setAttribute('stroke', reposted ? '#6C47FF' : 'currentColor');
+  }
 }
 
 async function syncRepostCount(postId) {
@@ -2456,6 +2476,62 @@ async function openDetail(postId, scrollToComments = false) {
         background: rgba(108,71,255,.35);
         vertical-align: middle;
       }
+
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         COMMENT BAR (fixed bottom)
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+      .comment-bar {
+        display: none; /* shown only on detail page */
+        position: fixed; bottom: 0; left: 0; right: 0;
+        flex-direction: column;
+        background: var(--bg);
+        border-top: 1px solid var(--border, #e5e7eb);
+        padding: 10px 14px 14px;
+        padding-bottom: calc(14px + env(safe-area-inset-bottom));
+        z-index: 100;
+        box-shadow: 0 -4px 20px rgba(0,0,0,.06);
+      }
+      .cb-top {
+        display: flex; align-items: flex-end; gap: 10px; margin-bottom: 8px;
+      }
+      .comment-bar-avatar {
+        width: 32px; height: 32px; border-radius: 50%;
+        object-fit: cover; flex-shrink: 0;
+        border: 1.5px solid var(--border, #e5e7eb);
+      }
+      .comment-bar-input {
+        flex: 1; border: 1.5px solid var(--border, #e5e7eb);
+        border-radius: 20px; padding: 8px 14px;
+        font-size: 15px; line-height: 1.4; color: var(--text);
+        background: var(--bg2, #f3f4f6);
+        resize: none; outline: none;
+        font-family: inherit; max-height: 100px;
+        transition: border-color .2s;
+      }
+      .comment-bar-input:focus { border-color: #6C47FF; background: var(--bg); }
+
+      /* actions row */
+      .cb-actions {
+        display: flex; align-items: center;
+        justify-content: space-between;
+      }
+      .cb-left, .cb-right { display: flex; align-items: center; gap: 4px; }
+      .cb-action-btn {
+        width: 38px; height: 38px; border-radius: 50%;
+        border: none; background: transparent; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        color: var(--text2); transition: all .18s;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .cb-action-btn:active { background: var(--bg2); transform: scale(.9); }
+      .cb-action-btn.cb-liked { color: rgb(244,7,82); }
+      .cb-action-btn.cb-liked .cb-heart-path { fill: rgb(244,7,82); stroke: rgb(244,7,82); }
+      .cb-action-btn.cb-reposted { color: #6C47FF; }
+      .cb-action-btn.cb-reposted .cb-repost-svg { stroke: #6C47FF; }
+      .cb-heart-path { transition: all .25s; }
+      .cb-send-btn { color: #6C47FF; }
+      .cb-send-btn:disabled { opacity: .35; cursor: not-allowed; }
+      .cb-send-btn:not(:disabled):active { background: rgba(108,71,255,.1); }
     `;
     document.head.appendChild(s);
   }
@@ -2564,50 +2640,61 @@ async function openDetail(postId, scrollToComments = false) {
           </div>
         </div>
 
-        <!-- ACTIONS -->
-        <div class="dp-actions">
-          <button class="dp-action" onclick="focusCommentBar()">
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
-            Reply
-          </button>
-          <button class="dp-action dp-repost-btn" data-post-id="${postId}" data-reposted="false" onclick="handleRepost('${postId}',this)">
-            <svg class="dp-repost-svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M17 1l4 4-4 4M7 23l-4-4 4-4"/><path d="M3 11V9a4 4 0 014-4h14M21 13v2a4 4 0 01-4 4H3"/></svg>
-            Repost
-          </button>
-          <button class="dp-action dp-like-btn ${isLiked?'dp-liked':''}" data-post-id="${postId}" data-liked="${isLiked}" onclick="toggleLike('${postId}',this)">
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
-              <path class="dp-heart-path" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
-                stroke="${isLiked?'rgb(244,7,82)':'currentColor'}" stroke-width="2.2"
-                ${isLiked?'fill="rgb(244,7,82)"':''}/>
-            </svg>
-            Like
-          </button>
-          <button class="dp-action" id="detail-share-btn">
-            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-            Share
-          </button>
-        </div>
+        <!-- ACTIONS removed — handled by fixed comment bar below -->
+
       </div>
 
       <div class="dp-divider"></div>
       <div id="comments-container"></div>
     `;
 
-    // Wire share
+    // Wire share (header button)
     document.getElementById('detail-share-btn').onclick = () => sharePost(p);
 
-    // Comment bar
+    // Comment bar — avatar + placeholder
     if (currentProfile?.avatar) {
       document.getElementById('comment-bar-avatar').src = currentProfile.avatar;
     }
     document.getElementById('comment-input').placeholder = `Reply to ${user.username}…`;
 
-    // Repost state
-    const repostBtn = body.querySelector('.dp-repost-btn');
-    if (repostBtn && repostedPosts.has(postId)) {
-      repostBtn.classList.add('dp-reposted');
-      repostBtn.dataset.reposted = 'true';
+    // Comment bar — wire like button to this post
+    const cbLike = document.getElementById('cb-like-btn');
+    if (cbLike) {
+      cbLike.dataset.postId = postId;
+      cbLike.dataset.liked = isLiked ? 'true' : 'false';
+      const cbPath = cbLike.querySelector('.cb-heart-path');
+      if (isLiked) {
+        cbPath?.setAttribute('fill', 'rgb(244,7,82)');
+        cbPath?.setAttribute('stroke', 'rgb(244,7,82)');
+        cbLike.classList.add('cb-liked');
+      } else {
+        cbPath?.setAttribute('fill', 'none');
+        cbPath?.setAttribute('stroke', 'currentColor');
+        cbLike.classList.remove('cb-liked');
+      }
+      cbLike.onclick = () => toggleLike(postId, cbLike);
     }
+
+    // Comment bar — wire repost button to this post
+    const cbRepost = document.getElementById('cb-repost-btn');
+    if (cbRepost) {
+      cbRepost.dataset.postId = postId;
+      const alreadyReposted = repostedPosts.has(postId);
+      cbRepost.dataset.reposted = alreadyReposted ? 'true' : 'false';
+      const cbSvg = cbRepost.querySelector('.cb-repost-svg');
+      if (alreadyReposted) {
+        cbRepost.classList.add('cb-reposted');
+        cbSvg?.setAttribute('stroke', '#6C47FF');
+      } else {
+        cbRepost.classList.remove('cb-reposted');
+        cbSvg?.setAttribute('stroke', 'currentColor');
+      }
+      cbRepost.onclick = () => handleRepost(postId, cbRepost);
+    }
+
+    // Swap bottom nav → comment bar
+    document.getElementById('bottom-nav').style.display = 'none';
+    document.getElementById('comment-bar').style.display = 'flex';
 
     // Track view + load comments
     await recordView(postId);
@@ -2630,6 +2717,20 @@ function toggleDetailFollow(btn, userId) {
 
 function focusCommentBar() {
   document.getElementById('comment-input')?.focus();
+}
+
+function insertMention() {
+  const input = document.getElementById('comment-input');
+  if (!input) return;
+  const pos = input.selectionStart;
+  input.value = input.value.slice(0, pos) + '@' + input.value.slice(pos);
+  input.setSelectionRange(pos + 1, pos + 1);
+  input.focus();
+  input.dispatchEvent(new Event('input'));
+}
+
+function triggerCommentImage() {
+  showToast('Image attachments in replies coming soon 🙏');
 }
 
 // ── COMMENT BAR ──
