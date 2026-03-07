@@ -168,9 +168,9 @@
          PAGE: MY PROFILE
     ══════════════════════════════════════════ -->
     <!-- FLOATING HEADER: logged-in profile -->
-    <header id="my-profile-header" style="display:none; position:fixed; top:0; left:0; right:0; z-index:200; background:rgba(0,0,0,0); transition:background .25s ease; align-items:center; justify-content:space-between; padding:10px 16px; box-sizing:border-box;">
+    <header id="my-profile-header" style="display:none; position:fixed; top:0; left:0; right:0; z-index:200; height:56px; background:rgba(0,0,0,0); transition:background .25s ease; align-items:center; justify-content:space-between; padding:0 16px; box-sizing:border-box;">
       <button onclick="openSidePanel?.()" style="background:transparent !important; border:none; box-shadow:none; cursor:pointer; padding:4px;">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18" stroke="white" stroke-width="2"/></svg>
       </button>
       <div id="myprf-header-identity" style="display:flex;align-items:center;gap:10px;opacity:0;transition:opacity .25s ease;pointer-events:none;">
         <img id="myprf-header-avatar" src="" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.6);">
@@ -190,7 +190,7 @@
          PAGE: OTHER USER PROFILE  
     ══════════════════════════════════════════ -->
     <!-- FLOATING HEADER: outside scroll container so position:fixed works -->
-    <header id="user-profile-header" style="display:none; position:fixed; top:0; left:0; right:0; z-index:200; background:rgba(0,0,0,0); transition:background .25s ease; align-items:center; justify-content:space-between; padding:10px 16px; box-sizing:border-box;">
+    <header id="user-profile-header" style="display:none; position:fixed; top:0; left:0; right:0; z-index:200; height:56px; background:rgba(0,0,0,0); transition:background .25s ease; align-items:center; justify-content:space-between; padding:0 16px; box-sizing:border-box;">
       <button class="back-btn" onclick="slideBack()" style="background:transparent !important; border:none; box-shadow:none;">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M12 5l-7 7 7 7" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
