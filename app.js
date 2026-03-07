@@ -1778,14 +1778,16 @@ function setLikeUI(postId, liked, count) {
     if (count !== null && countEl) animateCount(countEl, count);
   });
   // Detail page like button
-  document.querySelectorAll(`.detail-action.like-action[data-post-id="${postId}"]`).forEach(btn => {
+  document.querySelectorAll(`.dp-like-btn[data-post-id="${postId}"], .detail-action.like-action[data-post-id="${postId}"]`).forEach(btn => {
     btn.dataset.liked = liked ? 'true' : 'false';
+    // support both old and new class names
     btn.classList.toggle('liked', liked);
+    btn.classList.toggle('dp-liked', liked);
     if (count !== null) {
       const sp = btn.querySelector('span');
       if (sp) animateCount(sp, count);
     }
-    const path = btn.querySelector('.heart-path');
+    const path = btn.querySelector('.heart-path, .dp-heart-path');
     if (path) {
       path.setAttribute('fill', liked ? 'var(--red)' : 'none');
       path.setAttribute('stroke', liked ? 'var(--red)' : 'currentColor');
@@ -1823,13 +1825,14 @@ function setRepostUI(postId, reposted) {
     else if (span) span.style.color = '';
   });
   // Detail page repost button
-  document.querySelectorAll(`.detail-action.repost-action[data-post-id="${postId}"]`).forEach(btn => {
+  document.querySelectorAll(`.dp-repost-btn[data-post-id="${postId}"], .detail-action.repost-action[data-post-id="${postId}"]`).forEach(btn => {
     btn.dataset.reposted = reposted ? 'true' : 'false';
     btn.classList.toggle('reposted', reposted);
-    const svg = btn.querySelector('.repost-icon');
+    btn.classList.toggle('dp-reposted', reposted);
+    const svg = btn.querySelector('.dp-repost-svg, .repost-icon');
     if (svg) {
-      svg.setAttribute('stroke', reposted ? '#6C47FF' : '#000000');
-      svg.setAttribute('stroke-width', reposted ? '2.5' : '2');
+      svg.setAttribute('stroke', reposted ? '#6C47FF' : 'currentColor');
+      svg.setAttribute('stroke-width', reposted ? '2.5' : '2.2');
     }
   });
 }
@@ -2150,9 +2153,316 @@ async function openDetail(postId, scrollToComments = false) {
   detailPostId = postId;
   detailCommentParentId = null;
 
+  // ── Inject styles once ──
+  if (!document.getElementById('detail-styles')) {
+    const s = document.createElement('style');
+    s.id = 'detail-styles';
+    s.textContent = `
+
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         DETAIL PAGE
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+      #detail-body { padding-bottom: 140px; }
+
+      /* ── Post wrapper ── */
+      .dp-wrap { background: var(--bg); }
+
+      /* ── Author row ── */
+      .dp-author {
+        display: flex; align-items: center; gap: 12px;
+        padding: 16px 16px 0;
+      }
+      .dp-avatar {
+        width: 46px; height: 46px; border-radius: 50%;
+        object-fit: cover; object-position: top;
+        flex-shrink: 0; cursor: pointer;
+        border: 2px solid var(--border, #e5e7eb);
+        transition: opacity .15s;
+      }
+      .dp-avatar:active { opacity: .7; }
+      .dp-author-info { flex: 1; min-width: 0; }
+      .dp-name {
+        font-size: 15px; font-weight: 700; color: var(--text);
+        cursor: pointer; white-space: nowrap;
+        overflow: hidden; text-overflow: ellipsis;
+        line-height: 1.2;
+      }
+      .dp-name:hover { text-decoration: underline; }
+      .dp-handle { font-size: 13px; color: var(--text2); margin-top: 1px; }
+      .dp-follow-btn {
+        height: 32px; padding: 0 18px;
+        border-radius: 20px; font-size: 13px; font-weight: 700;
+        border: 1.5px solid var(--border, #e5e7eb);
+        background: transparent; color: var(--text);
+        cursor: pointer; transition: all .2s; flex-shrink: 0;
+        letter-spacing: -.01em;
+      }
+      .dp-follow-btn.following {
+        background: #6C47FF; color: #fff; border-color: #6C47FF;
+      }
+      .dp-follow-btn:active { transform: scale(.93); }
+
+      /* ── Content text ── */
+      .dp-text {
+        font-size: 18px; line-height: 1.65; color: var(--text);
+        padding: 14px 16px 4px; margin: 0;
+        white-space: pre-wrap; word-break: break-word;
+      }
+
+      /* ── Media ── */
+      .dp-media { margin: 12px 0 0; overflow: hidden; }
+      .dp-media img {
+        width: 100%; display: block;
+        max-height: 500px; object-fit: contain;
+        background: #000; cursor: zoom-in;
+      }
+      .dp-media .dp-video-wrap {
+        position: relative; background: #000; cursor: pointer;
+      }
+      .dp-media video { width: 100%; display: block; max-height: 420px; }
+      .dp-media .dp-play-overlay {
+        position: absolute; inset: 0;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0,0,0,.18);
+      }
+      .dp-play-circle {
+        width: 60px; height: 60px; border-radius: 50%;
+        background: rgba(0,0,0,.6); backdrop-filter: blur(10px);
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 20px rgba(0,0,0,.4);
+      }
+
+      /* ── Quoted / Repost card ── */
+      .dp-quote-intro {
+        font-size: 14px; color: var(--text2); padding: 12px 16px 0;
+        display: flex; align-items: center; gap: 6px;
+      }
+      .dp-quote-card {
+        margin: 10px 16px 0;
+        border: 1.5px solid var(--border, #e5e7eb);
+        border-radius: 18px; overflow: hidden;
+        background: var(--bg2, #f9fafb);
+        cursor: pointer; transition: background .15s, border-color .15s;
+      }
+      .dp-quote-card:hover { border-color: #6C47FF; }
+      .dp-quote-card:active { background: rgba(108,71,255,.04); }
+      .dp-quote-inner { padding: 12px 14px 14px; }
+      .dp-quote-header {
+        display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+      }
+      .dp-quote-avatar {
+        width: 26px; height: 26px; border-radius: 50%;
+        object-fit: cover; flex-shrink: 0;
+      }
+      .dp-quote-name { font-size: 14px; font-weight: 700; color: var(--text); }
+      .dp-quote-time { font-size: 12px; color: var(--text2); margin-left: auto; }
+      .dp-quote-text {
+        font-size: 14px; color: var(--text); line-height: 1.5;
+        white-space: pre-wrap; word-break: break-word; margin: 0;
+      }
+      .dp-quote-img {
+        width: 100%; display: block;
+        max-height: 220px; object-fit: cover;
+      }
+
+      /* ── Full date ── */
+      .dp-date {
+        padding: 14px 16px 0;
+        font-size: 14px; color: var(--text2);
+        letter-spacing: -.01em;
+      }
+      .dp-date b { color: var(--text); font-weight: 600; }
+
+      /* ── Stats bar ── */
+      .dp-stats {
+        display: flex; margin: 14px 0 0;
+        border-top: 1px solid var(--border, #e5e7eb);
+        border-bottom: 1px solid var(--border, #e5e7eb);
+      }
+      .dp-stat {
+        flex: 1; display: flex; flex-direction: column;
+        align-items: center; padding: 11px 4px; gap: 3px;
+        position: relative;
+      }
+      .dp-stat + .dp-stat::before {
+        content: ''; position: absolute; left: 0; top: 18%;
+        height: 64%; width: 1px;
+        background: var(--border, #e5e7eb);
+      }
+      .dp-stat-n {
+        font-size: 19px; font-weight: 800; color: var(--text);
+        line-height: 1; letter-spacing: -.02em;
+      }
+      .dp-stat-l {
+        font-size: 10px; color: var(--text2);
+        text-transform: uppercase; letter-spacing: .06em; font-weight: 600;
+      }
+
+      /* ── Action row ── */
+      .dp-actions {
+        display: flex; align-items: center;
+        padding: 2px 6px;
+        border-bottom: 1px solid var(--border, #e5e7eb);
+      }
+      .dp-action {
+        flex: 1; display: flex; align-items: center; justify-content: center;
+        gap: 6px; height: 46px; border-radius: 12px;
+        font-size: 13px; font-weight: 600; color: var(--text2);
+        background: transparent; border: none; cursor: pointer;
+        transition: all .18s; -webkit-tap-highlight-color: transparent;
+      }
+      .dp-action:active { background: var(--bg2); transform: scale(.93); }
+      .dp-action.dp-liked { color: rgb(244,7,82); }
+      .dp-action.dp-liked .dp-heart-path { fill: rgb(244,7,82); stroke: rgb(244,7,82); }
+      .dp-action.dp-reposted { color: #6C47FF; }
+      .dp-action.dp-reposted .dp-repost-svg { stroke: #6C47FF; }
+      .dp-heart-path { transition: all .25s ease; }
+
+      /* ── Divider ── */
+      .dp-divider {
+        height: 8px;
+        background: var(--bg2, #f3f4f6);
+        border-top: 1px solid var(--border, #e5e7eb);
+        border-bottom: 1px solid var(--border, #e5e7eb);
+      }
+
+      /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+         COMMENTS
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+      .comments-header {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 14px 16px 8px;
+      }
+      .comments-title { font-size: 16px; font-weight: 800; color: var(--text); letter-spacing: -.02em; }
+      .comments-count {
+        font-size: 12px; font-weight: 700; color: #6C47FF;
+        background: rgba(108,71,255,.1); padding: 3px 11px; border-radius: 20px;
+      }
+      .comments-empty {
+        padding: 44px 20px; text-align: center;
+        font-size: 14px; color: var(--text2); line-height: 1.6;
+      }
+      .comments-empty-icon { font-size: 32px; margin-bottom: 8px; opacity: .5; }
+
+      /* ── Comment item ── */
+      .comment-item {
+        display: flex; gap: 10px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border, #e5e7eb);
+      }
+      .comment-item.reply {
+        padding-left: 52px;
+        background: var(--bg2, #f9fafb);
+      }
+      @keyframes cmtFadeUp {
+        from { opacity: 0; transform: translateY(10px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      .comment-item { animation: cmtFadeUp .22s ease both; }
+      .comment-avatar {
+        width: 36px; height: 36px; border-radius: 50%;
+        object-fit: cover; flex-shrink: 0; cursor: pointer;
+        border: 1.5px solid var(--border, #e5e7eb);
+        transition: opacity .15s;
+      }
+      .comment-avatar:active { opacity: .7; }
+      .comment-body { flex: 1; min-width: 0; }
+
+      /* bubble */
+      .comment-bubble {
+        background: var(--bg2, #f3f4f6);
+        border-radius: 4px 18px 18px 18px;
+        padding: 9px 13px 10px;
+      }
+      .comment-item.reply .comment-bubble {
+        background: var(--bg);
+        border: 1px solid var(--border, #e5e7eb);
+        border-radius: 4px 18px 18px 18px;
+      }
+      .comment-name-row {
+        display: flex; align-items: center; gap: 6px; margin-bottom: 3px;
+        flex-wrap: wrap;
+      }
+      .comment-name {
+        font-size: 13px; font-weight: 700; color: var(--text);
+        cursor: pointer; line-height: 1.2;
+      }
+      .comment-name:hover { text-decoration: underline; }
+      .comment-time { font-size: 11px; color: var(--text2); }
+      .comment-text {
+        font-size: 14px; line-height: 1.55; color: var(--text);
+        white-space: pre-wrap; word-break: break-word; margin: 0;
+      }
+
+      /* action row below bubble */
+      .comment-actions-row {
+        display: flex; align-items: center; gap: 14px;
+        padding: 5px 2px 0; flex-wrap: wrap;
+      }
+      .comment-action {
+        font-size: 12px; font-weight: 600; color: var(--text2);
+        background: none; border: none; cursor: pointer;
+        padding: 3px 0; display: flex; align-items: center; gap: 4px;
+        transition: color .15s; -webkit-tap-highlight-color: transparent;
+      }
+      .comment-action:hover { color: var(--text); }
+      .comment-action.liked { color: rgb(244,7,82); }
+      .comment-action.delete-comment-btn:hover { color: rgb(244,7,82); }
+      .cmt-heart-path { transition: all .2s; }
+      .like-comment-btn.liked .cmt-heart-path { fill: rgb(244,7,82); stroke: rgb(244,7,82); }
+
+      /* ── Inline reply composer ── */
+      .reply-composer {
+        display: none; margin-top: 8px;
+        border-radius: 16px; overflow: hidden;
+        border: 1.5px solid var(--border, #e5e7eb);
+        background: var(--bg);
+      }
+      .reply-composer.open { display: block; }
+      .reply-composer-inner {
+        display: flex; gap: 8px; padding: 10px 12px 6px; align-items: flex-start;
+      }
+      .reply-composer-avatar {
+        width: 28px; height: 28px; border-radius: 50%;
+        object-fit: cover; flex-shrink: 0;
+      }
+      .reply-textarea {
+        flex: 1; border: none; outline: none; resize: none;
+        font-size: 14px; line-height: 1.5; color: var(--text);
+        background: transparent; font-family: inherit; min-height: 36px;
+      }
+      .reply-composer-footer {
+        display: flex; justify-content: flex-end; gap: 8px;
+        padding: 4px 12px 10px;
+      }
+      .reply-cancel, .reply-submit {
+        height: 30px; padding: 0 16px; border-radius: 20px;
+        font-size: 13px; font-weight: 700; cursor: pointer; border: none;
+        transition: all .15s;
+      }
+      .reply-cancel { background: var(--bg2); color: var(--text2); }
+      .reply-submit { background: #6C47FF; color: #fff; }
+      .reply-submit:disabled { opacity: .35; cursor: not-allowed; }
+
+      /* ── Load replies btn ── */
+      .load-replies-btn {
+        font-size: 13px; font-weight: 700; color: #6C47FF;
+        background: none; border: none; cursor: pointer;
+        padding: 6px 0 0; display: flex; align-items: center; gap: 5px;
+      }
+      .load-replies-btn::before {
+        content: ''; display: inline-block;
+        width: 18px; height: 1px;
+        background: rgba(108,71,255,.35);
+        vertical-align: middle;
+      }
+    `;
+    document.head.appendChild(s);
+  }
+
   slideTo('detail', async () => {
     const body = document.getElementById('detail-body');
-    body.innerHTML = `<div class="detail-post">${skeletonPost()}</div>`;
+    body.innerHTML = `<div class="dp-wrap">${skeletonPost()}</div>`;
 
     const { data: p, error } = await supabase
       .from('posts')
@@ -2167,93 +2477,146 @@ async function openDetail(postId, scrollToComments = false) {
       return;
     }
 
-    const user = p.user || { username: '@unknown', avatar: '' };
-    const isOwn = currentUser && p.user_id === currentUser.id;
-    const isLiked = likedPosts.has(postId);
+    const user     = p.user || { username: '@unknown', avatar: '' };
+    const isOwn    = currentUser && p.user_id === currentUser.id;
+    const isLiked  = likedPosts.has(postId);
     const isRepost = !!p.reposted_post_id && !!p.reposted_post;
-    const orig = isRepost ? p.reposted_post : null;
+    const orig     = isRepost ? p.reposted_post : null;
     const origUser = orig?.user || { username: '@unknown', avatar: '' };
 
+    // ── Media ──
     let mediaHtml = '';
-    if (p.image) mediaHtml = `<div class="detail-media"><img src="${p.image}" alt=""></div>`;
-    else if (p.video) {
-      mediaHtml = `<div class="detail-media"><div class="video-thumb-wrap" onclick="openVideoFS('${p.video}')"><video preload="metadata"><source src="${p.video}#t=0.5" type="video/mp4"></video><div class="video-play-overlay"><div class="play-circle"><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M5 3l14 9L5 21V3z"/></svg></div></div></div></div>`;
+    if (p.image) {
+      mediaHtml = `<div class="dp-media"><img src="${p.image}" alt="" onclick="openImageFS('${p.image}')"></div>`;
+    } else if (p.video) {
+      mediaHtml = `<div class="dp-media"><div class="dp-video-wrap" onclick="openVideoFS('${p.video}')"><video preload="metadata"><source src="${p.video}#t=0.5" type="video/mp4"></video><div class="dp-play-overlay"><div class="dp-play-circle"><svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M5 3l14 9L5 21V3z"/></svg></div></div></div></div>`;
     }
 
-    let origCardHtml = '';
+    // ── Quoted card ──
+    let quoteHtml = '';
     if (isRepost && orig) {
-      origCardHtml = `<div class="original-card" style="margin-left:0;cursor:pointer" onclick="openDetail('${orig.id}')">
-        <div class="original-card-inner">
-          <div class="original-card-header"><img class="original-card-avatar" src="${origUser.avatar||''}" onerror="this.style.display='none'"><span class="original-card-name">${escHtml(origUser.username)}</span>${orig.created_at ? `<span style="font-size:12px;color:var(--text2);margin-left:auto">${timeSince(orig.created_at)}</span>` : ''}</div>
-          ${orig.content ? `<p class="original-card-text">${escHtml(orig.content.slice(0,200))}</p>` : ''}
-        </div>
-        ${orig.image ? `<img class="original-card-img" src="${orig.image}">` : ''}
-      </div>`;
+      quoteHtml = `
+        <div class="dp-quote-card" onclick="openDetail('${orig.id}')">
+          <div class="dp-quote-inner">
+            <div class="dp-quote-header">
+              <img class="dp-quote-avatar" src="${origUser.avatar||''}" onerror="this.style.display='none'">
+              <span class="dp-quote-name">${escHtml(origUser.username)}</span>
+              <span class="dp-quote-time">${timeSince(orig.created_at)}</span>
+            </div>
+            ${orig.content ? `<p class="dp-quote-text">${escHtml(orig.content.slice(0,240))}${orig.content.length>240?'…':''}</p>` : ''}
+          </div>
+          ${orig.image ? `<img class="dp-quote-img" src="${orig.image}" alt="">` : ''}
+        </div>`;
     }
+
+    // ── Full timestamp (your original style: "8 May 2025 · 11:42 PM") ──
+    const d = new Date(p.created_at);
+    const timeStr = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const dateStr = d.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
 
     body.innerHTML = `
-      <div class="detail-post">
-        <div class="detail-header">
-          <img class="detail-avatar" src="${user.avatar||''}" onerror="this.style.display='none'" onclick="showUserProfile('${p.user_id}')">
-          <div class="detail-meta">
-            <div class="detail-name" onclick="showUserProfile('${p.user_id}')">${escHtml(user.username)}</div>
-            <div class="detail-username">${timeSince(p.created_at)}</div>
+      <div class="dp-wrap">
+
+        <!-- AUTHOR -->
+        <div class="dp-author">
+          <img class="dp-avatar"
+            src="${user.avatar||''}" onerror="this.style.display='none'"
+            onclick="${isOwn ? "navTo('profile')" : `showUserProfile('${p.user_id}')`}">
+          <div class="dp-author-info">
+            <div class="dp-name"
+              onclick="${isOwn ? "navTo('profile')" : `showUserProfile('${p.user_id}')`}">${escHtml(user.username)}</div>
+            <div class="dp-handle">@${escHtml(user.username)}</div>
           </div>
-          ${!isOwn ? `<button class="detail-follow-btn" id="detail-follow-${postId}" onclick="toggleDetailFollow(this,'${p.user_id}')">Follow</button>` : ''}
+          ${!isOwn
+            ? `<button class="dp-follow-btn" id="dp-follow-${postId}" onclick="toggleDetailFollow(this,'${p.user_id}')">Follow</button>`
+            : ''}
         </div>
 
-        ${p.content ? `<p class="detail-text">${escHtml(p.content)}</p>` : ''}
+        <!-- TEXT -->
+        ${p.content ? `<p class="dp-text">${escHtml(p.content)}</p>` : ''}
+
+        <!-- MEDIA -->
         ${mediaHtml}
-        ${origCardHtml}
 
-        <div class="detail-stats">
-          <div class="detail-stat"><span class="detail-stat-n" data-type="likes">${fmtNum(p.like_count||0)}</span><span class="detail-stat-l">Likes</span></div>
-          <div class="detail-stat"><span class="detail-stat-n repost-count-display">${fmtNum(p.repost_count||0)}</span><span class="detail-stat-l">Reposts</span></div>
-          <div class="detail-stat"><span class="detail-stat-n">${fmtNum(p.views||0)}</span><span class="detail-stat-l">Views</span></div>
+        <!-- QUOTED POST -->
+        ${quoteHtml}
+
+        <!-- FULL DATE -->
+        <div class="dp-date"><b>${timeStr}</b> · ${dateStr}</div>
+
+        <!-- STATS -->
+        <div class="dp-stats">
+          <div class="dp-stat">
+            <span class="dp-stat-n detail-stat-n" data-type="likes">${fmtNum(p.like_count||0)}</span>
+            <span class="dp-stat-l">Likes</span>
+          </div>
+          <div class="dp-stat">
+            <span class="dp-stat-n repost-count-display">${fmtNum(p.repost_count||0)}</span>
+            <span class="dp-stat-l">Reposts</span>
+          </div>
+          <div class="dp-stat">
+            <span class="dp-stat-n" data-type="comments">${fmtNum(p.comment_count||0)}</span>
+            <span class="dp-stat-l">Replies</span>
+          </div>
+          <div class="dp-stat">
+            <span class="dp-stat-n detail-stat-n" data-type="views">${fmtNum(p.views||0)}</span>
+            <span class="dp-stat-l">Views</span>
+          </div>
         </div>
 
-        <div class="detail-actions">
-          <button class="detail-action comment-action" data-post-id="${postId}" onclick="focusCommentBar()">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        <!-- ACTIONS -->
+        <div class="dp-actions">
+          <button class="dp-action" onclick="focusCommentBar()">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg>
             Reply
           </button>
-          <button class="detail-action repost-action" data-post-id="${postId}" data-reposted="false" onclick="handleRepost('${postId}',this)">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M17 1l4 4-4 4M7 23l-4-4 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M3 11V9a4 4 0 014-4h14M21 13v2a4 4 0 01-4 4H3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <button class="dp-action dp-repost-btn" data-post-id="${postId}" data-reposted="false" onclick="handleRepost('${postId}',this)">
+            <svg class="dp-repost-svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M17 1l4 4-4 4M7 23l-4-4 4-4"/><path d="M3 11V9a4 4 0 014-4h14M21 13v2a4 4 0 01-4 4H3"/></svg>
             Repost
           </button>
-          <button class="detail-action like-action ${isLiked ? 'liked' : ''}" data-post-id="${postId}" data-liked="${isLiked}" onclick="toggleLike('${postId}',this)">
-            <svg class="action-heart" width="20" height="20" viewBox="0 0 24 24" fill="none"><path class="heart-path" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" stroke="currentColor" stroke-width="2" ${isLiked ? `fill="var(--red)" stroke="var(--red)"` : ''}/></svg>
+          <button class="dp-action dp-like-btn ${isLiked?'dp-liked':''}" data-post-id="${postId}" data-liked="${isLiked}" onclick="toggleLike('${postId}',this)">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+              <path class="dp-heart-path" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+                stroke="${isLiked?'rgb(244,7,82)':'currentColor'}" stroke-width="2.2"
+                ${isLiked?'fill="rgb(244,7,82)"':''}/>
+            </svg>
             Like
+          </button>
+          <button class="dp-action" id="detail-share-btn">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+            Share
           </button>
         </div>
       </div>
 
-      <div class="separator"></div>
+      <div class="dp-divider"></div>
       <div id="comments-container"></div>
     `;
 
-    // Share btn
+    // Wire share
     document.getElementById('detail-share-btn').onclick = () => sharePost(p);
 
-    // Comment bar avatar
+    // Comment bar
     if (currentProfile?.avatar) {
       document.getElementById('comment-bar-avatar').src = currentProfile.avatar;
     }
-
-    // Update placeholder
     document.getElementById('comment-input').placeholder = `Reply to ${user.username}…`;
 
-    // Track view
+    // Repost state
+    const repostBtn = body.querySelector('.dp-repost-btn');
+    if (repostBtn && repostedPosts.has(postId)) {
+      repostBtn.classList.add('dp-reposted');
+      repostBtn.dataset.reposted = 'true';
+    }
+
+    // Track view + load comments
     await recordView(postId);
     await syncViewCount(postId);
-
-    // Load comments
     await loadComments(postId);
 
     if (scrollToComments) {
       setTimeout(() => {
-        const cc = document.getElementById('comments-container');
-        cc?.scrollIntoView({ behavior: 'smooth' });
+        document.getElementById('comments-container')?.scrollIntoView({ behavior: 'smooth' });
       }, 300);
     }
   });
@@ -2318,7 +2681,7 @@ async function loadComments(postId) {
   if (pill) pill.textContent = (comments || []).length;
 
   if (!comments || !comments.length) {
-    list.innerHTML = '<div class="comments-empty">No replies yet — be the first!</div>';
+    list.innerHTML = '<div class="comments-empty"><div class="comments-empty-icon">💬</div>No replies yet — be the first!</div>';
     return;
   }
 
@@ -2358,7 +2721,7 @@ function buildCommentEl(c, parentId, likedSet, postId) {
       </div>
       <div class="comment-actions-row">
         <button class="comment-action like-comment-btn ${liked ? 'liked' : ''}" data-comment-id="${c.id}">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path class="heart-path" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" stroke="${liked ? 'var(--red)' : 'currentColor'}" fill="${liked ? 'var(--red)' : 'none'}" stroke-width="2"/></svg>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path class="cmt-heart-path" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" stroke="${liked ? 'var(--red)' : 'currentColor'}" fill="${liked ? 'var(--red)' : 'none'}" stroke-width="2"/></svg>
           <span>${c.like_count > 0 ? c.like_count : ''}</span>
         </button>
         ${!parentId ? `<button class="comment-action reply-btn" data-comment-id="${c.id}">Reply</button>` : ''}
