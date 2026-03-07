@@ -18,6 +18,7 @@ let selectedFile = null;
 let repostTargetId = null;
 let repostTargetBtn = null;
 let slideStack = [];           // navigation stack for back button
+let lastMainPage = 'feed';     // track which main tab was active before sliding
 let longPressTimer = null;
 let detailPostId = null;
 let detailCommentParentId = null;
@@ -221,6 +222,14 @@ function slideTo(pageId, setupFn) {
   const el = document.getElementById('page-' + pageId);
   if (!el) return;
 
+  // Track which main page we're leaving
+  const mainPages = ['feed','discover','notifications','profile'];
+  mainPages.forEach(id => {
+    if (document.getElementById('page-' + id)?.classList.contains('active')) {
+      lastMainPage = id;
+    }
+  });
+
   // Dim bottom nav pages
   ['feed','discover','notifications','profile'].forEach(id => {
     document.getElementById('page-' + id)?.classList.remove('active');
@@ -231,6 +240,10 @@ function slideTo(pageId, setupFn) {
   // Show floating header only for user-profile
   const floatingHeader = document.getElementById('user-profile-header');
   if (floatingHeader) floatingHeader.style.display = pageId === 'user-profile' ? 'flex' : 'none';
+
+  // Always hide my-profile floating header when navigating away
+  const myHeader = document.getElementById('my-profile-header');
+  if (myHeader) myHeader.style.display = 'none';
 
   requestAnimationFrame(() => {
     el.classList.add('active');
@@ -250,29 +263,38 @@ function slideBack() {
   document.getElementById('bottom-nav').style.display = '';
   document.getElementById('comment-bar').style.display = 'none';
 
-  // Hide floating header
+  // Only hide floating header if not returning to user-profile
+  const returningTo = slideStack.length > 0 ? slideStack[slideStack.length - 1] : null;
   const floatingHeader = document.getElementById('user-profile-header');
-  if (floatingHeader) floatingHeader.style.display = 'none';
-  // Reset mini elements
-  const miniIdentity = document.getElementById('uprf-header-identity');
-  const miniFollow   = document.getElementById('uprf-header-follow');
-  if (miniIdentity) { miniIdentity.style.opacity='0'; miniIdentity.style.pointerEvents='none'; }
-  if (miniFollow)   { miniFollow.style.opacity='0'; miniFollow.style.display='none'; }
-  if (document.getElementById('page-user-profile')?._uprfAvatarObs) {
-    document.getElementById('page-user-profile')._uprfAvatarObs.disconnect();
+  if (floatingHeader) floatingHeader.style.display = returningTo === 'user-profile' ? 'flex' : 'none';
+  // Reset mini elements only when fully leaving user-profile
+  if (returningTo !== 'user-profile') {
+    const miniIdentity = document.getElementById('uprf-header-identity');
+    const miniFollow   = document.getElementById('uprf-header-follow');
+    if (miniIdentity) { miniIdentity.style.opacity='0'; miniIdentity.style.pointerEvents='none'; }
+    if (miniFollow)   { miniFollow.style.opacity='0'; miniFollow.style.display='none'; }
+    if (document.getElementById('page-user-profile')?._uprfAvatarObs) {
+      document.getElementById('page-user-profile')._uprfAvatarObs.disconnect();
+    }
   }
 
   // Restore last main page
-  const lastMain = slideStack.length > 0 ? slideStack[slideStack.length - 1] : 'feed';
+  const lastMain = slideStack.length > 0 ? slideStack[slideStack.length - 1] : lastMainPage;
   const mainPages = ['feed','discover','notifications','profile'];
   if (mainPages.includes(lastMain)) {
     document.getElementById('page-' + lastMain)?.classList.add('active');
+    if (lastMain === 'profile') {
+      const myHeader = document.getElementById('my-profile-header');
+      if (myHeader) myHeader.style.display = 'flex';
+    }
   } else if (slideStack.length > 0) {
     document.getElementById('page-' + lastMain)?.classList.add('active');
   } else {
-    // Go back to feed by default
-    document.getElementById('page-feed')?.classList.add('active');
-    document.querySelector('.nav-btn[data-page="feed"]')?.classList.add('active');
+    document.getElementById('page-' + lastMainPage)?.classList.add('active');
+    if (lastMainPage === 'profile') {
+      const myHeader = document.getElementById('my-profile-header');
+      if (myHeader) myHeader.style.display = 'flex';
+    }
   }
 }
 
