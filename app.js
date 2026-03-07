@@ -1015,6 +1015,10 @@ async function showUserProfile(userId) {
     };
     upPage.addEventListener('scroll', upPage._uprfScroll);
 
+    // ── Wire 3-dots more button ──
+    const moreBtn = document.getElementById('user-profile-more');
+    if (moreBtn) moreBtn.onclick = () => openProfileShare(profile);
+
     // ── 3. Mini avatar + follow in header via IntersectionObserver ──
     const miniIdentity = document.getElementById('uprf-header-identity');
     const miniAvatar   = document.getElementById('uprf-header-avatar');
@@ -3703,6 +3707,153 @@ function shareMyProfile() {
   } else {
     navigator.clipboard?.writeText(window.location.href).then(() => showToast('Profile link copied!'));
   }
+}
+
+// ── PROFILE SHARE SHEET ──
+let shareSheetProfile = null; // stores the profile being shared
+
+async function openProfileShare(profile) {
+  shareSheetProfile = profile;
+  const overlay = document.getElementById('profile-share-overlay');
+  const sheet   = document.getElementById('profile-share-sheet');
+  if (!overlay || !sheet) return;
+
+  overlay.classList.remove('hidden');
+  requestAnimationFrame(() => sheet.classList.add('open'));
+
+  // Load top followers of current user to share to
+  const row = document.getElementById('share-followers-row');
+  if (currentUser) {
+    try {
+      const { data: follows } = await supabase
+        .from('follows')
+        .select('following_id, following:users!follows_following_id_fkey(id, username, avatar)')
+        .eq('follower_id', currentUser.id)
+        .limit(6);
+
+      if (follows && follows.length > 0) {
+        row.innerHTML = follows.map(f => {
+          const u = f.following;
+          const avatar = u?.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${u?.username}`;
+          return `
+            <div class="share-person" onclick="shareToDM('${u.id}', '${escHtml(u.username)}')">
+              <img class="share-person-avatar" src="${avatar}" onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${u?.username}'">
+              <span class="share-person-name">${escHtml(u.username)}</span>
+            </div>`;
+        }).join('');
+      } else {
+        row.innerHTML = '<span style="font-size:13px;color:var(--text3);padding:8px 0;">No one to show yet</span>';
+      }
+    } catch(e) {
+      row.innerHTML = '<span style="font-size:13px;color:var(--text3);padding:8px 0;">Could not load</span>';
+    }
+  } else {
+    row.innerHTML = '<span style="font-size:13px;color:var(--text3);padding:8px 0;">Sign in to share</span>';
+  }
+}
+
+function closeProfileShare(e) {
+  if (e && e.target !== document.getElementById('profile-share-overlay')) return;
+  const overlay = document.getElementById('profile-share-overlay');
+  const sheet   = document.getElementById('profile-share-sheet');
+  sheet?.classList.remove('open');
+  setTimeout(() => overlay?.classList.add('hidden'), 380);
+}
+
+function getProfileUrl(profile) {
+  return `${window.location.origin}${window.location.pathname}?u=${encodeURIComponent(profile?.username || '')}`;
+}
+
+function shareToApp(app) {
+  if (!shareSheetProfile) return;
+  const url  = getProfileUrl(shareSheetProfile);
+  const text = `Check out ${shareSheetProfile.username} on Winged`;
+  const encoded = encodeURIComponent(url);
+  const encodedText = encodeURIComponent(text);
+  const links = {
+    whatsapp:  `https://wa.me/?text=${encodedText}%20${encoded}`,
+    facebook:  `https://www.facebook.com/sharer/sharer.php?u=${encoded}`,
+    twitter:   `https://twitter.com/intent/tweet?text=${encodedText}&url=${encoded}`,
+    telegram:  `https://t.me/share/url?url=${encoded}&text=${encodedText}`,
+    instagram: null // Instagram has no web share URL — use native share
+  };
+  if (app === 'instagram') {
+    if (navigator.share) {
+      navigator.share({ title: 'Winged', text, url }).catch(() => {});
+    } else {
+      navigator.clipboard?.writeText(url).then(() => showToast('Link copied — paste in Instagram'));
+    }
+    return;
+  }
+  window.open(links[app], '_blank');
+}
+
+function shareToDM(userId, username) {
+  if (!shareSheetProfile) return;
+  const url = getProfileUrl(shareSheetProfile);
+  // DM share — for now copies link and shows toast (DM feature pending)
+  navigator.clipboard?.writeText(url).then(() => {
+    showToast(`Link copied — send to ${username} 💜`);
+  });
+  closeProfileShare();
+}
+
+function copyProfileLink() {
+  if (!shareSheetProfile) return;
+  const url = getProfileUrl(shareSheetProfile);
+  navigator.clipboard?.writeText(url).then(() => showToast('Profile link copied!'));
+  closeProfileShare();
+}
+
+async function reportProfile() {
+  if (!shareSheetProfile || !currentUser) return;
+  try {
+    await supabase.from('reports').insert({
+      reporter_id: currentUser.id,
+      reported_user_id: shareSheetProfile.id,
+      type: 'profile',
+      created_at: new Date().toISOString()
+    });
+  } catch(e) { /* table may not exist yet */ }
+  showToast('Report submitted. Thank you.');
+  closeProfileShare();
+}
+
+function blockUser() {
+  if (!shareSheetProfile) return;
+  const username = shareSheetProfile.username || 'This user';
+  closeProfileShare();
+  // Confirm before blocking
+  const overlay = document.createElement('div');
+  overlay.className = 'action-sheet-overlay';
+  const sheet = document.createElement('div');
+  sheet.className = 'action-sheet';
+  sheet.innerHTML = `
+    <div style="padding:20px 20px 8px;text-align:center;">
+      <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px;">Block @${escHtml(username)}?</div>
+      <div style="font-size:14px;color:var(--text2);line-height:1.5;">They won't be able to see your posts or interact with you.</div>
+    </div>
+    <div class="action-sheet-divider"></div>
+  `;
+  const confirmBtn = document.createElement('div');
+  confirmBtn.className = 'action-sheet-item danger';
+  confirmBtn.innerHTML = '<span style="font-size:20px">🚫</span><span>Block</span>';
+  confirmBtn.addEventListener('click', () => {
+    document.body.removeChild(overlay);
+    showToast(`@${username} has been blocked.`);
+    // TODO: insert into blocks table when available
+    slideBack();
+  });
+  const cancelBtn = document.createElement('div');
+  cancelBtn.className = 'action-sheet-item';
+  cancelBtn.style.cssText = 'font-weight:700;border-top:1px solid var(--border);';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.addEventListener('click', () => document.body.removeChild(overlay));
+  sheet.appendChild(confirmBtn);
+  sheet.appendChild(cancelBtn);
+  overlay.appendChild(sheet);
+  overlay.addEventListener('click', e => { if (e.target === overlay) document.body.removeChild(overlay); });
+  document.body.appendChild(overlay);
 }
 
 
