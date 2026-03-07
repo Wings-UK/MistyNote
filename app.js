@@ -1812,10 +1812,16 @@ function syncLikeCount(postId, count) {
   document.querySelectorAll(`.heart-ai[data-post-id="${postId}"] .like-count`).forEach(sp => {
     animateCount(sp, count);
   });
-  // Detail view stat
+  // Detail stat table
   const statEl = document.querySelector(`.detail-stat-n[data-type="likes"]`);
   if (statEl && detailPostId === postId) {
     animateCount(statEl, count);
+  }
+  // Comment bar like count
+  const cbCount = document.getElementById('cb-like-count');
+  const cbLike = document.getElementById('cb-like-btn');
+  if (cbCount && cbLike?.dataset.postId === postId) {
+    animateCount(cbCount, count);
   }
 }
 
@@ -1853,7 +1859,7 @@ function setRepostUI(postId, reposted) {
     cbRepost.dataset.reposted = reposted ? 'true' : 'false';
     cbRepost.classList.toggle('cb-reposted', reposted);
     const cbSvg = cbRepost.querySelector('.cb-repost-svg');
-    if (cbSvg) cbSvg.setAttribute('stroke', reposted ? '#6C47FF' : 'currentColor');
+    if (cbSvg) { cbSvg.setAttribute('stroke', reposted ? '#6C47FF' : 'currentColor'); cbSvg.setAttribute('stroke-width', reposted ? '2.5' : '2'); }
   }
 }
 
@@ -2512,12 +2518,13 @@ async function openDetail(postId, scrollToComments = false) {
         -webkit-tap-highlight-color: transparent; flex-shrink: 0;
       }
       .cb-action-btn:active { transform: scale(.85); }
-      .cb-like-btn { display: flex; align-items: center; gap: 3px; width: auto; padding: 0 6px; border-radius: 20px; }
-      .cb-like-count { font-size: 14px; font-weight: 600; color: #333; }
+      .cb-like-btn { display: flex; align-items: center; gap: 10px; width: auto; padding: 0 6px; border-radius: 20px; }
+      .cb-like-count { font-size: 14px; font-weight: 400; color: #000000; transition: color 0.25s; }
       .cb-action-btn.cb-liked { color: rgb(244,7,82); }
       .cb-action-btn.cb-liked .cb-heart-path { fill: rgb(244,7,82); stroke: rgb(244,7,82); }
+      .cb-action-btn.cb-liked .cb-like-count { color: rgb(244,7,82); font-weight: 500; }
       .cb-action-btn.cb-reposted { color: #6C47FF; }
-      .cb-action-btn.cb-reposted .cb-repost-svg { stroke: #6C47FF; }
+      .cb-action-btn.cb-reposted .cb-repost-svg { stroke: #6C47FF; stroke-width: 2.5; }
       .cb-heart-path { transition: all .25s; }
       .cb-send-btn {
         width: 44px; height: 44px;
@@ -2677,9 +2684,11 @@ async function openDetail(postId, scrollToComments = false) {
       if (alreadyReposted) {
         cbRepost.classList.add('cb-reposted');
         cbSvg?.setAttribute('stroke', '#6C47FF');
+        cbSvg?.setAttribute('stroke-width', '2.5');
       } else {
         cbRepost.classList.remove('cb-reposted');
         cbSvg?.setAttribute('stroke', 'currentColor');
+        cbSvg?.setAttribute('stroke-width', '2');
       }
       cbRepost.onclick = () => handleRepost(postId, cbRepost);
     }
