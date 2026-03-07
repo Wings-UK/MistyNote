@@ -2060,10 +2060,12 @@ async function submitPost() {
   let imageUrl = null;
   if (selectedFile) {
     try {
+      if (btn) btn.textContent = 'Uploading...';
       imageUrl = await uploadImage(selectedFile, 'post-images');
+      if (btn) btn.textContent = 'Post';
     } catch (e) {
-      showToast('Image upload failed: ' + e.message);
-      if (btn) btn.disabled = false;
+      showToast('Upload failed after 3 attempts. Check your connection.');
+      if (btn) { btn.disabled = false; btn.textContent = 'Post'; }
       return;
     }
   }
@@ -3088,37 +3090,63 @@ async function recordView(postId) {
 async function uploadImage(file, bucket) {
   const compressed = await compressImage(file);
   const ext = 'jpg';
-  const path = `${currentUser.id}_${Date.now()}.${ext}`;
+  // Unique path: userId + timestamp + random to avoid any collision
+  const rand = Math.random().toString(36).slice(2, 8);
+  const path = `${currentUser.id}_${Date.now()}_${rand}.${ext}`;
 
-  const { error } = await supabase.storage.from(bucket).upload(path, compressed, { upsert: false });
-  if (error) throw error;
-
-  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-  return data.publicUrl;
+  // Retry up to 3 times with exponential backoff
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const uploadPromise = supabase.storage.from(bucket).upload(path, compressed, {
+        upsert: true, // overwrite on collision instead of failing
+        contentType: 'image/jpeg'
+      });
+      // 30 second timeout per attempt
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Upload timed out')), 30000)
+      );
+      const { error } = await Promise.race([uploadPromise, timeoutPromise]);
+      if (error) throw error;
+      const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+      return data.publicUrl;
+    } catch (e) {
+      lastError = e;
+      if (attempt < 3) {
+        showToast(`Upload attempt ${attempt} failed, retrying...`);
+        await new Promise(r => setTimeout(r, attempt * 1000)); // 1s, 2s backoff
+      }
+    }
+  }
+  throw lastError;
 }
 
-async function compressImage(file, maxW = 1200, quality = 0.8) {
-  if (file.size < 300 * 1024) return file;
+async function compressImage(file, maxW = 1200, quality = 0.82) {
+  // Always compress through canvas to guarantee JPEG output
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Read failed'));
+    reader.onerror = () => reject(new Error('Failed to read file'));
     reader.onload = ev => {
       const img = new Image();
-      img.onerror = () => reject(new Error('Image load failed'));
+      img.onerror = () => reject(new Error('Failed to decode image'));
       img.onload = () => {
-        const scale = Math.min(1, maxW / img.width);
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.floor(img.width * scale);
-        canvas.height = Math.floor(img.height * scale);
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/jpeg', quality);
-        const byteString = atob(dataUrl.split(',')[1]);
-        const ab = new ArrayBuffer(byteString.length);
-        const ia = new Uint8Array(ab);
-        for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
-        const blob = new Blob([ab], { type: 'image/jpeg' });
-        resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' }));
+        try {
+          const scale = Math.min(1, maxW / Math.max(img.width, 1));
+          const w = Math.max(1, Math.floor(img.width * scale));
+          const h = Math.max(1, Math.floor(img.height * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          // White background for transparent PNGs
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+          canvas.toBlob(blob => {
+            if (!blob) { reject(new Error('Canvas compression failed')); return; }
+            resolve(new File([blob], 'image.jpg', { type: 'image/jpeg' }));
+          }, 'image/jpeg', quality);
+        } catch(e) { reject(e); }
       };
       img.src = ev.target.result;
     };
