@@ -63,6 +63,8 @@
   }
   
   img, video { display: block; max-width: 100%; }
+  /* Global avatar rule — all avatars are round, no exceptions */
+  [class*="avatar"] { border-radius: 50% !important; }
   button { background: none; border: none; cursor: pointer; font-family: var(--font); color: var(--text); }
   a { text-decoration: none; color: inherit; }
   textarea, input { font-family: var(--font); outline: none; border: none; background: none; }
@@ -226,7 +228,7 @@
     width: 9px; height: 9px; border-radius: 50%;
     background: var(--red); border: 2px solid var(--surface);
   }
-  .nav-avatar { width: 24px; height: 24px; border-radius: 8px; object-fit: cover; }
+  .nav-avatar { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
   #nav-avatar-icon { opacity: 0.6; }
   
   /* ── HEADERS ── */
