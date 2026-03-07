@@ -202,14 +202,16 @@ function navTo(pageId) {
 function animateCount(el, newVal) {
   if (!el) return;
   const current = parseInt(el.textContent.replace(/[^0-9]/g,'')) || 0;
-  el.textContent = newVal > 0 ? fmtNum(newVal) : '';
+  // Stat table elements always show 0; feed hearts hide when 0
+  const isStatEl = el.closest('.dp-stat, .detail-stats');
+  el.textContent = (newVal > 0 || isStatEl) ? fmtNum(newVal) : '';
 
   if (newVal === current) return;
 
   const scale = newVal > current ? 1.35 : 0.75;
   el.style.transition = 'none';
   el.style.transform = `scale(${scale})`;
-  void el.offsetWidth; // force reflow
+  void el.offsetWidth;
   el.style.transition = 'transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
   el.style.transform = 'scale(1)';
 }
@@ -2359,11 +2361,7 @@ async function openDetail(postId, scrollToComments = false) {
         display: flex; align-items: center; justify-content: space-between;
         padding: 14px 16px 8px;
       }
-      .comments-title { font-size: 16px; font-weight: 800; color: var(--text); letter-spacing: -.02em; }
-      .comments-count {
-        font-size: 12px; font-weight: 700; color: #6C47FF;
-        background: rgba(108,71,255,.1); padding: 3px 11px; border-radius: 20px;
-      }
+      .comments-title { font-size: 16px; font-weight: 500; color: var(--text); }
       .comments-empty {
         padding: 44px 20px; text-align: center;
         font-size: 14px; color: var(--text2); line-height: 1.6;
@@ -2766,7 +2764,7 @@ async function loadComments(postId) {
   const container = document.getElementById('comments-container');
   if (!container) return;
 
-  container.innerHTML = `<div class="comments-header"><span class="comments-title">Replies</span><span class="comments-count" id="comments-count-pill">…</span></div><div id="comments-list"></div>`;
+  container.innerHTML = `<div class="comments-header"><span class="comments-title">Replies</span></div><div id="comments-list"></div>`;
 
   const { data: comments, error } = await supabase
     .from('comments')
@@ -2943,10 +2941,17 @@ async function submitComment(postId, parentId, content) {
 }
 
 function updateCommentCountDelta(delta) {
+  // Update replies pill
   const pill = document.getElementById('comments-count-pill');
   if (pill) {
     const v = parseInt(pill.textContent) || 0;
     pill.textContent = Math.max(0, v + delta);
+  }
+  // Update stat table replies count
+  const statEl = document.querySelector('.dp-stat-n[data-type="comments"]');
+  if (statEl) {
+    const v = parseInt(statEl.textContent.replace(/[^0-9]/g,'')) || 0;
+    animateCount(statEl, Math.max(0, v + delta));
   }
 }
 
