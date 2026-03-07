@@ -2869,7 +2869,7 @@ function buildCommentEl(c, parentId, likedSet, postId) {
     wrap.style.transition = 'opacity 0.25s, transform 0.25s';
     wrap.style.opacity = '0'; wrap.style.transform = 'scale(0.95)';
     setTimeout(() => wrap.remove(), 250);
-    supabase.rpc('increment_post_comment_count', { pid: postId, delta: -1 });
+    await supabase.rpc('increment_post_comment_count', { pid: postId, delta: -1 });
     updateCommentCountDelta(-1);
   });
 
@@ -2919,7 +2919,7 @@ async function submitComment(postId, parentId, content) {
   }).select(`id,content,created_at,like_count,parent_id,user_id,user:users(id,username,avatar)`).single();
 
   if (!error) {
-    supabase.rpc('increment_post_comment_count', { pid: postId, delta: 1 });
+    await supabase.rpc('increment_post_comment_count', { pid: postId, delta: 1 });
     if (!parentId) {
       updateCommentCountDelta(1);
       const list = document.getElementById('comments-list');
@@ -2941,7 +2941,7 @@ async function submitComment(postId, parentId, content) {
 }
 
 function updateCommentCountDelta(delta) {
-  // Update replies pill
+  // Update replies pill (if present)
   const pill = document.getElementById('comments-count-pill');
   if (pill) {
     const v = parseInt(pill.textContent) || 0;
@@ -2952,6 +2952,15 @@ function updateCommentCountDelta(delta) {
   if (statEl) {
     const v = parseInt(statEl.textContent.replace(/[^0-9]/g,'')) || 0;
     animateCount(statEl, Math.max(0, v + delta));
+  }
+  // Update feed card comment count
+  if (detailPostId) {
+    const feedSpan = document.querySelector(`.comment-btn[data-post-id="${detailPostId}"] span`);
+    if (feedSpan) {
+      const v = parseInt(feedSpan.textContent.replace(/[^0-9]/g,'')) || 0;
+      const newVal = Math.max(0, v + delta);
+      feedSpan.textContent = newVal > 0 ? fmtNum(newVal) : '';
+    }
   }
 }
 
