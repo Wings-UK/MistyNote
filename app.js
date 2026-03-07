@@ -184,8 +184,12 @@ function navTo(pageId) {
   }
   if (pageId === 'profile') {
     renderMyProfile();
-    document.getElementById('my-profile-header').style.display = 'flex';
-    document.getElementById('my-profile-header').style.background = 'rgba(0,0,0,0)';
+    const myHdr = document.getElementById('my-profile-header');
+    if (myHdr) myHdr.style.display = 'flex';
+    // Re-evaluate header colour based on current scroll position
+    const myPage = document.getElementById('page-profile');
+    if (myPage?._myprfScroll) myPage._myprfScroll();
+    else if (myHdr) myHdr.style.background = 'rgba(0,0,0,0)';
   } else {
     const myHdr = document.getElementById('my-profile-header');
     if (myHdr) { myHdr.style.display = 'none'; }
@@ -267,6 +271,11 @@ function slideBack() {
   const returningTo = slideStack.length > 0 ? slideStack[slideStack.length - 1] : null;
   const floatingHeader = document.getElementById('user-profile-header');
   if (floatingHeader) floatingHeader.style.display = returningTo === 'user-profile' ? 'flex' : 'none';
+  // Re-evaluate header colour based on current scroll position
+  if (returningTo === 'user-profile') {
+    const upPage = document.getElementById('page-user-profile');
+    if (upPage?._uprfScroll) upPage._uprfScroll();
+  }
   // Reset mini elements only when fully leaving user-profile
   if (returningTo !== 'user-profile') {
     const miniIdentity = document.getElementById('uprf-header-identity');
@@ -286,6 +295,8 @@ function slideBack() {
     if (lastMain === 'profile') {
       const myHeader = document.getElementById('my-profile-header');
       if (myHeader) myHeader.style.display = 'flex';
+      const myPage = document.getElementById('page-profile');
+      if (myPage?._myprfScroll) myPage._myprfScroll();
     }
   } else if (slideStack.length > 0) {
     document.getElementById('page-' + lastMain)?.classList.add('active');
@@ -294,6 +305,8 @@ function slideBack() {
     if (lastMainPage === 'profile') {
       const myHeader = document.getElementById('my-profile-header');
       if (myHeader) myHeader.style.display = 'flex';
+      const myPage = document.getElementById('page-profile');
+      if (myPage?._myprfScroll) myPage._myprfScroll();
     }
   }
 }
