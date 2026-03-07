@@ -226,35 +226,31 @@
       <div id="detail-body"></div>
       <!-- Fixed comment bar (original MistyNote style) -->
       <div class="comment-bar" id="comment-bar">
-        <div class="cb-top">
-          <img class="comment-bar-avatar" id="comment-bar-avatar" src="" onerror="this.style.display='none'">
-          <textarea class="comment-bar-input" id="comment-input" placeholder="Add a reply..." rows="1"></textarea>
-        </div>
+        <textarea class="comment-bar-input" id="comment-input" placeholder="Add a reply..." rows="1"></textarea>
         <div class="cb-actions">
           <div class="cb-left">
-            <!-- Repost -->
             <button class="cb-action-btn cb-repost-btn" id="cb-repost-btn" data-reposted="false">
               <svg class="cb-repost-svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 1l4 4-4 4M7 23l-4-4 4-4"/><path d="M3 11V9a4 4 0 014-4h14M21 13v2a4 4 0 01-4 4H3"/></svg>
             </button>
-            <!-- Heart / Like -->
             <button class="cb-action-btn cb-like-btn" id="cb-like-btn" data-liked="false">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
                 <path class="cb-heart-path" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" stroke="currentColor" stroke-width="2" fill="none"/>
               </svg>
+              <span class="cb-like-count" id="cb-like-count"></span>
             </button>
           </div>
           <div class="cb-right">
-            <!-- @ mention -->
             <button class="cb-action-btn" onclick="insertMention()">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 006 0v-1a10 10 0 10-3.92 7.94"/></svg>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 006 0v-1a10 10 0 10-3.92 7.94"/></svg>
             </button>
-            <!-- Gallery / Image -->
+            <button class="cb-action-btn" onclick="insertMention()">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg>
+            </button>
             <button class="cb-action-btn" onclick="triggerCommentImage()">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
             </button>
-            <!-- Send -->
             <button class="cb-action-btn cb-send-btn" id="comment-send-btn" onclick="submitReplyFromBar()" disabled>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
           </div>
         </div>
