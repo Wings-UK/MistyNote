@@ -102,54 +102,37 @@
       <header class="page-header feed-header">
         <div class="feed-header-inner">
 
-          <!-- Notification bell — top right -->
-          <button class="feed-notif-btn" onclick="navTo('notifications')" aria-label="Notifications">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-              <path d="M13.73 21a2 2 0 01-3.46 0"/>
-            </svg>
-            <span class="feed-notif-dot" id="feed-notif-dot"></span>
-          </button>
-
-          <!-- Centre sigil -->
-          <div class="feed-sigil">
-            <svg class="feed-sigil-svg" width="38" height="38" viewBox="0 0 48 48" fill="none">
-              <!-- mist arc -->
-              <path d="M5 29C5 29 10 9 24 9C38 9 43 29 43 29" stroke="url(#sh1)" stroke-width="3" stroke-linecap="round"/>
-              <!-- wave -->
-              <path d="M5 29C5 29 14 20 24 29C34 38 43 29 43 29" stroke="url(#sh2)" stroke-width="3" stroke-linecap="round"/>
-              <!-- note dot -->
-              <circle cx="24" cy="29" r="3.5" fill="url(#sh1)"/>
-              <!-- subtle second arc for depth -->
-              <path d="M10 29C10 29 14 15 24 15C34 15 38 29 38 29" stroke="url(#sh3)" stroke-width="1.2" stroke-linecap="round" opacity="0.35"/>
+          <!-- Logo — far left -->
+          <div class="feed-logo">
+            <svg width="30" height="30" viewBox="0 0 48 48" fill="none">
+              <path d="M5 28C5 28 10 9 24 9C38 9 43 28 43 28" stroke="url(#fh1)" stroke-width="3.2" stroke-linecap="round"/>
+              <path d="M5 28C5 28 14 19 24 28C34 37 43 28 43 28" stroke="url(#fh2)" stroke-width="3.2" stroke-linecap="round"/>
+              <circle cx="24" cy="28" r="3.5" fill="url(#fh1)"/>
               <defs>
-                <linearGradient id="sh1" x1="5" y1="29" x2="43" y2="29" gradientUnits="userSpaceOnUse">
-                  <stop stop-color="#7c5cfc"/>
-                  <stop offset="0.5" stop-color="#6C47FF"/>
-                  <stop offset="1" stop-color="#a78bfa"/>
+                <linearGradient id="fh1" x1="5" y1="28" x2="43" y2="28" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#6C47FF"/><stop offset="1" stop-color="#a78bfa"/>
                 </linearGradient>
-                <linearGradient id="sh2" x1="5" y1="29" x2="43" y2="29" gradientUnits="userSpaceOnUse">
-                  <stop stop-color="#b09ffe"/>
-                  <stop offset="1" stop-color="#6C47FF"/>
-                </linearGradient>
-                <linearGradient id="sh3" x1="10" y1="29" x2="38" y2="29" gradientUnits="userSpaceOnUse">
-                  <stop stop-color="#a78bfa"/>
-                  <stop offset="1" stop-color="#6C47FF"/>
+                <linearGradient id="fh2" x1="5" y1="28" x2="43" y2="28" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#a78bfa"/><stop offset="1" stop-color="#6C47FF"/>
                 </linearGradient>
               </defs>
             </svg>
           </div>
 
-          <!-- Spacer for right balance -->
-          <div class="feed-header-right"></div>
+          <!-- Tabs — 30px from logo -->
+          <div class="feed-tabs-group">
+            <button class="feed-tab active" id="feed-tab-foryou" onclick="setFeedTab('for-you', this)">Explore</button>
+            <button class="feed-tab" id="feed-tab-following" onclick="setFeedTab('following', this)">Following</button>
+            <div class="feed-tab-bar" id="feed-tab-bar"></div>
+          </div>
 
-        </div>
+          <!-- DM icon — far right -->
+          <button class="feed-dm-btn" onclick="navTo('messages')" aria-label="Messages">
+            <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+            </svg>
+          </button>
 
-        <!-- Tabs row — full width below -->
-        <div class="feed-tabs-row">
-          <button class="feed-tab active" id="feed-tab-foryou" onclick="setFeedTab('for-you', this)">For You</button>
-          <button class="feed-tab" id="feed-tab-following" onclick="setFeedTab('following', this)">Following</button>
-          <div class="feed-tab-bar" id="feed-tab-bar"></div>
         </div>
       </header>
 
