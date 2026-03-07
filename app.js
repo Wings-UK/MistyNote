@@ -545,7 +545,7 @@ function injectProfileStyles() {
     .prf-masonry-img { width:100%; display:block; object-fit:cover; }
     .prf-masonry-text-tile { width:100%; min-height:120px; display:flex; align-items:center; justify-content:center; padding:16px 12px; }
     .prf-masonry-text-tile p { font-size:13px; color:#fff; line-height:1.45; text-align:center; font-weight:600; margin:0; }
-    .prf-masonry-caption { font-size:12px; color:var(--text); line-height:1.4; padding:8px 10px 4px; }
+    .prf-masonry-caption { font-size:16px; color:var(--text); line-height:1.4; padding:8px 10px 4px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
     .prf-masonry-footer { display:flex; align-items:center; justify-content:space-between; padding:6px 10px 10px; gap:6px; }
     .prf-masonry-author { display:flex; align-items:center; gap:5px; min-width:0; flex:1; }
     .prf-masonry-avatar { width:20px; height:20px; border-radius:50%; object-fit:cover; flex-shrink:0; }
@@ -599,7 +599,7 @@ async function renderMyProfile() {
 
   const posts         = postsRes.data || [];
   const likedPostsArr = (likedRes.data || []).map(r => r.post).filter(Boolean);
-  const mediaPosts    = posts.filter(p => p.image || p.video || p.reposted_post?.image);
+  const mediaPosts    = posts.filter(p => (p.image || p.video) && !p.reposted_post_id);
   const totalViews    = posts.reduce((s, p) => s + (p.views || 0), 0);
   const totalLikes    = posts.reduce((s, p) => s + (p.like_count || 0), 0);
 
@@ -810,7 +810,7 @@ function renderPrfPosts(posts, containerId, isOwn) {
 function renderPrfMasonry(posts, containerId, mediaOnly = false) {
   const container = document.getElementById(containerId);
   if (!container) return;
-  const items = mediaOnly ? posts.filter(p => p.image || p.video || p.reposted_post?.image) : posts;
+  const items = mediaOnly ? posts.filter(p => (p.image || p.video) && !p.reposted_post_id) : posts;
   if (!items.length) {
     container.innerHTML = `<div class="prf-empty"><div class="prf-empty-icon">✍️</div><p>No posts yet</p><span>Start sharing your world</span></div>`;
     return;
@@ -912,7 +912,7 @@ async function showUserProfile(userId) {
 
     const allPosts   = posts || [];
     const likedPosts = [];
-    const mediaPosts = allPosts.filter(p => p.image || p.video || p.reposted_post?.image);
+    const mediaPosts = allPosts.filter(p => (p.image || p.video) && !p.reposted_post_id);
 
     body.innerHTML = `
       <div class="prf-wrap">
@@ -1864,6 +1864,16 @@ function setLikeUI(postId, liked, count) {
     const cbPath = cbLike.querySelector('.cb-heart-path');
     if (cbPath) { cbPath.setAttribute('fill', liked ? 'rgb(244,7,82)' : 'none'); cbPath.setAttribute('stroke', liked ? 'rgb(244,7,82)' : 'currentColor'); }
   }
+  // Sync masonry tiles
+  document.querySelectorAll(`.prf-masonry-like[data-post-id="${postId}"]`).forEach(btn => {
+    btn.classList.toggle('liked', liked);
+    const svg = btn.querySelector('svg');
+    if (svg) { svg.setAttribute('fill', liked ? 'rgb(244,7,82)' : 'none'); svg.setAttribute('stroke', liked ? 'rgb(244,7,82)' : 'currentColor'); }
+    if (count !== null) {
+      const countEl = btn.querySelector('.prf-masonry-like-count');
+      if (countEl) countEl.textContent = count > 0 ? fmtNum(count) : '';
+    }
+  });
 }
 
 function syncLikeCount(postId, count) {
@@ -1882,6 +1892,10 @@ function syncLikeCount(postId, count) {
   if (cbCount && cbLike?.dataset.postId === postId) {
     animateCount(cbCount, count);
   }
+  // Masonry tiles
+  document.querySelectorAll(`.prf-masonry-like[data-post-id="${postId}"] .prf-masonry-like-count`).forEach(el => {
+    el.textContent = count > 0 ? fmtNum(count) : '';
+  });
 }
 
 // ══════════════════════════════════════════
