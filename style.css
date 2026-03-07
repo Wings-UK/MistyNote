@@ -673,57 +673,208 @@
   
   /* Comments section */
   .comments-section
+  /* ══ THREAD COMMENTS ══════════════════════════ */
   .comments-header {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 16px 16px 10px;
+    padding: 20px 16px 12px;
   }
-  .comments-title { font-size: 16px; font-weight: 500; }
-  
-  .comment-item { display: flex; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border2); }
-  .comment-item.reply { padding-left: 46px; }
-  .comment-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; cursor: pointer; }
-  .comment-body { flex: 1; min-width: 0; }
-  .comment-bubble { background: var(--bg2); border-radius: 0 var(--radius) var(--radius) var(--radius); padding: 10px 13px; }
-  .comment-name-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
-  .comment-name { font-size: 14px; font-weight: 700; cursor: pointer; }
+  .comments-title {
+    font-size: 13px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--text3);
+  }
+
+  /* Thread list */
+  .comments-list { padding: 0 0 120px; }
+
+  /* Top-level comment row */
+  .comment-item {
+    display: flex; gap: 0;
+    padding: 14px 16px 0;
+    position: relative;
+  }
+
+  /* Thread left column — avatar + trunk rope */
+  .comment-thread-col {
+    display: flex; flex-direction: column; align-items: center;
+    flex-shrink: 0; width: 36px; margin-right: 10px;
+  }
+  .comment-avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    object-fit: cover; flex-shrink: 0; cursor: pointer;
+    position: relative; z-index: 1;
+  }
+  /* Trunk rope — continuous vertical line from avatar down through all replies */
+  .thread-trunk {
+    width: 2px; flex: 1; min-height: 0;
+    background: var(--border);
+    border-radius: 99px;
+    margin-top: 5px;
+  }
+  .thread-trunk.hidden { visibility: hidden; }
+
+  /* Comment content */
+  .comment-body { flex: 1; min-width: 0; padding-bottom: 14px; }
+  .comment-meta-row {
+    display: flex; align-items: baseline;
+    gap: 6px; margin-bottom: 5px;
+  }
+  .comment-name {
+    font-size: 14px; font-weight: 700; color: var(--text);
+    cursor: pointer; flex-shrink: 0;
+  }
+  .comment-name:active { opacity: 0.7; }
   .comment-time { font-size: 12px; color: var(--text3); }
-  .comment-text { font-size: 14.5px; line-height: 1.5; white-space: pre-wrap; }
-  .comment-actions-row { display: flex; gap: 12px; margin-top: 6px; padding-left: 2px; }
+  .comment-text {
+    font-size: 16px; line-height: 1.55;
+    color: var(--text); white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  /* Sticker slot — ready for sticker components */
+  .comment-sticker-slot {
+    margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px;
+  }
+
+  /* Actions row */
+  .comment-actions-row {
+    display: flex; align-items: center; gap: 2px;
+    margin-top: 8px;
+  }
   .comment-action {
     display: flex; align-items: center; gap: 4px;
-    font-size: 12px; font-weight: 600; color: var(--text3);
-    padding: 3px 6px; border-radius: 999px; transition: all 0.2s;
+    font-size: 13px; font-weight: 600; color: var(--text3);
+    padding: 5px 8px; border-radius: 999px;
+    transition: background 0.15s, color 0.15s;
+    -webkit-tap-highlight-color: transparent;
+    border: none; background: transparent; cursor: pointer;
   }
   .comment-action:active { background: var(--bg3); }
   .comment-action.liked { color: var(--red); }
-  .comment-action.liked path { fill: var(--red); stroke: var(--red); }
-  
+  .comment-action.liked .cmt-heart-path { fill: var(--red); stroke: var(--red); }
+  .comment-action.reply-btn { color: var(--text3); }
+  .comment-action.reply-btn:active { color: var(--accent); background: var(--bg3); }
+  .comment-action.delete-comment-btn { color: var(--text3); margin-left: auto; }
+  .comment-action.delete-comment-btn:active { color: var(--red); }
+
+  /* Replies ctrl row — expand / hide replies, sits right under comment actions */
+  .replies-ctrl {
+    display: flex; align-items: center; gap: 10px;
+    margin-top: 6px;
+  }
+  .expand-replies-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13px; font-weight: 700; color: var(--accent);
+    background: none; border: none; cursor: pointer; padding: 2px 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .expand-replies-btn::before {
+    content: ''; display: block;
+    width: 14px; height: 2px;
+    background: var(--border); border-radius: 99px; flex-shrink: 0;
+  }
+  .collapse-replies-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13px; font-weight: 700; color: var(--text3);
+    background: none; border: none; cursor: pointer; padding: 2px 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .collapse-replies-btn::before {
+    content: ''; display: block;
+    width: 14px; height: 2px;
+    background: var(--border); border-radius: 99px; flex-shrink: 0;
+  }
+  .collapse-replies-btn:active { color: var(--accent); }
+  .collapse-replies-btn.hidden { display: none; }
+
+  /* Replies block — shifted -20px left so replies get more width */
+  .replies-block { margin-left: -20px; }
+
+  /* Reply row */
+  .comment-item.reply {
+    padding: 10px 0 0;
+  }
+  /* Reply left col — narrower avatar, with rope connector lines via pseudo-elements */
+  .comment-item.reply .comment-thread-col {
+    width: 38px; margin-right: 8px;
+    position: relative; justify-content: flex-end; align-items: flex-end;
+  }
+  .comment-item.reply .comment-avatar { width: 28px; height: 28px; }
+  /* Vertical rope segment from top of reply row down to avatar centre */
+  .comment-item.reply .comment-thread-col::before {
+    content: '';
+    position: absolute;
+    left: 17px; /* trunk centre: 36px col / 2 - 1px = 17px, offset by -20px margin = aligns with parent trunk */
+    top: 0;
+    height: 15px; /* reaches avatar centre (28px/2) */
+    width: 2px;
+    background: var(--border);
+    border-radius: 99px;
+  }
+  /* Horizontal arm from rope to avatar */
+  .comment-item.reply .comment-thread-col::after {
+    content: '';
+    position: absolute;
+    left: 17px;
+    top: 13px; /* avatar centre */
+    width: 11px;
+    height: 2px;
+    background: var(--border);
+    border-radius: 99px;
+  }
+  .comment-item.reply .comment-name { font-size: 13px; }
+  .comment-item.reply .comment-text { font-size: 15px; }
+  .comment-item.reply .comment-body { padding-bottom: 10px; }
+
+  /* Separator between top-level comments only */
+  .comment-item + .comment-item:not(.reply) {
+    border-top: 1px solid var(--border2);
+  }
+
   /* Reply composer */
   .reply-composer {
-    margin: 6px 16px 0 52px;
-    background: var(--bg2); border-radius: var(--radius);
+    margin: 2px 0 12px 0;
+    background: var(--bg2);
+    border-radius: var(--radius);
     border: 1.5px solid var(--border);
     overflow: hidden; display: none;
   }
   .reply-composer.open { display: block; }
   .reply-composer-inner { display: flex; gap: 8px; padding: 10px 12px; }
   .reply-composer-avatar { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
-  .reply-textarea { flex: 1; font-size: 14px; resize: none; color: var(--text); }
+  .reply-textarea {
+    flex: 1; font-size: 15px; resize: none;
+    color: var(--text); background: transparent; border: none; outline: none;
+    font-family: inherit; line-height: 1.45;
+  }
   .reply-textarea::placeholder { color: var(--text3); }
   .reply-composer-footer {
     display: flex; justify-content: flex-end; gap: 8px;
     padding: 6px 12px 10px; border-top: 1px solid var(--border);
+    align-items: center;
   }
-  .reply-cancel { font-size: 13px; color: var(--text3); padding: 6px 10px; }
+  /* Sticker trigger in reply composer — future use */
+  .reply-sticker-btn {
+    font-size: 18px; background: none; border: none; cursor: pointer;
+    padding: 4px; margin-right: auto; opacity: 0.5;
+    transition: opacity 0.15s, transform 0.15s;
+  }
+  .reply-sticker-btn:active { opacity: 1; transform: scale(1.2); }
+  .reply-cancel { font-size: 13px; color: var(--text3); padding: 6px 10px; background: none; border: none; cursor: pointer; }
   .reply-submit {
-    font-size: 13px; font-weight: 700; padding: 6px 14px;
+    font-size: 13px; font-weight: 700; padding: 6px 16px;
     background: var(--accent); color: white; border-radius: 999px;
-    transition: transform 0.15s, opacity 0.15s;
+    transition: transform 0.15s, opacity 0.15s; border: none; cursor: pointer;
   }
-  .reply-submit:disabled { opacity: 0.4; }
+  .reply-submit:disabled { opacity: 0.35; cursor: not-allowed; }
   .reply-submit:active:not(:disabled) { transform: scale(0.95); }
-  
-  /* Comment bar (fixed) */
+
+  /* Empty state */
+  .comments-empty {
+    padding: 48px 24px; text-align: center;
+  }
+  .comments-empty-icon { font-size: 32px; margin-bottom: 10px; }
+  .comments-empty-text { font-size: 15px; font-weight: 600; color: var(--text2); margin-bottom: 4px; }
+  .comments-empty-sub { font-size: 13px; color: var(--text3); }
   .comment-bar {
     position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000;
     display: none; /* shown only on detail page via JS */
@@ -775,11 +926,9 @@
     color: var(--text3); font-size: 14px;
   }
   
-  /* Load more replies */
-  .load-replies-btn {
-    background: none; border: none; color: var(--accent); font-size: 13px; font-weight: 700;
-    padding: 8px 16px 8px 52px; cursor: pointer; display: block;
-  }
+  /* Expand / collapse replies (dark mode overrides handled by CSS vars) */
+  .expand-replies-btn { color: var(--accent); }
+  .collapse-replies-btn { color: var(--text3); }
   
   /* ══════════════════════════════════════════
      COMPOSER
