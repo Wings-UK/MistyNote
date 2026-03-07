@@ -2358,7 +2358,7 @@ async function openDetail(postId, scrollToComments = false) {
       }
       .dp-stat-l {
         font-size: 10px; color: var(--text2);
-        text-transform: uppercase; letter-spacing: .06em; font-weight: 600;
+        text-transform: uppercase; letter-spacing: .06em;
       }
 
       /* ── Action row ── */
@@ -2443,7 +2443,7 @@ async function openDetail(postId, scrollToComments = false) {
         flex-wrap: wrap;
       }
       .comment-name {
-        font-size: 13px; font-weight: 700; color: var(--text);
+        font-size: 14px; font-weight: 700; color: var(--text);
         cursor: pointer; line-height: 1.2;
       }
       .comment-name:hover { text-decoration: underline; }
