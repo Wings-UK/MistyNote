@@ -2245,13 +2245,13 @@ async function openDetail(postId, scrollToComments = false) {
       .dp-avatar:active { opacity: .7; }
       .dp-author-info { flex: 1; min-width: 0; }
       .dp-name {
-        font-size: 15px; font-weight: 700; color: var(--text);
+        font-size: 14px; font-weight: 700; color: var(--text);
         cursor: pointer; white-space: nowrap;
         overflow: hidden; text-overflow: ellipsis;
         line-height: 1.2;
       }
       .dp-name:hover { text-decoration: underline; }
-      .dp-handle { font-size: 13px; color: var(--text2); margin-top: 1px; }
+      .dp-handle { font-size: 14px; color: var(--text2); margin-top: 1px; }
       .dp-follow-btn {
         height: 32px; padding: 0 18px;
         border-radius: 20px; font-size: 13px; font-weight: 700;
@@ -2320,7 +2320,7 @@ async function openDetail(postId, scrollToComments = false) {
       .dp-quote-name { font-size: 14px; font-weight: 700; color: var(--text); }
       .dp-quote-time { font-size: 12px; color: var(--text2); margin-left: auto; }
       .dp-quote-text {
-        font-size: 14px; color: var(--text); line-height: 1.5;
+        font-size: 16px; color: var(--text); line-height: 1.5;
         white-space: pre-wrap; word-break: break-word; margin: 0;
       }
       .dp-quote-img {
@@ -2353,7 +2353,7 @@ async function openDetail(postId, scrollToComments = false) {
         background: var(--border, #e5e7eb);
       }
       .dp-stat-n {
-        font-size: 19px; font-weight: 800; color: var(--text);
+        font-size: 17px; font-weight: 700; color: var(--text);
         line-height: 1; letter-spacing: -.02em;
       }
       .dp-stat-l {
