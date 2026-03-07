@@ -183,6 +183,13 @@ function navTo(pageId) {
   }
   if (pageId === 'profile') {
     renderMyProfile();
+    document.getElementById('my-profile-header').style.display = 'flex';
+    document.getElementById('my-profile-header').style.background = 'rgba(0,0,0,0)';
+  } else {
+    const myHdr = document.getElementById('my-profile-header');
+    if (myHdr) { myHdr.style.display = 'none'; }
+    const myPage = document.getElementById('page-profile');
+    if (myPage?._myprfAvatarObs) myPage._myprfAvatarObs.disconnect();
   }
   if (pageId === 'discover') {
     loadDiscover();
@@ -663,6 +670,58 @@ async function renderMyProfile() {
   container._prfData = { posts, likedPosts: likedPostsArr, mediaPosts };
   renderPrfPosts(posts, 'prf-panel-list', true);
   document.getElementById('prf-panel-list')._loaded = true;
+
+  // ── Floating header for own profile ──
+  const myPage   = document.getElementById('page-profile');
+  const myHeader = document.getElementById('my-profile-header');
+  if (!myHeader) return;
+
+  // Set mini avatar
+  const myMiniAvatar = document.getElementById('myprf-header-avatar');
+  if (myMiniAvatar) myMiniAvatar.src = profile.avatar || '';
+
+  // Sample cover colour
+  let myR=0, myG=0, myB=0;
+  const myCoverImg = container.querySelector('.prf-cover-img');
+  if (myCoverImg) {
+    const sampleMyColour = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 50; canvas.height = 10;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(myCoverImg, 0, 0, 50, 10);
+        const d = ctx.getImageData(0, 0, 50, 10).data;
+        let r=0,g=0,b=0,count=0;
+        for (let i=0;i<d.length;i+=4){ r+=d[i];g+=d[i+1];b+=d[i+2];count++; }
+        myR=Math.round(r/count*0.4);
+        myG=Math.round(g/count*0.4);
+        myB=Math.round(b/count*0.4);
+      } catch(e) {}
+    };
+    if (myCoverImg.complete) sampleMyColour();
+    else myCoverImg.addEventListener('load', sampleMyColour, {once:true});
+  }
+
+  // Scroll → header bg
+  if (myPage._myprfScroll) myPage.removeEventListener('scroll', myPage._myprfScroll);
+  myPage._myprfScroll = () => {
+    const opacity = Math.min(myPage.scrollTop / 60, 1);
+    myHeader.style.background = `rgba(${myR},${myG},${myB},${opacity})`;
+  };
+  myPage.addEventListener('scroll', myPage._myprfScroll);
+
+  // Avatar observer → mini avatar in header
+  const myAvatarWrap = container.querySelector('.prf-avatar-wrap');
+  const myMiniIdentity = document.getElementById('myprf-header-identity');
+  if (myPage._myprfAvatarObs) myPage._myprfAvatarObs.disconnect();
+  myPage._myprfAvatarObs = new IntersectionObserver(([entry]) => {
+    const visible = entry.isIntersecting;
+    if (myMiniIdentity) {
+      myMiniIdentity.style.opacity = visible ? '0' : '1';
+      myMiniIdentity.style.pointerEvents = visible ? 'none' : 'auto';
+    }
+  }, { root: myPage, threshold: 0 });
+  if (myAvatarWrap) myPage._myprfAvatarObs.observe(myAvatarWrap);
 }
 
 function switchPrfTab(tab, el) {
@@ -3079,6 +3138,17 @@ function sharePost(post) {
     navigator.clipboard?.writeText(window.location.href).then(() => showToast('Link copied!'));
   }
 }
+
+function shareMyProfile() {
+  const user = currentProfile;
+  const text = user?.username ? `Check out ${user.username} on Winged` : 'Check out my profile on Winged';
+  if (navigator.share) {
+    navigator.share({ title: 'Winged', text, url: window.location.href }).catch(() => {});
+  } else {
+    navigator.clipboard?.writeText(window.location.href).then(() => showToast('Profile link copied!'));
+  }
+}
+
 
 // ══════════════════════════════════════════
 // VIDEO FULLSCREEN
