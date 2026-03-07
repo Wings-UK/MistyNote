@@ -2792,6 +2792,10 @@ async function loadComments(postId) {
   const pill = document.getElementById('comments-count-pill');
   if (pill) pill.textContent = (comments || []).length;
 
+  // Update stat table with real count from DB
+  const statEl = document.querySelector('.dp-stat-n[data-type="comments"]');
+  if (statEl) statEl.textContent = fmtNum((comments || []).length);
+
   if (!comments || !comments.length) {
     list.innerHTML = '<div class="comments-empty"><div class="comments-empty-icon">💬</div>No replies yet — be the first!</div>';
     return;
@@ -2922,7 +2926,6 @@ async function submitReplyInline(parentCommentId, postId, btn) {
     user: currentProfile
   }, parentCommentId, new Set(), postId);
   repliesContainer?.prepend(optimistic);
-  updateCommentCountDelta(1);
 }
 
 async function submitComment(postId, parentId, content) {
@@ -2932,8 +2935,8 @@ async function submitComment(postId, parentId, content) {
 
   if (!error) {
     await supabase.rpc('increment_post_comment_count', { pid: postId, delta: 1 });
+    updateCommentCountDelta(1);
     if (!parentId) {
-      updateCommentCountDelta(1);
       const list = document.getElementById('comments-list');
       if (list) {
         const el = buildCommentEl(data, null, new Set(), postId);
@@ -2942,7 +2945,6 @@ async function submitComment(postId, parentId, content) {
         const emptyEl = list.querySelector('.comments-empty');
         if (emptyEl) emptyEl.remove();
       }
-      // Notify post author
       supabase.from('posts').select('user_id').eq('id', postId).single().then(({ data: post }) => {
         if (post && post.user_id !== currentUser.id) {
           supabase.from('notifications').insert({ user_id: post.user_id, actor_id: currentUser.id, post_id: postId, type: 'comment', comment_text: content, read: false });
