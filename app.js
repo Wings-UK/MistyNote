@@ -2700,6 +2700,18 @@ async function openDetail(postId, scrollToComments = false) {
     await syncViewCount(postId);
     await loadComments(postId);
 
+    // Live comment count straight from comments table — don't trust cached column
+    supabase
+      .from('comments')
+      .select('*', { count: 'exact', head: true })
+      .eq('post_id', postId)
+      .then(({ count }) => {
+        const statEl = document.querySelector('.dp-stat-n[data-type="comments"]');
+        if (statEl && count !== null) animateCount(statEl, count);
+        // Also keep the cached column in sync
+        supabase.from('posts').update({ comment_count: count }).eq('id', postId);
+      });
+
     if (scrollToComments) {
       setTimeout(() => {
         document.getElementById('comments-container')?.scrollIntoView({ behavior: 'smooth' });
