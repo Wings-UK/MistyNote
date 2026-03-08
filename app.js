@@ -2294,7 +2294,7 @@ async function openDetail(postId, scrollToComments = false) {
       .dp-avatar:active { opacity: .7; }
       .dp-author-info { flex: 1; min-width: 0; }
       .dp-name {
-        font-size: 14px; font-weight: 700; color: var(--text);
+        font-size: 15px; font-weight: 600; color: var(--text);
         cursor: pointer; white-space: nowrap;
         overflow: hidden; text-overflow: ellipsis;
         line-height: 1.2;
@@ -2457,9 +2457,9 @@ async function openDetail(postId, scrollToComments = false) {
       .cb-heart-path { transition: all .25s; }
       .cb-send-btn {
         width: 44px; height: 44px;
-        background: rgb(244,7,82); color: #fff; border-radius: 50%;
+        background: #6C47FF; color: #fff; border-radius: 50%;
       }
-      .cb-send-btn:disabled { opacity: .4; cursor: not-allowed; background: rgb(244,7,82); }
+      .cb-send-btn:disabled { opacity: .4; cursor: not-allowed; background: #6C47FF; }
       .cb-send-btn:not(:disabled):active { transform: scale(.88); }
     `;
     document.head.appendChild(s);
