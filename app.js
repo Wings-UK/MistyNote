@@ -1067,11 +1067,12 @@ async function showUserProfile(userId) {
     miniAvatar.src = profile.avatar || '';
     const mainFollowBtn = document.getElementById(`follow-btn-${userId}`);
     miniFollow.onclick = () => mainFollowBtn?.click();
-    // Sync follow label
+    // Sync follow label + state to match main button
     const syncFollowLabel = () => {
       if (!mainFollowBtn) return;
       const isFollowing = mainFollowBtn.classList.contains('prf-btn-following');
       miniFollow.textContent = isFollowing ? 'Following' : 'Follow';
+      miniFollow.classList.toggle('following', isFollowing);
     };
     syncFollowLabel();
     const followObserver = new MutationObserver(syncFollowLabel);
