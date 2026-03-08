@@ -734,185 +734,215 @@
   .detail-action.liked { color: var(--red); }
   .detail-action.liked path { fill: var(--red); stroke: var(--red); }
   .detail-action.reposted { color: var(--green); }
-  
-  /* Comments section */
-  .comments-section
-  /* ══ THREAD COMMENTS ══════════════════════════ */
+
+  /* ══════════════════════════════════════════════════
+     COMMENT SECTION — Clean Premium Rebuild
+  ══════════════════════════════════════════════════ */
+
+  /* Section wrapper */
+  #comments-container {
+    margin-top: 24px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* Header row */
   .comments-header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 20px 16px 12px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 22px 16px 0 16px;
   }
   .comments-title {
-    font-size: 13px; font-weight: 700; letter-spacing: 0.06em;
-    text-transform: uppercase; color: var(--text3);
-    padding-left: 16px; padding-top: 16px; margin-top: 20px;
+    font-size: 11px; font-weight: 800;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--text3);
+  }
+  .comments-title-line {
+    flex: 1; height: 1px; background: var(--border);
   }
 
-  /* Thread list */
-  .comments-list { padding: 16px 0 120px; }
+  /* List */
+  .comments-list { padding-bottom: 120px; }
 
-  /* Top-level comment row */
+  /* ── TOP-LEVEL COMMENT ── */
   .comment-item {
-    display: flex; gap: 0;
-    padding: 14px 16px 0;
+    display: flex;
+    padding: 18px 16px 0 16px;
+    animation: cmtIn .22s ease both;
     position: relative;
   }
-
-  /* Thread left column — avatar + trunk rope */
-  .comment-thread-col {
-    display: flex; flex-direction: column; align-items: center;
-    flex-shrink: 0; width: 36px; margin-right: 10px;
+  @keyframes cmtIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
   }
-  .comment-avatar {
-    width: 36px; height: 36px; border-radius: 50%;
-    object-fit: cover; flex-shrink: 0; cursor: pointer;
-    position: relative; z-index: 1;
-  }
-  /* Trunk rope removed — kept as hidden placeholder for JS refs */
-  .thread-trunk { display: none !important; }
-
-  /* Comment content */
-  .comment-body { flex: 1; min-width: 0; padding-bottom: 14px; }
-  .comment-meta-row {
-    display: flex; align-items: baseline;
-    gap: 6px; margin-bottom: 5px;
-  }
-  .comment-name {
-    font-size: 14px; font-weight: 700; color: var(--text);
-    cursor: pointer; flex-shrink: 0;
-  }
-  .comment-name:active { opacity: 0.7; }
-  .comment-time { font-size: 12px; color: var(--text3); }
-  .comment-text {
-    font-size: 16px; line-height: 1.55;
-    color: var(--text); white-space: pre-wrap;
-    word-break: break-word;
-  }
-
-  /* Sticker slot — ready for sticker components */
-  .comment-sticker-slot {
-    margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px;
-  }
-
-  /* Actions row */
-  .comment-actions-row {
-    display: flex; align-items: center; gap: 2px;
-    margin-top: 8px;
-  }
-  .comment-action {
-    display: flex; align-items: center; gap: 4px;
-    font-size: 13px; font-weight: 600; color: var(--text3);
-    padding: 5px 8px; border-radius: 999px;
-    transition: background 0.15s, color 0.15s;
-    -webkit-tap-highlight-color: transparent;
-    border: none; background: transparent; cursor: pointer;
-  }
-  .comment-action:active { background: var(--bg3); }
-  .comment-action.liked { color: var(--red); }
-  .comment-action.liked .cmt-heart-path { fill: var(--red); stroke: var(--red); }
-  .comment-action.reply-btn { color: var(--text3); }
-  .comment-action.reply-btn:active { color: var(--accent); background: var(--bg3); }
-  .comment-action.delete-comment-btn { color: var(--text3); margin-left: auto; }
-  .comment-action.delete-comment-btn:active { color: var(--red); }
-
-  /* Replies ctrl row — expand / hide replies, sits right under comment actions */
-  .replies-ctrl {
-    display: flex; align-items: center; gap: 10px;
-    margin-top: 6px;
-  }
-  .expand-replies-btn {
-    display: inline-flex; align-items: center; gap: 6px;
-    font-size: 13px; font-weight: 700; color: var(--accent);
-    background: none; border: none; cursor: pointer; padding: 2px 0;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .expand-replies-btn::before {
-    content: ''; display: block;
-    width: 14px; height: 2px;
-    background: var(--border); border-radius: 99px; flex-shrink: 0;
-  }
-  .collapse-replies-btn {
-    display: inline-flex; align-items: center; gap: 6px;
-    font-size: 13px; font-weight: 700; color: var(--text3);
-    background: none; border: none; cursor: pointer; padding: 2px 0;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .collapse-replies-btn::before {
-    content: ''; display: block;
-    width: 14px; height: 2px;
-    background: var(--border); border-radius: 99px; flex-shrink: 0;
-  }
-  .collapse-replies-btn:active { color: var(--accent); }
-  .collapse-replies-btn.hidden { display: none; }
-
-  /* Replies block — shifted -20px left so replies get more width */
-  .replies-block { margin-left: -20px; }
-
-  /* Reply row */
-  .comment-item.reply {
-    padding: 10px 0 0;
-  }
-  /* Reply left col */
-  .comment-item.reply .comment-thread-col {
-    width: 28px; margin-right: 8px;
-    align-items: center;
-  }
-  .comment-item.reply .comment-avatar { width: 28px; height: 28px; }
-  /* Rope connectors removed */
-  .comment-item.reply .comment-name { font-size: 13px; }
-  .comment-item.reply .comment-text { font-size: 15px; }
-  .comment-item.reply .comment-body { padding-bottom: 10px; }
-
-  /* Separator between top-level comments only */
   .comment-item + .comment-item:not(.reply) {
     border-top: 1px solid var(--border2);
   }
 
+  /* Left col */
+  .comment-thread-col {
+    flex-shrink: 0; width: 38px; margin-right: 12px;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .comment-avatar {
+    width: 38px; height: 38px; border-radius: 50%;
+    object-fit: cover; cursor: pointer; flex-shrink: 0;
+  }
+  .thread-trunk { display: none !important; }
+
+  /* Right col */
+  .comment-body { flex: 1; min-width: 0; padding-bottom: 16px; }
+
+  /* Name + time */
+  .comment-meta-row {
+    display: flex; align-items: center;
+    gap: 6px; margin-bottom: 6px;
+  }
+  .comment-name {
+    font-size: 15px; font-weight: 600; color: var(--text);
+    cursor: pointer; flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .comment-name:active { opacity: 0.65; }
+  .comment-time {
+    font-size: 12px; color: var(--text3);
+    margin-left: 2px;
+  }
+
+  /* Text */
+  .comment-text {
+    font-size: 16px; line-height: 1.6;
+    color: var(--text); white-space: pre-wrap;
+    word-break: break-word; margin-bottom: 2px;
+  }
+
+  /* Sticker slot */
+  .comment-sticker-slot {
+    margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px;
+  }
+
+  /* Actions */
+  .comment-actions-row {
+    display: flex; align-items: center;
+    gap: 0; margin-top: 6px; margin-left: -8px;
+  }
+  .comment-action {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 13px; font-weight: 600; color: var(--text3);
+    padding: 6px 8px; border-radius: 10px;
+    border: none; background: transparent; cursor: pointer;
+    transition: background .12s, color .12s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .comment-action:active { background: var(--bg3); }
+  .comment-action.liked { color: var(--red); }
+  .comment-action.liked .cmt-heart-path { fill: var(--red); stroke: var(--red); }
+  .comment-action.reply-btn { color: var(--accent); font-size: 13px; }
+  .comment-action.reply-btn:active { background: rgba(108,71,255,.08); }
+  .comment-action.delete-comment-btn { color: var(--text3); margin-left: auto; }
+  .comment-action.delete-comment-btn:active { color: var(--red); }
+
+  /* Expand / collapse replies */
+  .replies-ctrl {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 8px; margin-bottom: 2px;
+  }
+  .expand-replies-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 700;
+    color: var(--accent); background: rgba(108,71,255,.08);
+    border: none; border-radius: 20px;
+    padding: 4px 12px; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background .15s;
+  }
+  .expand-replies-btn:active { background: rgba(108,71,255,.18); }
+  .collapse-replies-btn {
+    display: none;
+    align-items: center; gap: 5px;
+    font-size: 12px; font-weight: 600; color: var(--text3);
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 20px; padding: 4px 12px;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+    transition: background .15s, color .15s;
+  }
+  .collapse-replies-btn.visible { display: inline-flex; }
+  .collapse-replies-btn:active { color: var(--accent); background: var(--bg3); }
+  .collapse-replies-btn.hidden { display: none !important; }
+
+  /* Replies block */
+  .replies-block { margin-left: -20px; margin-top: 4px; }
+
+  /* ── REPLY ROW ── */
+  .comment-item.reply {
+    padding: 12px 16px 0 0;
+    animation: cmtIn .18s ease both;
+  }
+  .comment-item.reply .comment-thread-col {
+    width: 30px; margin-right: 10px; align-items: center;
+  }
+  .comment-item.reply .comment-avatar { width: 30px; height: 30px; }
+  .comment-item.reply .comment-name { font-size: 14px; }
+  .comment-item.reply .comment-text { font-size: 15px; }
+  .comment-item.reply .comment-body { padding-bottom: 12px; }
+
   /* Reply composer */
   .reply-composer {
-    margin: 2px 0 12px 0;
+    margin: 10px 0 4px;
     background: var(--bg2);
-    border-radius: var(--radius);
+    border-radius: 16px;
     border: 1.5px solid var(--border);
     overflow: hidden; display: none;
+    transition: border-color .15s;
   }
   .reply-composer.open { display: block; }
-  .reply-composer-inner { display: flex; gap: 8px; padding: 10px 12px; }
-  .reply-composer-avatar { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+  .reply-composer:focus-within { border-color: var(--accent); }
+  .reply-composer-inner { display: flex; gap: 10px; padding: 12px 14px 8px; }
+  .reply-composer-avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    object-fit: cover; flex-shrink: 0; margin-top: 2px;
+  }
   .reply-textarea {
     flex: 1; font-size: 15px; resize: none;
-    color: var(--text); background: transparent; border: none; outline: none;
-    font-family: inherit; line-height: 1.45;
+    color: var(--text); background: transparent;
+    border: none; outline: none;
+    font-family: inherit; line-height: 1.5;
   }
   .reply-textarea::placeholder { color: var(--text3); }
   .reply-composer-footer {
-    display: flex; justify-content: flex-end; gap: 8px;
-    padding: 6px 12px 10px; border-top: 1px solid var(--border);
-    align-items: center;
+    display: flex; align-items: center;
+    gap: 8px; padding: 6px 14px 12px;
   }
-  /* Sticker trigger in reply composer — future use */
   .reply-sticker-btn {
-    font-size: 18px; background: none; border: none; cursor: pointer;
-    padding: 4px; margin-right: auto; opacity: 0.5;
-    transition: opacity 0.15s, transform 0.15s;
+    font-size: 18px; background: none; border: none;
+    cursor: pointer; padding: 4px; opacity: 0.4;
+    transition: opacity .15s, transform .15s;
   }
   .reply-sticker-btn:active { opacity: 1; transform: scale(1.2); }
-  .reply-cancel { font-size: 13px; color: var(--text3); padding: 6px 10px; background: none; border: none; cursor: pointer; }
-  .reply-submit {
-    font-size: 13px; font-weight: 700; padding: 6px 16px;
-    background: var(--accent); color: white; border-radius: 999px;
-    transition: transform 0.15s, opacity 0.15s; border: none; cursor: pointer;
+  .reply-cancel {
+    font-size: 13px; font-weight: 600; color: var(--text3);
+    padding: 6px 12px; background: none;
+    border: none; cursor: pointer; margin-left: auto;
+    border-radius: 20px; transition: background .15s;
   }
-  .reply-submit:disabled { opacity: 0.35; cursor: not-allowed; }
+  .reply-cancel:active { background: var(--bg3); }
+  .reply-submit {
+    font-size: 13px; font-weight: 700; padding: 7px 18px;
+    background: var(--accent); color: #fff;
+    border-radius: 20px; border: none; cursor: pointer;
+    transition: opacity .15s, transform .15s;
+  }
+  .reply-submit:disabled { opacity: 0.3; cursor: not-allowed; }
   .reply-submit:active:not(:disabled) { transform: scale(0.95); }
 
   /* Empty state */
   .comments-empty {
-    padding: 48px 24px; text-align: center;
+    padding: 56px 24px 40px; text-align: center;
   }
-  .comments-empty-icon { font-size: 32px; margin-bottom: 10px; }
-  .comments-empty-text { font-size: 15px; font-weight: 600; color: var(--text2); margin-bottom: 4px; }
-  .comments-empty-sub { font-size: 13px; color: var(--text3); }
+  .comments-empty-icon { font-size: 36px; margin-bottom: 12px; }
+  .comments-empty-text {
+    font-size: 16px; font-weight: 700;
+    color: var(--text2); margin-bottom: 6px;
+  }
+  .comments-empty-sub { font-size: 14px; color: var(--text3); line-height: 1.5; }
   .comment-bar {
     position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000;
     display: none; /* shown only on detail page via JS */
@@ -959,14 +989,7 @@
 
   .comment-bar-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
   
-  .comments-empty {
-    padding: 40px 24px; text-align: center;
-    color: var(--text3); font-size: 14px;
-  }
-  
-  /* Expand / collapse replies (dark mode overrides handled by CSS vars) */
-  .expand-replies-btn { color: var(--accent); }
-  .collapse-replies-btn { color: var(--text3); }
+  /* comment section uses CSS vars — no dark mode overrides needed */
   
   /* ══════════════════════════════════════════
      COMPOSER
