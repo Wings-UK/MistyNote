@@ -749,7 +749,7 @@
   }
 
   /* Thread list */
-  .comments-list { padding: 0 0 120px; }
+  .comments-list { padding: 16px 0 120px; }
 
   /* Top-level comment row */
   .comment-item {
