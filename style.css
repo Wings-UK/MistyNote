@@ -667,7 +667,7 @@
     object-fit: cover; flex-shrink: 0;
   }
   .quote-card-name {
-    font-size: 13px; font-weight: 700; color: var(--text);
+    font-size: 15px; font-weight: 600; color: var(--text);
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .quote-card-time {
