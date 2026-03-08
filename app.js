@@ -488,13 +488,13 @@ function injectProfileStyles() {
     /* ── BUTTONS ── */
     .prf-btn-row { display:flex; gap:10px; margin-top:16px; flex-wrap:wrap; }
     .prf-btn { height:36px; padding:0 18px; border-radius:20px; font-size:14px; font-weight:600; cursor:pointer; border:none; transition:all .18s; display:flex; align-items:center; gap:6px; font-family:inherit; }
-    .prf-btn-primary { background:#6C47FF; color:#fff; box-shadow:0 2px 12px rgba(108,71,255,.3); }
+    .prf-btn-primary { background:#6C47FF; color:#fff; border:1.5px solid #6C47FF; }
     .prf-btn-primary:active { transform:scale(.96); opacity:.9; }
     .prf-btn-dark { background:var(--text); color:var(--bg); }
     .prf-btn-dark:active { transform:scale(.96); opacity:.85; }
     .prf-btn-outline { background:transparent; color:var(--text); border:1.5px solid var(--border,#e5e7eb); }
     .prf-btn-outline:active { transform:scale(.96); }
-    .prf-btn-following { background:transparent; color:var(--text); border:1.5px solid var(--border,#e5e7eb); border-radius:20px; }
+    .prf-btn-following { background:transparent; color:#6C47FF; border:1.5px solid #6C47FF; border-radius:20px; }
     .prf-btn-icon { width:36px; height:36px; padding:0; border-radius:50%; justify-content:center; background:var(--bg2); border:1.5px solid var(--border,#e5e7eb); color:var(--text); }
     .prf-btn-icon:active { transform:scale(.94); }
 
@@ -1112,7 +1112,7 @@ function switchUPrfTab(tab, userId, el) {
 function toggleFollow(userId, btn) {
   const isFollowing = btn.classList.contains('prf-btn-following');
   btn.classList.toggle('prf-btn-following', !isFollowing);
-  btn.classList.toggle('prf-btn-dark', isFollowing);
+  btn.classList.toggle('prf-btn-primary', isFollowing);  // back to accent purple on unfollow
   btn.textContent = !isFollowing ? 'Following' : 'Follow';
   showToast(!isFollowing ? 'Following ✓' : 'Unfollowed');
 }
@@ -2333,13 +2333,13 @@ async function openDetail(postId, scrollToComments = false) {
       .dp-follow-btn {
         height: 32px; padding: 0 18px;
         border-radius: 20px; font-size: 13px; font-weight: 700;
-        border: 1.5px solid var(--border, #e5e7eb);
-        background: transparent; color: var(--text);
+        border: 1.5px solid #6C47FF;
+        background: #6C47FF; color: #fff;
         cursor: pointer; transition: all .2s; flex-shrink: 0;
         letter-spacing: -.01em;
       }
       .dp-follow-btn.following {
-        background: #6C47FF; color: #fff; border-color: #6C47FF;
+        background: transparent; color: #6C47FF; border-color: #6C47FF;
       }
       .dp-follow-btn:active { transform: scale(.93); }
 
