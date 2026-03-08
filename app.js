@@ -1245,45 +1245,27 @@ function createFeedPost(p) {
     mainContentHTML = `
       ${text ? `<div class="tir repost-commentary"><p class="tired">${displayText}</p></div>` : ''}
 
-      <div class="original-post-card" data-original-id="${orig.id}">
-        <div class="repost-indicator" style="display:flex;align-items:center;gap:6px;padding:8px 10px 4px;font-size:13px;color:#888;">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.6;"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
-          <span>Reposted from ${escHtml(origUser.username)}</span>
-        </div>
-
-        <div class="cust-name" style="padding:0 10px;">
-          <a class="post-avatar-link" onclick="showUserProfile('${orig.user_id}');event.stopPropagation()">
-            <img class="small-photo" src="${origUser.avatar || ''}" onerror="this.style.display='none'" alt="" style="width:35px;height:35px;">
-          </a>
-          <div class="post-meta">
-            <a class="post-author-link" onclick="showUserProfile('${orig.user_id}');event.stopPropagation()">
-              <span class="jerry">${escHtml(origUser.username)}</span>
-              <svg xmlns="http://www.w3.org/2000/svg" class="verif" viewBox="0 0 24 24" width="15" height="15"><path d="M12 2L3 7v5c0 5 4 9 9 10 5-1 9-5 9-10V7z" fill="#6C47FF"/><polyline points="8,12 11,15 16,9" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </a>
-            <span class="time">${timeSince(orig.created_at)}</span>
+      <div class="quote-card" data-original-id="${orig.id}" onclick="openDetail('${orig.id}');event.stopPropagation()">
+        <div class="quote-card-inner">
+          <div class="quote-card-header">
+            <img class="quote-card-avatar" src="${origUser.avatar||''}" onerror="this.style.display='none'" alt="">
+            <span class="quote-card-name">${escHtml(origUser.username)}</span>
+            <span class="quote-card-time">${timeSince(orig.created_at)}</span>
           </div>
+          ${orig.content ? `<p class="quote-card-text">${escHtml(orig.content.slice(0,240))}${orig.content.length>240?'…':''}</p>` : ''}
         </div>
-
-        ${orig.content ? `<div class="tir" style="margin:0 10px;"><p class="tired">${origDisplay}</p></div>` : ''}
-
-        ${orig.image ? `<div class="repost-img-wrap"><img src="${orig.image}" class="repost-img" alt="" loading="lazy"></div>` : ''}
-
+        ${orig.image ? `<img class="quote-card-img" src="${orig.image}" alt="" loading="lazy">` : ''}
         ${orig.video && !orig.image ? `
-          <div class="video-container laptop1" data-post-id="${orig.id}">
-            <video class="video-thumbnail" preload="metadata">
-              <source src="${orig.video}" type="video/mp4">
-            </video>
-            <div class="video-overlay">
-              <div class="play-button">
-                <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-                  <circle cx="24" cy="24" r="22" fill="rgba(244,7,82,0.5)" stroke="white" stroke-width="3"/>
-                  <path d="M34 24L18 34V14L34 24Z" fill="white"/>
-                </svg>
-              </div>
+          <div class="quote-card-video-wrap">
+            <video class="quote-card-video" preload="metadata"><source src="${orig.video}" type="video/mp4"></video>
+            <div class="quote-card-play">
+              <svg width="36" height="36" viewBox="0 0 48 48" fill="none">
+                <circle cx="24" cy="24" r="22" fill="rgba(0,0,0,0.45)" stroke="white" stroke-width="2"/>
+                <path d="M32 24L20 31V17L32 24Z" fill="white"/>
+              </svg>
             </div>
           </div>
         ` : ''}
-
       </div>
     `;
   } else {
@@ -1401,7 +1383,7 @@ function createFeedPost(p) {
       if (tired) { tired.innerHTML = escHtml(text); e.stopPropagation(); return; }
     }
     if (e.target.closest('.post-avatar-link') || e.target.closest('.post-author-link')) return;
-    if (e.target.closest('.view-original') || e.target.closest('.original-post-card')) {
+    if (e.target.closest('.view-original') || e.target.closest('.quote-card')) {
       openDetail(e.target.closest('[data-original-id]')?.dataset.originalId || orig?.id);
       return;
     }
@@ -1655,19 +1637,7 @@ function injectFeedPostStyles() {
     .donate-btn:hover img { opacity: 1; }
 
     /* Repost card inside feed */
-    .original-post-card {
-      border: 1px solid rgb(220,220,220);
-      border-radius: 12px;
-      margin-top: 10px;
-      overflow: hidden;
-      background: rgb(250,250,250);
-      cursor: pointer;
-      transition: background 0.15s;
-    }
-    .original-post-card:hover { background: rgb(245,245,245); }
-    .repost-img-wrap { width: 100%; aspect-ratio: 1/1; overflow: hidden; }
-    .repost-img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
-    .repost-commentary .tir { padding-bottom: 2px; }
+    .repost-commentary .tir { padding-bottom: 2px; } /* quote-card CSS in style.css */
 
     /* Post action menu */
     .post-action-bar {
@@ -2379,33 +2349,7 @@ async function openDetail(postId, scrollToComments = false) {
         font-size: 14px; color: var(--text2); padding: 12px 16px 0;
         display: flex; align-items: center; gap: 6px;
       }
-      .dp-quote-card {
-        margin: 10px 16px 0;
-        border: 1.5px solid var(--border, #e5e7eb);
-        border-radius: 18px; overflow: hidden;
-        background: var(--bg2, #f9fafb);
-        cursor: pointer; transition: background .15s, border-color .15s;
-      }
-      .dp-quote-card:hover { border-color: #6C47FF; }
-      .dp-quote-card:active { background: rgba(108,71,255,.04); }
-      .dp-quote-inner { padding: 12px 14px 14px; }
-      .dp-quote-header {
-        display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
-      }
-      .dp-quote-avatar {
-        width: 26px; height: 26px; border-radius: 50%;
-        object-fit: cover; flex-shrink: 0;
-      }
-      .dp-quote-name { font-size: 14px; font-weight: 700; color: var(--text); }
-      .dp-quote-time { font-size: 12px; color: var(--text2); margin-left: auto; }
-      .dp-quote-text {
-        font-size: 16px; color: var(--text); line-height: 1.5;
-        white-space: pre-wrap; word-break: break-word; margin: 0;
-      }
-      .dp-quote-img {
-        width: 100%; display: block;
-        max-height: 220px; object-fit: cover;
-      }
+      /* quote-card CSS lives in style.css */
 
       /* ── Full date ── */
       .dp-date {
@@ -2557,16 +2501,22 @@ async function openDetail(postId, scrollToComments = false) {
     let quoteHtml = '';
     if (isRepost && orig) {
       quoteHtml = `
-        <div class="dp-quote-card" onclick="openDetail('${orig.id}')">
-          <div class="dp-quote-inner">
-            <div class="dp-quote-header">
-              <img class="dp-quote-avatar" src="${origUser.avatar||''}" onerror="this.style.display='none'">
-              <span class="dp-quote-name">${escHtml(origUser.username)}</span>
-              <span class="dp-quote-time">${timeSince(orig.created_at)}</span>
+        <div class="quote-card" onclick="openDetail('${orig.id}')">
+          <div class="quote-card-inner">
+            <div class="quote-card-header">
+              <img class="quote-card-avatar" src="${origUser.avatar||''}" onerror="this.style.display='none'">
+              <span class="quote-card-name">${escHtml(origUser.username)}</span>
+              <span class="quote-card-time">${timeSince(orig.created_at)}</span>
             </div>
-            ${orig.content ? `<p class="dp-quote-text">${escHtml(orig.content.slice(0,240))}${orig.content.length>240?'…':''}</p>` : ''}
+            ${orig.content ? `<p class="quote-card-text">${escHtml(orig.content.slice(0,240))}${orig.content.length>240?'…':''}</p>` : ''}
           </div>
-          ${orig.image ? `<img class="dp-quote-img" src="${orig.image}" alt="">` : ''}
+          ${orig.image ? `<img class="quote-card-img" src="${orig.image}" alt="">` : ''}
+          ${orig.video && !orig.image ? `
+            <div class="quote-card-video-wrap">
+              <video class="quote-card-video" preload="metadata"><source src="${orig.video}" type="video/mp4"></video>
+              <div class="quote-card-play"><svg width="36" height="36" viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="22" fill="rgba(0,0,0,0.45)" stroke="white" stroke-width="2"/><path d="M32 24L20 31V17L32 24Z" fill="white"/></svg></div>
+            </div>
+          ` : ''}
         </div>`;
     }
 
