@@ -675,7 +675,7 @@
     margin-left: auto; flex-shrink: 0;
   }
   .quote-card-text {
-    font-size: 14px; color: var(--text2); line-height: 1.5;
+    font-size: 16px; color: var(--text2); line-height: 1.5;
     white-space: pre-wrap; word-break: break-word; margin: 0;
     display: -webkit-box; -webkit-line-clamp: 3;
     -webkit-box-orient: vertical; overflow: hidden;
