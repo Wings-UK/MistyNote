@@ -647,6 +647,21 @@
   }
   .detail-follow-btn.following { background: transparent; color: var(--accent); border: 2px solid var(--accent); }
   .detail-follow-btn:active { transform: scale(0.95); }
+
+  /* Mini follow button — sticky scroll header on user profile */
+  .mini-follow-btn {
+    display: none; opacity: 0;
+    height: 30px; padding: 0 14px; border-radius: 20px;
+    font-size: 13px; font-weight: 700;
+    background: #6C47FF; color: #fff;
+    border: 1.5px solid #6C47FF;
+    cursor: pointer; transition: opacity .25s ease, transform .15s;
+    flex-shrink: 0;
+  }
+  .mini-follow-btn.following {
+    background: transparent; color: #6C47FF; border-color: #6C47FF;
+  }
+  .mini-follow-btn:active { transform: scale(0.95); }
   
   .detail-text { font-size: 18px; line-height: 1.6; margin-bottom: 14px; white-space: pre-wrap; word-break: break-word; }
   .detail-media { border-radius: var(--radius); overflow: hidden; margin-bottom: 14px; }
