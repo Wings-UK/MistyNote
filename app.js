@@ -1481,7 +1481,7 @@ function injectFeedPostStyles() {
     .tir {
       padding: 10px 5px 8px;
     }
-    .tired { width: 100%; font-size: 15px; white-space: pre-wrap; word-break: break-word; color: var(--text); }
+    .tired { width: 100%; font-size: 16px; white-space: pre-wrap; word-break: break-word; color: var(--text); }
     .reer { color: rgba(244,7,82,0.7); cursor: pointer; }
 
     .laptop1 { max-width: 100%; margin-top: 10px; padding: 0; overflow: hidden; border-radius: 12px; background: #f0f0f0; max-height: 400px; display: flex; align-items: center; justify-content: center; }
