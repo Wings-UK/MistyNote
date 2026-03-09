@@ -1176,13 +1176,17 @@ async function toggleFollow(userId, btn) {
 
   if (isFollowing) {
     // Unfollow — delete from follows table
-    const { error } = await supabase
+    console.log('Attempting unfollow — follower_id:', currentUser.id, 'following_id:', userId);
+    const { data: delData, error, count } = await supabase
       .from('follows')
       .delete()
       .eq('follower_id', currentUser.id)
-      .eq('following_id', userId);
+      .eq('following_id', userId)
+      .select();
 
+    console.log('Unfollow result:', { delData, error, count });
     if (error) {
+      console.error('Unfollow error:', error.code, error.message, error.details, error.hint);
       setFollowBtnState(btn, true); // revert
       showToast('Failed to unfollow');
       return;
