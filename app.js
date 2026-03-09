@@ -710,12 +710,12 @@ async function renderMyProfile() {
           <span class="prf-stat-n">${fmtNum(posts.length)}</span>
           <span class="prf-stat-l">Posts</span>
         </div>
-        <div class="prf-stat-card clickable">
-          <span class="prf-stat-n">${fmtNum(profile.followers||0)}</span>
+        <div class="prf-stat-card clickable" onclick="openFollowList('followers', currentUser.id)">
+          <span class="prf-stat-n" id="prf-followers-count">${fmtNum(profile.followers||0)}</span>
           <span class="prf-stat-l">Followers</span>
         </div>
-        <div class="prf-stat-card clickable">
-          <span class="prf-stat-n">${fmtNum(profile.following||0)}</span>
+        <div class="prf-stat-card clickable" onclick="openFollowList('following', currentUser.id)">
+          <span class="prf-stat-n" id="prf-following-count">${fmtNum(profile.following||0)}</span>
           <span class="prf-stat-l">Following</span>
         </div>
         <div class="prf-stat-card">
@@ -1026,12 +1026,12 @@ async function showUserProfile(userId, tapEl) {
             <span class="prf-stat-n">${fmtNum(allPosts.length)}</span>
             <span class="prf-stat-l">Posts</span>
           </div>
-          <div class="prf-stat-card clickable">
-            <span class="prf-stat-n">${fmtNum(profile.followers||0)}</span>
+          <div class="prf-stat-card clickable" onclick="openFollowList('followers','${userId}')">
+            <span class="prf-stat-n" id="uprf-followers-${userId}">${fmtNum(profile.followers||0)}</span>
             <span class="prf-stat-l">Followers</span>
           </div>
-          <div class="prf-stat-card clickable">
-            <span class="prf-stat-n">${fmtNum(profile.following||0)}</span>
+          <div class="prf-stat-card clickable" onclick="openFollowList('following','${userId}')">
+            <span class="prf-stat-n" id="uprf-following-${userId}">${fmtNum(profile.following||0)}</span>
             <span class="prf-stat-l">Following</span>
           </div>
           <div class="prf-stat-card">
@@ -1116,6 +1116,13 @@ async function showUserProfile(userId, tapEl) {
     // Set mini avatar src and wire follow button to main follow btn
     miniAvatar.src = profile.avatar || '';
     const mainFollowBtn = document.getElementById(`follow-btn-${userId}`);
+
+    // ── Check real follow state from DB ──
+    if (mainFollowBtn && currentUser && userId !== currentUser.id) {
+      checkFollowState(userId).then(isFollowing => {
+        setFollowBtnState(mainFollowBtn, isFollowing);
+      });
+    }
     miniFollow.onclick = () => mainFollowBtn?.click();
     // Sync follow label + state to match main button
     const syncFollowLabel = () => {
@@ -1160,12 +1167,87 @@ function switchUPrfTab(tab, userId, el) {
   panel._loaded = true;
 }
 
-function toggleFollow(userId, btn) {
+async function toggleFollow(userId, btn) {
+  if (!currentUser) { showToast('Sign in to follow'); return; }
   const isFollowing = btn.classList.contains('prf-btn-following');
-  btn.classList.toggle('prf-btn-following', !isFollowing);
-  btn.classList.toggle('prf-btn-primary', isFollowing);  // back to accent purple on unfollow
-  btn.textContent = !isFollowing ? 'Following' : 'Follow';
-  showToast(!isFollowing ? 'Following ✓' : 'Unfollowed');
+
+  // Optimistic UI update
+  setFollowBtnState(btn, !isFollowing);
+
+  if (isFollowing) {
+    // Unfollow — delete from follows table
+    const { error } = await supabase
+      .from('follows')
+      .delete()
+      .eq('follower_id', currentUser.id)
+      .eq('following_id', userId);
+
+    if (error) {
+      setFollowBtnState(btn, true); // revert
+      showToast('Failed to unfollow');
+      return;
+    }
+    showToast('Unfollowed');
+  } else {
+    // Follow — insert into follows table
+    const { error } = await supabase
+      .from('follows')
+      .insert({ follower_id: currentUser.id, following_id: userId });
+
+    if (error) {
+      setFollowBtnState(btn, false); // revert
+      showToast('Failed to follow');
+      return;
+    }
+    showToast('Following ✓');
+  }
+
+  // Refresh follower count on the visible profile
+  refreshFollowCounts(userId);
+}
+
+function setFollowBtnState(btn, isFollowing) {
+  btn.classList.toggle('prf-btn-following', isFollowing);
+  btn.classList.toggle('prf-btn-primary', !isFollowing);
+  btn.textContent = isFollowing ? 'Following' : 'Follow';
+}
+
+async function refreshFollowCounts(userId) {
+  const { data } = await supabase
+    .from('users')
+    .select('followers, following')
+    .eq('id', userId)
+    .maybeSingle();
+  if (!data) return;
+
+  // Update visible follower count on other user's profile
+  const followerEl = document.querySelector(`#uprf-followers-${userId}`);
+  if (followerEl) followerEl.textContent = fmtNum(data.followers || 0);
+
+  // Update own following count on ME page
+  if (currentUser) {
+    const { data: me } = await supabase
+      .from('users')
+      .select('followers, following')
+      .eq('id', currentUser.id)
+      .maybeSingle();
+    if (me) {
+      currentProfile = { ...currentProfile, ...me };
+      const myFollowingEl = document.querySelector('#prf-following-count');
+      if (myFollowingEl) myFollowingEl.textContent = fmtNum(me.following || 0);
+    }
+  }
+}
+
+async function checkFollowState(userId) {
+  if (!currentUser || userId === currentUser.id) return false;
+  const { data } = await supabase
+    .from('follows')
+    .select('id')
+    .eq('follower_id', currentUser.id)
+    .eq('following_id', userId)
+    .maybeSingle();
+  return !!data;
 }
 
 // ══════════════════════════════════════════
@@ -2360,7 +2442,8 @@ async function openDetail(postId, scrollToComments = false) {
         cursor: pointer; transition: all .2s; flex-shrink: 0;
         letter-spacing: -.01em;
       }
-      .dp-follow-btn.following {
+      .dp-follow-btn.following,
+      .dp-follow-btn.prf-btn-following {
         background: transparent; color: #6C47FF; border-color: #6C47FF;
       }
       .dp-follow-btn:active { transform: scale(.93); }
@@ -2706,6 +2789,21 @@ async function openDetail(postId, scrollToComments = false) {
     // Track view + load comments
     await recordView(postId);
     await syncViewCount(postId);
+
+    // Check real follow state for detail page follow button
+    if (!isOwn && currentUser) {
+      const dpFollowBtn = document.getElementById(`dp-follow-${postId}`);
+      if (dpFollowBtn) {
+        checkFollowState(p.user_id).then(isFollowing => {
+          if (isFollowing) {
+            dpFollowBtn.classList.add('prf-btn-following');
+            dpFollowBtn.classList.remove('prf-btn-primary');
+            dpFollowBtn.textContent = 'Following';
+          }
+        });
+      }
+    }
+
     await loadComments(postId);
 
     // Live comment count straight from comments table — don't trust cached column
@@ -2728,10 +2826,19 @@ async function openDetail(postId, scrollToComments = false) {
   });
 }
 
-function toggleDetailFollow(btn, userId) {
-  const isFollowing = btn.classList.contains('following');
-  btn.classList.toggle('following', !isFollowing);
-  btn.textContent = !isFollowing ? 'Following' : 'Follow';
+async function toggleDetailFollow(btn, userId) {
+  // Ensure btn uses same classes as setFollowBtnState
+  const isCurrentlyFollowing = btn.classList.contains('prf-btn-following') || btn.classList.contains('following');
+  // Normalise classes so toggleFollow works correctly
+  btn.classList.remove('following');
+  if (isCurrentlyFollowing) {
+    btn.classList.add('prf-btn-following');
+    btn.classList.remove('prf-btn-primary');
+  } else {
+    btn.classList.remove('prf-btn-following');
+    btn.classList.add('prf-btn-primary');
+  }
+  await toggleFollow(userId, btn);
 }
 
 function focusCommentBar() {
@@ -3943,6 +4050,128 @@ function closeVideoFS() {
 // ══════════════════════════════════════════
 // TOAST
 // ══════════════════════════════════════════
+
+// ══════════════════════════════════════════
+// FOLLOW LIST MODAL
+// ══════════════════════════════════════════
+
+async function openFollowList(type, userId) {
+  // type = 'followers' | 'following'
+  const title = type === 'followers' ? 'Followers' : 'Following';
+
+  // Build modal
+  const overlay = document.createElement('div');
+  overlay.id = 'follow-list-overlay';
+  overlay.innerHTML = `
+    <div class="follow-list-sheet">
+      <div class="follow-list-header">
+        <span class="follow-list-title">${title}</span>
+        <button class="follow-list-close" onclick="closeFollowList()">✕</button>
+      </div>
+      <div class="follow-list-body" id="follow-list-body">
+        <div class="follow-list-loading">Loading...</div>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add('visible'));
+
+  // Close on backdrop tap
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeFollowList(); });
+
+  // Fetch list
+  let data, error;
+  if (type === 'followers') {
+    // People who follow userId
+    ({ data, error } = await supabase
+      .from('follows')
+      .select('follower:users!follows_follower_id_fkey(id, username, avatar, verified)')
+      .eq('following_id', userId)
+      .order('created_at', { ascending: false }));
+  } else {
+    // People userId is following
+    ({ data, error } = await supabase
+      .from('follows')
+      .select('following:users!follows_following_id_fkey(id, username, avatar, verified)')
+      .eq('follower_id', userId)
+      .order('created_at', { ascending: false }));
+  }
+
+  const body = document.getElementById('follow-list-body');
+  if (!body) return;
+
+  if (error || !data || data.length === 0) {
+    body.innerHTML = `<div class="follow-list-empty">No ${title.toLowerCase()} yet</div>`;
+    return;
+  }
+
+  const users = data.map(d => type === 'followers' ? d.follower : d.following).filter(Boolean);
+
+  // Check which ones current user is already following
+  let followingSet = new Set();
+  if (currentUser) {
+    const ids = users.map(u => u.id).filter(id => id !== currentUser.id);
+    if (ids.length) {
+      const { data: myFollows } = await supabase
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', currentUser.id)
+        .in('following_id', ids);
+      if (myFollows) myFollows.forEach(f => followingSet.add(f.following_id));
+    }
+  }
+
+  body.innerHTML = users.map(u => {
+    const isMe = currentUser && u.id === currentUser.id;
+    const isFollowing = followingSet.has(u.id);
+    const avatar = u.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(u.username)}`;
+    const verified = u.verified ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="#6C47FF"><path d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg>` : '';
+    return `
+      <div class="follow-list-row" onclick="followListTapUser('${u.id}')">
+        <img class="follow-list-avatar" src="${avatar}" onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(u.username)}'">
+        <div class="follow-list-info">
+          <span class="follow-list-name">${escHtml(u.username)}${verified}</span>
+        </div>
+        ${!isMe ? `<button class="follow-list-btn ${isFollowing ? 'following' : ''}"
+          id="flbtn-${u.id}"
+          onclick="event.stopPropagation(); followListToggle('${u.id}', this)">
+          ${isFollowing ? 'Following' : 'Follow'}
+        </button>` : ''}
+      </div>`;
+  }).join('');
+}
+
+function closeFollowList() {
+  const overlay = document.getElementById('follow-list-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('visible');
+  setTimeout(() => overlay.remove(), 280);
+}
+
+async function followListToggle(userId, btn) {
+  const isFollowing = btn.classList.contains('following');
+  // Optimistic
+  btn.classList.toggle('following', !isFollowing);
+  btn.textContent = !isFollowing ? 'Following' : 'Follow';
+
+  if (isFollowing) {
+    const { error } = await supabase.from('follows').delete()
+      .eq('follower_id', currentUser.id).eq('following_id', userId);
+    if (error) { btn.classList.add('following'); btn.textContent = 'Following'; showToast('Failed'); }
+    else { showToast('Unfollowed'); refreshFollowCounts(userId); }
+  } else {
+    const { error } = await supabase.from('follows').insert({ follower_id: currentUser.id, following_id: userId });
+    if (error) { btn.classList.remove('following'); btn.textContent = 'Follow'; showToast('Failed'); }
+    else { showToast('Following ✓'); refreshFollowCounts(userId); }
+  }
+}
+
+function followListTapUser(userId) {
+  closeFollowList();
+  setTimeout(() => {
+    if (currentUser && userId === currentUser.id) navTo('profile');
+    else showUserProfile(userId, null);
+  }, 200);
+}
 
 let toastTimer;
 function showToast(msg, duration = 2500) {
