@@ -235,13 +235,19 @@
     ══════════════════════════════════════════ -->
     <section class="page slide-page no-header-page" id="page-detail">
       <header class="page-header">
-        <button class="back-btn" onclick="slideBack()">
+        <button class="back-btn" onclick="slideBack()" style="background:transparent !important; border:none; box-shadow:none;">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M12 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
-        <h1 class="page-title"></h1>
-        <button class="header-action" id="detail-share-btn">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>
-        </button>
+        <div id="dp-header-identity" style="display:flex;align-items:center;gap:8px;opacity:0;transition:opacity .25s ease;pointer-events:none;flex:1;">
+          <img id="dp-header-avatar" src="" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">
+          <span id="dp-header-username" style="font-size:15px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button id="dp-header-follow" class="mini-follow-btn" style="opacity:0;transition:opacity .25s ease;pointer-events:none;" onclick="">Follow</button>
+          <button class="header-action" id="detail-share-btn" style="background:transparent !important; border:none; box-shadow:none;">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>
+          </button>
+        </div>
       </header>
       <div id="detail-body"></div>
     </section>
