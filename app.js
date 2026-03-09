@@ -2588,39 +2588,18 @@ async function openDetail(postId, scrollToComments = false) {
     const dpHeaderIdentity = document.getElementById('dp-header-identity');
     const dpHeaderAvatar   = document.getElementById('dp-header-avatar');
     const dpHeaderUsername = document.getElementById('dp-header-username');
-    const dpHeaderFollow   = document.getElementById('dp-header-follow');
 
     dpHeaderAvatar.src = user.avatar || '';
     dpHeaderUsername.textContent = user.username || '';
 
-    // Wire header follow btn to main follow btn
-    const mainDpFollow = document.getElementById(`dp-follow-${postId}`);
-    if (mainDpFollow) {
-      dpHeaderFollow.style.display = 'block';
-      dpHeaderFollow.onclick = () => mainDpFollow?.click();
-      const syncDpFollow = () => {
-        const isFollowing = mainDpFollow.classList.contains('following');
-        dpHeaderFollow.textContent = isFollowing ? 'Following' : 'Follow';
-        dpHeaderFollow.classList.toggle('following', isFollowing);
-      };
-      syncDpFollow();
-      const dpFollowObs = new MutationObserver(syncDpFollow);
-      dpFollowObs.observe(mainDpFollow, { attributes: true, attributeFilter: ['class'] });
-    } else {
-      // Own post — hide follow button
-      dpHeaderFollow.style.display = 'none';
-    }
-
-    // IntersectionObserver on author avatar
+    // IntersectionObserver on author avatar — show mini identity when avatar scrolls out
     const detailPage = document.getElementById('page-detail');
     if (detailPage._dpAvatarObs) detailPage._dpAvatarObs.disconnect();
     const dpAuthorAvatar = detailPage.querySelector('.dp-avatar');
     detailPage._dpAvatarObs = new IntersectionObserver(([entry]) => {
       const visible = entry.isIntersecting;
-      dpHeaderIdentity.style.opacity      = visible ? '0' : '1';
+      dpHeaderIdentity.style.opacity       = visible ? '0' : '1';
       dpHeaderIdentity.style.pointerEvents = visible ? 'none' : 'auto';
-      dpHeaderFollow.style.opacity        = visible ? '0' : '1';
-      dpHeaderFollow.style.pointerEvents   = visible ? 'none' : 'auto';
     }, { root: detailPage, threshold: 0 });
     if (dpAuthorAvatar) detailPage._dpAvatarObs.observe(dpAuthorAvatar);
 
