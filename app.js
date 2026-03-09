@@ -2605,7 +2605,7 @@ async function openDetail(postId, scrollToComments = false) {
 
 
     // Comment bar placeholder
-    document.getElementById('comment-input').placeholder = `Reply to ${user.username} 💜...`;
+    document.getElementById('comment-input').placeholder = `Reply to ${user.username}...`;
 
     // Comment bar — wire like button
     const cbLike = document.getElementById('cb-like-btn');
@@ -2739,7 +2739,7 @@ async function loadComments(postId) {
 
   const { data: comments } = await supabase
     .from('comments')
-    .select(`id,content,created_at,like_count,parent_id,user_id,user:users(id,username,avatar)`)
+    .select(`id,content,image_url,sticker_url,created_at,like_count,parent_id,user_id,user:users(id,username,avatar)`)
     .eq('post_id', postId)
     .is('parent_id', null)
     .order('created_at', { ascending: false })
@@ -2798,8 +2798,15 @@ function buildCommentEl(c, parentId, likedSet, postId) {
         <span class="comment-name" onclick="showUserProfile('${c.user_id}')">${escHtml(u.username)}</span>
         <span class="comment-time">${timeSince(c.created_at)}</span>
       </div>
-      <p class="comment-text">${escHtml(c.content)}</p>
-      <div class="comment-sticker-slot" id="sticker-slot-${c.id}"></div>
+      ${c.content ? `<p class="comment-text">${escHtml(c.content)}</p>` : ''}
+      ${c.image_url ? `
+        <div class="comment-media">
+          <img class="comment-img" src="${c.image_url}" alt="" loading="lazy" onclick="openMediaViewer('${c.image_url}')">
+        </div>` : ''}
+      ${c.sticker_url ? `
+        <div class="comment-sticker-slot" id="sticker-slot-${c.id}">
+          <img class="comment-sticker" src="${c.sticker_url}" alt="">
+        </div>` : `<div class="comment-sticker-slot" id="sticker-slot-${c.id}"></div>`}
       <div class="comment-actions-row">
         <button class="comment-action like-comment-btn ${liked ? 'liked' : ''}" data-comment-id="${c.id}">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="${liked ? 'var(--red)' : 'none'}" stroke="${liked ? 'var(--red)' : 'currentColor'}" stroke-width="2">
@@ -2936,7 +2943,7 @@ async function submitReplyInline(parentCommentId, postId, btn) {
 async function submitComment(postId, parentId, content) {
   const { data, error } = await supabase.from('comments').insert({
     post_id: postId, user_id: currentUser.id, parent_id: parentId || null, content
-  }).select(`id,content,created_at,like_count,parent_id,user_id,user:users(id,username,avatar)`).single();
+  }).select(`id,content,image_url,sticker_url,created_at,like_count,parent_id,user_id,user:users(id,username,avatar)`).single();
 
   if (!error) {
     await supabase.rpc('increment_post_comment_count', { pid: postId, delta: 1 });
