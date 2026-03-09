@@ -854,7 +854,18 @@
     transition: background .15s;
   }
   .expand-replies-btn:active { background: rgba(108,71,255,.18); }
-  .collapse-replies-btn { display: none !important; }
+  .collapse-replies-btn {
+    display: none;
+    align-items: center; gap: 5px;
+    font-size: 12px; font-weight: 600; color: var(--text3);
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 20px; padding: 4px 12px;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+    transition: background .15s, color .15s;
+  }
+  .collapse-replies-btn.visible { display: inline-flex; }
+  .collapse-replies-btn:active { color: var(--accent); background: var(--bg3); }
+  .collapse-replies-btn.hidden { display: none !important; }
 
   /* Replies block */
   .replies-block { margin-left: -20px; margin-top: 4px; }
