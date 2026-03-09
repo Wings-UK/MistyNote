@@ -2739,7 +2739,7 @@ async function loadComments(postId) {
 
   const { data: comments } = await supabase
     .from('comments')
-    .select(`id,content,image_url,sticker_url,created_at,like_count,parent_id,user_id,user:users(id,username,avatar)`)
+    .select(`id,content,created_at,like_count,parent_id,user_id,user:users(id,username,avatar)`)
     .eq('post_id', postId)
     .is('parent_id', null)
     .order('created_at', { ascending: false })
@@ -2943,7 +2943,7 @@ async function submitReplyInline(parentCommentId, postId, btn) {
 async function submitComment(postId, parentId, content) {
   const { data, error } = await supabase.from('comments').insert({
     post_id: postId, user_id: currentUser.id, parent_id: parentId || null, content
-  }).select(`id,content,image_url,sticker_url,created_at,like_count,parent_id,user_id,user:users(id,username,avatar)`).single();
+  }).select(`id,content,created_at,like_count,parent_id,user_id,user:users(id,username,avatar)`).single();
 
   if (!error) {
     await supabase.rpc('increment_post_comment_count', { pid: postId, delta: 1 });
