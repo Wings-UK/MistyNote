@@ -5,6 +5,15 @@
 
 'use strict';
 
+// ── CONTENT PROTECTION ─────────────────────────────────────
+// Block right-click context menu globally
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+// Block image/media drag
+document.addEventListener('dragstart', e => {
+  if (e.target.tagName === 'IMG' || e.target.tagName === 'VIDEO') e.preventDefault();
+});
+
 // ── STATE ──────────────────────────────────────────────────
 let currentUser = null;
 let currentProfile = null;
