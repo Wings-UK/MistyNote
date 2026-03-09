@@ -849,7 +849,7 @@ function renderPrfPosts(posts, containerId, isOwn) {
   }
   container.innerHTML = '';
   posts.forEach(p => {
-    const el = createFeedPost(p);
+    const el = createFeedPost(p, true);
     if (el) { container.appendChild(el); observePost(el); }
   });
 }
@@ -1247,7 +1247,7 @@ function initFeedTabBar() {
   bar.style.width = btnRect.width + 'px';
 }
 
-function createFeedPost(p) {
+function createFeedPost(p, isProfilePage = false) {
   const user = p.user || { username: '@unknown', avatar: '' };
   const isRepost = !!p.reposted_post_id && !!p.reposted_post;
   const orig = isRepost ? p.reposted_post : null;
@@ -1331,11 +1331,11 @@ function createFeedPost(p) {
 
   el.innerHTML = `
     <div class="cust-name">
-      <a class="post-avatar-link" onclick="${isOwnPost ? 'selfTap(this)' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
+      <a class="post-avatar-link" onclick="${(isOwnPost && isProfilePage) ? 'selfTap(this)' : (isOwnPost ? '' : `showUserProfile('${p.user_id}',this)`)};event.stopPropagation()">
         <img class="small-photo" src="${user.avatar || ''}" onerror="this.style.display='none'" alt="">
       </a>
       <div class="post-meta">
-        <a class="post-author-link" onclick="${isOwnPost ? 'selfTap(this)' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
+        <a class="post-author-link" onclick="${(isOwnPost && isProfilePage) ? 'selfTap(this)' : (isOwnPost ? '' : `showUserProfile('${p.user_id}',this)`)};event.stopPropagation()">
           <span class="jerry">${escHtml(user.username)}</span>
           <svg xmlns="http://www.w3.org/2000/svg" class="verif" viewBox="0 0 24 24" width="15" height="15"><path d="M12 2L3 7v5c0 5 4 9 9 10 5-1 9-5 9-10V7z" fill="#6C47FF"/><polyline points="8,12 11,15 16,9" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </a>
@@ -2568,8 +2568,9 @@ async function openDetail(postId, scrollToComments = false) {
             src="${user.avatar||''}" onerror="this.style.display='none'"
             onclick="${isOwn ? 'selfTap(this)' : `showUserProfile('${p.user_id}',this)`}">
           <div class="dp-author-info">
-            <div class="dp-name"
-              onclick="${isOwn ? 'selfTap(this)' : `showUserProfile('${p.user_id}',this)`}">${escHtml(user.username)}</div>
+            <div class="dp-name">
+              <span onclick="${isOwn ? 'selfTap(this)' : `showUserProfile('${p.user_id}',this)`}">${escHtml(user.username)}</span>
+            </div>
           </div>
           ${!isOwn
             ? `<button class="dp-follow-btn" id="dp-follow-${postId}" onclick="toggleDetailFollow(this,'${p.user_id}')">Follow</button>`
