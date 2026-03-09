@@ -276,6 +276,14 @@ function slideTo(pageId, setupFn) {
     if (id !== pageId) document.getElementById('page-' + id)?.classList.remove('active');
   });
 
+  // If leaving detail, hide comment bar and restore bottom nav
+  if (slideStack[slideStack.length - 2] === 'detail' || document.getElementById('comment-bar')?.style.display === 'flex') {
+    if (pageId !== 'detail') {
+      document.getElementById('comment-bar').style.display = 'none';
+      document.getElementById('bottom-nav').style.display = '';
+    }
+  }
+
   if (setupFn) setupFn();
 
   // Show floating header only for user-profile
@@ -310,6 +318,13 @@ function slideBack() {
   // Hide comment bar only when leaving detail
   if (pageId === 'detail') {
     document.getElementById('comment-bar').style.display = 'none';
+  }
+
+  // If returning to detail, re-show comment bar and hide bottom nav
+  if (returningTo === 'detail') {
+    document.getElementById('comment-bar').style.display = 'flex';
+    document.getElementById('bottom-nav').style.display = 'none';
+    return;
   }
 
   // Restore bottom nav only when back to a main page
