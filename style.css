@@ -747,17 +747,16 @@
 
   /* Header row */
   .comments-header {
-    display: flex; align-items: center; gap: 10px;
-    padding: 22px 16px 0 16px;
+    padding: 0;
   }
   .comments-title {
+    display: block;
     font-size: 11px; font-weight: 800;
     letter-spacing: 0.12em; text-transform: uppercase;
     color: var(--text3);
+    margin-top: 16px; padding: 0 16px 12px;
   }
-  .comments-title-line {
-    flex: 1; height: 1px; background: var(--border);
-  }
+  .comments-title-line { display: none; }
 
   /* List */
   .comments-list { padding-bottom: 120px; }
@@ -765,7 +764,7 @@
   /* ── TOP-LEVEL COMMENT ── */
   .comment-item {
     display: flex;
-    padding: 18px 16px 0 16px;
+    padding: 5px 16px;
     animation: cmtIn .22s ease both;
     position: relative;
   }
@@ -855,18 +854,7 @@
     transition: background .15s;
   }
   .expand-replies-btn:active { background: rgba(108,71,255,.18); }
-  .collapse-replies-btn {
-    display: none;
-    align-items: center; gap: 5px;
-    font-size: 12px; font-weight: 600; color: var(--text3);
-    background: var(--bg2); border: 1px solid var(--border);
-    border-radius: 20px; padding: 4px 12px;
-    cursor: pointer; -webkit-tap-highlight-color: transparent;
-    transition: background .15s, color .15s;
-  }
-  .collapse-replies-btn.visible { display: inline-flex; }
-  .collapse-replies-btn:active { color: var(--accent); background: var(--bg3); }
-  .collapse-replies-btn.hidden { display: none !important; }
+  .collapse-replies-btn { display: none !important; }
 
   /* Replies block */
   .replies-block { margin-left: -20px; margin-top: 4px; }
