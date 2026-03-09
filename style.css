@@ -1478,3 +1478,82 @@
   .share-action-icon.share-action-danger { background: rgba(244,7,82,0.1); color: rgb(244,7,82); }
   .share-action-label { font-size: 15px; font-weight: 500; color: var(--text); }
   .share-action-danger-text { color: rgb(244,7,82); }
+
+/* ══════════════════════════════════════════
+   FOLLOW LIST MODAL
+══════════════════════════════════════════ */
+#follow-list-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,0.45);
+  display: flex; align-items: flex-end;
+  opacity: 0; transition: opacity .25s ease;
+  pointer-events: none;
+}
+#follow-list-overlay.visible {
+  opacity: 1; pointer-events: auto;
+}
+.follow-list-sheet {
+  width: 100%; max-height: 75vh;
+  background: var(--bg); border-radius: 20px 20px 0 0;
+  display: flex; flex-direction: column;
+  transform: translateY(100%);
+  transition: transform .28s cubic-bezier(.32,1,.6,1);
+  overflow: hidden;
+}
+#follow-list-overlay.visible .follow-list-sheet {
+  transform: translateY(0);
+}
+.follow-list-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.follow-list-title {
+  font-size: 16px; font-weight: 700; color: var(--text);
+}
+.follow-list-close {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--bg2); border: none; cursor: pointer;
+  color: var(--text2); font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+}
+.follow-list-body {
+  overflow-y: auto; flex: 1;
+  padding: 8px 0 calc(20px + env(safe-area-inset-bottom));
+}
+.follow-list-loading,
+.follow-list-empty {
+  text-align: center; padding: 40px 20px;
+  color: var(--text3); font-size: 15px;
+}
+.follow-list-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 20px; cursor: pointer;
+  transition: background .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.follow-list-row:active { background: var(--bg2); }
+.follow-list-avatar {
+  width: 44px; height: 44px; border-radius: 50%;
+  object-fit: cover; flex-shrink: 0;
+}
+.follow-list-info {
+  flex: 1; min-width: 0;
+}
+.follow-list-name {
+  font-size: 15px; font-weight: 600; color: var(--text);
+  display: flex; align-items: center; gap: 4px;
+}
+.follow-list-btn {
+  height: 32px; padding: 0 16px; border-radius: 20px;
+  font-size: 13px; font-weight: 700; cursor: pointer;
+  background: #6C47FF; color: #fff;
+  border: 1.5px solid #6C47FF;
+  transition: all .18s; flex-shrink: 0;
+  font-family: inherit;
+}
+.follow-list-btn.following {
+  background: transparent; color: #6C47FF; border-color: #6C47FF;
+}
+.follow-list-btn:active { transform: scale(.93); }
