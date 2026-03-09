@@ -630,7 +630,7 @@ async function renderMyProfile() {
 
   const [postsRes, likedRes] = await Promise.all([
     supabase.from('posts')
-      .select(`id,content,image,video,created_at,like_count,repost_count,views,reposted_post_id,
+      .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
                user:users(id,username,avatar),
                reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar))`)
       .eq('user_id', currentUser.id)
