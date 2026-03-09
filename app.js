@@ -1346,11 +1346,11 @@ function createFeedPost(p, isProfilePage = false) {
 
   el.innerHTML = `
     <div class="cust-name">
-      <a class="post-avatar-link" onclick="${isProfilePage ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
+      <a class="post-avatar-link" onclick="${(isProfilePage && isOwnPost) ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
         <img class="small-photo" src="${user.avatar || ''}" onerror="this.style.display='none'" alt="">
       </a>
       <div class="post-meta">
-        <a class="post-author-link" onclick="${isProfilePage ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
+        <a class="post-author-link" onclick="${(isProfilePage && isOwnPost) ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
           <span class="jerry">${escHtml(user.username)}</span>
           <svg xmlns="http://www.w3.org/2000/svg" class="verif" viewBox="0 0 24 24" width="15" height="15"><path d="M12 2L3 7v5c0 5 4 9 9 10 5-1 9-5 9-10V7z" fill="#6C47FF"/><polyline points="8,12 11,15 16,9" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </a>
@@ -1417,7 +1417,7 @@ function createFeedPost(p, isProfilePage = false) {
       return;
     }
     if (e.target.closest('.repost-btn')) {
-      handleRepost(p.id, e.target.closest('.repost-btn'));
+      handleRepost(p.id, e.target.closest('.repost-btn'), p.user_id);
       return;
     }
     if (e.target.closest('.comment-btn')) {
@@ -2032,8 +2032,9 @@ async function getMyRepostOfPost(originalPostId) {
   return data?.id || null;
 }
 
-async function handleRepost(postId, btn) {
+async function handleRepost(postId, btn, postUserId) {
   if (!currentUser) { showToast('Sign in to repost'); return; }
+  if (postUserId && postUserId === currentUser.id) { showToast("You can't repost your own post"); return; }
   const alreadyReposted = btn?.dataset.reposted === 'true';
 
   if (alreadyReposted) {
@@ -2695,7 +2696,7 @@ async function openDetail(postId, scrollToComments = false) {
         cbSvg?.setAttribute('stroke', 'currentColor');
         cbSvg?.setAttribute('stroke-width', '2');
       }
-      cbRepost.onclick = () => handleRepost(postId, cbRepost);
+      cbRepost.onclick = () => handleRepost(postId, cbRepost, p.user_id);
     }
 
     // Swap bottom nav → comment bar
