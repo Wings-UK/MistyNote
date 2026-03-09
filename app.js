@@ -1176,17 +1176,15 @@ async function toggleFollow(userId, btn) {
 
   if (isFollowing) {
     // Unfollow — delete from follows table
-    console.log('Attempting unfollow — follower_id:', currentUser.id, 'following_id:', userId);
-    const { data: delData, error, count } = await supabase
+    const { data: delData, error } = await supabase
       .from('follows')
       .delete()
       .eq('follower_id', currentUser.id)
       .eq('following_id', userId)
       .select();
 
-    console.log('Unfollow result:', { delData, error, count });
-    if (error) {
-      console.error('Unfollow error:', error.code, error.message, error.details, error.hint);
+    if (error || !delData?.length) {
+      console.error('Unfollow failed:', error, 'rows deleted:', delData?.length, 'follower:', currentUser.id, 'following:', userId);
       setFollowBtnState(btn, true); // revert
       showToast('Failed to unfollow');
       return;
@@ -1194,15 +1192,13 @@ async function toggleFollow(userId, btn) {
     showToast('Unfollowed');
   } else {
     // Follow — insert into follows table
-    console.log('Attempting follow — follower_id:', currentUser.id, 'following_id:', userId);
     const { data: insertData, error } = await supabase
       .from('follows')
       .insert({ follower_id: currentUser.id, following_id: userId })
       .select();
 
-    console.log('Follow result:', { insertData, error });
     if (error) {
-      console.error('Follow error:', error.code, error.message, error.details, error.hint);
+      console.error('Follow failed:', error, 'follower:', currentUser.id, 'following:', userId);
       setFollowBtnState(btn, false); // revert
       showToast('Failed to follow');
       return;
@@ -4162,9 +4158,9 @@ async function followListToggle(userId, btn) {
   btn.textContent = !isFollowing ? 'Following' : 'Follow';
 
   if (isFollowing) {
-    const { error } = await supabase.from('follows').delete()
-      .eq('follower_id', currentUser.id).eq('following_id', userId);
-    if (error) { btn.classList.add('following'); btn.textContent = 'Following'; showToast('Failed'); }
+    const { data, error } = await supabase.from('follows').delete()
+      .eq('follower_id', currentUser.id).eq('following_id', userId).select();
+    if (error || !data?.length) { btn.classList.add('following'); btn.textContent = 'Following'; showToast('Failed'); }
     else { showToast('Unfollowed'); refreshFollowCounts(userId); }
   } else {
     const { error } = await supabase.from('follows').insert({ follower_id: currentUser.id, following_id: userId });
