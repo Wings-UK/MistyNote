@@ -270,6 +270,12 @@ function slideTo(pageId, setupFn) {
     document.getElementById('page-' + id)?.classList.remove('active');
   });
 
+  // Deactivate any currently active slide page so they don't stack visually
+  const slidePages = ['detail','user-profile','settings','wallet','storefront'];
+  slidePages.forEach(id => {
+    if (id !== pageId) document.getElementById('page-' + id)?.classList.remove('active');
+  });
+
   if (setupFn) setupFn();
 
   // Show floating header only for user-profile
@@ -294,15 +300,26 @@ function slideBack() {
     el?.classList.remove('active');
   }
 
-  // Restore bottom nav, hide comment bar
-  document.getElementById('bottom-nav').style.display = '';
-  document.getElementById('comment-bar').style.display = 'none';
-
-  // Only hide floating header if not returning to user-profile
   const returningTo = slideStack.length > 0 ? slideStack[slideStack.length - 1] : null;
+
+  // If still inside a slide page, re-activate it and stop
+  if (returningTo) {
+    document.getElementById('page-' + returningTo)?.classList.add('active');
+  }
+
+  // Hide comment bar only when leaving detail
+  if (pageId === 'detail') {
+    document.getElementById('comment-bar').style.display = 'none';
+  }
+
+  // Restore bottom nav only when back to a main page
+  if (!returningTo) {
+    document.getElementById('bottom-nav').style.display = '';
+  }
+
+  // Floating user-profile header
   const floatingHeader = document.getElementById('user-profile-header');
   if (floatingHeader) floatingHeader.style.display = returningTo === 'user-profile' ? 'flex' : 'none';
-  // Re-evaluate header colour based on current scroll position
   if (returningTo === 'user-profile') {
     const upPage = document.getElementById('page-user-profile');
     if (upPage?._uprfScroll) upPage._uprfScroll();
@@ -318,8 +335,8 @@ function slideBack() {
     }
   }
 
-  // Restore last main page
-  const lastMain = slideStack.length > 0 ? slideStack[slideStack.length - 1] : lastMainPage;
+  // Restore last main page when fully back
+  const lastMain = returningTo || lastMainPage;
   const mainPages = ['feed','discover','notifications','profile'];
   if (mainPages.includes(lastMain)) {
     document.getElementById('page-' + lastMain)?.classList.add('active');
