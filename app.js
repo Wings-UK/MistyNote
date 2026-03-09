@@ -2716,7 +2716,6 @@ async function loadComments(postId) {
   container.innerHTML = `
     <div class="comments-header">
       <span class="comments-title">Replies</span>
-      <div class="comments-title-line"></div>
     </div>
     <div class="comments-list" id="comments-list"></div>`;
 
