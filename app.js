@@ -4082,33 +4082,39 @@ async function openFollowList(type, userId) {
   // Close on backdrop tap
   overlay.addEventListener('click', e => { if (e.target === overlay) closeFollowList(); });
 
-  // Fetch list
-  let data, error;
+  // Fetch list — two step: get follow rows, then fetch user profiles
+  const body = document.getElementById('follow-list-body');
+  if (!body) return;
+
+  let followRows, fetchError;
   if (type === 'followers') {
-    // People who follow userId
-    ({ data, error } = await supabase
+    ({ data: followRows, error: fetchError } = await supabase
       .from('follows')
-      .select('follower:users!follows_follower_id_fkey(id, username, avatar, verified)')
+      .select('follower_id')
       .eq('following_id', userId)
       .order('created_at', { ascending: false }));
   } else {
-    // People userId is following
-    ({ data, error } = await supabase
+    ({ data: followRows, error: fetchError } = await supabase
       .from('follows')
-      .select('following:users!follows_following_id_fkey(id, username, avatar, verified)')
+      .select('following_id')
       .eq('follower_id', userId)
       .order('created_at', { ascending: false }));
   }
 
-  const body = document.getElementById('follow-list-body');
-  if (!body) return;
+  console.log('Follow rows:', followRows, 'error:', fetchError, 'userId:', userId, 'type:', type);
 
-  if (error || !data || data.length === 0) {
+  if (fetchError || !followRows || followRows.length === 0) {
     body.innerHTML = `<div class="follow-list-empty">No ${title.toLowerCase()} yet</div>`;
     return;
   }
 
-  const users = data.map(d => type === 'followers' ? d.follower : d.following).filter(Boolean);
+  const userIds = followRows.map(r => type === 'followers' ? r.follower_id : r.following_id);
+  const { data: usersData } = await supabase
+    .from('users')
+    .select('id, username, avatar, verified')
+    .in('id', userIds);
+
+  const users = usersData || [];
 
   // Check which ones current user is already following
   let followingSet = new Set();
