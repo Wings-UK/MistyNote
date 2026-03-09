@@ -484,7 +484,7 @@ function injectProfileStyles() {
     /* ── FOLLOWING · FOLLOWERS inline ── */
     .prf-follow-line { margin-top:10px; font-size:15px; color:var(--text2); }
     .prf-bld { color:var(--text); font-weight:700; cursor:pointer; margin-right:2px; }
-    .prf-bld:hover { text-decoration:underline; }
+    .prf-bld:hover { text-decoration:none; }
     .prf-follow-sep { margin:0 5px; }
 
     /* ── BIO ── */
@@ -1053,7 +1053,7 @@ async function showUserProfile(userId, tapEl) {
     `;
 
     body._uprfData = { posts: allPosts, mediaPosts, likedPosts };
-    renderPrfPosts(allPosts, `uprf-list-${userId}`, false);
+    renderPrfPosts(allPosts, `uprf-list-${userId}`, false, true);
     document.getElementById(`uprf-list-${userId}`)._loaded = true;
 
     const upPage   = document.getElementById('page-user-profile');
@@ -1331,11 +1331,11 @@ function createFeedPost(p, isProfilePage = false) {
 
   el.innerHTML = `
     <div class="cust-name">
-      <a class="post-avatar-link" onclick="${(isOwnPost && isProfilePage) ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)` };event.stopPropagation()">
+      <a class="post-avatar-link" onclick="${isProfilePage ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
         <img class="small-photo" src="${user.avatar || ''}" onerror="this.style.display='none'" alt="">
       </a>
       <div class="post-meta">
-        <a class="post-author-link" onclick="${(isOwnPost && isProfilePage) ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
+        <a class="post-author-link" onclick="${isProfilePage ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
           <span class="jerry">${escHtml(user.username)}</span>
           <svg xmlns="http://www.w3.org/2000/svg" class="verif" viewBox="0 0 24 24" width="15" height="15"><path d="M12 2L3 7v5c0 5 4 9 9 10 5-1 9-5 9-10V7z" fill="#6C47FF"/><polyline points="8,12 11,15 16,9" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </a>
@@ -1503,13 +1503,13 @@ function injectFeedPostStyles() {
     .small-photo:hover { filter: brightness(0.9); }
     .post-meta { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
     .post-author-link { display: flex; align-items: center; gap: 4px; text-decoration: none; cursor: pointer; width: fit-content; }
-    .post-author-link:hover .jerry { text-decoration: underline; text-decoration-thickness: 2px; }
+    .post-author-link:hover .jerry { text-decoration: none; }
     .jerry { font-weight: 600; font-size: 15px; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: var(--text); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     /* Consistent username weight across all pages */
     .detail-name, .profile-name, .original-card-name { font-weight: 600; }
     .verif { width: 15px; flex-shrink: 0; display: block; }
     .time { font-size: 12px; color: var(--text2); margin: 0; line-height: 1; }
-    .time:hover { text-decoration: underline; }
+    .time:hover { text-decoration: none; }
     .dots { display: flex; align-items: center; padding: 4px; flex-shrink: 0; margin-left: auto; }
     .dot { display: block; }
 
@@ -2335,7 +2335,7 @@ async function openDetail(postId, scrollToComments = false) {
         line-height: 1.2;
       }
       .dp-name span { display: inline-block; }
-      .dp-name:hover { text-decoration: underline; }
+      .dp-name:hover { text-decoration: none; }
       .dp-follow-btn {
         height: 32px; padding: 0 18px;
         border-radius: 20px; font-size: 13px; font-weight: 700;
