@@ -754,7 +754,7 @@
     font-size: 11px; font-weight: 800;
     letter-spacing: 0.12em; text-transform: uppercase;
     color: var(--text3);
-    margin-top: 16px; padding: 0 16px 12px;
+    margin-top: 16px; padding: 0 16px 20px;
   }
   .comments-title-line { display: none; }
 
@@ -855,7 +855,7 @@
   }
   .expand-replies-btn:active { background: rgba(108,71,255,.18); }
   .collapse-replies-btn {
-    display: none;
+    display: inline-flex;
     align-items: center; gap: 5px;
     font-size: 12px; font-weight: 600; color: var(--text3);
     background: var(--bg2); border: 1px solid var(--border);
@@ -863,9 +863,8 @@
     cursor: pointer; -webkit-tap-highlight-color: transparent;
     transition: background .15s, color .15s;
   }
-  .collapse-replies-btn.visible { display: inline-flex; }
-  .collapse-replies-btn:active { color: var(--accent); background: var(--bg3); }
   .collapse-replies-btn.hidden { display: none !important; }
+  .collapse-replies-btn:active { color: var(--accent); background: var(--bg3); }
 
   /* Replies block */
   .replies-block { margin-left: -20px; margin-top: 4px; }
