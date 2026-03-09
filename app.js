@@ -762,7 +762,7 @@ async function renderMyProfile() {
   }
 
   container._prfData = { posts, likedPosts: likedPostsArr, mediaPosts };
-  renderPrfPosts(posts, 'prf-panel-list', true);
+  renderPrfPosts(posts, 'prf-panel-list', true, true);
   document.getElementById('prf-panel-list')._loaded = true;
 
   // ── Floating header for own profile ──
@@ -831,16 +831,16 @@ function switchPrfTab(tab, el) {
   panel.style.display = (tab === 'list' || tab === 'likes') ? 'flex' : 'block';
   if (panel._loaded) return;
   const { posts, likedPosts: likedArr, mediaPosts } = container._prfData || {};
-  if (tab === 'list')  renderPrfPosts(posts || [],    'prf-panel-list',  true);
+  if (tab === 'list')  renderPrfPosts(posts || [],    'prf-panel-list',  true, true);
   if (tab === 'media') renderPrfMasonry(mediaPosts || [], 'prf-panel-media', true);
-  if (tab === 'likes') renderPrfPosts(likedArr || [], 'prf-panel-likes', false);
+  if (tab === 'likes') renderPrfPosts(likedArr || [], 'prf-panel-likes', false, true);
   if (tab === 'saved') renderPrfSaved('prf-panel-saved');
   panel._loaded = true;
 }
 
 function switchProfileTab(mode, btn) { switchPrfTab('posts', btn); }
 
-function renderPrfPosts(posts, containerId, isOwn) {
+function renderPrfPosts(posts, containerId, isOwn, isProfilePage = false) {
   const container = document.getElementById(containerId);
   if (!container) return;
   if (!posts.length) {
@@ -849,7 +849,7 @@ function renderPrfPosts(posts, containerId, isOwn) {
   }
   container.innerHTML = '';
   posts.forEach(p => {
-    const el = createFeedPost(p, true);
+    const el = createFeedPost(p, isProfilePage);
     if (el) { container.appendChild(el); observePost(el); }
   });
 }
@@ -1331,11 +1331,11 @@ function createFeedPost(p, isProfilePage = false) {
 
   el.innerHTML = `
     <div class="cust-name">
-      <a class="post-avatar-link" onclick="${(isOwnPost && isProfilePage) ? 'selfTap(this)' : (isOwnPost ? '' : `showUserProfile('${p.user_id}',this)`)};event.stopPropagation()">
+      <a class="post-avatar-link" onclick="${(isOwnPost && isProfilePage) ? 'selfTap(this)' : isOwnPost ? "navTo('profile')" : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
         <img class="small-photo" src="${user.avatar || ''}" onerror="this.style.display='none'" alt="">
       </a>
       <div class="post-meta">
-        <a class="post-author-link" onclick="${(isOwnPost && isProfilePage) ? 'selfTap(this)' : (isOwnPost ? '' : `showUserProfile('${p.user_id}',this)`)};event.stopPropagation()">
+        <a class="post-author-link" onclick="${(isOwnPost && isProfilePage) ? 'selfTap(this)' : isOwnPost ? "navTo('profile')" : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
           <span class="jerry">${escHtml(user.username)}</span>
           <svg xmlns="http://www.w3.org/2000/svg" class="verif" viewBox="0 0 24 24" width="15" height="15"><path d="M12 2L3 7v5c0 5 4 9 9 10 5-1 9-5 9-10V7z" fill="#6C47FF"/><polyline points="8,12 11,15 16,9" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </a>
@@ -2334,6 +2334,7 @@ async function openDetail(postId, scrollToComments = false) {
         overflow: hidden; text-overflow: ellipsis;
         line-height: 1.2;
       }
+      .dp-name span { display: inline-block; }
       .dp-name:hover { text-decoration: underline; }
       .dp-follow-btn {
         height: 32px; padding: 0 18px;
