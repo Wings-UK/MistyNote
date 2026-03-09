@@ -1320,7 +1320,7 @@
   * { scrollbar-width: none; }
   
   /* Safe area handling */
-  .page-header { padding-top: calc(8px + var(--safe-top)); height: calc(var(--header-h) + var(--safe-top)); }
+  .page-header { padding-top: calc(var(--safe-top) + 10px); padding-bottom: 10px; height: calc(var(--header-h) + var(--safe-top)); align-items: flex-end; }
   .page { padding-top: calc(var(--header-h) + var(--safe-top)); }
   .page.no-header-page { padding-top: var(--safe-top); }
   
