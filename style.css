@@ -60,9 +60,25 @@
     color: var(--text);
     -webkit-font-smoothing: antialiased;
     overscroll-behavior: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
   }
   
-  img, video { display: block; max-width: 100%; }
+  /* Allow text selection only in input fields */
+  input, textarea, [contenteditable] {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    user-select: text;
+  }
+
+  img, video {
+    display: block; max-width: 100%;
+    -webkit-touch-callout: none;
+    pointer-events: auto;
+    -webkit-user-drag: none;
+    user-drag: none;
+  }
   /* Global avatar rule — all avatars are round, no exceptions */
   [class*="avatar"] { border-radius: 50% !important; }
   button { background: none; border: none; cursor: pointer; font-family: var(--font); color: var(--text); }
