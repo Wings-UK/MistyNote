@@ -937,9 +937,18 @@ function renderProfileGrid(posts, profile, containerId, isOwn) {
 // ══════════════════════════════════════════
 // OTHER USER PROFILE
 // ══════════════════════════════════════════
-async function showUserProfile(userId) {
+// ── SELF TAP — pulse instead of navigating ──────────────────
+function selfTap(el) {
+  if (!el) return;
+  el.classList.remove('self-pulse');
+  void el.offsetWidth; // force reflow to restart animation
+  el.classList.add('self-pulse');
+  el.addEventListener('animationend', () => el.classList.remove('self-pulse'), { once: true });
+}
+
+async function showUserProfile(userId, tapEl) {
   if (!userId) return;
-  if (userId === currentUser?.id) { navTo('profile'); return; }
+  if (userId === currentUser?.id) { selfTap(tapEl); return; }
   injectProfileStyles();
 
   slideTo('user-profile', async () => {
@@ -1322,11 +1331,11 @@ function createFeedPost(p) {
 
   el.innerHTML = `
     <div class="cust-name">
-      <a class="post-avatar-link" onclick="${isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}')`};event.stopPropagation()">
+      <a class="post-avatar-link" onclick="${isOwnPost ? 'selfTap(this)' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
         <img class="small-photo" src="${user.avatar || ''}" onerror="this.style.display='none'" alt="">
       </a>
       <div class="post-meta">
-        <a class="post-author-link" onclick="${isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}')`};event.stopPropagation()">
+        <a class="post-author-link" onclick="${isOwnPost ? 'selfTap(this)' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
           <span class="jerry">${escHtml(user.username)}</span>
           <svg xmlns="http://www.w3.org/2000/svg" class="verif" viewBox="0 0 24 24" width="15" height="15"><path d="M12 2L3 7v5c0 5 4 9 9 10 5-1 9-5 9-10V7z" fill="#6C47FF"/><polyline points="8,12 11,15 16,9" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </a>
@@ -2557,10 +2566,10 @@ async function openDetail(postId, scrollToComments = false) {
         <div class="dp-author">
           <img class="dp-avatar"
             src="${user.avatar||''}" onerror="this.style.display='none'"
-            onclick="${isOwn ? "navTo('profile')" : `showUserProfile('${p.user_id}')`}">
+            onclick="${isOwn ? 'selfTap(this)' : `showUserProfile('${p.user_id}',this)`}">
           <div class="dp-author-info">
             <div class="dp-name"
-              onclick="${isOwn ? "navTo('profile')" : `showUserProfile('${p.user_id}')`}">${escHtml(user.username)}</div>
+              onclick="${isOwn ? 'selfTap(this)' : `showUserProfile('${p.user_id}',this)`}">${escHtml(user.username)}</div>
           </div>
           ${!isOwn
             ? `<button class="dp-follow-btn" id="dp-follow-${postId}" onclick="toggleDetailFollow(this,'${p.user_id}')">Follow</button>`
@@ -2816,12 +2825,12 @@ function buildCommentEl(c, parentId, likedSet, postId) {
 
   wrap.innerHTML = `
     <div class="comment-thread-col">
-      <img class="comment-avatar" src="${u.avatar||''}" onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(u.username)}'" alt="" onclick="showUserProfile('${c.user_id}')">
+      <img class="comment-avatar" src="${u.avatar||''}" onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(u.username)}'" alt="" onclick="showUserProfile('${c.user_id}',this)">
       <div class="thread-trunk hidden" id="trunk-${c.id}"></div>
     </div>
     <div class="comment-body">
       <div class="comment-meta-row">
-        <span class="comment-name" onclick="showUserProfile('${c.user_id}')">${escHtml(u.username)}</span>
+        <span class="comment-name" onclick="showUserProfile('${c.user_id}',this)">${escHtml(u.username)}</span>
         <span class="comment-time">${timeSince(c.created_at)}</span>
       </div>
       ${c.content ? `<p class="comment-text">${escHtml(c.content)}</p>` : ''}
