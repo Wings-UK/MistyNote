@@ -1190,11 +1190,15 @@ async function toggleFollow(userId, btn) {
     showToast('Unfollowed');
   } else {
     // Follow — insert into follows table
-    const { error } = await supabase
+    console.log('Attempting follow — follower_id:', currentUser.id, 'following_id:', userId);
+    const { data: insertData, error } = await supabase
       .from('follows')
-      .insert({ follower_id: currentUser.id, following_id: userId });
+      .insert({ follower_id: currentUser.id, following_id: userId })
+      .select();
 
+    console.log('Follow result:', { insertData, error });
     if (error) {
+      console.error('Follow error:', error.code, error.message, error.details, error.hint);
       setFollowBtnState(btn, false); // revert
       showToast('Failed to follow');
       return;
