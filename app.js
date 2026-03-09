@@ -2300,7 +2300,6 @@ async function openDetail(postId, scrollToComments = false) {
         line-height: 1.2;
       }
       .dp-name:hover { text-decoration: underline; }
-      .dp-handle { font-size: 14px; color: var(--text2); margin-top: 1px; }
       .dp-follow-btn {
         height: 32px; padding: 0 18px;
         border-radius: 20px; font-size: 13px; font-weight: 700;
@@ -2536,7 +2535,6 @@ async function openDetail(postId, scrollToComments = false) {
           <div class="dp-author-info">
             <div class="dp-name"
               onclick="${isOwn ? "navTo('profile')" : `showUserProfile('${p.user_id}')`}">${escHtml(user.username)}</div>
-            <div class="dp-handle">@${escHtml(user.username)}</div>
           </div>
           ${!isOwn
             ? `<button class="dp-follow-btn" id="dp-follow-${postId}" onclick="toggleDetailFollow(this,'${p.user_id}')">Follow</button>`
