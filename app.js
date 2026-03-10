@@ -1546,10 +1546,6 @@ function createFeedPost(p, isProfilePage = false) {
   el.addEventListener('click', e => {
     if (el.dataset.blockNavigation === 'true') return;
 
-    // DEBUG — remove after confirming fix
-    console.log('[TAP] target:', e.target.className, '| postId:', p.id, '| userId:', p.user_id);
-    console.log('[TAP] closest avatar:', e.target.closest('.post-avatar-link'));
-
     if (e.target.closest('.dots')) {
       showPostMenu(p, el, e.target.closest('.dots'));
       return;
