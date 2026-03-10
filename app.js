@@ -1143,8 +1143,10 @@ async function showUserProfile(userId, tapEl) {
 
     // ── Check real follow state from DB ──
     if (mainFollowBtn && currentUser && userId !== currentUser.id) {
+      mainFollowBtn.style.opacity = '0'; // hide until state known — prevents Follow→Following flash
       checkFollowState(userId).then(isFollowing => {
         setFollowBtnState(mainFollowBtn, isFollowing);
+        mainFollowBtn.style.opacity = '1';
       });
     }
     miniFollow.onclick = () => mainFollowBtn?.click();
@@ -2699,6 +2701,14 @@ async function openDetail(postId, scrollToComments = false) {
   slideTo('detail', async () => {
     const body = document.getElementById('detail-body');
     body.innerHTML = `<div class="dp-wrap">${skeletonPost()}</div>`;
+
+    // Clear stale header identity immediately — don't show previous post's author
+    const _hdrIdentity = document.getElementById('dp-header-identity');
+    const _hdrAvatar   = document.getElementById('dp-header-avatar');
+    const _hdrUsername = document.getElementById('dp-header-username');
+    if (_hdrIdentity) { _hdrIdentity.style.opacity = '0'; _hdrIdentity.style.pointerEvents = 'none'; }
+    if (_hdrAvatar)   _hdrAvatar.src = '';
+    if (_hdrUsername) _hdrUsername.textContent = '';
 
     const { data: p, error } = await supabase
       .from('posts')
