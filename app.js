@@ -1259,16 +1259,17 @@ async function checkFollowState(userId) {
 // ══════════════════════════════════════════
 
 async function loadFeed(reset = false) {
-  if (feedLoading || feedExhausted) return;
-  feedLoading = true;
-
   const list = document.getElementById('feed-list');
-  if (!list) { feedLoading = false; return; }
+  if (!list) return;
 
+  // Reset must happen before the guard — otherwise feedExhausted blocks a tab switch
   if (reset) {
-    feedOffset = 0; feedExhausted = false;
+    feedOffset = 0; feedExhausted = false; feedLoading = false;
     loadedPostIds.clear(); list.innerHTML = '';
   }
+
+  if (feedLoading || feedExhausted) return;
+  feedLoading = true;
 
   const PER_PAGE = 10;
 
@@ -1297,13 +1298,13 @@ async function loadFeed(reset = false) {
       const followingIds = followingRows?.map(r => r.following_id) || [];
 
       if (followingIds.length === 0) {
-        // Not following anyone yet
-        feedLoading = false;
+        // Not following anyone yet — show empty state and bail cleanly
         feedExhausted = true;
         if (feedOffset === 0) {
           const list = document.getElementById('feed-list');
           if (list) list.innerHTML = `<div class="empty-state"><div class="empty-icon">👥</div><p>No posts yet</p><span>Follow people to see their posts here</span></div>`;
         }
+        feedLoading = false;
         return;
       }
       query = query.in('user_id', followingIds);
