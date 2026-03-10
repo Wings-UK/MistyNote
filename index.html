@@ -137,7 +137,62 @@
       </header>
 
       <div class="stories-row" id="stories-row">
-        <!-- Stories injected by JS -->
+        <!-- Add your moment -->
+        <div class="story-item story-add-item" onclick="showToast('Moments coming soon ✨')">
+          <div class="story-add-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+          </div>
+          <span class="story-add-label">Your<br>Moment</span>
+        </div>
+
+        <!-- Demo: regular moment -->
+        <div class="story-item" onclick="showToast('Moments coming soon ✨')">
+          <div class="story-bg" style="background: linear-gradient(160deg,#6C47FF,#a78bfa)"></div>
+          <div class="story-avatar-wrap">
+            <img class="story-avatar" src="https://api.dicebear.com/7.x/adventurer/svg?seed=catherine" alt="">
+          </div>
+          <span class="story-name">catherine</span>
+        </div>
+
+        <!-- Demo: commerce moment — has product badge -->
+        <div class="story-item" onclick="showToast('Moments coming soon ✨')">
+          <div class="story-bg" style="background: linear-gradient(160deg,#ff3b5c,#ff8c42)"></div>
+          <div class="story-avatar-wrap">
+            <img class="story-avatar" src="https://api.dicebear.com/7.x/adventurer/svg?seed=confidence" alt="">
+          </div>
+          <div class="story-commerce-badge">🛍️</div>
+          <span class="story-name">confidence</span>
+        </div>
+
+        <!-- Demo: live moment -->
+        <div class="story-item seen" onclick="showToast('Moments coming soon ✨')">
+          <div class="story-bg" style="background: linear-gradient(160deg,#00c48c,#00a8e0)"></div>
+          <div class="story-avatar-wrap">
+            <img class="story-avatar" src="https://api.dicebear.com/7.x/adventurer/svg?seed=amara" alt="">
+          </div>
+          <div class="story-live-badge">Live</div>
+          <span class="story-name">amara</span>
+        </div>
+
+        <!-- Demo: seen moment -->
+        <div class="story-item seen" onclick="showToast('Moments coming soon ✨')">
+          <div class="story-bg" style="background: linear-gradient(160deg,#ffb800,#ff8c42)"></div>
+          <div class="story-avatar-wrap">
+            <img class="story-avatar" src="https://api.dicebear.com/7.x/adventurer/svg?seed=zara" alt="">
+          </div>
+          <span class="story-name">zara</span>
+        </div>
+
+        <!-- Demo: commerce + live -->
+        <div class="story-item" onclick="showToast('Moments coming soon ✨')">
+          <div class="story-bg" style="background: linear-gradient(160deg,#13131a,#6C47FF)"></div>
+          <div class="story-avatar-wrap">
+            <img class="story-avatar" src="https://api.dicebear.com/7.x/adventurer/svg?seed=kola" alt="">
+          </div>
+          <div class="story-live-badge">Live</div>
+          <div class="story-commerce-badge">🛍️</div>
+          <span class="story-name">kola.sells</span>
+        </div>
       </div>
 
       <div class="feed-list" id="feed-list">
