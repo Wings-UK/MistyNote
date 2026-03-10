@@ -675,7 +675,7 @@ async function renderMyProfile() {
   const profile = currentProfile;
   if (!profile) return;
 
-  const [postsRes, likedRes] = await Promise.all([
+  const [postsRes, likedRes, savedRes] = await Promise.all([
     supabase.from('posts')
       .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
                user:users(id,username,avatar),
@@ -688,11 +688,19 @@ async function renderMyProfile() {
                user:users(id,username,avatar))`)
       .eq('user_id', currentUser.id)
       .order('created_at', { ascending: false })
+      .limit(60),
+    supabase.from('saved_posts')
+      .select(`post:posts(id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
+               user:users(id,username,avatar),
+               reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar)))`)
+      .eq('user_id', currentUser.id)
+      .order('created_at', { ascending: false })
       .limit(60)
   ]);
 
   const posts         = postsRes.data || [];
   const likedPostsArr = (likedRes.data || []).map(r => r.post).filter(Boolean);
+  const savedPostsArr = (savedRes.data || []).map(r => r.post).filter(Boolean);
   const mediaPosts    = posts.filter(p => (p.image || p.video) && !p.reposted_post_id);
   const totalViews    = posts.reduce((s, p) => s + (p.views || 0), 0);
   const totalLikes    = posts.reduce((s, p) => s + (p.like_count || 0), 0);
@@ -808,7 +816,7 @@ async function renderMyProfile() {
     document.head.appendChild(fs);
   }
 
-  container._prfData = { posts, likedPosts: likedPostsArr, mediaPosts };
+  container._prfData = { posts, likedPosts: likedPostsArr, mediaPosts, savedPosts: savedPostsArr };
   renderPrfPosts(posts, 'prf-panel-list', true, true);
   document.getElementById('prf-panel-list')._loaded = true;
 
@@ -877,11 +885,11 @@ function switchPrfTab(tab, el) {
   if (!panel) return;
   panel.style.display = (tab === 'list' || tab === 'likes' || tab === 'saved') ? 'flex' : 'block';
   if (panel._loaded) return;
-  const { posts, likedPosts: likedArr, mediaPosts } = container._prfData || {};
+  const { posts, likedPosts: likedArr, mediaPosts, savedPosts: savedArr } = container._prfData || {};
   if (tab === 'list')  renderPrfPosts(posts || [],    'prf-panel-list',  true, true);
   if (tab === 'media') renderPrfMasonry(mediaPosts || [], 'prf-panel-media', true);
   if (tab === 'likes') renderPrfPosts(likedArr || [], 'prf-panel-likes', false, true);
-  if (tab === 'saved') renderPrfSaved('prf-panel-saved');
+  if (tab === 'saved') renderPrfSavedSync(savedArr || [], 'prf-panel-saved');
   panel._loaded = true;
 }
 
@@ -991,9 +999,12 @@ async function toggleSave(postId, btn) {
     if (error) { savedPosts.delete(postId); setSaveBtnState(btn, false); showToast('Failed to save'); }
     else showToast('Saved 🔖');
   }
-  // Invalidate saved panel so it reloads next time
+  // Refresh saved panel immediately if it's currently visible
   const panel = document.getElementById('prf-panel-saved');
-  if (panel) panel._loaded = false;
+  if (panel) {
+    panel._loaded = false;
+    if (panel.style.display !== 'none') renderPrfSaved('prf-panel-saved');
+  }
 }
 
 async function checkSavedPosts(postIds) {
@@ -1007,12 +1018,28 @@ async function checkSavedPosts(postIds) {
   });
 }
 
+function renderPrfSavedSync(posts, containerId) {
+  const c = document.getElementById(containerId);
+  if (!c) return;
+  if (!posts.length) {
+    c.innerHTML = '<div class="prf-empty"><div class="prf-empty-icon">🔖</div><p>No saved posts yet</p><span>Tap the bookmark on any post</span></div>';
+    return;
+  }
+  c.innerHTML = '';
+  posts.forEach(p => {
+    if (!p) return;
+    const el = createFeedPost(p, true);
+    if (el) { c.appendChild(el); observePost(el); }
+  });
+}
+
+// Keep async version for invalidation/refresh after save toggle
 async function renderPrfSaved(containerId) {
   const c = document.getElementById(containerId);
   if (!c) return;
   if (!currentUser) { c.innerHTML = '<div class="prf-empty"><p>Sign in to see saved posts</p></div>'; return; }
   const { data, error } = await supabase.from('saved_posts')
-    .select(`post_id, post:posts(id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,user:users(id,username,avatar))`)
+    .select(`post:posts(id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,user:users(id,username,avatar),reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar)))`)
     .eq('user_id', currentUser.id)
     .order('created_at', { ascending: false })
     .limit(60);
@@ -1021,9 +1048,8 @@ async function renderPrfSaved(containerId) {
     return;
   }
   c.innerHTML = '';
-  data.forEach(r => {
-    if (!r.post) return;
-    const el = createFeedPost(r.post, true);
+  data.map(r => r.post).filter(Boolean).forEach(p => {
+    const el = createFeedPost(p, true);
     if (el) { c.appendChild(el); observePost(el); }
   });
 }
