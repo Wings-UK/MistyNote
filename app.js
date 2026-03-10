@@ -1015,6 +1015,9 @@ async function showUserProfile(userId, tapEl) {
     const likedPosts = [];
     const mediaPosts = allPosts.filter(p => (p.image || p.video) && !p.reposted_post_id);
 
+    // Await follow state BEFORE rendering — same pattern as detail page, no flash
+    const isFollowing = currentUser ? await checkFollowState(userId) : false;
+
     body.innerHTML = `
       <div class="prf-wrap">
         <div class="prf-cover">
@@ -1037,7 +1040,7 @@ async function showUserProfile(userId, tapEl) {
             <button class="prf-btn prf-btn-icon" onclick="showToast('DMs coming soon 💬')">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
             </button>
-            <button class="prf-btn prf-btn-primary" id="follow-btn-${userId}" onclick="toggleFollow('${userId}',this)">Follow</button>
+            <button class="prf-btn ${isFollowing ? 'prf-btn-following' : 'prf-btn-primary'}" id="follow-btn-${userId}" onclick="toggleFollow('${userId}',this)">${isFollowing ? 'Following' : 'Follow'}</button>
           </div>
         </div>
 
@@ -1148,14 +1151,7 @@ async function showUserProfile(userId, tapEl) {
     miniAvatar.src = profile.avatar || '';
     const mainFollowBtn = document.getElementById(`follow-btn-${userId}`);
 
-    // ── Check real follow state from DB ──
-    if (mainFollowBtn && currentUser && userId !== currentUser.id) {
-      mainFollowBtn.style.opacity = '0'; // hide until state known — prevents Follow→Following flash
-      checkFollowState(userId).then(isFollowing => {
-        setFollowBtnState(mainFollowBtn, isFollowing);
-        mainFollowBtn.style.opacity = '1';
-      });
-    }
+    // Follow state already baked into button at render time — no post-render check needed
     miniFollow.onclick = () => mainFollowBtn?.click();
     // Sync follow label + state to match main button
     const syncFollowLabel = () => {
