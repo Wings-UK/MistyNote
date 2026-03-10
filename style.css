@@ -264,7 +264,8 @@
   .back-btn {
     width: 36px; height: 36px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    background: var(--bg3); transition: background 0.2s, transform 0.15s;
+    color: var(--text2); background: var(--bg3);
+    transition: background 0.2s, transform 0.15s;
   }
   .back-btn:active { transform: scale(0.9); background: var(--border); }
   .header-action {
@@ -282,6 +283,7 @@
     backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
     border-bottom: none; /* tab bar sits flush at bottom instead */
     flex-direction: row;
+    align-items: stretch; /* stretch inner to full height so tab bar reaches bottom */
   }
   .feed-header-inner {
     width: 100%; height: 100%;
@@ -1678,3 +1680,14 @@
 }
 .prf-moment-banner:active { transform: scale(0.95); opacity: 1; }
 .prf-moment-banner-text { line-height: 1; }
+
+/* ══════════════════════════════════════════
+   SAVE / BOOKMARK BUTTON
+══════════════════════════════════════════ */
+[data-theme="dark"] .save-btn .save-icon {
+  stroke: #9898b8; /* match other icons in dark mode */
+}
+[data-theme="dark"] .save-btn.saved .save-icon {
+  fill: #6C47FF !important;
+  stroke: #6C47FF !important;
+}
