@@ -4110,11 +4110,13 @@ async function openFollowList(type, userId) {
   }
 
   const userIds = followRows.map(r => type === 'followers' ? r.follower_id : r.following_id);
-  const { data: usersData } = await supabase
+  console.log('Looking up userIds:', userIds);
+  const { data: usersData, error: usersError } = await supabase
     .from('users')
     .select('id, username, avatar, verified')
     .in('id', userIds);
 
+  console.log('Users result:', usersData, 'error:', usersError);
   const users = usersData || [];
 
   // Check which ones current user is already following
