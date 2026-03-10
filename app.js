@@ -309,6 +309,13 @@ function slideTo(pageId, setupFn) {
   // Show floating header only for user-profile
   const floatingHeader = document.getElementById('user-profile-header');
   if (floatingHeader) floatingHeader.style.display = pageId === 'user-profile' ? 'flex' : 'none';
+  // Reset uprf mini identity immediately — prevent stale content showing during load
+  if (pageId === 'user-profile') {
+    const _uprfIdentity = document.getElementById('uprf-header-identity');
+    const _uprfFollow   = document.getElementById('uprf-header-follow');
+    if (_uprfIdentity) { _uprfIdentity.style.opacity = '0'; _uprfIdentity.style.pointerEvents = 'none'; }
+    if (_uprfFollow)   { _uprfFollow.style.opacity = '0'; _uprfFollow.style.display = 'none'; }
+  }
 
   // Always hide my-profile floating header when navigating away
   const myHeader = document.getElementById('my-profile-header');
@@ -878,7 +885,7 @@ function switchPrfTab(tab, el) {
 
 function switchProfileTab(mode, btn) { switchPrfTab('posts', btn); }
 
-function renderPrfPosts(posts, containerId, isOwn, isProfilePage = false) {
+function renderPrfPosts(posts, containerId, isOwn, isProfilePage = false, viewingUserId = null) {
   const container = document.getElementById(containerId);
   if (!container) return;
   if (!posts.length) {
@@ -887,7 +894,7 @@ function renderPrfPosts(posts, containerId, isOwn, isProfilePage = false) {
   }
   container.innerHTML = '';
   posts.forEach(p => {
-    const el = createFeedPost(p, isProfilePage);
+    const el = createFeedPost(p, isProfilePage, viewingUserId);
     if (el) { container.appendChild(el); observePost(el); }
   });
 }
@@ -1092,7 +1099,7 @@ async function showUserProfile(userId, tapEl) {
     `;
 
     body._uprfData = { posts: allPosts, mediaPosts, likedPosts };
-    renderPrfPosts(allPosts, `uprf-list-${userId}`, false, true);
+    renderPrfPosts(allPosts, `uprf-list-${userId}`, false, true, userId);
     document.getElementById(`uprf-list-${userId}`)._loaded = true;
 
     const upPage   = document.getElementById('page-user-profile');
@@ -1402,12 +1409,14 @@ function initFeedTabBar() {
   bar.style.width = btnRect.width + 'px';
 }
 
-function createFeedPost(p, isProfilePage = false) {
+function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
   const user = p.user || { username: '@unknown', avatar: '' };
   const isRepost = !!p.reposted_post_id && !!p.reposted_post;
   const orig = isRepost ? p.reposted_post : null;
   const origUser = orig?.user || { username: '@unknown', avatar: '' };
   const isOwnPost = currentUser && p.user_id === currentUser.id;
+  // On another user's profile list — tapping their own username should pulse not navigate
+  const isViewingUser = viewingUserId && p.user_id === viewingUserId;
 
   const el = document.createElement('div');
   el.className = 'poster' + (isRepost ? ' is-repost' : '');
@@ -1486,11 +1495,11 @@ function createFeedPost(p, isProfilePage = false) {
 
   el.innerHTML = `
     <div class="cust-name">
-      <a class="post-avatar-link" onclick="${(isProfilePage && isOwnPost) ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
+      <a class="post-avatar-link" onclick="${(isProfilePage && (isOwnPost || isViewingUser)) ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
         <img class="small-photo" src="${user.avatar || ''}" onerror="this.style.display='none'" alt="">
       </a>
       <div class="post-meta">
-        <a class="post-author-link" onclick="${(isProfilePage && isOwnPost) ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
+        <a class="post-author-link" onclick="${(isProfilePage && (isOwnPost || isViewingUser)) ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
           <span class="jerry">${escHtml(user.username)}</span>
           <svg xmlns="http://www.w3.org/2000/svg" class="verif" viewBox="0 0 24 24" width="15" height="15"><path d="M12 2L3 7v5c0 5 4 9 9 10 5-1 9-5 9-10V7z" fill="#6C47FF"/><polyline points="8,12 11,15 16,9" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </a>
@@ -4340,7 +4349,7 @@ function getMomentBanner(userId) {
     regular:       { label: '● Active Moment',       color: 'var(--accent)',  bg: 'var(--accent-soft)' },
     commerce:      { label: '🛍️ Selling Now',         color: '#b8860b',        bg: 'rgba(255,184,0,0.12)' },
     live:          { label: '● Live Now',             color: 'var(--red)',     bg: 'var(--red-soft)' },
-    live_commerce: { label: '● Live · Selling Now 🛍️', color: 'var(--red)',   bg: 'var(--red-soft)' },
+    live_commerce: { label: '● Live Sales Ongoing',    color: 'var(--red)',   bg: 'var(--red-soft)' },
   };
   const c = configs[moment.type] || configs.regular;
   return `
