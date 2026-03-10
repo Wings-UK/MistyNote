@@ -166,8 +166,23 @@ async function handleLogout() {
   showActionSheet([
     { label: 'Sign Out', danger: true, action: async () => {
       await supabase.auth.signOut();
-      currentUser = null; currentProfile = null;
+
+      // Reset ALL state — full clean slate for next login
+      currentUser = null; currentProfile = null; viewingProfile = null;
       loadedPostIds.clear(); likedPosts.clear(); repostedPosts.clear();
+      activeMoments.clear();
+      feedOffset = 0; feedLoading = false; feedExhausted = false;
+      currentFeedTab = 'for-you';
+      unreadCount = 0;
+
+      // Clear feed DOM
+      const feedList = document.getElementById('feed-list');
+      if (feedList) feedList.innerHTML = '';
+
+      // Reset feed tab UI back to Explore
+      document.querySelectorAll('.feed-tab').forEach(t => t.classList.remove('active'));
+      const forYouTab = document.getElementById('feed-tab-foryou');
+      if (forYouTab) forYouTab.classList.add('active');
 
       // Clean up realtime channels
       if (notifChannel) { supabase.removeChannel(notifChannel); notifChannel = null; }
@@ -1466,11 +1481,11 @@ function createFeedPost(p, isProfilePage = false) {
 
   el.innerHTML = `
     <div class="cust-name">
-      <a class="post-avatar-link" onclick="${(isProfilePage && isOwnPost) ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
+      <a class="post-avatar-link" data-user-id="${p.user_id}" data-is-own="${isOwnPost}" data-is-profile="${isProfilePage}">
         <img class="small-photo" src="${user.avatar || ''}" onerror="this.style.display='none'" alt="">
       </a>
       <div class="post-meta">
-        <a class="post-author-link" onclick="${(isProfilePage && isOwnPost) ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
+        <a class="post-author-link" data-user-id="${p.user_id}" data-is-own="${isOwnPost}" data-is-profile="${isProfilePage}">
           <span class="jerry">${escHtml(user.username)}</span>
           <svg xmlns="http://www.w3.org/2000/svg" class="verif" viewBox="0 0 24 24" width="15" height="15"><path d="M12 2L3 7v5c0 5 4 9 9 10 5-1 9-5 9-10V7z" fill="#6C47FF"/><polyline points="8,12 11,15 16,9" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </a>
@@ -1552,7 +1567,16 @@ function createFeedPost(p, isProfilePage = false) {
       const tired = e.target.closest('.tired');
       if (tired) { tired.innerHTML = escHtml(text); e.stopPropagation(); return; }
     }
-    if (e.target.closest('.post-avatar-link') || e.target.closest('.post-author-link')) return;
+    const avatarLink = e.target.closest('.post-avatar-link') || e.target.closest('.post-author-link');
+    if (avatarLink) {
+      const uid = avatarLink.dataset.userId;
+      const isOwn = avatarLink.dataset.isOwn === 'true';
+      const isPrf = avatarLink.dataset.isProfile === 'true';
+      if (isPrf && isOwn) selfTap(avatarLink);
+      else if (isOwn) navTo('profile');
+      else showUserProfile(uid, avatarLink);
+      return;
+    }
     if (e.target.closest('.view-original') || e.target.closest('.quote-card')) {
       openDetail(e.target.closest('[data-original-id]')?.dataset.originalId || orig?.id);
       return;
