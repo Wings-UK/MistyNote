@@ -42,6 +42,7 @@ let editCoverFile = null;
 const likedPosts = new Set();
 const repostedPosts = new Map();   // postId → myRepostId
 const loadedPostIds = new Set();
+const savedPosts = new Set();      // postIds saved/bookmarked by current user
 
 const MAX_CHARS = 280;
 
@@ -170,6 +171,7 @@ async function handleLogout() {
       // Reset ALL state — full clean slate for next login
       currentUser = null; currentProfile = null; viewingProfile = null;
       loadedPostIds.clear(); likedPosts.clear(); repostedPosts.clear();
+      savedPosts.clear();
       activeMoments.clear();
       feedOffset = 0; feedLoading = false; feedExhausted = false;
       currentFeedTab = 'for-you';
@@ -955,14 +957,76 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false) {
   container.appendChild(wrap);
 }
 
-function renderPrfSaved(containerId) {
+// ══════════════════════════════════════════
+// SAVE / BOOKMARK
+// ══════════════════════════════════════════
+
+function setSaveBtnState(btn, isSaved) {
+  if (!btn) return;
+  const icon = btn.querySelector('.save-icon');
+  if (isSaved) {
+    btn.classList.add('saved');
+    if (icon) { icon.setAttribute('fill', '#6C47FF'); icon.setAttribute('stroke', '#6C47FF'); }
+  } else {
+    btn.classList.remove('saved');
+    if (icon) { icon.setAttribute('fill', 'none'); icon.setAttribute('stroke', '#000000'); }
+  }
+}
+
+async function toggleSave(postId, btn) {
+  if (!currentUser) { showToast('Sign in to save posts'); return; }
+  const isSaved = savedPosts.has(postId);
+  // Optimistic
+  if (isSaved) { savedPosts.delete(postId); setSaveBtnState(btn, false); }
+  else          { savedPosts.add(postId);    setSaveBtnState(btn, true);  }
+
+  if (isSaved) {
+    const { error } = await supabase.from('saved_posts')
+      .delete().eq('user_id', currentUser.id).eq('post_id', postId);
+    if (error) { savedPosts.add(postId); setSaveBtnState(btn, true); showToast('Failed to unsave'); }
+    else showToast('Removed from saved');
+  } else {
+    const { error } = await supabase.from('saved_posts')
+      .insert({ user_id: currentUser.id, post_id: postId });
+    if (error) { savedPosts.delete(postId); setSaveBtnState(btn, false); showToast('Failed to save'); }
+    else showToast('Saved 🔖');
+  }
+  // Invalidate saved panel so it reloads next time
+  const panel = document.getElementById('prf-panel-saved');
+  if (panel) panel._loaded = false;
+}
+
+async function checkSavedPosts(postIds) {
+  if (!currentUser || !postIds.length) return;
+  const { data } = await supabase.from('saved_posts')
+    .select('post_id').eq('user_id', currentUser.id).in('post_id', postIds);
+  if (!data) return;
+  data.forEach(r => {
+    savedPosts.add(r.post_id);
+    document.querySelectorAll(`.save-btn[data-post-id="${r.post_id}"]`).forEach(btn => setSaveBtnState(btn, true));
+  });
+}
+
+async function renderPrfSaved(containerId) {
   const c = document.getElementById(containerId);
   if (!c) return;
-  c.innerHTML = `<div class="prf-placeholder" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1.5px solid #bbf7d0">
-    <div class="prf-placeholder-icon">🔖</div>
-    <h3 style="color:#15803d">Bookmarks coming soon</h3>
-    <p style="color:#16a34a">Save any post from your feed.<br>Appears here — private and organised.</p>
-  </div>`;
+  if (!currentUser) { c.innerHTML = '<div class="prf-empty"><p>Sign in to see saved posts</p></div>'; return; }
+  c.innerHTML = '<div class="loading-pulse" style="height:200px;margin:16px"></div>';
+  const { data, error } = await supabase.from('saved_posts')
+    .select(`post_id, post:posts(id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,user:users(id,username,avatar))`)
+    .eq('user_id', currentUser.id)
+    .order('created_at', { ascending: false })
+    .limit(60);
+  if (error || !data?.length) {
+    c.innerHTML = '<div class="prf-empty"><div class="prf-empty-icon">🔖</div><p>No saved posts yet</p><span>Tap the bookmark on any post</span></div>';
+    return;
+  }
+  c.innerHTML = '';
+  data.forEach(r => {
+    if (!r.post) return;
+    const el = createFeedPost(r.post, true);
+    if (el) { c.appendChild(el); observePost(el); }
+  });
 }
 
 function renderPrfStore(containerId) {
@@ -1364,6 +1428,7 @@ async function loadFeed(reset = false) {
     const ids = [...loadedPostIds];
     checkLikedPosts(ids);
     checkRepostedPosts(ids);
+    checkSavedPosts(ids);
     reObserveAllFeedPosts();
 
     // Seed demo moment rings on first load
@@ -1541,7 +1606,7 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
             </div>
           </div>
           <div class="mee">
-            <div class="donate-btn"><svg xmlns="http://www.w3.org/2000/svg" class="feeling" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>
+            <div class="donate-btn save-btn" data-post-id="${p.id}"><svg xmlns="http://www.w3.org/2000/svg" class="feeling save-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg></div>
             <div class="donate-btn share-action" data-post-id="${p.id}"><svg xmlns="http://www.w3.org/2000/svg" class="feeling" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg></div>
           </div>
         </div>
@@ -1573,6 +1638,10 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
       sharePost(p);
       return;
     }
+    if (e.target.closest('.save-btn')) {
+      toggleSave(p.id, e.target.closest('.save-btn'));
+      return;
+    }
     if (e.target.closest('.reer')) {
       const tired = e.target.closest('.tired');
       if (tired) { tired.innerHTML = escHtml(text); e.stopPropagation(); return; }
@@ -1599,6 +1668,10 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
     if (span) span.style.color = '#6C47FF';
   }
 
+  // Save button — check initial state
+  const saveBtn = el.querySelector('.save-btn');
+  if (saveBtn && savedPosts.has(p.id)) setSaveBtnState(saveBtn, true);
+
   // Like button — check initial state
   const heartContainer = el.querySelector('.heart-ai');
   if (heartContainer && likedPosts.has(p.id)) {
@@ -1610,7 +1683,7 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
   // Long-press for post menu
   let lpTimer;
   el.addEventListener('touchstart', e => {
-    if (e.target.closest('.heart-ai, .repost-btn, .comment-btn, .donate-btn, .dots, .post-avatar-link, .post-author-link')) return;
+    if (e.target.closest('.heart-ai, .repost-btn, .comment-btn, .donate-btn, .save-btn, .dots, .post-avatar-link, .post-author-link')) return;
     lpTimer = setTimeout(() => showPostMenu(p, el, null, true), 550);
   }, { passive: true });
   el.addEventListener('touchmove', () => clearTimeout(lpTimer), { passive: true });
