@@ -1467,7 +1467,7 @@ function createFeedPost(p, isProfilePage = false) {
   el.innerHTML = `
     <div class="cust-name">
       <a class="post-avatar-link" onclick="${(isProfilePage && isOwnPost) ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
-        ${getMomentRing(p.user_id, user.avatar || '')}
+        <img class="small-photo" src="${user.avatar || ''}" onerror="this.style.display='none'" alt="">
       </a>
       <div class="post-meta">
         <a class="post-author-link" onclick="${(isProfilePage && isOwnPost) ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
