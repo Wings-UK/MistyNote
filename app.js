@@ -4061,10 +4061,8 @@ function closeVideoFS() {
 
 async function openFollowList(type, userId) {
   // type = 'followers' | 'following'
+  // userId is always the auth id (users.id column) — used directly in follows table
   const title = type === 'followers' ? 'Followers' : 'Following';
-
-  const { data: userRow } = await supabase.from('users').select('user_id').eq('id', userId).maybeSingle();
-  const authUserId = userRow?.user_id || userId;
 
   // Build modal
   const overlay = document.createElement('div');
@@ -4094,17 +4092,17 @@ async function openFollowList(type, userId) {
     ({ data: followRows, error: fetchError } = await supabase
       .from('follows')
       .select('follower_id')
-      .eq('following_id', authUserId)
+      .eq('following_id', userId)
       .order('created_at', { ascending: false }));
   } else {
     ({ data: followRows, error: fetchError } = await supabase
       .from('follows')
       .select('following_id')
-      .eq('follower_id', authUserId)
+      .eq('follower_id', userId)
       .order('created_at', { ascending: false }));
   }
 
-  console.log('Follow rows:', followRows, 'error:', fetchError, 'authUserId:', authUserId, 'type:', type);
+  console.log('Follow rows:', followRows, 'error:', fetchError, 'userId:', userId, 'type:', type);
 
   if (fetchError || !followRows || followRows.length === 0) {
     body.innerHTML = `<div class="follow-list-empty">No ${title.toLowerCase()} yet</div>`;
@@ -4112,7 +4110,6 @@ async function openFollowList(type, userId) {
   }
 
   const userIds = followRows.map(r => type === 'followers' ? r.follower_id : r.following_id);
-  // users table: auth UUID is stored in user_id column, not id
   const { data: usersData } = await supabase
     .from('users')
     .select('id, username, avatar, verified')
