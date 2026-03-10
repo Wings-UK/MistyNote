@@ -22,6 +22,10 @@ let feedOffset = 0;
 let feedLoading = false;
 let feedExhausted = false;
 let currentFeedTab = 'for-you'; // 'for-you' | 'following'
+
+// Active moments map — userId → { type: 'regular'|'commerce'|'live'|'live_commerce' }
+// Seeded from demo for now — replace with DB query when moments are built
+const activeMoments = new Map();
 let unreadCount = 0;
 let notifChannel = null;
 let postsChannel = null;
@@ -1019,6 +1023,7 @@ async function showUserProfile(userId, tapEl) {
             ${profile.is_verified ? `<span class="prf-verified"><svg width="18" height="18" viewBox="0 0 24 24" fill="#6C47FF"><path d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg></span>` : ''}
           </div>
           ${profile.bio ? `<p class="prf-bio">${escHtml(profile.bio)}</p>` : ''}
+          ${getMomentBanner(userId)}
         </div>
 
         <!-- STATS BAR -->
@@ -1338,6 +1343,9 @@ async function loadFeed(reset = false) {
     checkRepostedPosts(ids);
     reObserveAllFeedPosts();
 
+    // Seed demo moment rings on first load
+    if (feedOffset <= PER_PAGE) seedDemoMoments(posts);
+
   } catch (e) {
     console.error('Feed error:', e);
     if (feedOffset === 0) list.innerHTML = `<div class="empty-state"><div class="empty-icon">😕</div><p>Couldn't load posts</p><span>${e.message}</span></div>`;
@@ -1459,7 +1467,7 @@ function createFeedPost(p, isProfilePage = false) {
   el.innerHTML = `
     <div class="cust-name">
       <a class="post-avatar-link" onclick="${(isProfilePage && isOwnPost) ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
-        <img class="small-photo" src="${user.avatar || ''}" onerror="this.style.display='none'" alt="">
+        ${getMomentRing(p.user_id, user.avatar || '')}
       </a>
       <div class="post-meta">
         <a class="post-author-link" onclick="${(isProfilePage && isOwnPost) ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
@@ -1618,6 +1626,33 @@ function injectFeedPostStyles() {
       margin-bottom: 8px;
     }
     .post-avatar-link { flex-shrink: 0; text-decoration: none; }
+    /* Avatar ring wrap */
+    .avatar-moment-wrap {
+      position: relative; flex-shrink: 0;
+      width: 38px; height: 38px;
+    }
+    .avatar-moment-ring {
+      position: absolute; inset: -2.5px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), #a78bfa);
+      z-index: 0; opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .avatar-moment-ring.live    { background: linear-gradient(135deg, var(--red), #ff8c42); }
+    .avatar-moment-ring.commerce { background: linear-gradient(135deg, var(--gold), #ff8c42); }
+    .avatar-moment-ring.live_commerce { background: linear-gradient(135deg, var(--red), var(--gold)); }
+    .avatar-moment-wrap.has-moment .avatar-moment-ring { opacity: 1; }
+    .avatar-moment-wrap.has-moment .small-photo { border: 2px solid var(--bg); position: relative; z-index: 1; }
+
+    /* Live pulse on ring */
+    .avatar-moment-wrap.has-moment.live .avatar-moment-ring,
+    .avatar-moment-wrap.has-moment.live_commerce .avatar-moment-ring {
+      animation: ringPulse 2s ease-in-out infinite;
+    }
+    @keyframes ringPulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(255,59,92,0.4); }
+      50% { opacity: 0.8; box-shadow: 0 0 0 4px rgba(255,59,92,0); }
+    }
+
     .small-photo {
       width: 38px;
       height: 38px;
@@ -2447,13 +2482,27 @@ async function openDetail(postId, scrollToComments = false) {
         display: flex; align-items: center; gap: 12px;
         padding: 16px 16px 0;
       }
+      .dp-avatar-wrap {
+        position: relative; flex-shrink: 0;
+        width: 46px; height: 46px;
+      }
+      .dp-avatar-ring {
+        position: absolute; inset: -2.5px; border-radius: 50%;
+        background: linear-gradient(135deg, var(--accent), #a78bfa);
+        z-index: 0; opacity: 0; transition: opacity 0.2s;
+      }
+      .dp-avatar-ring.live    { background: linear-gradient(135deg, var(--red), #ff8c42); animation: ringPulse 2s ease-in-out infinite; }
+      .dp-avatar-ring.commerce { background: linear-gradient(135deg, var(--gold), #ff8c42); }
+      .dp-avatar-ring.live_commerce { background: linear-gradient(135deg, var(--red), var(--gold)); animation: ringPulse 2s ease-in-out infinite; }
+      .dp-avatar-wrap.has-moment .dp-avatar-ring { opacity: 1; }
       .dp-avatar {
         width: 46px; height: 46px; border-radius: 50%;
         object-fit: cover; object-position: top;
-        flex-shrink: 0; cursor: pointer;
-        border: 2px solid var(--border, #e5e7eb);
+        cursor: pointer; position: relative; z-index: 1;
+        border: 2px solid var(--bg);
         transition: opacity .15s;
       }
+      .dp-avatar-wrap:not(.has-moment) .dp-avatar { border-color: var(--border, #e5e7eb); }
       .dp-avatar:active { opacity: .7; }
       .dp-author-info { flex: 1; min-width: 0; }
       .dp-name {
@@ -2698,9 +2747,7 @@ async function openDetail(postId, scrollToComments = false) {
 
         <!-- AUTHOR -->
         <div class="dp-author">
-          <img class="dp-avatar"
-            src="${user.avatar||''}" onerror="this.style.display='none'"
-            onclick="${isOwn ? 'selfTap(this)' : `showUserProfile('${p.user_id}',this)`}">
+          ${getDpAvatarRing(p.user_id, user.avatar||'', isOwn)}
           <div class="dp-author-info">
             <div class="dp-name">
               <span onclick="${isOwn ? 'selfTap(this)' : `showUserProfile('${p.user_id}',this)`}">${escHtml(user.username)}</span>
@@ -2765,7 +2812,7 @@ async function openDetail(postId, scrollToComments = false) {
     // IntersectionObserver on author avatar — show mini identity when avatar scrolls out
     const detailPage = document.getElementById('page-detail');
     if (detailPage._dpAvatarObs) detailPage._dpAvatarObs.disconnect();
-    const dpAuthorAvatar = detailPage.querySelector('.dp-avatar');
+    const dpAuthorAvatar = detailPage.querySelector('.dp-avatar-wrap') || detailPage.querySelector('.dp-avatar');
     detailPage._dpAvatarObs = new IntersectionObserver(([entry]) => {
       const visible = entry.isIntersecting;
       dpHeaderIdentity.style.opacity       = visible ? '0' : '1';
@@ -4235,6 +4282,82 @@ function fmtNum(n) {
   if (n >= 1000000) return (n/1000000).toFixed(1).replace(/\.0$/,'') + 'M';
   if (n >= 1000) return (n/1000).toFixed(1).replace(/\.0$/,'') + 'K';
   return String(n);
+}
+
+// ══════════════════════════════════════════
+// MOMENTS — ring helper
+// ══════════════════════════════════════════
+
+function getDpAvatarRing(userId, avatarSrc, isOwn) {
+  const moment = activeMoments.get(userId);
+  const src = avatarSrc || `https://api.dicebear.com/7.x/adventurer/svg?seed=${userId}`;
+  const onclick = isOwn ? 'selfTap(this)' : `showUserProfile('${userId}',this)`;
+  if (!moment) {
+    return `<img class="dp-avatar" src="${src}" onerror="this.style.display='none'" onclick="${onclick}">`;
+  }
+  const type = moment.type;
+  return `
+    <div class="dp-avatar-wrap has-moment ${type}">
+      <div class="dp-avatar-ring ${type}"></div>
+      <img class="dp-avatar" src="${src}"
+        onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${userId}'"
+        onclick="${onclick}">
+    </div>`;
+}
+
+function getMomentBanner(userId) {
+  const moment = activeMoments.get(userId);
+  if (!moment) return '';
+  const configs = {
+    regular:       { label: '● Active Moment',       color: 'var(--accent)',  bg: 'var(--accent-soft)' },
+    commerce:      { label: '🛍️ Selling Now',         color: '#b8860b',        bg: 'rgba(255,184,0,0.12)' },
+    live:          { label: '● Live Now',             color: 'var(--red)',     bg: 'var(--red-soft)' },
+    live_commerce: { label: '● Live · Selling Now 🛍️', color: 'var(--red)',   bg: 'var(--red-soft)' },
+  };
+  const c = configs[moment.type] || configs.regular;
+  return `
+    <div class="prf-moment-banner" style="--mb-color:${c.color};--mb-bg:${c.bg}"
+         onclick="openMomentFromAvatar('${userId}')">
+      <span class="prf-moment-banner-text">${c.label}</span>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+    </div>`;
+}
+
+function getMomentRing(userId, avatarSrc) {
+  const moment = activeMoments.get(userId);
+  const seed = avatarSrc || `https://api.dicebear.com/7.x/adventurer/svg?seed=${userId}`;
+  if (!moment) {
+    return `<img class="small-photo" src="${seed}" onerror="this.style.display='none'" alt="">`;
+  }
+  const type = moment.type; // regular | commerce | live | live_commerce
+  return `
+    <div class="avatar-moment-wrap has-moment ${type}" onclick="openMomentFromAvatar('${userId}');event.stopPropagation()">
+      <div class="avatar-moment-ring ${type}"></div>
+      <img class="small-photo" src="${seed}" onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${userId}'" alt="">
+    </div>`;
+}
+
+function openMomentFromAvatar(userId) {
+  const moment = activeMoments.get(userId);
+  if (!moment) return;
+  const typeLabel = moment.type === 'live' || moment.type === 'live_commerce' ? 'Live session' : 'Moment';
+  showToast(`${typeLabel} — coming soon ✨`);
+}
+
+function seedDemoMoments(posts) {
+  // Wire demo moment types to real user IDs from loaded posts
+  // In production this will be replaced by a DB query
+  if (activeMoments.size > 0) return; // already seeded
+  const types = ['regular', 'commerce', 'live', 'live_commerce', 'regular'];
+  let i = 0;
+  const seen = new Set();
+  for (const p of posts) {
+    if (!seen.has(p.user_id) && i < types.length) {
+      activeMoments.set(p.user_id, { type: types[i] });
+      seen.add(p.user_id);
+      i++;
+    }
+  }
 }
 
 function escHtml(str) {
