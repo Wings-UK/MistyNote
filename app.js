@@ -344,6 +344,9 @@ function slideBack() {
   if (returningTo === 'detail') {
     document.getElementById('comment-bar').style.display = 'flex';
     document.getElementById('bottom-nav').style.display = 'none';
+    // Ensure user-profile floating header is hidden when returning to detail
+    const fh = document.getElementById('user-profile-header');
+    if (fh) fh.style.display = 'none';
     return;
   }
 
@@ -1481,14 +1484,14 @@ function createFeedPost(p, isProfilePage = false) {
 
   el.innerHTML = `
     <div class="cust-name">
-      <a class="post-avatar-link" data-user-id="${p.user_id}" data-is-own="${isOwnPost}" data-is-profile="${isProfilePage}">
+      <div class="post-avatar-link" data-user-id="${p.user_id}" data-is-own="${isOwnPost}" data-is-profile="${isProfilePage}">
         <img class="small-photo" src="${user.avatar || ''}" onerror="this.style.display='none'" alt="">
-      </a>
+      </div>
       <div class="post-meta">
-        <a class="post-author-link" data-user-id="${p.user_id}" data-is-own="${isOwnPost}" data-is-profile="${isProfilePage}">
+        <div class="post-author-link" data-user-id="${p.user_id}" data-is-own="${isOwnPost}" data-is-profile="${isProfilePage}">
           <span class="jerry">${escHtml(user.username)}</span>
           <svg xmlns="http://www.w3.org/2000/svg" class="verif" viewBox="0 0 24 24" width="15" height="15"><path d="M12 2L3 7v5c0 5 4 9 9 10 5-1 9-5 9-10V7z" fill="#6C47FF"/><polyline points="8,12 11,15 16,9" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </a>
+        </div>
         <span class="time">${timeSince(p.created_at)}</span>
       </div>
       <div class="dots">
@@ -1542,6 +1545,10 @@ function createFeedPost(p, isProfilePage = false) {
   // ── Event listeners ──
   el.addEventListener('click', e => {
     if (el.dataset.blockNavigation === 'true') return;
+
+    // DEBUG — remove after confirming fix
+    console.log('[TAP] target:', e.target.className, '| postId:', p.id, '| userId:', p.user_id);
+    console.log('[TAP] closest avatar:', e.target.closest('.post-avatar-link'));
 
     if (e.target.closest('.dots')) {
       showPostMenu(p, el, e.target.closest('.dots'));
@@ -1649,7 +1656,7 @@ function injectFeedPostStyles() {
       gap: 10px;
       margin-bottom: 8px;
     }
-    .post-avatar-link { flex-shrink: 0; text-decoration: none; }
+    .post-avatar-link { flex-shrink: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
     /* Avatar ring wrap */
     .avatar-moment-wrap {
       position: relative; flex-shrink: 0;
