@@ -4063,6 +4063,9 @@ async function openFollowList(type, userId) {
   // type = 'followers' | 'following'
   const title = type === 'followers' ? 'Followers' : 'Following';
 
+  const { data: userRow } = await supabase.from('users').select('user_id').eq('id', userId).maybeSingle();
+  const authUserId = userRow?.user_id || userId;
+
   // Build modal
   const overlay = document.createElement('div');
   overlay.id = 'follow-list-overlay';
@@ -4091,17 +4094,17 @@ async function openFollowList(type, userId) {
     ({ data: followRows, error: fetchError } = await supabase
       .from('follows')
       .select('follower_id')
-      .eq('following_id', userId)
+      .eq('following_id', authUserId)
       .order('created_at', { ascending: false }));
   } else {
     ({ data: followRows, error: fetchError } = await supabase
       .from('follows')
       .select('following_id')
-      .eq('follower_id', userId)
+      .eq('follower_id', authUserId)
       .order('created_at', { ascending: false }));
   }
 
-  console.log('Follow rows:', followRows, 'error:', fetchError, 'userId:', userId, 'type:', type);
+  console.log('Follow rows:', followRows, 'error:', fetchError, 'authUserId:', authUserId, 'type:', type);
 
   if (fetchError || !followRows || followRows.length === 0) {
     body.innerHTML = `<div class="follow-list-empty">No ${title.toLowerCase()} yet</div>`;
@@ -4109,6 +4112,7 @@ async function openFollowList(type, userId) {
   }
 
   const userIds = followRows.map(r => type === 'followers' ? r.follower_id : r.following_id);
+  // users table: auth UUID is stored in user_id column, not id
   const { data: usersData } = await supabase
     .from('users')
     .select('id, username, avatar, verified')
@@ -4119,13 +4123,13 @@ async function openFollowList(type, userId) {
   // Check which ones current user is already following
   let followingSet = new Set();
   if (currentUser) {
-    const ids = users.map(u => u.id).filter(id => id !== currentUser.id);
-    if (ids.length) {
+    const authIds = users.map(u => u.id).filter(uid => uid && uid !== currentUser.id);
+    if (authIds.length) {
       const { data: myFollows } = await supabase
         .from('follows')
         .select('following_id')
         .eq('follower_id', currentUser.id)
-        .in('following_id', ids);
+        .in('following_id', authIds);
       if (myFollows) myFollows.forEach(f => followingSet.add(f.following_id));
     }
   }
@@ -4175,11 +4179,15 @@ async function followListToggle(userId, btn) {
   }
 }
 
-function followListTapUser(userId) {
+async function followListTapUser(userAuthId) {
   closeFollowList();
-  setTimeout(() => {
-    if (currentUser && userId === currentUser.id) navTo('profile');
-    else showUserProfile(userId, null);
+  // userAuthId is the auth UUID (user_id column) — need to find the profile id
+  setTimeout(async () => {
+    if (currentUser && userAuthId === currentUser.id) { navTo('profile'); return; }
+    // Look up the profile.id from user_id
+    const { data } = await supabase.from('users').select('id').eq('user_id', userAuthId).maybeSingle();
+    const profileId = data?.id || userAuthId;
+    showUserProfile(profileId, null);
   }, 200);
 }
 
