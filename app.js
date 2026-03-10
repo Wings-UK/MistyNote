@@ -1484,14 +1484,14 @@ function createFeedPost(p, isProfilePage = false) {
 
   el.innerHTML = `
     <div class="cust-name">
-      <div class="post-avatar-link" data-user-id="${p.user_id}" data-is-own="${isOwnPost}" data-is-profile="${isProfilePage}">
+      <a class="post-avatar-link" onclick="${(isProfilePage && isOwnPost) ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
         <img class="small-photo" src="${user.avatar || ''}" onerror="this.style.display='none'" alt="">
-      </div>
+      </a>
       <div class="post-meta">
-        <div class="post-author-link" data-user-id="${p.user_id}" data-is-own="${isOwnPost}" data-is-profile="${isProfilePage}">
+        <a class="post-author-link" onclick="${(isProfilePage && isOwnPost) ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
           <span class="jerry">${escHtml(user.username)}</span>
           <svg xmlns="http://www.w3.org/2000/svg" class="verif" viewBox="0 0 24 24" width="15" height="15"><path d="M12 2L3 7v5c0 5 4 9 9 10 5-1 9-5 9-10V7z" fill="#6C47FF"/><polyline points="8,12 11,15 16,9" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
+        </a>
         <span class="time">${timeSince(p.created_at)}</span>
       </div>
       <div class="dots">
@@ -1570,16 +1570,7 @@ function createFeedPost(p, isProfilePage = false) {
       const tired = e.target.closest('.tired');
       if (tired) { tired.innerHTML = escHtml(text); e.stopPropagation(); return; }
     }
-    const avatarLink = e.target.closest('.post-avatar-link') || e.target.closest('.post-author-link');
-    if (avatarLink) {
-      const uid = avatarLink.dataset.userId;
-      const isOwn = avatarLink.dataset.isOwn === 'true';
-      const isPrf = avatarLink.dataset.isProfile === 'true';
-      if (isPrf && isOwn) selfTap(avatarLink);
-      else if (isOwn) navTo('profile');
-      else showUserProfile(uid, avatarLink);
-      return;
-    }
+    if (e.target.closest('.post-avatar-link') || e.target.closest('.post-author-link')) return;
     if (e.target.closest('.view-original') || e.target.closest('.quote-card')) {
       openDetail(e.target.closest('[data-original-id]')?.dataset.originalId || orig?.id);
       return;
@@ -1652,7 +1643,7 @@ function injectFeedPostStyles() {
       gap: 10px;
       margin-bottom: 8px;
     }
-    .post-avatar-link { flex-shrink: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    .post-avatar-link { flex-shrink: 0; text-decoration: none; }
     /* Avatar ring wrap */
     .avatar-moment-wrap {
       position: relative; flex-shrink: 0;
