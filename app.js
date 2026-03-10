@@ -21,6 +21,7 @@ let viewingProfile = null; // other user currently being viewed
 let feedOffset = 0;
 let feedLoading = false;
 let feedExhausted = false;
+let currentFeedTab = 'for-you'; // 'for-you' | 'following'
 let unreadCount = 0;
 let notifChannel = null;
 let postsChannel = null;
@@ -1277,7 +1278,7 @@ async function loadFeed(reset = false) {
   }
 
   try {
-    const { data: posts, error } = await supabase
+    let query = supabase
       .from('posts')
       .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
                user:users(id,username,avatar),
@@ -1285,6 +1286,30 @@ async function loadFeed(reset = false) {
                comments(count)`)
       .order('created_at', { ascending: false })
       .range(feedOffset, feedOffset + PER_PAGE - 1);
+
+    // Following tab — fetch only posts from people current user follows
+    if (currentFeedTab === 'following' && currentUser) {
+      const { data: followingRows } = await supabase
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', currentUser.id);
+
+      const followingIds = followingRows?.map(r => r.following_id) || [];
+
+      if (followingIds.length === 0) {
+        // Not following anyone yet
+        feedLoading = false;
+        feedExhausted = true;
+        if (feedOffset === 0) {
+          const list = document.getElementById('feed-list');
+          if (list) list.innerHTML = `<div class="empty-state"><div class="empty-icon">👥</div><p>No posts yet</p><span>Follow people to see their posts here</span></div>`;
+        }
+        return;
+      }
+      query = query.in('user_id', followingIds);
+    }
+
+    const { data: posts, error } = await query;
 
     if (error) throw error;
 
@@ -1321,6 +1346,7 @@ async function loadFeed(reset = false) {
 }
 
 function setFeedTab(tab, btn) {
+  currentFeedTab = tab;
   document.querySelectorAll('.feed-tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
   // Slide the bar to match active tab width & position
