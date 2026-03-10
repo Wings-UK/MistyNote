@@ -1657,3 +1657,23 @@
   background: transparent; color: #6C47FF; border-color: #6C47FF;
 }
 .follow-list-btn:active { transform: scale(.93); }
+
+/* ══════════════════════════════════════════
+   PROFILE MOMENT BANNER
+══════════════════════════════════════════ */
+.prf-moment-banner {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 10px;
+  padding: 6px 12px 6px 10px;
+  border-radius: 20px;
+  background: var(--mb-bg);
+  color: var(--mb-color);
+  font-size: 12px; font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  border: 1px solid currentColor;
+  opacity: 0.9;
+}
+.prf-moment-banner:active { transform: scale(0.95); opacity: 1; }
+.prf-moment-banner-text { line-height: 1; }
