@@ -204,6 +204,7 @@
     transform: translateX(100%);
     transition: transform 0.35s cubic-bezier(0.4,0,0.2,1), opacity 0s;
     opacity: 1;
+    pointer-events: none; /* never intercept taps when off screen */
   }
   .page.slide-page.active { transform: translateX(0); pointer-events: all; }
   
