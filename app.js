@@ -793,7 +793,7 @@ async function renderMyProfile() {
       <div id="prf-panel-list"   class="prf-panel prf-posts-panel"></div>
       <div id="prf-panel-media"  class="prf-panel" style="display:none"></div>
       <div id="prf-panel-likes"  class="prf-panel prf-posts-panel" style="display:none"></div>
-      <div id="prf-panel-saved"  class="prf-panel" style="display:none"></div>
+      <div id="prf-panel-saved"  class="prf-panel prf-posts-panel" style="display:none"></div>
     </div>
 
     <div class="wing-fab" onclick="openComposer()">
@@ -875,7 +875,7 @@ function switchPrfTab(tab, el) {
   });
   const panel = document.getElementById('prf-panel-' + tab);
   if (!panel) return;
-  panel.style.display = (tab === 'list' || tab === 'likes') ? 'flex' : 'block';
+  panel.style.display = (tab === 'list' || tab === 'likes' || tab === 'saved') ? 'flex' : 'block';
   if (panel._loaded) return;
   const { posts, likedPosts: likedArr, mediaPosts } = container._prfData || {};
   if (tab === 'list')  renderPrfPosts(posts || [],    'prf-panel-list',  true, true);
@@ -1011,7 +1011,6 @@ async function renderPrfSaved(containerId) {
   const c = document.getElementById(containerId);
   if (!c) return;
   if (!currentUser) { c.innerHTML = '<div class="prf-empty"><p>Sign in to see saved posts</p></div>'; return; }
-  c.innerHTML = '<div class="loading-pulse" style="height:200px;margin:16px"></div>';
   const { data, error } = await supabase.from('saved_posts')
     .select(`post_id, post:posts(id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,user:users(id,username,avatar))`)
     .eq('user_id', currentUser.id)
