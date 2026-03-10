@@ -1184,7 +1184,6 @@ async function toggleFollow(userId, btn) {
       .select();
 
     if (error || !delData?.length) {
-      console.error('Unfollow failed:', error, 'rows deleted:', delData?.length, 'follower:', currentUser.id, 'following:', userId);
       setFollowBtnState(btn, true); // revert
       showToast('Failed to unfollow');
       return;
@@ -2623,6 +2622,10 @@ async function openDetail(postId, scrollToComments = false) {
     const user     = p.user || { username: '@unknown', avatar: '' };
     const isOwn    = currentUser && p.user_id === currentUser.id;
     const isLiked  = likedPosts.has(postId);
+
+    // Pre-fetch follow state before render — eliminates the Follow→Following flash
+    const isFollowingAuthor = (!isOwn && currentUser) ? await checkFollowState(p.user_id) : false;
+
     const isRepost = !!p.reposted_post_id && !!p.reposted_post;
     const orig     = isRepost ? p.reposted_post : null;
     const origUser = orig?.user || { username: '@unknown', avatar: '' };
@@ -2677,7 +2680,7 @@ async function openDetail(postId, scrollToComments = false) {
             </div>
           </div>
           ${!isOwn
-            ? `<button class="dp-follow-btn" id="dp-follow-${postId}" onclick="toggleDetailFollow(this,'${p.user_id}')">Follow</button>`
+            ? `<button class="dp-follow-btn ${isFollowingAuthor ? 'prf-btn-following' : ''}" id="dp-follow-${postId}" onclick="toggleDetailFollow(this,'${p.user_id}')">${isFollowingAuthor ? 'Following' : 'Follow'}</button>`
             : ''}
         </div>
 
@@ -2793,20 +2796,6 @@ async function openDetail(postId, scrollToComments = false) {
     // Track view + load comments
     await recordView(postId);
     await syncViewCount(postId);
-
-    // Check real follow state for detail page follow button
-    if (!isOwn && currentUser) {
-      const dpFollowBtn = document.getElementById(`dp-follow-${postId}`);
-      if (dpFollowBtn) {
-        checkFollowState(p.user_id).then(isFollowing => {
-          if (isFollowing) {
-            dpFollowBtn.classList.add('prf-btn-following');
-            dpFollowBtn.classList.remove('prf-btn-primary');
-            dpFollowBtn.textContent = 'Following';
-          }
-        });
-      }
-    }
 
     await loadComments(postId);
 
@@ -4102,7 +4091,6 @@ async function openFollowList(type, userId) {
       .order('created_at', { ascending: false }));
   }
 
-  console.log('Follow rows:', followRows, 'error:', fetchError, 'userId:', userId, 'type:', type);
 
   if (fetchError || !followRows || followRows.length === 0) {
     body.innerHTML = `<div class="follow-list-empty">No ${title.toLowerCase()} yet</div>`;
@@ -4110,13 +4098,11 @@ async function openFollowList(type, userId) {
   }
 
   const userIds = followRows.map(r => type === 'followers' ? r.follower_id : r.following_id);
-  console.log('Looking up userIds:', userIds);
   const { data: usersData, error: usersError } = await supabase
     .from('users')
     .select('id, username, avatar, is_verified')
     .in('id', userIds);
 
-  console.log('Users result:', usersData, 'error:', usersError);
   const users = usersData || [];
 
   // Check which ones current user is already following
