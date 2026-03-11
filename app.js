@@ -1602,28 +1602,12 @@ function setFeedTab(tab, btn) {
   currentFeedTab = tab;
   document.querySelectorAll('.feed-tab').forEach(t => t.classList.remove('active'));
   btn.classList.add('active');
-  // Slide the bar to match active tab width & position
-  const bar = document.getElementById('feed-tab-bar');
-  if (bar) {
-    const group = btn.closest('.feed-tabs-group');
-    const groupRect = group.getBoundingClientRect();
-    const btnRect = btn.getBoundingClientRect();
-    bar.style.left  = (btnRect.left - groupRect.left) + 'px';
-    bar.style.width = btnRect.width + 'px';
-  }
+
   loadFeed(true);
 }
 
 function initFeedTabBar() {
-  const active = document.getElementById('feed-tab-foryou');
-  if (!active) return;
-  const bar = document.getElementById('feed-tab-bar');
-  if (!bar) return;
-  const group = active.closest('.feed-tabs-group');
-  const groupRect = group.getBoundingClientRect();
-  const btnRect = active.getBoundingClientRect();
-  bar.style.left  = (btnRect.left - groupRect.left) + 'px';
-  bar.style.width = btnRect.width + 'px';
+  // tab bar removed
 }
 
 function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
