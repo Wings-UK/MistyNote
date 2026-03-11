@@ -99,50 +99,112 @@ window.addEventListener('supabase-ready', init);
 
 // ── INIT ──────────────────────────────────────────────────
 async function init() {
+  const route = getRoute();
+  const isDeepLink = route.type !== 'home';
+
+  // On deep links — show splash immediately, hide auth form so it never flashes
+  if (isDeepLink) {
+    showDeepLinkSplash();
+  }
+
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
+      hideDeepLinkSplash();
       showAuthScreen();
       return;
     }
     currentUser = session.user;
-    await bootApp();
+    await bootApp(isDeepLink);
   } catch (e) {
     console.error('Init error:', e);
+    hideDeepLinkSplash();
     showAuthScreen();
   }
 }
 
-async function bootApp() {
+function showDeepLinkSplash() {
+  // Hide auth screen completely
+  const auth = document.getElementById('auth-screen');
+  if (auth) auth.style.display = 'none';
+
+  // Create and show a minimal branded splash
+  if (document.getElementById('deep-link-splash')) return;
+  const splash = document.createElement('div');
+  splash.id = 'deep-link-splash';
+  splash.innerHTML = `
+    <div style="
+      position:fixed;inset:0;
+      background:var(--bg, #fff);
+      display:flex;flex-direction:column;
+      align-items:center;justify-content:center;
+      z-index:9999;gap:16px;
+    ">
+      <svg width="52" height="52" viewBox="0 0 48 48" fill="none">
+        <path d="M8 24C8 24 12 8 24 8C36 8 40 24 40 24" stroke="#6C47FF" stroke-width="3" stroke-linecap="round"/>
+        <path d="M8 24C8 24 16 18 24 24C32 30 40 24 40 24" stroke="#6C47FF" stroke-width="3" stroke-linecap="round"/>
+        <path d="M8 24C8 24 12 40 24 40C36 40 40 24 40 24" stroke="#6C47FF" stroke-width="3" stroke-linecap="round"/>
+      </svg>
+      <div style="font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;font-size:22px;color:var(--text,#111);">MistyNote</div>
+      <div style="width:32px;height:3px;background:#6C47FF;border-radius:2px;animation:splashBar 1.2s ease-in-out infinite alternate;"></div>
+    </div>
+    <style>
+      @keyframes splashBar {
+        from { width: 24px; opacity: 0.5; }
+        to   { width: 48px; opacity: 1; }
+      }
+    </style>
+  `;
+  document.body.appendChild(splash);
+}
+
+function hideDeepLinkSplash() {
+  const splash = document.getElementById('deep-link-splash');
+  if (splash) {
+    splash.style.transition = 'opacity 0.25s';
+    splash.style.opacity = '0';
+    setTimeout(() => splash.remove(), 260);
+  }
+}
+
+async function bootApp(isDeepLink = false) {
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('app').classList.remove('hidden');
 
   injectFeedPostStyles();
   injectEchoesPanel();
 
-  await loadMyProfile();
-  updateNavAvatar();
-  loadFeed();
-  loadNotifications();
-  loadInitialNotifCount();
-  subscribeToNotifs();
-  subscribeToPostUpdates();
-  initComposerFile();
-  initIntersectionObserver();
-  requestAnimationFrame(initFeedTabBar);
-  initCommentBarInput();
-
-  // Check dark mode pref
+  // Apply dark mode early to avoid flash
   if (localStorage.getItem('darkMode') === 'true') {
     document.documentElement.setAttribute('data-theme', 'dark');
     const toggle = document.getElementById('dark-mode-toggle');
     if (toggle) toggle.checked = true;
   }
 
-  // Handle deep link on initial load
-  const route = getRoute();
-  if (route.type !== 'home') {
+  await loadMyProfile();
+  updateNavAvatar();
+  initComposerFile();
+  initIntersectionObserver();
+  requestAnimationFrame(initFeedTabBar);
+  initCommentBarInput();
+  subscribeToNotifs();
+  subscribeToPostUpdates();
+
+  if (isDeepLink) {
+    // Deep link — go straight to content, load feed silently in background
+    const route = getRoute();
+    hideDeepLinkSplash();
     await handleRoute(route);
+    setTimeout(() => {
+      loadFeed();
+      loadNotifications();
+      loadInitialNotifCount();
+    }, 600);
+  } else {
+    // Normal load — show feed immediately
+    loadFeed();
+    loadNotifications();
+    loadInitialNotifCount();
   }
 }
 
