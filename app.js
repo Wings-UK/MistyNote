@@ -47,6 +47,54 @@ const savedPosts = new Set();      // postIds saved/bookmarked by current user
 const MAX_CHARS = 280;
 
 // ── WAIT FOR SUPABASE ──────────────────────────────────────
+
+// ══════════════════════════════════════════
+// ROUTER
+// ══════════════════════════════════════════
+
+function getRoute() {
+  const path = window.location.pathname;
+  if (path === '/' || path === '') return { type: 'home' };
+  const postMatch = path.match(/^\/post\/([^/]+)$/);
+  if (postMatch) return { type: 'post', id: postMatch[1] };
+  const profileMatch = path.match(/^\/profile\/([^/]+)$/);
+  if (profileMatch) return { type: 'profile', username: profileMatch[1] };
+  return { type: 'home' };
+}
+
+function pushRoute(path) {
+  if (window.location.pathname !== path) {
+    window.history.pushState({}, '', path);
+  }
+}
+
+function replaceRoute(path) {
+  window.history.replaceState({}, '', path);
+}
+
+async function handleRoute(route) {
+  if (!route) route = getRoute();
+  if (route.type === 'post') {
+    await openDetail(route.id);
+  } else if (route.type === 'profile') {
+    // Look up user by username then open profile
+    const { data: user } = await supabase.from('users').select('id').eq('username', route.username).maybeSingle();
+    if (user) await showUserProfile(user.id, null);
+  }
+}
+
+window.addEventListener('popstate', () => {
+  const route = getRoute();
+  if (route.type === 'home') {
+    // Close any open slide pages
+    if (slideStack.length > 0) {
+      slideBack();
+    }
+  } else {
+    handleRoute(route);
+  }
+});
+
 window.addEventListener('supabase-ready', init);
 
 // ── INIT ──────────────────────────────────────────────────
@@ -89,6 +137,12 @@ async function bootApp() {
     document.documentElement.setAttribute('data-theme', 'dark');
     const toggle = document.getElementById('dark-mode-toggle');
     if (toggle) toggle.checked = true;
+  }
+
+  // Handle deep link on initial load
+  const route = getRoute();
+  if (route.type !== 'home') {
+    await handleRoute(route);
   }
 }
 
@@ -357,6 +411,13 @@ function slideBack() {
     const fh = document.getElementById('user-profile-header');
     if (fh) fh.style.display = 'none';
     return;
+  }
+
+  // Restore URL when sliding back
+  if (returningTo === 'detail' && detailPostId) {
+    pushRoute('/post/' + detailPostId);
+  } else if (!returningTo) {
+    replaceRoute('/');
   }
 
   // Restore bottom nav only when back to a main page
@@ -1091,6 +1152,7 @@ async function showUserProfile(userId, tapEl) {
 
     const { data: profile } = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
     if (!profile) { body.innerHTML = '<div class="empty-state"><p>User not found</p></div>'; return; }
+    pushRoute('/profile/' + profile.username);
 
     const { data: posts } = await supabase.from('posts')
       .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
@@ -2585,6 +2647,7 @@ async function openDetail(postId, scrollToComments = false) {
   if (!postId) return;
   detailPostId = postId;
   detailCommentParentId = null;
+  pushRoute('/post/' + postId);
 
   // ── Inject styles once ──
   if (!document.getElementById('detail-styles')) {
@@ -4058,20 +4121,22 @@ async function compressImage(file, maxW = 1200, quality = 0.82) {
 
 function sharePost(post) {
   const text = post.content ? post.content.slice(0, 100) : 'Check this out on Winged';
+  const url  = window.location.origin + '/post/' + post.id;
   if (navigator.share) {
-    navigator.share({ title: 'Winged', text, url: window.location.href }).catch(() => {});
+    navigator.share({ title: 'Winged', text, url }).catch(() => {});
   } else {
-    navigator.clipboard?.writeText(window.location.href).then(() => showToast('Link copied!'));
+    navigator.clipboard?.writeText(url).then(() => showToast('Link copied!'));
   }
 }
 
 function shareMyProfile() {
   const user = currentProfile;
   const text = user?.username ? `Check out ${user.username} on Winged` : 'Check out my profile on Winged';
+  const url  = user?.username ? window.location.origin + '/profile/' + user.username : window.location.origin;
   if (navigator.share) {
-    navigator.share({ title: 'Winged', text, url: window.location.href }).catch(() => {});
+    navigator.share({ title: 'Winged', text, url }).catch(() => {});
   } else {
-    navigator.clipboard?.writeText(window.location.href).then(() => showToast('Profile link copied!'));
+    navigator.clipboard?.writeText(url).then(() => showToast('Profile link copied!'));
   }
 }
 
@@ -4079,12 +4144,10 @@ function shareMyProfile() {
 let shareSheetProfile = null; // stores the profile being shared
 
 async function openProfileShare(profile) {
-  console.log('openProfileShare called', profile);
   shareSheetProfile = profile;
   const overlay = document.getElementById('profile-share-overlay');
   const sheet   = document.getElementById('profile-share-sheet');
-  console.log('overlay:', overlay, 'sheet:', sheet);
-  if (!overlay || !sheet) { console.log('EARLY EXIT - overlay or sheet not found'); return; }
+  if (!overlay || !sheet) return;
 
   overlay.classList.remove('hidden');
   setTimeout(() => sheet.classList.add('open'), 10);
@@ -4129,7 +4192,9 @@ function closeProfileShare(e) {
 }
 
 function getProfileUrl(profile) {
-  return `${window.location.origin}${window.location.pathname}?u=${encodeURIComponent(profile?.username || '')}`;
+  return profile?.username
+    ? `${window.location.origin}/profile/${profile.username}`
+    : window.location.origin;
 }
 
 function shareToApp(app) {
