@@ -1,4 +1,43 @@
 /* ═══════════════════════════════════════════════════════════
+
+// ── DEBUG: Capture console errors and show as toast ──
+(function() {
+  const _origError = console.error.bind(console);
+  console.error = function(...args) {
+    _origError(...args);
+    try {
+      const msg = args.map(a => {
+        if (a instanceof Error) return a.message + (a.stack ? '\n' + a.stack.split('\n')[1] : '');
+        if (typeof a === 'object') return JSON.stringify(a);
+        return String(a);
+      }).join(' ');
+      // Show as persistent alert so it can be read and shared
+      setTimeout(() => {
+        if (typeof showDebugAlert === 'function') showDebugAlert(msg);
+      }, 100);
+    } catch(e) {}
+  };
+})();
+
+function showDebugAlert(msg) {
+  // Remove existing debug alert
+  document.getElementById('debug-alert')?.remove();
+  const el = document.createElement('div');
+  el.id = 'debug-alert';
+  el.style.cssText = `
+    position:fixed;bottom:80px;left:12px;right:12px;z-index:99999;
+    background:#1a1a1a;color:#ff4444;font-family:monospace;font-size:11px;
+    padding:12px;border-radius:12px;border:1px solid #ff4444;
+    max-height:200px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;
+    box-shadow:0 4px 20px rgba(0,0,0,0.5);
+  `;
+  el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <strong style="color:#ff6666">⚠ Console Error</strong>
+    <button onclick="this.parentElement.parentElement.remove()" style="background:none;border:none;color:#ff4444;font-size:18px;cursor:pointer;padding:0">×</button>
+  </div>${msg}`;
+  document.body.appendChild(el);
+}
+
    MISTYNOTE — app.js
    Complete rewrite: clean architecture, mobile-first
 ═══════════════════════════════════════════════════════════ */
@@ -2796,37 +2835,17 @@ async function uploadImageWithProgress(file, bucket, onProgress) {
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Upload timed out')), 60000)
       );
-      // Use direct fetch instead of SDK — more reliable in Chrome Android
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token) throw new Error('Not authenticated');
-
-      const SUPABASE_URL = 'https://rhmknjlxddxkfybcfgjj.supabase.co';
-      const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJobWtuamx4ZGR4a2Z5YmNmZ2pqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk0MzM4OTgsImV4cCI6MjA4NTAwOTg5OH0.dNBxXmIdYAxJT-bt1WWcO62Nobt8aDLTRdnrs5g1CCI';
-
-      const uploadUrl = `${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`;
-      const fetchPromise = fetch(uploadUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'apikey': SUPABASE_KEY,
-          'Content-Type': 'image/jpeg',
-          'x-upsert': 'true'
-        },
-        body: compressed
+      const uploadPromise = supabase.storage.from(bucket).upload(path, compressed, {
+        upsert: true, contentType: 'image/jpeg'
       });
-
-      const response = await Promise.race([fetchPromise, timeoutPromise]);
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`Upload failed: ${response.status} ${errText}`);
-      }
+      const { error: uploadError } = await Promise.race([uploadPromise, timeoutPromise]);
+      if (uploadError) throw uploadError;
 
       clearInterval(progressInterval);
       onProgress(85);
-      const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`;
+      const { data } = supabase.storage.from(bucket).getPublicUrl(path);
       onProgress(100);
-      return publicUrl;
+      return data.publicUrl;
     } catch(e) {
       lastError = e;
       if (attempt < 3) {
@@ -2890,46 +2909,27 @@ async function submitPost() {
 
       setComposeRing('uploading', 90);
 
-      // Use direct fetch for insert — bypasses Supabase SDK session issues on Chrome
+      // Refresh session then use SDK — ensures valid token for Chrome
+      await supabase.auth.refreshSession();
       const { data: { session: freshSession } } = await supabase.auth.getSession();
       if (!freshSession) throw new Error('Session expired — please sign in again');
 
-      const SUPABASE_URL = 'https://rhmknjlxddxkfybcfgjj.supabase.co';
-      const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJobWtuamx4ZGR4a2Z5YmNmZ2pqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk0MzM4OTgsImV4cCI6MjA4NTAwOTg5OH0.dNBxXmIdYAxJT-bt1WWcO62Nobt8aDLTRdnrs5g1CCI';
+      const payload = {
+        user_id: freshSession.user.id,
+        content: postContent || null,
+        image: imageUrl,
+        reposted_post_id: targetId || null
+      };
 
-      const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/posts`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${freshSession.access_token}`,
-          'apikey': SUPABASE_KEY,
-          'Prefer': 'return=representation'
-        },
-        body: JSON.stringify({
-          user_id: freshSession.user.id,
-          content: postContent || null,
-          image: imageUrl,
-          reposted_post_id: targetId || null
-        })
-      });
-
-      if (!insertRes.ok) {
-        const errText = await insertRes.text();
-        console.error('Insert error:', insertRes.status, errText);
-        throw new Error('Post failed: ' + insertRes.status);
-      }
-
-      const inserted = await insertRes.json();
-      const newPostId = Array.isArray(inserted) ? inserted[0]?.id : inserted?.id;
-      if (!newPostId) throw new Error('Post saved but ID missing');
-
-      // Fetch full post with relations for feed
-      const { data: newPost, error: fetchErr } = await supabase.from('posts').select(`
+      const { data: newPost, error } = await supabase.from('posts').insert(payload).select(`
         id,content,image,video,created_at,like_count,comment_count,repost_count,views,user_id,reposted_post_id,
         user:users(id,username,avatar),
         reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar))
-      `).eq('id', newPostId).single();
-      if (fetchErr) throw fetchErr;
+      `).single();
+      if (error) {
+        console.error('Insert error:', JSON.stringify(error));
+        throw new Error(error.message || error.details || JSON.stringify(error));
+      }
 
       setComposeRing('success');
       prependPostToFeed(newPost);
