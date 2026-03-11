@@ -2819,7 +2819,7 @@ async function submitPost() {
   if (!content && !selectedFile && !repostTargetId) return;
   if (!currentUser) { showToast('Please sign in'); return; }
 
-  if (btn) { btn.disabled = true; btn.textContent = ''; }
+  if (btn) btn.disabled = true;
 
   // Capture state before closeComposer clears them
   const targetId = repostTargetId;
