@@ -2612,12 +2612,39 @@ function openComposer() {
   if (currentProfile?.avatar) {
     document.getElementById('composer-avatar').src = currentProfile.avatar;
   }
+
+  // Push sheet above keyboard using Visual Viewport API
+  const sheet = document.getElementById('composer-sheet');
+  function onViewportResize() {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const keyboardHeight = window.innerHeight - vv.height - vv.offsetTop;
+    sheet.style.transform = sheet.classList.contains('open')
+      ? `translateY(-${Math.max(0, keyboardHeight)}px)`
+      : 'translateY(100%)';
+  }
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', onViewportResize);
+    window.visualViewport.addEventListener('scroll', onViewportResize);
+    // Store for cleanup on close
+    overlay._vpResize = onViewportResize;
+  }
 }
 
 function closeComposer(instant = false) {
   const sheet = document.getElementById('composer-sheet');
   const overlay = document.getElementById('composer-overlay');
   const delay = instant ? 0 : 400;
+
+  // Clean up viewport listeners
+  if (overlay._vpResize && window.visualViewport) {
+    window.visualViewport.removeEventListener('resize', overlay._vpResize);
+    window.visualViewport.removeEventListener('scroll', overlay._vpResize);
+    overlay._vpResize = null;
+  }
+  // Reset any keyboard offset
+  sheet.style.transform = '';
 
   if (instant) {
     sheet.style.transition = 'none';
