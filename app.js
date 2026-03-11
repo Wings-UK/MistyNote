@@ -169,7 +169,12 @@ function hideDeepLinkSplash() {
 
 async function bootApp(isDeepLink = false) {
   document.getElementById('auth-screen').style.display = 'none';
-  document.getElementById('app').classList.remove('hidden');
+
+  // On deep links — keep feed hidden until content is ready, preventing feed flash
+  const appEl = document.getElementById('app');
+  const feedEl = document.getElementById('page-feed');
+  if (isDeepLink && feedEl) feedEl.style.visibility = 'hidden';
+  appEl.classList.remove('hidden');
 
   injectFeedPostStyles();
   injectEchoesPanel();
@@ -195,6 +200,8 @@ async function bootApp(isDeepLink = false) {
     const route = getRoute();
     hideDeepLinkSplash();
     await handleRoute(route);
+    // Restore feed visibility and load in background
+    if (feedEl) feedEl.style.visibility = '';
     setTimeout(() => {
       loadFeed();
       loadNotifications();
@@ -2935,7 +2942,7 @@ async function openDetail(postId, scrollToComments = false) {
     const _hdrAvatar   = document.getElementById('dp-header-avatar');
     const _hdrUsername = document.getElementById('dp-header-username');
     if (_hdrIdentity) { _hdrIdentity.style.opacity = '0'; _hdrIdentity.style.pointerEvents = 'none'; }
-    if (_hdrAvatar)   _hdrAvatar.src = '';
+    if (_hdrAvatar)   { _hdrAvatar.style.visibility = 'hidden'; _hdrAvatar.src = ''; }
     if (_hdrUsername) _hdrUsername.textContent = '';
 
     const { data: p, error } = await supabase
@@ -3063,6 +3070,7 @@ async function openDetail(postId, scrollToComments = false) {
     const dpHeaderUsername = document.getElementById('dp-header-username');
 
     dpHeaderAvatar.src = user.avatar || '';
+    dpHeaderAvatar.style.visibility = 'visible';
     dpHeaderUsername.textContent = user.username || '';
 
     // IntersectionObserver on author avatar — show mini identity when avatar scrolls out
