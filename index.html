@@ -17,7 +17,17 @@
   <!-- ══════════════════════════════════════════
        AUTH SCREEN
   ══════════════════════════════════════════ -->
-  <div id="auth-screen" class="auth-screen">
+  <script>
+    // Runs before paint — hide auth screen on deep links to prevent flash
+    (function() {
+      var path = window.location.pathname;
+      var isDeepLink = path.startsWith('/post/') || path.startsWith('/profile/');
+      if (isDeepLink) {
+        document.documentElement.style.setProperty('--auth-display', 'none');
+      }
+    })();
+  </script>
+  <div id="auth-screen" class="auth-screen" style="display:var(--auth-display,flex)">
     <div class="auth-bg">
       <div class="auth-orb auth-orb-1"></div>
       <div class="auth-orb auth-orb-2"></div>
