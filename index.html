@@ -35,10 +35,18 @@
     </div>
     <div class="auth-content">
       <div class="auth-logo">
-        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-          <path d="M8 24C8 24 12 8 24 8C36 8 40 24 40 24" stroke="white" stroke-width="3" stroke-linecap="round"/>
-          <path d="M8 24C8 24 16 18 24 24C32 30 40 24 40 24" stroke="white" stroke-width="3" stroke-linecap="round"/>
-          <circle cx="24" cy="24" r="4" fill="white"/>
+        <svg width="56" height="56" viewBox="0 0 48 48" fill="none">
+          <path d="M5 28C5 28 10 9 24 9C38 9 43 28 43 28" stroke="url(#al1)" stroke-width="3.2" stroke-linecap="round"/>
+          <path d="M5 28C5 28 14 19 24 28C34 37 43 28 43 28" stroke="url(#al2)" stroke-width="3.2" stroke-linecap="round"/>
+          <circle cx="24" cy="28" r="3.5" fill="url(#al1)"/>
+          <defs>
+            <linearGradient id="al1" x1="5" y1="28" x2="43" y2="28" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#6C47FF"/><stop offset="1" stop-color="#a78bfa"/>
+            </linearGradient>
+            <linearGradient id="al2" x1="5" y1="28" x2="43" y2="28" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#a78bfa"/><stop offset="1" stop-color="#6C47FF"/>
+            </linearGradient>
+          </defs>
         </svg>
       </div>
       <h1 class="auth-title">MistyNote</h1>
@@ -133,7 +141,7 @@
           <div class="feed-tabs-group">
             <button class="feed-tab active" id="feed-tab-foryou" onclick="setFeedTab('for-you', this)">Explore</button>
             <button class="feed-tab" id="feed-tab-following" onclick="setFeedTab('following', this)">Following</button>
-            <div class="feed-tab-bar" id="feed-tab-bar"></div>
+
           </div>
 
           <!-- DM icon — far right -->
