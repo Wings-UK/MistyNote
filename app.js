@@ -2614,11 +2614,21 @@ function openComposer() {
   }
 }
 
-function closeComposer() {
+function closeComposer(instant = false) {
   const sheet = document.getElementById('composer-sheet');
+  const overlay = document.getElementById('composer-overlay');
+  const delay = instant ? 0 : 400;
+
+  if (instant) {
+    sheet.style.transition = 'none';
+    overlay.style.transition = 'none';
+  }
+
   sheet.classList.remove('open');
   setTimeout(() => {
-    document.getElementById('composer-overlay').classList.add('hidden');
+    overlay.classList.add('hidden');
+    sheet.style.transition = '';
+    overlay.style.transition = '';
     document.getElementById('composer-textarea').value = '';
     document.getElementById('composer-media-preview').innerHTML = '';
     document.getElementById('composer-repost-preview').innerHTML = '';
@@ -2626,7 +2636,7 @@ function closeComposer() {
     repostTargetId = null;
     repostTargetBtn = null;
     updateComposerBtn();
-  }, 400);
+  }, delay);
 }
 
 function initComposerFile() {
@@ -2782,15 +2792,15 @@ async function submitPost() {
   if (!content && !selectedFile && !repostTargetId) return;
   if (!currentUser) { showToast('Please sign in'); return; }
 
-  if (btn) btn.disabled = true;
+  if (btn) { btn.disabled = true; btn.textContent = ''; }
 
   // Capture state before closeComposer clears them
   const targetId = repostTargetId;
   const fileToUpload = selectedFile;
   const postContent = content;
 
-  // Close composer immediately — user is free
-  closeComposer();
+  // Close composer instantly — no animation, user is free immediately
+  closeComposer(true);
 
   // Text-only posts — submit instantly, no ring needed
   if (!fileToUpload) {
@@ -2845,6 +2855,7 @@ async function submitPost() {
       prependPostToFeed(newPost);
       uploadState.retryFn = null;
       uploadState.pendingPostData = null;
+      // No toast — the ring turning green IS the confirmation
 
     } catch(e) {
       console.error('Upload error:', e);
