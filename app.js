@@ -1,43 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
 
-// ── DEBUG: Capture console errors and show as toast ──
-(function() {
-  const _origError = console.error.bind(console);
-  console.error = function(...args) {
-    _origError(...args);
-    try {
-      const msg = args.map(a => {
-        if (a instanceof Error) return a.message + (a.stack ? '\n' + a.stack.split('\n')[1] : '');
-        if (typeof a === 'object') return JSON.stringify(a);
-        return String(a);
-      }).join(' ');
-      // Show as persistent alert so it can be read and shared
-      setTimeout(() => {
-        if (typeof showDebugAlert === 'function') showDebugAlert(msg);
-      }, 100);
-    } catch(e) {}
-  };
-})();
-
-function showDebugAlert(msg) {
-  // Remove existing debug alert
-  document.getElementById('debug-alert')?.remove();
-  const el = document.createElement('div');
-  el.id = 'debug-alert';
-  el.style.cssText = `
-    position:fixed;bottom:80px;left:12px;right:12px;z-index:99999;
-    background:#1a1a1a;color:#ff4444;font-family:monospace;font-size:11px;
-    padding:12px;border-radius:12px;border:1px solid #ff4444;
-    max-height:200px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;
-    box-shadow:0 4px 20px rgba(0,0,0,0.5);
-  `;
-  el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-    <strong style="color:#ff6666">⚠ Console Error</strong>
-    <button onclick="this.parentElement.parentElement.remove()" style="background:none;border:none;color:#ff4444;font-size:18px;cursor:pointer;padding:0">×</button>
-  </div>${msg}`;
-  document.body.appendChild(el);
-}
-
    MISTYNOTE — app.js
    Complete rewrite: clean architecture, mobile-first
 ═══════════════════════════════════════════════════════════ */
@@ -2639,99 +2601,101 @@ async function undoRepost(postId, btn) {
 // COMPOSER
 // ══════════════════════════════════════════
 
+// ══════════════════════════════════════════
+// COMPOSER — clean rewrite
+// ══════════════════════════════════════════
+
 function openComposer() {
   const overlay = document.getElementById('composer-overlay');
+  const sheet   = document.getElementById('composer-sheet');
   overlay.classList.remove('hidden');
+
   requestAnimationFrame(() => {
-    document.getElementById('composer-sheet').classList.add('open');
+    sheet.classList.add('open');
     document.getElementById('composer-textarea').focus();
   });
 
-  // Avatar
   if (currentProfile?.avatar) {
     document.getElementById('composer-avatar').src = currentProfile.avatar;
   }
 
-  // Push sheet above keyboard using Visual Viewport API
-  const sheet = document.getElementById('composer-sheet');
-  function onViewportResize() {
-    const vv = window.visualViewport;
-    if (!vv) return;
-    const keyboardHeight = window.innerHeight - vv.height - vv.offsetTop;
-    sheet.style.transform = sheet.classList.contains('open')
-      ? `translateY(-${Math.max(0, keyboardHeight)}px)`
-      : 'translateY(100%)';
+  // Keyboard avoidance — push sheet above keyboard
+  function onVP() {
+    if (!window.visualViewport) return;
+    const kb = Math.max(0, window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop);
+    if (sheet.classList.contains('open')) {
+      sheet.style.marginBottom = kb + 'px';
+    }
   }
-
   if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', onViewportResize);
-    window.visualViewport.addEventListener('scroll', onViewportResize);
-    // Store for cleanup on close
-    overlay._vpResize = onViewportResize;
+    window.visualViewport.addEventListener('resize', onVP);
+    window.visualViewport.addEventListener('scroll', onVP);
+    overlay._vp = onVP;
   }
 }
 
 function closeComposer(instant = false) {
-  const sheet = document.getElementById('composer-sheet');
   const overlay = document.getElementById('composer-overlay');
-  const delay = instant ? 0 : 400;
+  const sheet   = document.getElementById('composer-sheet');
 
-  // Clean up viewport listeners
-  if (overlay._vpResize && window.visualViewport) {
-    window.visualViewport.removeEventListener('resize', overlay._vpResize);
-    window.visualViewport.removeEventListener('scroll', overlay._vpResize);
-    overlay._vpResize = null;
+  if (overlay._vp && window.visualViewport) {
+    window.visualViewport.removeEventListener('resize', overlay._vp);
+    window.visualViewport.removeEventListener('scroll', overlay._vp);
+    overlay._vp = null;
   }
-  // Reset any keyboard offset
-  sheet.style.transform = '';
+
+  sheet.style.marginBottom = '';
 
   if (instant) {
     sheet.style.transition = 'none';
     overlay.style.transition = 'none';
   }
-
   sheet.classList.remove('open');
-  setTimeout(() => {
+
+  const cleanup = () => {
     overlay.classList.add('hidden');
     sheet.style.transition = '';
     overlay.style.transition = '';
-    document.getElementById('composer-textarea').value = '';
+    const ta = document.getElementById('composer-textarea');
+    if (ta) { ta.value = ''; ta.style.height = ''; }
     document.getElementById('composer-media-preview').innerHTML = '';
     document.getElementById('composer-repost-preview').innerHTML = '';
     selectedFile = null;
     repostTargetId = null;
     repostTargetBtn = null;
     updateComposerBtn();
-  }, delay);
+  };
+
+  instant ? cleanup() : setTimeout(cleanup, 380);
 }
 
 function initComposerFile() {
   const fileInput = document.getElementById('composer-file');
   if (!fileInput) return;
-  fileInput.addEventListener('change', async e => {
+
+  fileInput.addEventListener('change', e => {
     const file = e.target.files[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) { showToast('Images only'); return; }
-    // No hard size block — compressor handles any size
-    // Show placeholder preview immediately while compressing
+
     selectedFile = file;
-    const preview = document.getElementById('composer-media-preview');
-    preview.innerHTML = `<div class="media-preview-item" id="preview-loading" style="min-height:120px;display:flex;align-items:center;justify-content:center;background:var(--bg2);border-radius:12px"><span style="color:var(--text3);font-size:13px">Loading preview…</span></div>`;
     updateComposerBtn();
 
-    // Generate preview from compressed version — fast and memory safe
-    try {
-      const thumb = await compressImage(file, 800, 0.75);
-      const url = URL.createObjectURL(thumb);
-      preview.innerHTML = `<div class="media-preview-item"><img src="${url}" alt=""><button class="media-preview-remove" onclick="removeMedia()">×</button></div>`;
-    } catch(e) {
-      // Fallback to FileReader if compression fails for preview
-      const reader = new FileReader();
-      reader.onload = ev => {
-        preview.innerHTML = `<div class="media-preview-item"><img src="${ev.target.result}" alt=""><button class="media-preview-remove" onclick="removeMedia()">×</button></div>`;
-      };
-      reader.readAsDataURL(file);
-    }
+    const preview = document.getElementById('composer-media-preview');
+
+    // Show raw preview immediately using FileReader — always works, no canvas, no compression
+    const reader = new FileReader();
+    reader.onload = ev => {
+      preview.innerHTML = `
+        <div class="media-preview-item">
+          <img src="${ev.target.result}" alt="" style="max-height:220px;width:100%;object-fit:cover;border-radius:12px;">
+          <button class="media-preview-remove" onclick="removeMedia()">×</button>
+        </div>`;
+    };
+    reader.onerror = () => {
+      preview.innerHTML = `<div style="padding:12px;color:var(--text3);font-size:13px">📷 Image selected</div>`;
+    };
+    reader.readAsDataURL(file);
   });
 
   const ta = document.getElementById('composer-textarea');
@@ -2751,10 +2715,10 @@ function removeMedia() {
 }
 
 function updateComposerBtn() {
-  const ta = document.getElementById('composer-textarea');
+  const ta  = document.getElementById('composer-textarea');
   const btn = document.getElementById('composer-post-btn');
-  const hasText = ta?.value?.trim().length > 0;
-  const hasMedia = !!selectedFile;
+  const hasText   = ta?.value?.trim().length > 0;
+  const hasMedia  = !!selectedFile;
   const hasRepost = !!repostTargetId;
   if (btn) btn.disabled = !(hasText || hasMedia || hasRepost);
 }
@@ -2762,17 +2726,14 @@ function updateComposerBtn() {
 function updateCharCount(len) {
   const el = document.getElementById('composer-char-count');
   if (!el) return;
-  const remaining = MAX_CHARS - len;
-  el.textContent = remaining;
-  el.className = 'composer-char-count' + (remaining < 20 ? ' critical' : remaining < 60 ? ' low' : '');
+  const rem = MAX_CHARS - len;
+  el.textContent = rem;
+  el.className = 'composer-char-count' + (rem < 20 ? ' critical' : rem < 60 ? ' low' : '');
 }
 
-function insertEmoji() {
-  showToast('Emoji picker coming soon!');
-}
+function insertEmoji() { showToast('Emoji picker coming soon!'); }
 
-
-// ── Feed prepend helper ──
+// ── Feed prepend ──
 function prependPostToFeed(newPost) {
   if (!newPost) return;
   const adapted = { ...newPost, comments: [{ count: 0 }] };
@@ -2784,13 +2745,10 @@ function prependPostToFeed(newPost) {
     el.classList.add('fade-up');
     observePost(el);
   }
-  // Mark repost state
   if (newPost.reposted_post_id) {
     repostedPosts.set(newPost.reposted_post_id, newPost.id);
     setRepostUI(newPost.reposted_post_id, true);
-    // Increment repost count async
     supabase.rpc('increment_repost_count', { post_id: newPost.reposted_post_id }).catch(() => {});
-    // Notify original author
     supabase.from('posts').select('user_id').eq('id', newPost.reposted_post_id).single().then(({ data: orig }) => {
       if (orig && orig.user_id !== currentUser.id) {
         supabase.from('notifications').insert({
@@ -2800,153 +2758,168 @@ function prependPostToFeed(newPost) {
       }
     });
   }
-  // Update profile if on that page
   if (document.getElementById('page-profile')?.classList.contains('active')) {
     renderMyProfile();
   }
 }
 
-// ── Upload with simulated progress ──
-async function uploadImageWithProgress(file, bucket, onProgress) {
-  onProgress(10);
-  let compressed;
-  try {
-    compressed = await compressImage(file);
-  } catch(e) {
-    // Compression failed — try uploading original file directly
-    console.warn('Compression failed, uploading original:', e.message);
-    compressed = new File([file], 'image.jpg', { type: file.type || 'image/jpeg' });
-  }
-  onProgress(35);
+// ── Image → JPEG blob via canvas, with FileReader fallback ──
+function fileToJpegBlob(file) {
+  return new Promise((resolve) => {
+    const MAX = 1280;
+    const Q   = 0.82;
 
-  const ext = 'jpg';
-  const rand = Math.random().toString(36).slice(2, 8);
-  const path = `${currentUser.id}_${Date.now()}_${rand}.${ext}`;
+    const tryCanvas = (src) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const scale = Math.min(1, MAX / Math.max(img.naturalWidth, img.naturalHeight, 1));
+          const w = Math.max(1, Math.round(img.naturalWidth  * scale));
+          const h = Math.max(1, Math.round(img.naturalHeight * scale));
+          const c = document.createElement('canvas');
+          c.width = w; c.height = h;
+          const ctx = c.getContext('2d');
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+          c.toBlob(blob => {
+            // If toBlob fails or returns nothing, fallback to raw file
+            resolve(blob && blob.size > 0 ? blob : file);
+          }, 'image/jpeg', Q);
+        } catch(_) { resolve(file); }
+      };
+      img.onerror = () => resolve(file); // give up gracefully, use original
+      img.src = src;
+    };
 
-  // Simulate progress while uploading
-  let progressInterval = setInterval(() => {
-    // nudge progress slowly — real progress not available via Supabase JS client
-  }, 300);
-
-  let lastError;
-  for (let attempt = 1; attempt <= 3; attempt++) {
+    // Try objectURL first (fast), fall back to FileReader (always works)
     try {
-      onProgress(35 + attempt * 15);
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Upload timed out')), 60000)
-      );
-      const uploadPromise = supabase.storage.from(bucket).upload(path, compressed, {
-        upsert: true, contentType: 'image/jpeg'
-      });
-      const { error: uploadError } = await Promise.race([uploadPromise, timeoutPromise]);
-      if (uploadError) throw uploadError;
+      const url = URL.createObjectURL(file);
+      tryCanvas(url);
+    } catch(_) {
+      const fr = new FileReader();
+      fr.onload = ev => tryCanvas(ev.target.result);
+      fr.onerror = () => resolve(file);
+      fr.readAsDataURL(file);
+    }
+  });
+}
 
-      clearInterval(progressInterval);
-      onProgress(85);
+// ── Upload: compress → retry loop → return public URL ──
+async function uploadToStorage(file, onProgress) {
+  onProgress(5);
+
+  // Compress — never throws, worst case returns original file
+  const blob = await fileToJpegBlob(file);
+  onProgress(25);
+
+  const path = `${currentUser.id}_${Date.now()}_${Math.random().toString(36).slice(2,7)}.jpg`;
+  const bucket = 'post-images';
+
+  // Retry up to 4 times with exponential backoff — built for bad networks
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try {
+      onProgress(25 + attempt * 14); // 39 / 53 / 67 / 81
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 45000); // 45s per attempt
+
+      const { error } = await supabase.storage
+        .from(bucket)
+        .upload(path, blob, { upsert: true, contentType: 'image/jpeg' });
+
+      clearTimeout(timer);
+      if (error) throw error;
+
+      onProgress(90);
       const { data } = supabase.storage.from(bucket).getPublicUrl(path);
       onProgress(100);
       return data.publicUrl;
-    } catch(e) {
-      lastError = e;
-      if (attempt < 3) {
-        await new Promise(r => setTimeout(r, attempt * 1500));
-      }
+
+    } catch (err) {
+      if (attempt === 4) throw err;
+      // Wait before retry: 2s, 4s, 8s
+      await new Promise(r => setTimeout(r, attempt * 2000));
     }
   }
-  clearInterval(progressInterval);
-  throw lastError;
 }
 
+// ── Submit post ──
 async function submitPost() {
-  const ta = document.getElementById('composer-textarea');
+  const ta      = document.getElementById('composer-textarea');
   const content = ta?.value?.trim() || '';
-  const btn = document.getElementById('composer-post-btn');
+  const btn     = document.getElementById('composer-post-btn');
 
   if (!content && !selectedFile && !repostTargetId) return;
   if (!currentUser) { showToast('Please sign in'); return; }
 
   if (btn) btn.disabled = true;
 
-  // Capture state before closeComposer clears them
-  const targetId = repostTargetId;
+  // Snapshot state before composer clears it
   const fileToUpload = selectedFile;
-  const postContent = content;
+  const postContent  = content;
+  const targetId     = repostTargetId;
 
-  // Close composer instantly — no animation, user is free immediately
+  // Dismiss composer immediately
   closeComposer(true);
 
-  // Text-only posts — submit instantly, no ring needed
+  // ── Text-only post (instant) ──
   if (!fileToUpload) {
-    const payload = {
-      user_id: currentUser.id,
-      content: postContent || null,
-      image: null,
-      reposted_post_id: targetId || null
-    };
     try {
-      const { data: newPost, error } = await supabase.from('posts').insert(payload).select(`
+      const { data: post, error } = await supabase.from('posts').insert({
+        user_id: currentUser.id,
+        content: postContent || null,
+        image: null,
+        reposted_post_id: targetId || null
+      }).select(`
         id,content,image,video,created_at,like_count,comment_count,repost_count,views,user_id,reposted_post_id,
         user:users(id,username,avatar),
         reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar))
       `).single();
       if (error) throw error;
-      prependPostToFeed(newPost);
+      prependPostToFeed(post);
     } catch(e) {
-      showToast('Post failed: ' + (e.message || 'Unknown error'));
+      showToast('Post failed — check your connection');
     }
     return;
   }
 
-  // Image post — show ring, upload in background
+  // ── Image post — ring shows progress ──
   setComposeRing('uploading', 5);
 
   const doUpload = async () => {
     try {
-      setComposeRing('uploading', 10);
-      const imageUrl = await uploadImageWithProgress(fileToUpload, 'post-images', (pct) => {
-        setComposeRing('uploading', pct);
-      });
+      // 1. Upload image
+      const imageUrl = await uploadToStorage(fileToUpload, pct => setComposeRing('uploading', pct));
 
-      setComposeRing('uploading', 90);
+      setComposeRing('uploading', 92);
 
-      // Refresh session then use SDK — ensures valid token for Chrome
-      await supabase.auth.refreshSession();
-      const { data: { session: freshSession } } = await supabase.auth.getSession();
-      if (!freshSession) throw new Error('Session expired — please sign in again');
-
-      const payload = {
-        user_id: freshSession.user.id,
+      // 2. Insert post record
+      const { data: post, error } = await supabase.from('posts').insert({
+        user_id: currentUser.id,
         content: postContent || null,
         image: imageUrl,
         reposted_post_id: targetId || null
-      };
-
-      const { data: newPost, error } = await supabase.from('posts').insert(payload).select(`
+      }).select(`
         id,content,image,video,created_at,like_count,comment_count,repost_count,views,user_id,reposted_post_id,
         user:users(id,username,avatar),
         reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar))
       `).single();
-      if (error) {
-        console.error('Insert error:', JSON.stringify(error));
-        throw new Error(error.message || error.details || JSON.stringify(error));
-      }
 
+      if (error) throw error;
+
+      // 3. Done
       setComposeRing('success');
-      prependPostToFeed(newPost);
+      prependPostToFeed(post);
       uploadState.retryFn = null;
-      uploadState.pendingPostData = null;
-      // No toast — the ring turning green IS the confirmation
 
     } catch(e) {
-      console.error('Upload error:', e);
       setComposeRing('failed');
-      // Store retry function
       uploadState.retryFn = doUpload;
     }
   };
 
-  await doUpload();
-
+  doUpload(); // fire and forget — ring handles state
 }
 
 // ══════════════════════════════════════════
@@ -4413,121 +4386,7 @@ async function recordView(postId) {
 // IMAGE UPLOAD
 // ══════════════════════════════════════════
 
-async function uploadImage(file, bucket) {
-  const compressed = await compressImage(file);
-  const ext = 'jpg';
-  // Unique path: userId + timestamp + random to avoid any collision
-  const rand = Math.random().toString(36).slice(2, 8);
-  const path = `${currentUser.id}_${Date.now()}_${rand}.${ext}`;
 
-  // Retry up to 3 times with exponential backoff
-  let lastError;
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      const uploadPromise = supabase.storage.from(bucket).upload(path, compressed, {
-        upsert: true, // overwrite on collision instead of failing
-        contentType: 'image/jpeg'
-      });
-      // 30 second timeout per attempt
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Upload timed out')), 30000)
-      );
-      const { error } = await Promise.race([uploadPromise, timeoutPromise]);
-      if (error) throw error;
-      const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-      return data.publicUrl;
-    } catch (e) {
-      lastError = e;
-      if (attempt < 3) {
-        showToast(`Upload attempt ${attempt} failed, retrying...`);
-        await new Promise(r => setTimeout(r, attempt * 1000)); // 1s, 2s backoff
-      }
-    }
-  }
-  throw lastError;
-}
-
-async function compressImage(file, maxW = 1200, quality = 0.82) {
-  // For small files under 800KB — skip compression entirely, just repackage as JPEG
-  if (file.size < 800 * 1024 && (file.type === 'image/jpeg' || file.type === 'image/jpg')) {
-    return new File([file], 'image.jpg', { type: 'image/jpeg' });
-  }
-
-  // Use createObjectURL instead of readAsDataURL — much faster for large files
-  return new Promise((resolve, reject) => {
-    const objectUrl = URL.createObjectURL(file);
-    const img = new Image();
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      // Try fallback via FileReader for formats objectURL struggles with
-      const reader = new FileReader();
-      reader.onerror = () => reject(new Error('Cannot read file: ' + file.type));
-      reader.onload = ev => {
-        const img2 = new Image();
-        img2.onerror = () => reject(new Error('Cannot decode image format: ' + file.type));
-        img2.onload = () => {
-          try {
-            const canvas = document.createElement('canvas');
-            const scale = Math.min(1, maxW / Math.max(img2.width, img2.height, 1));
-            canvas.width = Math.max(1, Math.floor(img2.width * scale));
-            canvas.height = Math.max(1, Math.floor(img2.height * scale));
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(img2, 0, 0, canvas.width, canvas.height);
-            canvas.toBlob(blob => {
-              if (!blob) { reject(new Error('Compression failed')); return; }
-              resolve(new File([blob], 'image.jpg', { type: 'image/jpeg' }));
-            }, 'image/jpeg', quality);
-          } catch(e) { reject(e); }
-        };
-        img2.src = ev.target.result;
-      };
-      reader.readAsDataURL(file);
-    };
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      try {
-        // Scale down aggressively for very large images
-        const longestSide = Math.max(img.width, img.height);
-        const effectiveMaxW = longestSide > 3000 ? 1080 : maxW;
-        const effectiveQuality = longestSide > 3000 ? 0.78 : quality;
-
-        const scale = Math.min(1, effectiveMaxW / Math.max(longestSide, 1));
-        const w = Math.max(1, Math.floor(img.width * scale));
-        const h = Math.max(1, Math.floor(img.height * scale));
-
-        const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        // White background for transparent PNGs
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, w, h);
-        ctx.drawImage(img, 0, 0, w, h);
-        canvas.toBlob(blob => {
-          if (!blob) { reject(new Error('Canvas compression failed')); return; }
-          // Warn if still large after compression
-          if (blob.size > 4 * 1024 * 1024) {
-            // Re-compress at lower quality
-            const canvas2 = document.createElement('canvas');
-            canvas2.width = w; canvas2.height = h;
-            const ctx2 = canvas2.getContext('2d');
-            ctx2.fillStyle = '#ffffff';
-            ctx2.fillRect(0, 0, w, h);
-            ctx2.drawImage(img, 0, 0, w, h);
-            canvas2.toBlob(blob2 => {
-              resolve(new File([blob2 || blob], 'image.jpg', { type: 'image/jpeg' }));
-            }, 'image/jpeg', 0.65);
-          } else {
-            resolve(new File([blob], 'image.jpg', { type: 'image/jpeg' }));
-          }
-        }, 'image/jpeg', effectiveQuality);
-      } catch(e) { reject(e); }
-    };
-    img.src = objectUrl;
-  });
-}
 
 // ══════════════════════════════════════════
 // SHARE
