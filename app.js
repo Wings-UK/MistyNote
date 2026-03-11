@@ -2653,7 +2653,9 @@ async function submitPost() {
       imageUrl = await uploadImage(selectedFile, 'post-images');
       if (btn) btn.textContent = 'Post';
     } catch (e) {
-      showToast('Upload failed after 3 attempts. Check your connection.');
+      console.error('Upload error:', e);
+      const msg = e?.message || 'Unknown error';
+      showToast('Upload failed: ' + msg);
       if (btn) { btn.disabled = false; btn.textContent = 'Post'; }
       return;
     }
@@ -4235,7 +4237,31 @@ async function compressImage(file, maxW = 1200, quality = 0.82) {
     const img = new Image();
     img.onerror = () => {
       URL.revokeObjectURL(objectUrl);
-      reject(new Error('Failed to decode image'));
+      // Try fallback via FileReader for formats objectURL struggles with
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Cannot read file: ' + file.type));
+      reader.onload = ev => {
+        const img2 = new Image();
+        img2.onerror = () => reject(new Error('Cannot decode image format: ' + file.type));
+        img2.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            const scale = Math.min(1, maxW / Math.max(img2.width, img2.height, 1));
+            canvas.width = Math.max(1, Math.floor(img2.width * scale));
+            canvas.height = Math.max(1, Math.floor(img2.height * scale));
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img2, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob(blob => {
+              if (!blob) { reject(new Error('Compression failed')); return; }
+              resolve(new File([blob], 'image.jpg', { type: 'image/jpeg' }));
+            }, 'image/jpeg', quality);
+          } catch(e) { reject(e); }
+        };
+        img2.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
     };
     img.onload = () => {
       URL.revokeObjectURL(objectUrl);
