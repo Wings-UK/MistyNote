@@ -2570,20 +2570,30 @@ function closeComposer() {
 function initComposerFile() {
   const fileInput = document.getElementById('composer-file');
   if (!fileInput) return;
-  fileInput.addEventListener('change', e => {
+  fileInput.addEventListener('change', async e => {
     const file = e.target.files[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) { showToast('Images only'); return; }
-    if (file.size > 5 * 1024 * 1024) { showToast('Image must be under 5MB'); return; }
+    // No hard size block — compressor handles any size
+    // Show placeholder preview immediately while compressing
     selectedFile = file;
+    const preview = document.getElementById('composer-media-preview');
+    preview.innerHTML = `<div class="media-preview-item" id="preview-loading" style="min-height:120px;display:flex;align-items:center;justify-content:center;background:var(--bg2);border-radius:12px"><span style="color:var(--text3);font-size:13px">Loading preview…</span></div>`;
+    updateComposerBtn();
 
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const preview = document.getElementById('composer-media-preview');
-      preview.innerHTML = `<div class="media-preview-item"><img src="${ev.target.result}" alt=""><button class="media-preview-remove" onclick="removeMedia()">×</button></div>`;
-      updateComposerBtn();
-    };
-    reader.readAsDataURL(file);
+    // Generate preview from compressed version — fast and memory safe
+    try {
+      const thumb = await compressImage(file, 800, 0.75);
+      const url = URL.createObjectURL(thumb);
+      preview.innerHTML = `<div class="media-preview-item"><img src="${url}" alt=""><button class="media-preview-remove" onclick="removeMedia()">×</button></div>`;
+    } catch(e) {
+      // Fallback to FileReader if compression fails for preview
+      const reader = new FileReader();
+      reader.onload = ev => {
+        preview.innerHTML = `<div class="media-preview-item"><img src="${ev.target.result}" alt=""><button class="media-preview-remove" onclick="removeMedia()">×</button></div>`;
+      };
+      reader.readAsDataURL(file);
+    }
   });
 
   const ta = document.getElementById('composer-textarea');
@@ -4219,35 +4229,55 @@ async function uploadImage(file, bucket) {
 }
 
 async function compressImage(file, maxW = 1200, quality = 0.82) {
-  // Always compress through canvas to guarantee JPEG output
+  // Use createObjectURL instead of readAsDataURL — much faster for large files
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Failed to read file'));
-    reader.onload = ev => {
-      const img = new Image();
-      img.onerror = () => reject(new Error('Failed to decode image'));
-      img.onload = () => {
-        try {
-          const scale = Math.min(1, maxW / Math.max(img.width, 1));
-          const w = Math.max(1, Math.floor(img.width * scale));
-          const h = Math.max(1, Math.floor(img.height * scale));
-          const canvas = document.createElement('canvas');
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          // White background for transparent PNGs
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, w, h);
-          ctx.drawImage(img, 0, 0, w, h);
-          canvas.toBlob(blob => {
-            if (!blob) { reject(new Error('Canvas compression failed')); return; }
-            resolve(new File([blob], 'image.jpg', { type: 'image/jpeg' }));
-          }, 'image/jpeg', quality);
-        } catch(e) { reject(e); }
-      };
-      img.src = ev.target.result;
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Failed to decode image'));
     };
-    reader.readAsDataURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      try {
+        // Scale down aggressively for very large images
+        const longestSide = Math.max(img.width, img.height);
+        const effectiveMaxW = longestSide > 3000 ? 1080 : maxW;
+        const effectiveQuality = longestSide > 3000 ? 0.78 : quality;
+
+        const scale = Math.min(1, effectiveMaxW / Math.max(longestSide, 1));
+        const w = Math.max(1, Math.floor(img.width * scale));
+        const h = Math.max(1, Math.floor(img.height * scale));
+
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        // White background for transparent PNGs
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob(blob => {
+          if (!blob) { reject(new Error('Canvas compression failed')); return; }
+          // Warn if still large after compression
+          if (blob.size > 4 * 1024 * 1024) {
+            // Re-compress at lower quality
+            const canvas2 = document.createElement('canvas');
+            canvas2.width = w; canvas2.height = h;
+            const ctx2 = canvas2.getContext('2d');
+            ctx2.fillStyle = '#ffffff';
+            ctx2.fillRect(0, 0, w, h);
+            ctx2.drawImage(img, 0, 0, w, h);
+            canvas2.toBlob(blob2 => {
+              resolve(new File([blob2 || blob], 'image.jpg', { type: 'image/jpeg' }));
+            }, 'image/jpeg', 0.65);
+          } else {
+            resolve(new File([blob], 'image.jpg', { type: 'image/jpeg' }));
+          }
+        }, 'image/jpeg', effectiveQuality);
+      } catch(e) { reject(e); }
+    };
+    img.src = objectUrl;
   });
 }
 
