@@ -94,8 +94,16 @@
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/><path d="m21 21-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         <span>Discover</span>
       </button>
-      <button class="nav-btn nav-btn-compose" onclick="openComposer()">
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="white" fill-opacity="0.15"/><path d="M12 5v14M5 12h14" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>
+      <button class="nav-btn nav-btn-compose" id="nav-compose-btn" onclick="composeOrRetry()">
+        <!-- Progress ring SVG -->
+        <svg class="compose-ring" viewBox="0 0 52 52" width="52" height="52" id="compose-ring-svg">
+          <circle class="compose-ring-track" cx="26" cy="26" r="22"/>
+          <circle class="compose-ring-fill" cx="26" cy="26" r="22" id="compose-ring-fill"/>
+        </svg>
+        <!-- Icon inside button -->
+        <div class="compose-btn-inner" id="compose-btn-inner">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="white" fill-opacity="0.15"/><path d="M12 5v14M5 12h14" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>
+        </div>
       </button>
       <button class="nav-btn" data-page="notifications" onclick="navTo('notifications')">
         <div class="nav-bell-wrap">
