@@ -2769,9 +2769,15 @@ function prependPostToFeed(newPost) {
 
 // ── Upload with simulated progress ──
 async function uploadImageWithProgress(file, bucket, onProgress) {
-  // Compress first
-  onProgress(15);
-  const compressed = await compressImage(file);
+  onProgress(10);
+  let compressed;
+  try {
+    compressed = await compressImage(file);
+  } catch(e) {
+    // Compression failed — try uploading original file directly
+    console.warn('Compression failed, uploading original:', e.message);
+    compressed = new File([file], 'image.jpg', { type: file.type || 'image/jpeg' });
+  }
   onProgress(35);
 
   const ext = 'jpg';
@@ -2856,7 +2862,6 @@ async function submitPost() {
 
   const doUpload = async () => {
     try {
-      // Simulate progress stages while uploading
       setComposeRing('uploading', 10);
       const imageUrl = await uploadImageWithProgress(fileToUpload, 'post-images', (pct) => {
         setComposeRing('uploading', pct);
@@ -4395,6 +4400,11 @@ async function uploadImage(file, bucket) {
 }
 
 async function compressImage(file, maxW = 1200, quality = 0.82) {
+  // For small files under 800KB — skip compression entirely, just repackage as JPEG
+  if (file.size < 800 * 1024 && (file.type === 'image/jpeg' || file.type === 'image/jpg')) {
+    return new File([file], 'image.jpg', { type: 'image/jpeg' });
+  }
+
   // Use createObjectURL instead of readAsDataURL — much faster for large files
   return new Promise((resolve, reject) => {
     const objectUrl = URL.createObjectURL(file);
