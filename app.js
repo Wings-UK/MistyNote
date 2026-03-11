@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════
-   WINGED — app.js
+   MISTYNOTE — app.js
    Complete rewrite: clean architecture, mobile-first
 ═══════════════════════════════════════════════════════════ */
 
@@ -4120,10 +4120,10 @@ async function compressImage(file, maxW = 1200, quality = 0.82) {
 // ══════════════════════════════════════════
 
 function sharePost(post) {
-  const text = post.content ? post.content.slice(0, 100) : 'Check this out on Winged';
+  const text = post.content ? post.content.slice(0, 100) : 'Check this out on MistyNote';
   const url  = window.location.origin + '/post/' + post.id;
   if (navigator.share) {
-    navigator.share({ title: 'Winged', text, url }).catch(() => {});
+    navigator.share({ title: 'MistyNote', text, url }).catch(() => {});
   } else {
     navigator.clipboard?.writeText(url).then(() => showToast('Link copied!'));
   }
@@ -4131,10 +4131,10 @@ function sharePost(post) {
 
 function shareMyProfile() {
   const user = currentProfile;
-  const text = user?.username ? `Check out ${user.username} on Winged` : 'Check out my profile on Winged';
+  const text = user?.username ? `Check out ${user.username} on MistyNote` : 'Check out my profile on MistyNote';
   const url  = user?.username ? window.location.origin + '/profile/' + user.username : window.location.origin;
   if (navigator.share) {
-    navigator.share({ title: 'Winged', text, url }).catch(() => {});
+    navigator.share({ title: 'MistyNote', text, url }).catch(() => {});
   } else {
     navigator.clipboard?.writeText(url).then(() => showToast('Profile link copied!'));
   }
@@ -4200,7 +4200,7 @@ function getProfileUrl(profile) {
 function shareToApp(app) {
   if (!shareSheetProfile) return;
   const url  = getProfileUrl(shareSheetProfile);
-  const text = `Check out ${shareSheetProfile.username} on Winged`;
+  const text = `Check out ${shareSheetProfile.username} on MistyNote`;
   const encoded = encodeURIComponent(url);
   const encodedText = encodeURIComponent(text);
   const links = {
@@ -4212,7 +4212,7 @@ function shareToApp(app) {
   };
   if (app === 'instagram') {
     if (navigator.share) {
-      navigator.share({ title: 'Winged', text, url }).catch(() => {});
+      navigator.share({ title: 'MistyNote', text, url }).catch(() => {});
     } else {
       navigator.clipboard?.writeText(url).then(() => showToast('Link copied — paste in Instagram'));
     }
