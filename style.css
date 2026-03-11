@@ -312,15 +312,7 @@
     position: relative;
   }
   .feed-tab.active { color: var(--text); }
-  /* Sliding underline bar */
-  .feed-tab-bar {
-    position: absolute; bottom: 0; left: 0;
-    height: 2.5px; border-radius: 99px;
-    background: linear-gradient(90deg, #6C47FF, #a78bfa);
-    box-shadow: 0 0 6px rgba(108,71,255,0.45);
-    transition: left 0.28s cubic-bezier(0.34,1.2,0.64,1),
-                width 0.28s cubic-bezier(0.34,1.2,0.64,1);
-  }
+
   /* DM button — pushed to far right */
   .feed-dm-btn {
     margin-left: auto; flex-shrink: 0;
