@@ -48,6 +48,68 @@ const MAX_CHARS = 280;
 
 // ── WAIT FOR SUPABASE ──────────────────────────────────────
 
+
+// ══════════════════════════════════════════
+// UPLOAD PROGRESS — COMPOSE BUTTON RING
+// ══════════════════════════════════════════
+
+const uploadState = {
+  status: 'idle', // idle | uploading | success | failed
+  retryFn: null,
+  pendingPostData: null,
+};
+
+const RING_CIRCUMFERENCE = 138.2; // 2 * PI * 22
+
+function setComposeRing(status, progress = 0) {
+  const btn  = document.getElementById('nav-compose-btn');
+  const fill = document.getElementById('compose-ring-fill');
+  const inner = document.getElementById('compose-btn-inner');
+  if (!btn || !fill || !inner) return;
+
+  // Remove all state classes
+  btn.classList.remove('uploading', 'upload-success', 'upload-failed');
+
+  if (status === 'idle') {
+    fill.style.strokeDashoffset = RING_CIRCUMFERENCE;
+    inner.innerHTML = `<svg width="26" height="26" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="white" fill-opacity="0.15"/><path d="M12 5v14M5 12h14" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>`;
+    btn.style.animation = '';
+  } else if (status === 'uploading') {
+    btn.classList.add('uploading');
+    const offset = RING_CIRCUMFERENCE - (progress / 100) * RING_CIRCUMFERENCE;
+    fill.style.strokeDashoffset = offset;
+    inner.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  } else if (status === 'success') {
+    btn.classList.add('upload-success');
+    fill.style.strokeDashoffset = 0;
+    inner.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    // Auto-reset after 2 seconds
+    setTimeout(() => setComposeRing('idle'), 2000);
+  } else if (status === 'failed') {
+    btn.classList.add('upload-failed');
+    inner.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 9v4M12 17h.01" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  }
+  uploadState.status = status;
+}
+
+function composeOrRetry() {
+  if (uploadState.status === 'uploading') return; // ignore tap while uploading
+  if (uploadState.status === 'failed') {
+    // Show retry / discard action sheet
+    showActionSheet([
+      { label: 'Retry Upload', action: () => { if (uploadState.retryFn) uploadState.retryFn(); } },
+      { label: 'Discard Post', style: 'destructive', action: () => {
+        uploadState.retryFn = null;
+        uploadState.pendingPostData = null;
+        setComposeRing('idle');
+      }},
+      { label: 'Cancel', action: () => {} }
+    ]);
+    return;
+  }
+  openComposer();
+}
+
 // ══════════════════════════════════════════
 // ROUTER
 // ══════════════════════════════════════════
@@ -2633,6 +2695,85 @@ function insertEmoji() {
   showToast('Emoji picker coming soon!');
 }
 
+
+// ── Feed prepend helper ──
+function prependPostToFeed(newPost) {
+  if (!newPost) return;
+  const adapted = { ...newPost, comments: [{ count: 0 }] };
+  const el = createFeedPost(adapted);
+  const list = document.getElementById('feed-list');
+  if (list && el) {
+    list.prepend(el);
+    loadedPostIds.add(newPost.id);
+    el.classList.add('fade-up');
+    observePost(el);
+  }
+  // Mark repost state
+  if (newPost.reposted_post_id) {
+    repostedPosts.set(newPost.reposted_post_id, newPost.id);
+    setRepostUI(newPost.reposted_post_id, true);
+    // Increment repost count async
+    supabase.rpc('increment_repost_count', { post_id: newPost.reposted_post_id }).catch(() => {});
+    // Notify original author
+    supabase.from('posts').select('user_id').eq('id', newPost.reposted_post_id).single().then(({ data: orig }) => {
+      if (orig && orig.user_id !== currentUser.id) {
+        supabase.from('notifications').insert({
+          user_id: orig.user_id, actor_id: currentUser.id,
+          post_id: newPost.reposted_post_id, type: 'repost', read: false
+        }).catch(() => {});
+      }
+    });
+  }
+  // Update profile if on that page
+  if (document.getElementById('page-profile')?.classList.contains('active')) {
+    renderMyProfile();
+  }
+}
+
+// ── Upload with simulated progress ──
+async function uploadImageWithProgress(file, bucket, onProgress) {
+  // Compress first
+  onProgress(15);
+  const compressed = await compressImage(file);
+  onProgress(35);
+
+  const ext = 'jpg';
+  const rand = Math.random().toString(36).slice(2, 8);
+  const path = `${currentUser.id}_${Date.now()}_${rand}.${ext}`;
+
+  // Simulate progress while uploading
+  let progressInterval = setInterval(() => {
+    // nudge progress slowly — real progress not available via Supabase JS client
+  }, 300);
+
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      onProgress(35 + attempt * 15);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Upload timed out')), 60000)
+      );
+      const uploadPromise = supabase.storage.from(bucket).upload(path, compressed, {
+        upsert: true, contentType: 'image/jpeg'
+      });
+      const { error } = await Promise.race([uploadPromise, timeoutPromise]);
+      if (error) throw error;
+      clearInterval(progressInterval);
+      onProgress(85);
+      const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+      onProgress(100);
+      return data.publicUrl;
+    } catch(e) {
+      lastError = e;
+      if (attempt < 3) {
+        await new Promise(r => setTimeout(r, attempt * 1500));
+      }
+    }
+  }
+  clearInterval(progressInterval);
+  throw lastError;
+}
+
 async function submitPost() {
   const ta = document.getElementById('composer-textarea');
   const content = ta?.value?.trim() || '';
@@ -2643,93 +2784,78 @@ async function submitPost() {
 
   if (btn) btn.disabled = true;
 
-  // Capture these before closeComposer clears them
+  // Capture state before closeComposer clears them
   const targetId = repostTargetId;
+  const fileToUpload = selectedFile;
+  const postContent = content;
 
-  let imageUrl = null;
-  if (selectedFile) {
+  // Close composer immediately — user is free
+  closeComposer();
+
+  // Text-only posts — submit instantly, no ring needed
+  if (!fileToUpload) {
+    const payload = {
+      user_id: currentUser.id,
+      content: postContent || null,
+      image: null,
+      reposted_post_id: targetId || null
+    };
     try {
-      if (btn) btn.textContent = 'Uploading...';
-      imageUrl = await uploadImage(selectedFile, 'post-images');
-      if (btn) btn.textContent = 'Post';
-    } catch (e) {
-      console.error('Upload error:', e);
-      const msg = e?.message || 'Unknown error';
-      showToast('Upload failed: ' + msg);
-      if (btn) { btn.disabled = false; btn.textContent = 'Post'; }
-      return;
+      const { data: newPost, error } = await supabase.from('posts').insert(payload).select(`
+        id,content,image,video,created_at,like_count,comment_count,repost_count,views,user_id,reposted_post_id,
+        user:users(id,username,avatar),
+        reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar))
+      `).single();
+      if (error) throw error;
+      prependPostToFeed(newPost);
+    } catch(e) {
+      showToast('Post failed: ' + (e.message || 'Unknown error'));
     }
-  }
-
-  const payload = {
-    user_id: currentUser.id,
-    content: content || null,
-    image: imageUrl || null,
-    reposted_post_id: targetId || null
-  };
-
-  const { data: newPost, error } = await supabase
-    .from('posts')
-    .insert([payload])
-    .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
-             user:users(id,username,avatar),
-             reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar))`)
-    .single();
-
-  if (error) {
-    showToast('Post failed: ' + error.message);
-    if (btn) btn.disabled = false;
     return;
   }
 
-  // Close composer first so UI feels instant
-  closeComposer();
-  showToast('Posted! 🎉');
+  // Image post — show ring, upload in background
+  setComposeRing('uploading', 5);
 
-  // Prepend to feed immediately
-  const adapted = { ...newPost, comments: [{ count: 0 }] };
-  const el = createFeedPost(adapted);
-  const list = document.getElementById('feed-list');
-  if (list && el) {
-    list.prepend(el);
-    loadedPostIds.add(newPost.id);
-    el.classList.add('fade-up');
-    observePost(el);
-  }
+  const doUpload = async () => {
+    try {
+      // Simulate progress stages while uploading
+      setComposeRing('uploading', 10);
+      const imageUrl = await uploadImageWithProgress(fileToUpload, 'post-images', (pct) => {
+        setComposeRing('uploading', pct);
+      });
 
-  // Mark repost state immediately — before any async work
-  if (targetId) {
-    repostedPosts.set(targetId, newPost.id);
-    setRepostUI(targetId, true);
-  }
+      setComposeRing('uploading', 90);
 
-  // Handle repost async after UI is already updated
-  if (targetId) {
-    const { error: _e_increment_repost_count } = await supabase.rpc('increment_repost_count', { post_id: targetId }); // ignore error
+      const payload = {
+        user_id: currentUser.id,
+        content: postContent || null,
+        image: imageUrl,
+        reposted_post_id: targetId || null
+      };
 
-    // Fetch real count and update DOM
-    const { data: updated } = await supabase
-      .from('posts').select('repost_count').eq('id', targetId).single();
-    const newCount = updated?.repost_count ?? 0;
-    document.querySelectorAll(`.repost-btn[data-post-id="${targetId}"] span`)
-      .forEach(sp => { sp.textContent = newCount > 0 ? fmtNum(newCount) : String(newCount); });
-    document.querySelectorAll('.repost-count-display')
-      .forEach(el => { el.textContent = newCount; });
+      const { data: newPost, error } = await supabase.from('posts').insert(payload).select(`
+        id,content,image,video,created_at,like_count,comment_count,repost_count,views,user_id,reposted_post_id,
+        user:users(id,username,avatar),
+        reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar))
+      `).single();
+      if (error) throw error;
 
-    // Notify original post author
-    const { data: orig } = await supabase.from('posts').select('user_id').eq('id', targetId).single();
-    if (orig && orig.user_id !== currentUser.id) {
-      await supabase.from('notifications').insert({
-        user_id: orig.user_id, actor_id: currentUser.id,
-        post_id: targetId, type: 'repost', read: false
-      }).catch(() => {});
+      setComposeRing('success');
+      prependPostToFeed(newPost);
+      uploadState.retryFn = null;
+      uploadState.pendingPostData = null;
+
+    } catch(e) {
+      console.error('Upload error:', e);
+      setComposeRing('failed');
+      // Store retry function
+      uploadState.retryFn = doUpload;
     }
-  }
+  };
 
-  // Update profile if on that page
-  if (document.getElementById('page-profile')?.classList.contains('active')) {
-    renderMyProfile();
-  }
+  await doUpload();
+
 }
 
 // ══════════════════════════════════════════
