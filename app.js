@@ -95,6 +95,28 @@ window.addEventListener('popstate', () => {
   }
 });
 
+
+// ══════════════════════════════════════════
+// USERNAME / BIO VALIDATION
+// ══════════════════════════════════════════
+
+function validateUsername(raw) {
+  // Strip leading @ if present
+  const username = raw.replace(/^@/, '').trim();
+  if (!username) return { valid: false, error: 'Username is required', value: '' };
+  if (username.length < 3) return { valid: false, error: 'At least 3 characters required', value: username };
+  if (username.length > 20) return { valid: false, error: 'Max 20 characters', value: username };
+  if (!/^[a-z0-9_]+$/.test(username)) return { valid: false, error: 'Only lowercase letters, numbers and _ allowed', value: username };
+  if (/^_/.test(username) || /_$/.test(username)) return { valid: false, error: 'Cannot start or end with underscore', value: username };
+  if (/__/.test(username)) return { valid: false, error: 'No consecutive underscores', value: username };
+  return { valid: true, error: '', value: username };
+}
+
+function sanitizeUsernameInput(input) {
+  // Force lowercase, strip invalid chars as user types
+  return input.toLowerCase().replace(/[^a-z0-9_]/g, '');
+}
+
 window.addEventListener('supabase-ready', init);
 
 // ── INIT ──────────────────────────────────────────────────
@@ -249,8 +271,14 @@ async function handleAuth() {
 
   try {
     if (isSignup) {
-      const username = document.getElementById('auth-username')?.value?.trim() || '';
-      if (!username) { throw new Error('Please enter a username'); }
+      const rawUsername = document.getElementById('auth-username')?.value || '';
+      const usernameCheck = validateUsername(rawUsername);
+      if (!usernameCheck.valid) { throw new Error(usernameCheck.error); }
+      const cleanUsername = usernameCheck.value;
+
+      // Check username not already taken
+      const { data: existing } = await supabase.from('users').select('id').eq('username', cleanUsername).maybeSingle();
+      if (existing) { throw new Error('Username already taken — try another'); }
 
       const { data, error } = await supabase.auth.signUp({ email, password });
       if (error) throw error;
@@ -258,7 +286,7 @@ async function handleAuth() {
       if (data.user) {
         await supabase.from('users').upsert({
           id: data.user.id,
-          username: '@' + username.replace(/^@/, '').replace(/\s/g, ''),
+          username: cleanUsername,
           bio: '', location: '', avatar: '', cover: '',
           followers: 0, following: 0
         });
@@ -3986,6 +4014,32 @@ async function deletePost(postId, el) {
 // ══════════════════════════════════════════
 
 function openEditProfile() {
+  // Wire up live username sanitization
+  setTimeout(() => {
+    const unInput = document.getElementById('edit-username');
+    const unError = document.getElementById('edit-username-error');
+    const bioInput = document.getElementById('edit-bio');
+    const bioCount = document.getElementById('edit-bio-count');
+
+    if (unInput) {
+      unInput.addEventListener('input', () => {
+        const sanitized = sanitizeUsernameInput(unInput.value);
+        if (unInput.value !== sanitized) unInput.value = sanitized;
+        const check = validateUsername(sanitized);
+        if (unError) unError.textContent = sanitized.length > 0 && !check.valid ? check.error : '';
+      });
+    }
+
+    if (bioInput && bioCount) {
+      const updateCount = () => {
+        const len = bioInput.value.length;
+        bioCount.textContent = len + '/150';
+        bioCount.style.color = len >= 140 ? 'var(--red, #ff3b5c)' : 'var(--text3)';
+      };
+      bioInput.addEventListener('input', updateCount);
+      updateCount();
+    }
+  }, 50);
   if (!currentProfile) return;
   const overlay = document.getElementById('edit-profile-overlay');
   overlay.classList.remove('hidden');
@@ -4020,9 +4074,37 @@ function previewCover(e) {
 }
 
 async function saveProfile() {
+  const rawUsername = document.getElementById('edit-username').value;
+  const bioValue    = document.getElementById('edit-bio').value.trim();
+  const unError     = document.getElementById('edit-username-error');
+
+  // Validate username
+  const usernameCheck = validateUsername(rawUsername);
+  if (!usernameCheck.valid) {
+    if (unError) unError.textContent = usernameCheck.error;
+    document.getElementById('edit-username').focus();
+    return;
+  }
+
+  // Check uniqueness if username changed
+  if (usernameCheck.value !== currentProfile.username) {
+    const { data: existing } = await supabase.from('users').select('id').eq('username', usernameCheck.value).maybeSingle();
+    if (existing) {
+      if (unError) unError.textContent = 'Username already taken — try another';
+      document.getElementById('edit-username').focus();
+      return;
+    }
+  }
+
+  // Validate bio length
+  if (bioValue.length > 150) {
+    showToast('Bio must be 150 characters or less');
+    return;
+  }
+
   const updates = {
-    username: document.getElementById('edit-username').value.trim(),
-    bio: document.getElementById('edit-bio').value.trim(),
+    username: usernameCheck.value,
+    bio: bioValue,
     location: document.getElementById('edit-location').value.trim()
   };
 
