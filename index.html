@@ -68,7 +68,7 @@
         </div>
         <div class="auth-input-wrap" id="username-wrap" style="display:none">
           <span class="auth-input-icon">@</span>
-          <input type="text" id="auth-username" placeholder="username (no spaces)" class="auth-input">
+          <input type="text" id="auth-username" placeholder="username (letters, numbers, _)" class="auth-input" maxlength="20" autocomplete="off" autocapitalize="none" spellcheck="false">
         </div>
         <p id="auth-error" class="auth-error"></p>
         <button class="auth-submit-btn" id="auth-btn" onclick="handleAuth()">
@@ -528,12 +528,19 @@
         </div>
         <div class="edit-fields">
           <div class="edit-field-group">
-            <label class="edit-label">Display Name</label>
-            <input type="text" id="edit-username" class="edit-input" placeholder="Your name">
+            <label class="edit-label">
+              Username
+              <span class="edit-field-hint">3–20 chars · letters, numbers, _ only</span>
+            </label>
+            <input type="text" id="edit-username" class="edit-input" placeholder="your_username" maxlength="20" autocomplete="off" autocapitalize="none" spellcheck="false">
+            <span class="edit-field-error" id="edit-username-error"></span>
           </div>
           <div class="edit-field-group">
-            <label class="edit-label">Bio</label>
-            <textarea id="edit-bio" class="edit-input edit-textarea" placeholder="Tell the world about yourself..." rows="3"></textarea>
+            <label class="edit-label">
+              Bio
+              <span class="edit-char-count" id="edit-bio-count">0/150</span>
+            </label>
+            <textarea id="edit-bio" class="edit-input edit-textarea" placeholder="Tell the world about yourself..." rows="3" maxlength="150"></textarea>
           </div>
           <div class="edit-field-group">
             <label class="edit-label">Location</label>
