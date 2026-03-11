@@ -2890,26 +2890,46 @@ async function submitPost() {
 
       setComposeRing('uploading', 90);
 
-      // Refresh session before insert — prevents expired token errors on Chrome
+      // Use direct fetch for insert — bypasses Supabase SDK session issues on Chrome
       const { data: { session: freshSession } } = await supabase.auth.getSession();
       if (!freshSession) throw new Error('Session expired — please sign in again');
 
-      const payload = {
-        user_id: freshSession.user.id,
-        content: postContent || null,
-        image: imageUrl,
-        reposted_post_id: targetId || null
-      };
+      const SUPABASE_URL = 'https://rhmknjlxddxkfybcfgjj.supabase.co';
+      const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJobWtuamx4ZGR4a2Z5YmNmZ2pqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk0MzM4OTgsImV4cCI6MjA4NTAwOTg5OH0.dNBxXmIdYAxJT-bt1WWcO62Nobt8aDLTRdnrs5g1CCI';
 
-      const { data: newPost, error } = await supabase.from('posts').insert(payload).select(`
+      const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/posts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${freshSession.access_token}`,
+          'apikey': SUPABASE_KEY,
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify({
+          user_id: freshSession.user.id,
+          content: postContent || null,
+          image: imageUrl,
+          reposted_post_id: targetId || null
+        })
+      });
+
+      if (!insertRes.ok) {
+        const errText = await insertRes.text();
+        console.error('Insert error:', insertRes.status, errText);
+        throw new Error('Post failed: ' + insertRes.status);
+      }
+
+      const inserted = await insertRes.json();
+      const newPostId = Array.isArray(inserted) ? inserted[0]?.id : inserted?.id;
+      if (!newPostId) throw new Error('Post saved but ID missing');
+
+      // Fetch full post with relations for feed
+      const { data: newPost, error: fetchErr } = await supabase.from('posts').select(`
         id,content,image,video,created_at,like_count,comment_count,repost_count,views,user_id,reposted_post_id,
         user:users(id,username,avatar),
         reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar))
-      `).single();
-      if (error) {
-        console.error('Insert error:', JSON.stringify(error));
-        throw new Error(error.message || error.details || JSON.stringify(error));
-      }
+      `).eq('id', newPostId).single();
+      if (fetchErr) throw fetchErr;
 
       setComposeRing('success');
       prependPostToFeed(newPost);
