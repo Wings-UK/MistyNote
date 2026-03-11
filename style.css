@@ -231,13 +231,54 @@
   .nav-btn.active svg { transform: scale(1.1); }
   
   .nav-btn-compose {
-    width: 52px; height: 52px; border-radius: 16px; flex: none;
+    width: 52px; height: 52px; border-radius: 50%; flex: none;
     background: linear-gradient(135deg, var(--accent), #ff3b5c);
     color: white; display: flex; align-items: center; justify-content: center;
     box-shadow: 0 4px 16px rgba(108,71,255,0.4);
     transition: transform 0.2s, box-shadow 0.2s;
+    position: relative; overflow: visible; padding: 0;
   }
   .nav-btn-compose:active { transform: scale(0.92); box-shadow: 0 2px 8px rgba(108,71,255,0.3); }
+
+  /* Progress ring */
+  .compose-ring {
+    position: absolute; top: -4px; left: -4px;
+    width: 60px; height: 60px;
+    pointer-events: none;
+    transform: rotate(-90deg);
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .compose-ring-track {
+    fill: none; stroke: rgba(255,255,255,0.2);
+    stroke-width: 3;
+  }
+  .compose-ring-fill {
+    fill: none; stroke: white;
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-dasharray: 138.2; /* 2 * PI * 22 */
+    stroke-dashoffset: 138.2;
+    transition: stroke-dashoffset 0.3s ease;
+  }
+  .compose-btn-inner {
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.2s;
+  }
+
+  /* Upload states */
+  .nav-btn-compose.uploading .compose-ring { opacity: 1; }
+  .nav-btn-compose.uploading .compose-ring-fill { stroke: white; }
+  .nav-btn-compose.upload-success { background: linear-gradient(135deg, #22c55e, #16a34a); }
+  .nav-btn-compose.upload-success .compose-ring { opacity: 0; }
+  .nav-btn-compose.upload-failed { background: linear-gradient(135deg, #ff3b5c, #e11d48); }
+  .nav-btn-compose.upload-failed .compose-ring { opacity: 1; }
+  .nav-btn-compose.upload-failed .compose-ring-fill { stroke: rgba(255,255,255,0.6); stroke-dashoffset: 0; }
+
+  @keyframes composePulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.08); }
+  }
+  .nav-btn-compose.upload-failed { animation: composePulse 2s ease-in-out infinite; }
   
   .nav-bell-wrap, .nav-avatar-wrap { position: relative; }
   .notif-dot {
