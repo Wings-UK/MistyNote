@@ -1262,6 +1262,16 @@
   .composer-char-count.low { color: var(--gold); }
   .composer-char-count.critical { color: var(--red); }
 
+  /* Location read-only display */
+  .location-readonly-wrap {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 14px; border-radius: 12px;
+    background: var(--bg2); color: var(--text2);
+    font-size: 15px; border: 1.5px solid var(--border);
+  }
+  .location-readonly-wrap svg { color: var(--accent); flex-shrink: 0; }
+  .location-readonly-wrap span { flex: 1; }
+
   /* ── Toolbar: media buttons ── */
   .composer-toolbar {
     display: flex; align-items: center;
