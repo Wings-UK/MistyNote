@@ -2678,6 +2678,12 @@ function initComposerFile() {
     if (!file) return;
     if (!file.type.startsWith('image/')) { showToast('Images only'); return; }
 
+    if (file.size > 2 * 1024 * 1024) {
+      showToast('Image must be under 2MB');
+      fileInput.value = '';
+      return;
+    }
+
     selectedFile = file;
     updateComposerBtn();
 
@@ -2698,11 +2704,18 @@ function initComposerFile() {
   });
 
   const ta = document.getElementById('composer-textarea');
+  ta?.addEventListener('focus', () => {
+    // Scroll textarea into view when keyboard opens, especially with image preview above
+    setTimeout(() => {
+      ta.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 100);
+  });
   ta?.addEventListener('input', () => {
     updateComposerBtn();
     updateCharCount(ta.value.length);
     ta.style.height = 'auto';
     ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
+    ta.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   });
 }
 
