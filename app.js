@@ -2985,6 +2985,13 @@ async function uploadToStorage(file, onProgress) {
   const bucket = 'post-images';
   console.log('[UPLOAD] uploading to bucket:', bucket, 'path:', path);
 
+  // Convert blob → ArrayBuffer ONCE before the retry loop.
+  // Chrome Android revokes blob access after the first read attempt,
+  // so calling blob.arrayBuffer() inside the loop causes NotReadableError
+  // on retries. ArrayBuffer stays in memory and is safely reusable.
+  const arrayBuffer = await blob.arrayBuffer();
+  console.log('[UPLOAD] arrayBuffer ready —', arrayBuffer.byteLength, 'bytes');
+
   // Retry up to 4 times with exponential backoff — built for bad networks
   for (let attempt = 1; attempt <= 4; attempt++) {
     try {
@@ -2993,12 +3000,6 @@ async function uploadToStorage(file, onProgress) {
 
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 45000); // 45s per attempt
-
-      // Convert blob → ArrayBuffer before upload.
-      // Chrome Android has a known issue where Supabase Storage SDK's
-      // internal insertSync throws a TypeError when passed a Blob directly.
-      // Passing an ArrayBuffer with explicit contentType bypasses this.
-      const arrayBuffer = await blob.arrayBuffer();
 
       const { error } = await supabase.storage
         .from(bucket)
