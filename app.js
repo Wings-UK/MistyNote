@@ -2676,7 +2676,21 @@ function initComposerFile() {
   fileInput.addEventListener('change', e => {
     const file = e.target.files[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) { showToast('Images only'); return; }
+    // File type check — accept image/* and HEIC/HEIF by extension
+    const name = file.name.toLowerCase();
+    const isHeic = name.endsWith('.heic') || name.endsWith('.heif');
+    if (!file.type.startsWith('image/') && !isHeic) { showToast('Images only'); return; }
+
+    // Size warning — over 25MB is unreasonable even before compression
+    if (file.size > 25 * 1024 * 1024) {
+      showToast('Image too large. Please pick one under 25MB.');
+      return;
+    }
+
+    // Soft warning for large files — still allowed, just inform user
+    if (file.size > 10 * 1024 * 1024) {
+      showToast('Large image — may take a moment to upload');
+    }
 
     selectedFile = file;
     updateComposerBtn();
@@ -2764,41 +2778,158 @@ function prependPostToFeed(newPost) {
 }
 
 // ── Image → JPEG blob via canvas, with FileReader fallback ──
-function fileToJpegBlob(file) {
-  return new Promise((resolve) => {
-    const MAX = 1280;
-    const Q   = 0.82;
+// ── Read EXIF orientation tag from ArrayBuffer ──
+function readExifOrientation(buffer) {
+  try {
+    const view = new DataView(buffer);
+    if (view.getUint16(0) !== 0xFFD8) return 1; // not JPEG
+    let offset = 2;
+    while (offset < view.byteLength) {
+      const marker = view.getUint16(offset);
+      offset += 2;
+      if (marker === 0xFFE1) { // APP1 / EXIF
+        if (view.getUint32(offset + 2) !== 0x45786966) return 1; // 'Exif'
+        const little = view.getUint16(offset + 10) === 0x4949;
+        const tags   = view.getUint16(offset + 14, little);
+        for (let i = 0; i < tags; i++) {
+          if (view.getUint16(offset + 16 + i * 12, little) === 0x0112) {
+            return view.getUint16(offset + 16 + i * 12 + 8, little);
+          }
+        }
+      } else if ((marker & 0xFF00) !== 0xFF00) break;
+      else offset += view.getUint16(offset);
+    }
+  } catch(_) {}
+  return 1;
+}
 
-    const tryCanvas = (src) => {
+// ── Strip ALL EXIF data (privacy: removes GPS, device info, timestamps) ──
+function stripExif(blob) {
+  return new Promise(resolve => {
+    const fr = new FileReader();
+    fr.onload = ev => {
+      try {
+        const arr  = new Uint8Array(ev.target.result);
+        const out  = [arr.slice(0, 2)]; // keep SOI marker (FFD8)
+        let i = 2;
+        while (i < arr.length) {
+          if (arr[i] !== 0xFF) break;
+          const marker = (arr[i] << 8) | arr[i + 1];
+          const len    = (arr[i + 2] << 8) | arr[i + 3];
+          // Drop APP0 (JFIF), APP1 (EXIF), APP2–APP15 (misc metadata)
+          const isMetadata = marker >= 0xFFE0 && marker <= 0xFFEF;
+          if (!isMetadata) out.push(arr.slice(i, i + 2 + len));
+          i += 2 + len;
+        }
+        out.push(arr.slice(i)); // rest of image data
+        resolve(new Blob(out, { type: 'image/jpeg' }));
+      } catch(_) { resolve(blob); } // on any failure keep original
+    };
+    fr.onerror = () => resolve(blob);
+    fr.readAsArrayBuffer(blob);
+  });
+}
+
+// ── Convert file to compressed, orientation-corrected, EXIF-stripped JPEG ──
+// Never throws — worst case returns original file untouched
+function fileToJpegBlob(file) {
+  return new Promise(resolve => {
+    const MAX = 1280; // max dimension px
+    const Q   = 0.82; // JPEG quality
+
+    const processWithSrc = (src, orientBuffer) => {
+      const orientation = orientBuffer ? readExifOrientation(orientBuffer) : 1;
       const img = new Image();
-      img.onload = () => {
+
+      img.onerror = () => resolve(file);
+      img.onload  = () => {
         try {
-          const scale = Math.min(1, MAX / Math.max(img.naturalWidth, img.naturalHeight, 1));
-          const w = Math.max(1, Math.round(img.naturalWidth  * scale));
-          const h = Math.max(1, Math.round(img.naturalHeight * scale));
-          const c = document.createElement('canvas');
-          c.width = w; c.height = h;
+          const ow = img.naturalWidth;
+          const oh = img.naturalHeight;
+
+          // Determine if we need to swap w/h for rotation
+          const swap  = orientation >= 5 && orientation <= 8;
+          const scale = Math.min(1, MAX / Math.max(swap ? oh : ow, swap ? ow : oh, 1));
+          const dw    = Math.max(1, Math.round(ow * scale));
+          const dh    = Math.max(1, Math.round(oh * scale));
+
+          const c   = document.createElement('canvas');
+          c.width   = swap ? dh : dw;
+          c.height  = swap ? dw : dh;
           const ctx = c.getContext('2d');
+
           ctx.fillStyle = '#fff';
-          ctx.fillRect(0, 0, w, h);
-          ctx.drawImage(img, 0, 0, w, h);
-          c.toBlob(blob => {
-            // If toBlob fails or returns nothing, fallback to raw file
-            resolve(blob && blob.size > 0 ? blob : file);
+          ctx.fillRect(0, 0, c.width, c.height);
+
+          // Apply orientation correction transform
+          ctx.save();
+          ctx.translate(c.width / 2, c.height / 2);
+          const rotate = { 3: Math.PI, 6: Math.PI/2, 8: -Math.PI/2 };
+          const flipX  = [2, 4, 5, 7].includes(orientation);
+          if (rotate[orientation]) ctx.rotate(rotate[orientation]);
+          if (flipX) ctx.scale(-1, 1);
+          ctx.drawImage(img, -dw/2, -dh/2, dw, dh);
+          ctx.restore();
+
+          c.toBlob(async blob => {
+            if (!blob || blob.size === 0) { resolve(file); return; }
+            // Strip EXIF from the compressed output
+            const clean = await stripExif(blob);
+            resolve(clean);
           }, 'image/jpeg', Q);
+
         } catch(_) { resolve(file); }
       };
-      img.onerror = () => resolve(file); // give up gracefully, use original
       img.src = src;
     };
 
-    // Try objectURL first (fast), fall back to FileReader (always works)
+    // For HEIC/HEIF — browser can't decode natively, upload original
+    // Most modern Android browsers handle HEIC in <img> but canvas may fail
+    const name = (file.name || '').toLowerCase();
+    if (name.endsWith('.heic') || name.endsWith('.heif')) {
+      // Try to draw it — if canvas fails we fall back to original
+      try {
+        const url = URL.createObjectURL(file);
+        processWithSrc(url, null);
+      } catch(_) { resolve(file); }
+      return;
+    }
+
+    // For JPEG — read EXIF orientation first, then process
+    if (file.type === 'image/jpeg' || file.type === 'image/jpg') {
+      const fr = new FileReader();
+      fr.onload = ev => {
+        const orientBuffer = ev.target.result;
+        try {
+          const url = URL.createObjectURL(file);
+          processWithSrc(url, orientBuffer);
+        } catch(_) {
+          // objectURL failed — use data URL from same read
+          const fr2 = new FileReader();
+          fr2.onload = e2 => processWithSrc(e2.target.result, orientBuffer);
+          fr2.onerror = () => resolve(file);
+          fr2.readAsDataURL(file);
+        }
+      };
+      fr.onerror = () => {
+        // Can't read EXIF — still compress without orientation fix
+        try {
+          const url = URL.createObjectURL(file);
+          processWithSrc(url, null);
+        } catch(_) { resolve(file); }
+      };
+      // Read just first 64KB for EXIF — much faster than full file
+      fr.readAsArrayBuffer(file.slice(0, 65536));
+      return;
+    }
+
+    // PNG, GIF, WebP etc — no EXIF orientation, just compress
     try {
       const url = URL.createObjectURL(file);
-      tryCanvas(url);
+      processWithSrc(url, null);
     } catch(_) {
       const fr = new FileReader();
-      fr.onload = ev => tryCanvas(ev.target.result);
+      fr.onload = ev => processWithSrc(ev.target.result, null);
       fr.onerror = () => resolve(file);
       fr.readAsDataURL(file);
     }
