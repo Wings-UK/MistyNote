@@ -2837,26 +2837,40 @@ function fileToJpegBlob(file) {
     const MAX = 1280; // max dimension px
     const Q   = 0.82; // JPEG quality
 
+    console.log('[UPLOAD] fileToJpegBlob start —', file.name, file.type, (file.size/1024).toFixed(1)+'KB');
+
     const processWithSrc = (src, orientBuffer) => {
       const orientation = orientBuffer ? readExifOrientation(orientBuffer) : 1;
+      console.log('[UPLOAD] processWithSrc — orientation:', orientation, 'src type:', src.startsWith('blob:') ? 'objectURL' : 'dataURL');
       const img = new Image();
 
-      img.onerror = () => resolve(file);
+      img.onerror = (e) => {
+        console.error('[UPLOAD] img.onerror — failed to load image src. Falling back to original file.', e);
+        resolve(file);
+      };
       img.onload  = () => {
         try {
           const ow = img.naturalWidth;
           const oh = img.naturalHeight;
+          console.log('[UPLOAD] img loaded —', ow+'x'+oh);
 
           // Determine if we need to swap w/h for rotation
           const swap  = orientation >= 5 && orientation <= 8;
           const scale = Math.min(1, MAX / Math.max(swap ? oh : ow, swap ? ow : oh, 1));
           const dw    = Math.max(1, Math.round(ow * scale));
           const dh    = Math.max(1, Math.round(oh * scale));
+          console.log('[UPLOAD] canvas size —', (swap?dh:dw)+'x'+(swap?dw:dh), 'scale:', scale.toFixed(3));
 
           const c   = document.createElement('canvas');
           c.width   = swap ? dh : dw;
           c.height  = swap ? dw : dh;
           const ctx = c.getContext('2d');
+
+          if (!ctx) {
+            console.error('[UPLOAD] canvas getContext failed — resolving with original file');
+            resolve(file);
+            return;
+          }
 
           ctx.fillStyle = '#fff';
           ctx.fillRect(0, 0, c.width, c.height);
@@ -2870,19 +2884,31 @@ function fileToJpegBlob(file) {
           if (flipX) ctx.scale(-1, 1);
           ctx.drawImage(img, -dw/2, -dh/2, dw, dh);
           ctx.restore();
+          console.log('[UPLOAD] drawImage done — calling toBlob');
 
           c.toBlob(async blob => {
-            if (!blob || blob.size === 0) { resolve(file); return; }
+            if (!blob || blob.size === 0) {
+              console.error('[UPLOAD] toBlob returned empty blob — falling back to original file');
+              resolve(file); return;
+            }
+            console.log('[UPLOAD] toBlob success —', (blob.size/1024).toFixed(1)+'KB — stripping EXIF');
             // Strip EXIF from the compressed output.
             // Canvas toBlob never carries original EXIF through, so if stripExif
             // mangles the blob (e.g. small images with no APP segments), falling
             // back to the unstripped canvas blob is safe and still privacy-clean.
             const clean = await stripExif(blob);
-            if (!clean || clean.size < blob.size * 0.5) { resolve(blob); return; }
+            if (!clean || clean.size < blob.size * 0.5) {
+              console.warn('[UPLOAD] stripExif produced suspicious result ('+((clean?.size||0)/1024).toFixed(1)+'KB vs '+( blob.size/1024).toFixed(1)+'KB) — using unstripped canvas blob');
+              resolve(blob); return;
+            }
+            console.log('[UPLOAD] stripExif done —', (clean.size/1024).toFixed(1)+'KB — resolving');
             resolve(clean);
           }, 'image/jpeg', Q);
 
-        } catch(_) { resolve(file); }
+        } catch(err) {
+          console.error('[UPLOAD] exception in img.onload —', err, '— falling back to original file');
+          resolve(file);
+        }
       };
       img.src = src;
     };
@@ -2891,36 +2917,39 @@ function fileToJpegBlob(file) {
     // Most modern Android browsers handle HEIC in <img> but canvas may fail
     const name = (file.name || '').toLowerCase();
     if (name.endsWith('.heic') || name.endsWith('.heif')) {
-      // Try to draw it — if canvas fails we fall back to original
+      console.log('[UPLOAD] HEIC/HEIF detected — trying objectURL');
       try {
         const url = URL.createObjectURL(file);
         processWithSrc(url, null);
-      } catch(_) { resolve(file); }
+      } catch(e) { console.error('[UPLOAD] HEIC objectURL failed —', e); resolve(file); }
       return;
     }
 
     // For JPEG — read EXIF orientation first, then process
     if (file.type === 'image/jpeg' || file.type === 'image/jpg') {
+      console.log('[UPLOAD] JPEG — reading EXIF orientation first');
       const fr = new FileReader();
       fr.onload = ev => {
         const orientBuffer = ev.target.result;
         try {
           const url = URL.createObjectURL(file);
           processWithSrc(url, orientBuffer);
-        } catch(_) {
+        } catch(e) {
+          console.warn('[UPLOAD] objectURL failed for JPEG —', e, '— falling back to dataURL');
           // objectURL failed — use data URL from same read
           const fr2 = new FileReader();
           fr2.onload = e2 => processWithSrc(e2.target.result, orientBuffer);
-          fr2.onerror = () => resolve(file);
+          fr2.onerror = (e2) => { console.error('[UPLOAD] fr2 dataURL read failed —', e2); resolve(file); };
           fr2.readAsDataURL(file);
         }
       };
-      fr.onerror = () => {
+      fr.onerror = (e) => {
+        console.warn('[UPLOAD] EXIF read failed —', e, '— compressing without orientation fix');
         // Can't read EXIF — still compress without orientation fix
         try {
           const url = URL.createObjectURL(file);
           processWithSrc(url, null);
-        } catch(_) { resolve(file); }
+        } catch(e2) { console.error('[UPLOAD] objectURL also failed —', e2); resolve(file); }
       };
       // Read just first 64KB for EXIF — much faster than full file
       fr.readAsArrayBuffer(file.slice(0, 65536));
@@ -2928,13 +2957,15 @@ function fileToJpegBlob(file) {
     }
 
     // PNG, GIF, WebP etc — no EXIF orientation, just compress
+    console.log('[UPLOAD] non-JPEG image — compressing directly');
     try {
       const url = URL.createObjectURL(file);
       processWithSrc(url, null);
-    } catch(_) {
+    } catch(e) {
+      console.warn('[UPLOAD] objectURL failed —', e, '— falling back to dataURL');
       const fr = new FileReader();
       fr.onload = ev => processWithSrc(ev.target.result, null);
-      fr.onerror = () => resolve(file);
+      fr.onerror = (e2) => { console.error('[UPLOAD] dataURL read also failed —', e2); resolve(file); };
       fr.readAsDataURL(file);
     }
   });
@@ -2942,18 +2973,22 @@ function fileToJpegBlob(file) {
 
 // ── Upload: compress → retry loop → return public URL ──
 async function uploadToStorage(file, onProgress) {
+  console.log('[UPLOAD] uploadToStorage start');
   onProgress(5);
 
   // Compress — never throws, worst case returns original file
   const blob = await fileToJpegBlob(file);
+  console.log('[UPLOAD] compression complete — blob size:', (blob.size/1024).toFixed(1)+'KB', 'type:', blob.type);
   onProgress(25);
 
   const path = `${currentUser.id}_${Date.now()}_${Math.random().toString(36).slice(2,7)}.jpg`;
   const bucket = 'post-images';
+  console.log('[UPLOAD] uploading to bucket:', bucket, 'path:', path);
 
   // Retry up to 4 times with exponential backoff — built for bad networks
   for (let attempt = 1; attempt <= 4; attempt++) {
     try {
+      console.log('[UPLOAD] attempt', attempt, 'of 4');
       onProgress(25 + attempt * 14); // 39 / 53 / 67 / 81
 
       const controller = new AbortController();
@@ -2964,14 +2999,19 @@ async function uploadToStorage(file, onProgress) {
         .upload(path, blob, { upsert: true, contentType: 'image/jpeg' });
 
       clearTimeout(timer);
-      if (error) throw error;
+      if (error) {
+        console.error('[UPLOAD] supabase storage error on attempt', attempt, '—', error);
+        throw error;
+      }
 
       onProgress(90);
       const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+      console.log('[UPLOAD] success — public URL:', data.publicUrl);
       onProgress(100);
       return data.publicUrl;
 
     } catch (err) {
+      console.error('[UPLOAD] catch on attempt', attempt, '—', err);
       if (attempt === 4) throw err;
       // Wait before retry: 2s, 4s, 8s
       await new Promise(r => setTimeout(r, attempt * 2000));
