@@ -168,7 +168,7 @@ function validateUsername(raw) {
   const username = raw.replace(/^@/, '').trim();
   if (!username) return { valid: false, error: 'Username is required', value: '' };
   if (username.length < 3) return { valid: false, error: 'At least 3 characters required', value: username };
-  if (username.length > 20) return { valid: false, error: 'Max 20 characters', value: username };
+  if (username.length > 15) return { valid: false, error: 'Max 15 characters', value: username };
   if (!/^[a-z0-9_]+$/.test(username)) return { valid: false, error: 'Only lowercase letters, numbers and _ allowed', value: username };
   if (/^_/.test(username) || /_$/.test(username)) return { valid: false, error: 'Cannot start or end with underscore', value: username };
   if (/__/.test(username)) return { valid: false, error: 'No consecutive underscores', value: username };
@@ -4202,10 +4202,20 @@ function openEditProfile() {
     }
 
     if (bioInput && bioCount) {
+      // Block newlines — bio must be single line
+      bioInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') e.preventDefault();
+      });
+      // Also strip any pasted newlines
+      bioInput.addEventListener('input', () => {
+        if (bioInput.value.includes('\n')) {
+          bioInput.value = bioInput.value.replace(/\n/g, ' ').trim();
+        }
+      });
       const updateCount = () => {
         const len = bioInput.value.length;
-        bioCount.textContent = len + '/150';
-        bioCount.style.color = len >= 140 ? 'var(--red, #ff3b5c)' : 'var(--text3)';
+        bioCount.textContent = len + '/100';
+        bioCount.style.color = len >= 90 ? 'var(--red, #ff3b5c)' : 'var(--text3)';
       };
       bioInput.addEventListener('input', updateCount);
       updateCount();
@@ -4268,8 +4278,8 @@ async function saveProfile() {
   }
 
   // Validate bio length
-  if (bioValue.length > 150) {
-    showToast('Bio must be 150 characters or less');
+  if (bioValue.length > 100) {
+    showToast('Bio must be 100 characters or less');
     return;
   }
 
