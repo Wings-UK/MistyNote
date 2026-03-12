@@ -4407,7 +4407,8 @@ async function saveProfile() {
     return;
   }
 
-  const usernameChanged = usernameCheck.value !== currentProfile.username;
+  // Normalise both sides before comparing — prevents false "changed" from whitespace/case
+  const usernameChanged = usernameCheck.value.toLowerCase().trim() !== (currentProfile.username || '').toLowerCase().trim();
   const bioChanged      = bioValue !== (currentProfile.bio || '');
 
   // ── Username rate limit: 90 days ──
@@ -4457,7 +4458,12 @@ async function saveProfile() {
     if (editAvatarFile) updates.avatar = await uploadImage(editAvatarFile, 'avatars');
     if (editCoverFile)  updates.cover  = await uploadImage(editCoverFile, 'covers');
 
-    const { error } = await supabase.from('users').update(updates).eq('id', currentUser.id);
+    // Only send columns that exist — strip anything undefined or null-ish that could cause errors
+    const safeUpdates = Object.fromEntries(
+      Object.entries(updates).filter(([_, v]) => v !== undefined)
+    );
+
+    const { error } = await supabase.from('users').update(safeUpdates).eq('id', currentUser.id);
     if (error) throw error;
 
     // ── Log changes silently ──
