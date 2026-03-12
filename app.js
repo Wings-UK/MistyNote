@@ -252,6 +252,70 @@ function hideDeepLinkSplash() {
   }
 }
 
+// ══════════════════════════════════════════
+// LOCATION — silent auto-detect on every boot
+// ══════════════════════════════════════════
+
+async function detectAndSaveLocation() {
+  if (!currentUser) return;
+  if (!navigator.geolocation) {
+    // Device doesn't support geolocation — flag it
+    await supabase.from('users').update({ location: null, location_denied: true }).eq('id', currentUser.id).catch(() => {});
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      try {
+        const { latitude, longitude } = pos.coords;
+        const res  = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
+        const data = await res.json();
+        const city    = data.address?.city || data.address?.town || data.address?.village || data.address?.county || '';
+        const country = data.address?.country || '';
+        const location = [city, country].filter(Boolean).join(', ');
+
+        if (!location) return;
+
+        // Only update if location actually changed — avoid unnecessary DB writes
+        if (location === currentProfile?.location) return;
+
+        await supabase.from('users')
+          .update({ location, location_denied: false })
+          .eq('id', currentUser.id)
+          .catch(() => {});
+
+        // Log the change
+        if (currentProfile?.location !== location) {
+          await logProfileChange('location', currentProfile?.location, location).catch(() => {});
+        }
+
+        // Update local profile
+        if (currentProfile) currentProfile.location = location;
+
+        // Refresh profile UI if visible
+        const profilePage = document.getElementById('page-profile');
+        if (profilePage?.classList.contains('active')) {
+          renderMyProfile();
+        }
+      } catch(_) {
+        // Reverse geocode failed — silently ignore, try next session
+      }
+    },
+    async (err) => {
+      if (err.code === err.PERMISSION_DENIED) {
+        // User denied — flag the account
+        await supabase.from('users')
+          .update({ location_denied: true })
+          .eq('id', currentUser.id)
+          .catch(() => {});
+        if (currentProfile) currentProfile.location_denied = true;
+      }
+      // For timeout/unavailable errors — silently ignore, try next session
+    },
+    { timeout: 8000, maximumAge: 300000 } // use cached GPS if under 5 mins old
+  );
+}
+
 async function bootApp(isDeepLink = false) {
   document.getElementById('auth-screen').style.display = 'none';
 
@@ -274,6 +338,7 @@ async function bootApp(isDeepLink = false) {
   await loadMyProfile();
   updateNavAvatar();
   initComposerFile();
+  detectAndSaveLocation(); // fire and forget — runs silently in background
   initIntersectionObserver();
   requestAnimationFrame(initFeedTabBar);
   initCommentBarInput();
@@ -757,6 +822,8 @@ function injectProfileStyles() {
 
     /* ── BIO ── */
     .prf-bio { margin-top:10px; font-size:15px; color:var(--text); line-height:1.55; white-space:pre-wrap; word-break:break-word; }
+    .prf-location { margin-top:6px; font-size:13px; color:var(--text3); display:flex; align-items:center; gap:3px; }
+    .prf-location-denied { margin-top:8px; font-size:12px; color:var(--red,#ff3b5c); background:rgba(255,59,92,0.08); padding:8px 12px; border-radius:8px; line-height:1.4; }
 
     /* ── STATS BAR ── */
     .prf-stats-row {
@@ -963,6 +1030,8 @@ async function renderMyProfile() {
           ${profile.is_verified ? `<span class="prf-verified"><svg width="18" height="18" viewBox="0 0 24 24" fill="#6C47FF"><path d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg></span>` : ''}
         </div>
         ${profile.bio ? `<p class="prf-bio">${escHtml(profile.bio)}</p>` : ''}
+        ${profile.location ? `<p class="prf-location"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="vertical-align:-1px;margin-right:3px"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="currentColor"/></svg>${escHtml(profile.location)}</p>` : ''}
+        ${profile.location_denied && isOwn ? `<p class="prf-location-denied">⚠ Location denied — enable in browser settings to unlock commerce features</p>` : ''}
       </div>
 
       <!-- STATS BAR -->
@@ -1362,6 +1431,8 @@ async function showUserProfile(userId, tapEl) {
             ${profile.is_verified ? `<span class="prf-verified"><svg width="18" height="18" viewBox="0 0 24 24" fill="#6C47FF"><path d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg></span>` : ''}
           </div>
           ${profile.bio ? `<p class="prf-bio">${escHtml(profile.bio)}</p>` : ''}
+          ${profile.location ? `<p class="prf-location"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="vertical-align:-1px;margin-right:3px"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="currentColor"/></svg>${escHtml(profile.location)}</p>` : ''}
+        ${profile.location ? `<p class="prf-location"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="vertical-align:-1px;margin-right:3px"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" fill="currentColor"/></svg>${escHtml(profile.location)}</p>` : ''}
           ${getMomentBanner(userId)}
         </div>
 
@@ -4227,6 +4298,54 @@ function openEditProfile() {
 
   document.getElementById('edit-username').value = currentProfile.username || '';
   document.getElementById('edit-bio').value = currentProfile.bio || '';
+
+  // Location — read-only display
+  const locDisplay = document.getElementById('edit-location-display');
+  const locHint    = document.getElementById('location-hint');
+  if (locDisplay) {
+    if (currentProfile.location_denied) {
+      locDisplay.textContent = 'Location permission denied';
+      locDisplay.style.color = 'var(--red, #ff3b5c)';
+      if (locHint) locHint.textContent = 'Location is required for commerce features — please enable in browser settings';
+    } else if (currentProfile.location) {
+      locDisplay.textContent = currentProfile.location;
+      locDisplay.style.color = '';
+    } else {
+      locDisplay.textContent = 'Detecting…';
+      locDisplay.style.color = 'var(--text3)';
+    }
+  }
+
+  // ── Show rate limit status ──
+  const unError  = document.getElementById('edit-username-error');
+  const bioCount = document.getElementById('edit-bio-count');
+
+  const unDaysLeft  = daysUntilAllowed(currentProfile.username_last_changed, 90);
+  const bioDaysLeft = daysUntilAllowed(currentProfile.bio_last_changed, 7);
+
+  if (unDaysLeft > 0 && unError) {
+    unError.textContent = `Locked — can change in ${unDaysLeft} day${unDaysLeft === 1 ? '' : 's'}`;
+    unError.style.color = 'var(--text3)';
+    document.getElementById('edit-username').disabled = true;
+    document.getElementById('edit-username').style.opacity = '0.5';
+  } else {
+    if (unError) { unError.textContent = ''; unError.style.color = ''; }
+    document.getElementById('edit-username').disabled = false;
+    document.getElementById('edit-username').style.opacity = '';
+  }
+
+  if (bioDaysLeft > 0) {
+    const bioInput = document.getElementById('edit-bio');
+    bioInput.disabled = true;
+    bioInput.style.opacity = '0.5';
+    if (bioCount) {
+      bioCount.textContent = `Locked — ${bioDaysLeft} day${bioDaysLeft === 1 ? '' : 's'} remaining`;
+      bioCount.style.color = 'var(--text3)';
+    }
+  } else {
+    document.getElementById('edit-bio').disabled = false;
+    document.getElementById('edit-bio').style.opacity = '';
+  }
   document.getElementById('edit-location').value = currentProfile.location || '';
   if (currentProfile.cover) document.getElementById('edit-cover-img').src = currentProfile.cover;
   if (currentProfile.avatar) document.getElementById('edit-avatar-img').src = currentProfile.avatar;
@@ -4254,12 +4373,33 @@ function previewCover(e) {
   reader.readAsDataURL(editCoverFile);
 }
 
+// ── Rate limit helpers ──
+function daysUntilAllowed(lastChangedISO, limitDays) {
+  if (!lastChangedISO) return 0;
+  const last    = new Date(lastChangedISO);
+  const now     = new Date();
+  const elapsed = (now - last) / (1000 * 60 * 60 * 24); // days elapsed
+  const remaining = limitDays - elapsed;
+  return remaining > 0 ? Math.ceil(remaining) : 0;
+}
+
+// ── Log a profile field change ──
+async function logProfileChange(field, oldValue, newValue) {
+  if (oldValue === newValue) return; // no change, don't log
+  await supabase.from('profile_change_log').insert({
+    user_id: currentUser.id,
+    field,
+    old_value: oldValue || null,
+    new_value: newValue || null,
+  }).catch(() => {}); // never block the save if logging fails
+}
+
 async function saveProfile() {
   const rawUsername = document.getElementById('edit-username').value;
   const bioValue    = document.getElementById('edit-bio').value.trim();
   const unError     = document.getElementById('edit-username-error');
 
-  // Validate username
+  // ── Validate username ──
   const usernameCheck = validateUsername(rawUsername);
   if (!usernameCheck.valid) {
     if (unError) unError.textContent = usernameCheck.error;
@@ -4267,8 +4407,18 @@ async function saveProfile() {
     return;
   }
 
-  // Check uniqueness if username changed
-  if (usernameCheck.value !== currentProfile.username) {
+  const usernameChanged = usernameCheck.value !== currentProfile.username;
+  const bioChanged      = bioValue !== (currentProfile.bio || '');
+
+  // ── Username rate limit: 90 days ──
+  if (usernameChanged) {
+    const daysLeft = daysUntilAllowed(currentProfile.username_last_changed, 90);
+    if (daysLeft > 0) {
+      if (unError) unError.textContent = `Username can't be changed for another ${daysLeft} day${daysLeft === 1 ? '' : 's'}`;
+      document.getElementById('edit-username').focus();
+      return;
+    }
+    // Check uniqueness
     const { data: existing } = await supabase.from('users').select('id').eq('username', usernameCheck.value).maybeSingle();
     if (existing) {
       if (unError) unError.textContent = 'Username already taken — try another';
@@ -4277,27 +4427,45 @@ async function saveProfile() {
     }
   }
 
-  // Validate bio length
-  if (bioValue.length > 100) {
-    showToast('Bio must be 100 characters or less');
-    return;
+  // ── Bio rate limit: 7 days ──
+  if (bioChanged) {
+    const daysLeft = daysUntilAllowed(currentProfile.bio_last_changed, 7);
+    if (daysLeft > 0) {
+      showToast(`Bio can't be changed for another ${daysLeft} day${daysLeft === 1 ? '' : 's'}`);
+      return;
+    }
+    if (bioValue.length > 100) {
+      showToast('Bio must be 100 characters or less');
+      return;
+    }
   }
 
+  // ── Build updates ──
   const updates = {
     username: usernameCheck.value,
     bio: bioValue,
-    location: document.getElementById('edit-location').value.trim()
+    // location is auto-managed by detectAndSaveLocation — not editable here
   };
+
+  if (usernameChanged) updates.username_last_changed = new Date().toISOString();
+  if (bioChanged)      updates.bio_last_changed      = new Date().toISOString();
 
   const saveBtn = document.querySelector('.modal-save');
   if (saveBtn) { saveBtn.textContent = '…'; saveBtn.style.opacity = '0.5'; }
 
   try {
     if (editAvatarFile) updates.avatar = await uploadImage(editAvatarFile, 'avatars');
-    if (editCoverFile) updates.cover = await uploadImage(editCoverFile, 'covers');
+    if (editCoverFile)  updates.cover  = await uploadImage(editCoverFile, 'covers');
 
     const { error } = await supabase.from('users').update(updates).eq('id', currentUser.id);
     if (error) throw error;
+
+    // ── Log changes silently ──
+    if (usernameChanged) await logProfileChange('username', currentProfile.username, usernameCheck.value);
+    if (bioChanged)      await logProfileChange('bio', currentProfile.bio, bioValue);
+
+    if (updates.avatar)  await logProfileChange('avatar', currentProfile.avatar, updates.avatar);
+    if (updates.cover)   await logProfileChange('cover', currentProfile.cover, updates.cover);
 
     Object.assign(currentProfile, updates);
     updateNavAvatar();
