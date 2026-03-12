@@ -2873,8 +2873,12 @@ function fileToJpegBlob(file) {
 
           c.toBlob(async blob => {
             if (!blob || blob.size === 0) { resolve(file); return; }
-            // Strip EXIF from the compressed output
+            // Strip EXIF from the compressed output.
+            // Canvas toBlob never carries original EXIF through, so if stripExif
+            // mangles the blob (e.g. small images with no APP segments), falling
+            // back to the unstripped canvas blob is safe and still privacy-clean.
             const clean = await stripExif(blob);
+            if (!clean || clean.size < blob.size * 0.5) { resolve(blob); return; }
             resolve(clean);
           }, 'image/jpeg', Q);
 
