@@ -230,20 +230,111 @@
     <!-- ══════════════════════════════════════════
          PAGE: DISCOVER
     ══════════════════════════════════════════ -->
+    <!-- ══════════════════════════════════════════
+         PAGE: DISCOVER
+    ══════════════════════════════════════════ -->
     <section class="page" id="page-discover">
-      <header class="page-header">
-        <h1 class="page-title">Discover</h1>
-      </header>
-      <div class="discover-search-wrap">
-        <div class="search-bar">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/><path d="m21 21-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-          <input type="text" placeholder="Search people, posts..." class="search-input" id="discover-search">
+
+      <!-- Sticky top: search bar + tabs -->
+      <div class="disc-top" id="disc-top">
+
+        <div class="disc-searchbar-row">
+          <div class="disc-searchbar" id="disc-searchbar">
+            <svg class="disc-searchbar-icon" width="17" height="17" viewBox="0 0 24 24" fill="none">
+              <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2.2"/>
+              <path d="m21 21-4.35-4.35" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+            </svg>
+            <input
+              type="text"
+              id="disc-input"
+              class="disc-input"
+              placeholder="Search posts, people, products…"
+              autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+            >
+            <button class="disc-x-btn" id="disc-x-btn" onclick="discClear()" style="display:none" aria-label="Clear">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" fill="currentColor" fill-opacity="0.18"/>
+                <path d="M15 9l-6 6M9 9l6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
         </div>
-      </div>
-      <div class="discover-body" id="discover-body">
-        <p class="section-label">Trending</p>
-        <div class="discover-posts" id="discover-posts"></div>
-      </div>
+
+        <!-- Result tabs — only visible when searching -->
+        <div class="disc-tabs" id="disc-tabs" style="display:none">
+          <button class="disc-tab active" data-tab="posts"     onclick="discTab('posts',this)">Posts</button>
+          <button class="disc-tab"        data-tab="people"    onclick="discTab('people',this)">People</button>
+          <button class="disc-tab"        data-tab="products"  onclick="discTab('products',this)">Products</button>
+          <div class="disc-tab-ink" id="disc-tab-ink"></div>
+        </div>
+
+      </div><!-- /disc-top -->
+
+      <!-- Scrollable body -->
+      <div class="disc-body" id="disc-body">
+
+        <!-- ── HOME STATE ── -->
+        <div id="disc-home">
+
+          <!-- Recent searches -->
+          <div id="disc-recent-section" style="display:none">
+            <div class="disc-row-header">
+              <span class="disc-label">Recent</span>
+              <button class="disc-clear-all-btn" onclick="discClearAllRecent()">Clear all</button>
+            </div>
+            <div class="disc-recent-pills" id="disc-recent-pills"></div>
+          </div>
+
+          <!-- Trending topics -->
+          <div class="disc-row-header" style="margin-top:4px">
+            <span class="disc-label">Trending Topics</span>
+          </div>
+          <div class="disc-topics-scroll-wrap">
+            <div class="disc-topics-scroll" id="disc-topics-scroll">
+              <button class="disc-topic" onclick="discTopicTap(this)">🎉 Happy Anniversary</button>
+              <button class="disc-topic" onclick="discTopicTap(this)">🎂 Birthday</button>
+              <button class="disc-topic" onclick="discTopicTap(this)">🔨 DIY</button>
+              <button class="disc-topic" onclick="discTopicTap(this)">💅 Nail Art</button>
+              <button class="disc-topic" onclick="discTopicTap(this)">💪 Fitness</button>
+              <button class="disc-topic" onclick="discTopicTap(this)">🍳 Cooking</button>
+              <button class="disc-topic" onclick="discTopicTap(this)">📱 Electronics</button>
+              <button class="disc-topic" onclick="discTopicTap(this)">🎁 Gifts</button>
+              <button class="disc-topic" onclick="discTopicTap(this)">🎬 Movies</button>
+              <button class="disc-topic" onclick="discTopicTap(this)">📚 Novels</button>
+              <button class="disc-topic" onclick="discTopicTap(this)">✍️ Copywriting</button>
+              <button class="disc-topic" onclick="discTopicTap(this)">👗 Fashion</button>
+              <button class="disc-topic" onclick="discTopicTap(this)">✨ Skincare</button>
+              <button class="disc-topic" onclick="discTopicTap(this)">✈️ Travel</button>
+              <button class="disc-topic" onclick="discTopicTap(this)">🍜 Food</button>
+              <button class="disc-topic" onclick="discTopicTap(this)">💻 Tech</button>
+              <button class="disc-topic" onclick="discTopicTap(this)">💍 Wedding</button>
+              <button class="disc-topic" onclick="discTopicTap(this)">🏠 Home Decor</button>
+              <button class="disc-topic" onclick="discTopicTap(this)">👶 Parenting</button>
+              <button class="disc-topic" onclick="discTopicTap(this)">🎵 Music</button>
+            </div>
+          </div>
+
+          <!-- For You — trending posts grid -->
+          <div class="disc-row-header" style="margin-top:20px">
+            <span class="disc-label">For You</span>
+          </div>
+          <div class="disc-foryou-grid" id="disc-foryou-grid">
+            <div class="disc-skeleton"></div>
+            <div class="disc-skeleton"></div>
+            <div class="disc-skeleton"></div>
+            <div class="disc-skeleton"></div>
+          </div>
+
+        </div><!-- /disc-home -->
+
+        <!-- ── RESULTS STATE ── -->
+        <div id="disc-results" style="display:none">
+          <div id="disc-pane-posts"    class="disc-pane"></div>
+          <div id="disc-pane-people"   class="disc-pane" style="display:none"></div>
+          <div id="disc-pane-products" class="disc-pane" style="display:none"></div>
+        </div>
+
+      </div><!-- /disc-body -->
     </section>
 
     <!-- ══════════════════════════════════════════
