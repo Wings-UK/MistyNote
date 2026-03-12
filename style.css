@@ -627,44 +627,287 @@
   .load-more-trigger { height: 20px; }
   
   /* ══════════════════════════════════════════
-     DISCOVER
+     DISCOVER — world class rebuild
   ══════════════════════════════════════════ */
-  .discover-search-wrap { padding: 12px 16px 8px; position: sticky; top: 56px; z-index: 50; background: var(--bg); }
-  .search-bar {
+
+  /* ── Sticky top ── */
+  #page-discover { display: flex; flex-direction: column; overflow: hidden; }
+  .disc-top {
+    position: sticky; top: 0; z-index: 60;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px 0;
+  }
+  .disc-searchbar-row { padding-bottom: 10px; }
+  .disc-searchbar {
     display: flex; align-items: center; gap: 10px;
-    background: var(--bg3); border-radius: var(--radius);
-    padding: 12px 16px; color: var(--text3);
+    background: var(--bg3); border-radius: 14px;
+    padding: 11px 14px;
+    transition: box-shadow 0.2s;
   }
-  .search-input { flex: 1; font-size: 15px; color: var(--text); }
-  .search-input::placeholder { color: var(--text3); }
-  
-  .section-label {
-    font-size: 11px; font-weight: 700; letter-spacing: 0.8px;
+  .disc-searchbar:focus-within {
+    box-shadow: 0 0 0 2px var(--accent-soft);
+  }
+  .disc-searchbar-icon { color: var(--text3); flex-shrink: 0; }
+  .disc-input {
+    flex: 1; font-size: 15px; color: var(--text);
+    background: none; border: none; outline: none;
+    font-family: var(--font);
+  }
+  .disc-input::placeholder { color: var(--text3); }
+  .disc-x-btn {
+    color: var(--text3); flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px;
+  }
+
+  /* ── Tabs ── */
+  .disc-tabs {
+    display: flex; position: relative;
+    gap: 0; border-top: 1px solid var(--border2);
+    margin: 0 -16px;
+  }
+  .disc-tab {
+    flex: 1; padding: 11px 0; font-size: 14px; font-weight: 600;
+    color: var(--text3); letter-spacing: 0.2px;
+    position: relative; transition: color 0.2s;
+    border-bottom: 2.5px solid transparent;
+  }
+  .disc-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  /* ── Body ── */
+  .disc-body {
+    flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding-bottom: 90px;
+  }
+
+  /* ── Section headers ── */
+  .disc-row-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 16px 10px;
+  }
+  .disc-label {
+    font-size: 11px; font-weight: 800; letter-spacing: 1px;
     text-transform: uppercase; color: var(--text3);
-    padding: 16px 16px 8px;
   }
-  
-  .discover-posts {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 0 3px 3px;
+  .disc-clear-all-btn {
+    font-size: 13px; font-weight: 600; color: var(--accent);
   }
-  .discover-tile {
-    aspect-ratio: 4/5; overflow: hidden; cursor: pointer; position: relative;
-    background: var(--bg3);
+
+  /* ── Recent search pills ── */
+  .disc-recent-pills {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    padding: 0 16px 4px;
   }
-  .discover-tile img, .discover-tile video {
-    width: 100%; height: 100%; object-fit: cover;
+  .disc-recent-pill {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--bg3); border-radius: 20px;
+    padding: 7px 12px; font-size: 13px; font-weight: 500;
+    color: var(--text2); cursor: pointer;
+    transition: background 0.15s;
+  }
+  .disc-recent-pill:active { background: var(--bg2); }
+  .disc-recent-pill svg { color: var(--text3); flex-shrink: 0; }
+  .disc-recent-pill-x {
+    color: var(--text3); margin-left: 2px;
+    font-size: 15px; line-height: 1;
+  }
+
+  /* ── Trending topics ── */
+  .disc-topics-scroll-wrap {
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    padding: 0 16px 4px;
+    scrollbar-width: none;
+  }
+  .disc-topics-scroll-wrap::-webkit-scrollbar { display: none; }
+  .disc-topics-scroll {
+    display: flex; gap: 8px; width: max-content;
+  }
+  .disc-topic {
+    display: flex; align-items: center; gap: 6px;
+    padding: 9px 16px; border-radius: 24px;
+    font-size: 13px; font-weight: 700;
+    background: var(--bg3); color: var(--text2);
+    white-space: nowrap;
+    border: 1.5px solid var(--border);
+    transition: all 0.15s;
+  }
+  .disc-topic:active {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-color: var(--accent);
+    transform: scale(0.96);
+  }
+
+  /* ── For You grid (masonry-style 2-col) ── */
+  .disc-foryou-grid {
+    columns: 2; column-gap: 3px;
+    padding: 0 3px 3px;
+  }
+  .disc-foryou-tile {
+    break-inside: avoid; margin-bottom: 3px;
+    position: relative; overflow: hidden;
+    cursor: pointer; background: var(--bg3);
+    border-radius: 4px;
+  }
+  .disc-foryou-tile img {
+    width: 100%; display: block;
+    object-fit: cover;
     transition: transform 0.3s ease;
   }
-  .discover-tile:active img { transform: scale(0.97); }
-  .discover-tile-overlay {
-    position: absolute; inset: 0; padding: 10px;
-    background: linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 60%);
-    display: flex; flex-direction: column; justify-content: flex-end;
+  .disc-foryou-tile:active img { transform: scale(0.97); }
+  .disc-foryou-tile-overlay {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    padding: 24px 8px 8px;
+    background: linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 100%);
+    display: flex; align-items: center; gap: 5px;
   }
-  .discover-tile-text { font-size: 12px; color: white; line-height: 1.3; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
-  .discover-tile-author { display: flex; align-items: center; gap: 5px; margin-top: 4px; }
-  .discover-tile-avatar { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; border: 1px solid rgba(255,255,255,0.4); }
-  .discover-tile-username { font-size: 11px; color: rgba(255,255,255,0.8); font-weight: 600; }
+  .disc-foryou-tile-av {
+    width: 18px; height: 18px; border-radius: 50%;
+    object-fit: cover; flex-shrink: 0;
+    border: 1.5px solid rgba(255,255,255,0.5);
+  }
+  .disc-foryou-tile-name {
+    font-size: 11px; color: rgba(255,255,255,0.9);
+    font-weight: 700; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  .disc-skeleton {
+    break-inside: avoid; margin-bottom: 3px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--bg3) 25%, var(--bg2) 50%, var(--bg3) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s infinite;
+    height: 160px;
+  }
+  .disc-skeleton:nth-child(2) { height: 220px; }
+  .disc-skeleton:nth-child(3) { height: 190px; }
+  .disc-skeleton:nth-child(4) { height: 140px; }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+
+  /* ── Search results: Posts pane ── */
+  .disc-pane { padding-bottom: 8px; }
+  .disc-posts-grid {
+    columns: 2; column-gap: 3px; padding: 0 3px 3px;
+  }
+  .disc-post-tile {
+    break-inside: avoid; margin-bottom: 3px;
+    position: relative; overflow: hidden; cursor: pointer;
+    background: var(--bg3); border-radius: 4px;
+  }
+  .disc-post-tile img {
+    width: 100%; display: block; object-fit: cover;
+  }
+  .disc-post-tile-text {
+    padding: 10px 10px 12px;
+    font-size: 13px; color: var(--text2); line-height: 1.45;
+    display: -webkit-box; -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .disc-no-results {
+    text-align: center; padding: 60px 24px;
+    color: var(--text3); font-size: 15px;
+  }
+  .disc-no-results strong { display: block; font-size: 17px; color: var(--text2); margin-bottom: 6px; }
+
+  /* ── Search results: People pane ── */
+  .disc-people-list { padding: 8px 0; }
+  .disc-person-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .disc-person-row:active { background: var(--bg2); }
+  .disc-person-av {
+    width: 46px; height: 46px; border-radius: 50%;
+    object-fit: cover; flex-shrink: 0;
+    background: var(--bg3);
+  }
+  .disc-person-info { flex: 1; min-width: 0; }
+  .disc-person-name {
+    font-size: 15px; font-weight: 700; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .disc-person-username {
+    font-size: 13px; color: var(--text3); margin-top: 1px;
+  }
+  .disc-person-bio {
+    font-size: 12px; color: var(--text2); margin-top: 3px;
+    display: -webkit-box; -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .disc-follow-btn {
+    padding: 7px 16px; border-radius: 20px; font-size: 13px; font-weight: 700;
+    background: var(--accent); color: white; flex-shrink: 0;
+    transition: opacity 0.2s;
+  }
+  .disc-follow-btn:active { opacity: 0.75; }
+  .disc-follow-btn.following {
+    background: var(--bg3); color: var(--text2);
+    border: 1.5px solid var(--border);
+  }
+
+  /* ── Search results: Products pane ── */
+  .disc-products-grid {
+    columns: 2; column-gap: 3px; padding: 3px 3px 0;
+  }
+  .disc-product-card {
+    break-inside: avoid; margin-bottom: 3px;
+    background: var(--bg); border-radius: 12px;
+    overflow: hidden; cursor: pointer;
+    border: 1px solid var(--border);
+    transition: transform 0.2s;
+  }
+  .disc-product-card:active { transform: scale(0.975); }
+  .disc-product-img-wrap {
+    width: 100%; aspect-ratio: 1/1; overflow: hidden;
+    background: var(--bg3); position: relative;
+  }
+  .disc-product-img-wrap img {
+    width: 100%; height: 100%; object-fit: cover;
+    display: block;
+  }
+  .disc-product-body { padding: 9px 10px 10px; }
+  .disc-product-title {
+    font-size: 13px; font-weight: 600; color: var(--text);
+    line-height: 1.35;
+    display: -webkit-box; -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .disc-product-social {
+    font-size: 11px; color: var(--accent); font-weight: 600;
+    margin-top: 5px; height: 15px; overflow: hidden;
+    transition: opacity 0.4s;
+  }
+  .disc-product-price-row {
+    display: flex; align-items: baseline; gap: 5px;
+    margin-top: 6px;
+  }
+  .disc-product-currency { font-size: 12px; font-weight: 700; color: var(--text); }
+  .disc-product-amount {
+    font-size: 20px; font-weight: 900; color: var(--text);
+    letter-spacing: -0.5px; line-height: 1;
+  }
+  .disc-product-sold {
+    font-size: 11px; color: var(--text3); margin-left: 2px;
+    font-weight: 500;
+  }
+  .disc-product-seller {
+    display: flex; align-items: center; gap: 6px;
+    margin-top: 8px; padding-top: 8px;
+    border-top: 1px solid var(--border2);
+  }
+  .disc-product-seller-av {
+    width: 20px; height: 20px; border-radius: 50%;
+    object-fit: cover; flex-shrink: 0; background: var(--bg3);
+  }
+  .disc-product-seller-name {
+    font-size: 11px; font-weight: 600; color: var(--text2);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
   
   /* ══════════════════════════════════════════
      NOTIFICATIONS
