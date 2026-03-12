@@ -2972,7 +2972,7 @@ function fileToJpegBlob(file) {
 }
 
 // ── Upload: compress → retry loop → return public URL ──
-async function uploadToStorage(file, onProgress) {
+async function uploadToStorage(file, onProgress, preReadBuffer = null) {
   console.log('[UPLOAD] uploadToStorage start');
   onProgress(5);
 
@@ -2986,11 +2986,18 @@ async function uploadToStorage(file, onProgress) {
   console.log('[UPLOAD] uploading to bucket:', bucket, 'path:', path);
 
   // Convert blob → ArrayBuffer ONCE before the retry loop.
-  // Chrome Android revokes blob access after the first read attempt,
-  // so calling blob.arrayBuffer() inside the loop causes NotReadableError
-  // on retries. ArrayBuffer stays in memory and is safely reusable.
-  const arrayBuffer = await blob.arrayBuffer();
-  console.log('[UPLOAD] arrayBuffer ready —', arrayBuffer.byteLength, 'bytes');
+  // If a preReadBuffer was passed in (read before composer closed), use it directly.
+  // Otherwise fall back to reading from the blob.
+  // Chrome Android revokes file/blob access after the input is cleared,
+  // so pre-reading before closeComposer() is the safest path.
+  let arrayBuffer;
+  if (preReadBuffer && preReadBuffer.byteLength > 0) {
+    arrayBuffer = preReadBuffer;
+    console.log('[UPLOAD] using pre-read buffer —', arrayBuffer.byteLength, 'bytes');
+  } else {
+    arrayBuffer = await blob.arrayBuffer();
+    console.log('[UPLOAD] arrayBuffer ready —', arrayBuffer.byteLength, 'bytes');
+  }
 
   // Retry up to 4 times with exponential backoff — built for bad networks
   for (let attempt = 1; attempt <= 4; attempt++) {
@@ -3038,9 +3045,23 @@ async function submitPost() {
   if (btn) btn.disabled = true;
 
   // Snapshot state before composer clears it
-  const fileToUpload = selectedFile;
+  // IMPORTANT: We must read the file into an ArrayBuffer NOW, before closing
+  // the composer. On Chrome Android, clearing the file input (which closeComposer
+  // does) revokes the browser's access to the File object — making any later
+  // .arrayBuffer() or objectURL call fail with NotReadableError.
   const postContent  = content;
   const targetId     = repostTargetId;
+  let fileToUpload = selectedFile;
+  let cachedBuffer = null;
+  if (fileToUpload) {
+    try {
+      cachedBuffer = await fileToUpload.arrayBuffer();
+      console.log('[UPLOAD] file pre-read into buffer —', cachedBuffer.byteLength, 'bytes');
+    } catch(e) {
+      console.error('[UPLOAD] pre-read failed —', e);
+      cachedBuffer = null;
+    }
+  }
 
   // Dismiss composer immediately
   closeComposer(true);
@@ -3072,7 +3093,7 @@ async function submitPost() {
   const doUpload = async () => {
     try {
       // 1. Upload image
-      const imageUrl = await uploadToStorage(fileToUpload, pct => setComposeRing('uploading', pct));
+      const imageUrl = await uploadToStorage(fileToUpload, pct => setComposeRing('uploading', pct), cachedBuffer);
 
       setComposeRing('uploading', 92);
 
