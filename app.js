@@ -258,11 +258,10 @@ function hideDeepLinkSplash() {
 
 async function detectAndSaveLocation() {
   if (!currentUser) return;
-  if (!navigator.geolocation) {
-    // Device doesn't support geolocation — flag it
-    await supabase.from('users').update({ location: null, location_denied: true }).eq('id', currentUser.id).catch(() => {});
-    return;
-  }
+  if (!navigator.geolocation) return;
+
+  // Snapshot current user id — prevents race condition if user switches accounts
+  const userId = currentUser.id;
 
   navigator.geolocation.getCurrentPosition(
     async (pos) => {
@@ -276,43 +275,48 @@ async function detectAndSaveLocation() {
 
         if (!location) return;
 
-        // Only update if location actually changed — avoid unnecessary DB writes
-        if (location === currentProfile?.location) return;
-
+        // Always save GPS location — overrides any old manual value
         await supabase.from('users')
-          .update({ location, location_denied: false })
-          .eq('id', currentUser.id)
+          .update({ location })
+          .eq('id', userId)
           .catch(() => {});
 
-        // Log the change
-        if (currentProfile?.location !== location) {
-          await logProfileChange('location', currentProfile?.location, location).catch(() => {});
+        // Log only if changed
+        const oldLocation = currentProfile?.location;
+        if (oldLocation !== location) {
+          await logProfileChange('location', oldLocation, location).catch(() => {});
         }
 
-        // Update local profile
-        if (currentProfile) currentProfile.location = location;
-
-        // Refresh profile UI if visible
-        const profilePage = document.getElementById('page-profile');
-        if (profilePage?.classList.contains('active')) {
-          renderMyProfile();
+        // Update local profile and UI
+        if (currentProfile && currentUser?.id === userId) {
+          currentProfile.location = location;
+          // Update edit profile display if open
+          const locDisplay = document.getElementById('edit-location-display');
+          if (locDisplay) {
+            locDisplay.textContent = location;
+            locDisplay.style.color = '';
+          }
+          // Refresh profile page if visible
+          if (document.getElementById('page-profile')?.classList.contains('active')) {
+            renderMyProfile();
+          }
         }
       } catch(_) {
-        // Reverse geocode failed — silently ignore, try next session
+        // Reverse geocode failed — silently ignore
       }
     },
     async (err) => {
       if (err.code === err.PERMISSION_DENIED) {
-        // User denied — flag the account
         await supabase.from('users')
           .update({ location_denied: true })
-          .eq('id', currentUser.id)
+          .eq('id', userId)
           .catch(() => {});
-        if (currentProfile) currentProfile.location_denied = true;
+        if (currentProfile && currentUser?.id === userId) {
+          currentProfile.location_denied = true;
+        }
       }
-      // For timeout/unavailable errors — silently ignore, try next session
     },
-    { timeout: 8000, maximumAge: 300000 } // use cached GPS if under 5 mins old
+    { timeout: 10000, maximumAge: 60000 } // max 1 min cache — always get fresh location per session
   );
 }
 
@@ -338,7 +342,8 @@ async function bootApp(isDeepLink = false) {
   await loadMyProfile();
   updateNavAvatar();
   initComposerFile();
-  detectAndSaveLocation(); // fire and forget — runs silently in background
+  // Delay location detection slightly — Chrome needs page to be fully interactive
+  setTimeout(() => detectAndSaveLocation(), 2000);
   initIntersectionObserver();
   requestAnimationFrame(initFeedTabBar);
   initCommentBarInput();
@@ -4448,9 +4453,6 @@ async function saveProfile() {
     // location is auto-managed by detectAndSaveLocation — not editable here
   };
 
-  if (usernameChanged) updates.username_last_changed = new Date().toISOString();
-  if (bioChanged)      updates.bio_last_changed      = new Date().toISOString();
-
   const saveBtn = document.querySelector('.modal-save');
   if (saveBtn) { saveBtn.textContent = '…'; saveBtn.style.opacity = '0.5'; }
 
@@ -4458,20 +4460,29 @@ async function saveProfile() {
     if (editAvatarFile) updates.avatar = await uploadImage(editAvatarFile, 'avatars');
     if (editCoverFile)  updates.cover  = await uploadImage(editCoverFile, 'covers');
 
-    // Only send columns that exist — strip anything undefined or null-ish that could cause errors
-    const safeUpdates = Object.fromEntries(
-      Object.entries(updates).filter(([_, v]) => v !== undefined)
-    );
+    // Try saving with rate limit columns first
+    // If it fails (columns don't exist yet), retry without them
+    let error;
+    const fullUpdates = { ...updates };
+    if (usernameChanged) fullUpdates.username_last_changed = new Date().toISOString();
+    if (bioChanged)      fullUpdates.bio_last_changed      = new Date().toISOString();
 
-    const { error } = await supabase.from('users').update(safeUpdates).eq('id', currentUser.id);
+    ({ error } = await supabase.from('users').update(fullUpdates).eq('id', currentUser.id));
+
+    if (error) {
+      // Retry without rate limit columns — SQL migration not run yet
+      ({ error } = await supabase.from('users').update(updates).eq('id', currentUser.id));
+    }
+
     if (error) throw error;
 
-    // ── Log changes silently ──
-    if (usernameChanged) await logProfileChange('username', currentProfile.username, usernameCheck.value);
-    if (bioChanged)      await logProfileChange('bio', currentProfile.bio, bioValue);
-
-    if (updates.avatar)  await logProfileChange('avatar', currentProfile.avatar, updates.avatar);
-    if (updates.cover)   await logProfileChange('cover', currentProfile.cover, updates.cover);
+    // ── Log changes silently — never block save if logging fails ──
+    try {
+      if (usernameChanged) await logProfileChange('username', currentProfile.username, usernameCheck.value);
+      if (bioChanged)      await logProfileChange('bio', currentProfile.bio, bioValue);
+      if (updates.avatar)  await logProfileChange('avatar', currentProfile.avatar, updates.avatar);
+      if (updates.cover)   await logProfileChange('cover', currentProfile.cover, updates.cover);
+    } catch(_) {}
 
     Object.assign(currentProfile, updates);
     updateNavAvatar();
