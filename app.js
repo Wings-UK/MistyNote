@@ -2837,40 +2837,26 @@ function fileToJpegBlob(file) {
     const MAX = 1280; // max dimension px
     const Q   = 0.82; // JPEG quality
 
-    console.log('[UPLOAD] fileToJpegBlob start —', file.name, file.type, (file.size/1024).toFixed(1)+'KB');
-
     const processWithSrc = (src, orientBuffer) => {
       const orientation = orientBuffer ? readExifOrientation(orientBuffer) : 1;
-      console.log('[UPLOAD] processWithSrc — orientation:', orientation, 'src type:', src.startsWith('blob:') ? 'objectURL' : 'dataURL');
       const img = new Image();
 
-      img.onerror = (e) => {
-        console.error('[UPLOAD] img.onerror — failed to load image src. Falling back to original file.', e);
-        resolve(file);
-      };
+      img.onerror = () => resolve(file);
       img.onload  = () => {
         try {
           const ow = img.naturalWidth;
           const oh = img.naturalHeight;
-          console.log('[UPLOAD] img loaded —', ow+'x'+oh);
 
           // Determine if we need to swap w/h for rotation
           const swap  = orientation >= 5 && orientation <= 8;
           const scale = Math.min(1, MAX / Math.max(swap ? oh : ow, swap ? ow : oh, 1));
           const dw    = Math.max(1, Math.round(ow * scale));
           const dh    = Math.max(1, Math.round(oh * scale));
-          console.log('[UPLOAD] canvas size —', (swap?dh:dw)+'x'+(swap?dw:dh), 'scale:', scale.toFixed(3));
 
           const c   = document.createElement('canvas');
           c.width   = swap ? dh : dw;
           c.height  = swap ? dw : dh;
           const ctx = c.getContext('2d');
-
-          if (!ctx) {
-            console.error('[UPLOAD] canvas getContext failed — resolving with original file');
-            resolve(file);
-            return;
-          }
 
           ctx.fillStyle = '#fff';
           ctx.fillRect(0, 0, c.width, c.height);
@@ -2884,31 +2870,15 @@ function fileToJpegBlob(file) {
           if (flipX) ctx.scale(-1, 1);
           ctx.drawImage(img, -dw/2, -dh/2, dw, dh);
           ctx.restore();
-          console.log('[UPLOAD] drawImage done — calling toBlob');
 
           c.toBlob(async blob => {
-            if (!blob || blob.size === 0) {
-              console.error('[UPLOAD] toBlob returned empty blob — falling back to original file');
-              resolve(file); return;
-            }
-            console.log('[UPLOAD] toBlob success —', (blob.size/1024).toFixed(1)+'KB — stripping EXIF');
-            // Strip EXIF from the compressed output.
-            // Canvas toBlob never carries original EXIF through, so if stripExif
-            // mangles the blob (e.g. small images with no APP segments), falling
-            // back to the unstripped canvas blob is safe and still privacy-clean.
+            if (!blob || blob.size === 0) { resolve(file); return; }
+            // Strip EXIF from the compressed output
             const clean = await stripExif(blob);
-            if (!clean || clean.size < blob.size * 0.5) {
-              console.warn('[UPLOAD] stripExif produced suspicious result ('+((clean?.size||0)/1024).toFixed(1)+'KB vs '+( blob.size/1024).toFixed(1)+'KB) — using unstripped canvas blob');
-              resolve(blob); return;
-            }
-            console.log('[UPLOAD] stripExif done —', (clean.size/1024).toFixed(1)+'KB — resolving');
             resolve(clean);
           }, 'image/jpeg', Q);
 
-        } catch(err) {
-          console.error('[UPLOAD] exception in img.onload —', err, '— falling back to original file');
-          resolve(file);
-        }
+        } catch(_) { resolve(file); }
       };
       img.src = src;
     };
@@ -2917,39 +2887,36 @@ function fileToJpegBlob(file) {
     // Most modern Android browsers handle HEIC in <img> but canvas may fail
     const name = (file.name || '').toLowerCase();
     if (name.endsWith('.heic') || name.endsWith('.heif')) {
-      console.log('[UPLOAD] HEIC/HEIF detected — trying objectURL');
+      // Try to draw it — if canvas fails we fall back to original
       try {
         const url = URL.createObjectURL(file);
         processWithSrc(url, null);
-      } catch(e) { console.error('[UPLOAD] HEIC objectURL failed —', e); resolve(file); }
+      } catch(_) { resolve(file); }
       return;
     }
 
     // For JPEG — read EXIF orientation first, then process
     if (file.type === 'image/jpeg' || file.type === 'image/jpg') {
-      console.log('[UPLOAD] JPEG — reading EXIF orientation first');
       const fr = new FileReader();
       fr.onload = ev => {
         const orientBuffer = ev.target.result;
         try {
           const url = URL.createObjectURL(file);
           processWithSrc(url, orientBuffer);
-        } catch(e) {
-          console.warn('[UPLOAD] objectURL failed for JPEG —', e, '— falling back to dataURL');
+        } catch(_) {
           // objectURL failed — use data URL from same read
           const fr2 = new FileReader();
           fr2.onload = e2 => processWithSrc(e2.target.result, orientBuffer);
-          fr2.onerror = (e2) => { console.error('[UPLOAD] fr2 dataURL read failed —', e2); resolve(file); };
+          fr2.onerror = () => resolve(file);
           fr2.readAsDataURL(file);
         }
       };
-      fr.onerror = (e) => {
-        console.warn('[UPLOAD] EXIF read failed —', e, '— compressing without orientation fix');
+      fr.onerror = () => {
         // Can't read EXIF — still compress without orientation fix
         try {
           const url = URL.createObjectURL(file);
           processWithSrc(url, null);
-        } catch(e2) { console.error('[UPLOAD] objectURL also failed —', e2); resolve(file); }
+        } catch(_) { resolve(file); }
       };
       // Read just first 64KB for EXIF — much faster than full file
       fr.readAsArrayBuffer(file.slice(0, 65536));
@@ -2957,52 +2924,36 @@ function fileToJpegBlob(file) {
     }
 
     // PNG, GIF, WebP etc — no EXIF orientation, just compress
-    console.log('[UPLOAD] non-JPEG image — compressing directly');
     try {
       const url = URL.createObjectURL(file);
       processWithSrc(url, null);
-    } catch(e) {
-      console.warn('[UPLOAD] objectURL failed —', e, '— falling back to dataURL');
+    } catch(_) {
       const fr = new FileReader();
       fr.onload = ev => processWithSrc(ev.target.result, null);
-      fr.onerror = (e2) => { console.error('[UPLOAD] dataURL read also failed —', e2); resolve(file); };
+      fr.onerror = () => resolve(file);
       fr.readAsDataURL(file);
     }
   });
 }
 
 // ── Upload: compress → retry loop → return public URL ──
-async function uploadToStorage(file, onProgress, preReadBuffer = null) {
-  console.log('[UPLOAD] uploadToStorage start');
+async function uploadToStorage(file, onProgress) {
   onProgress(5);
 
-  // Compress — never throws, worst case returns original file
-  const blob = await fileToJpegBlob(file);
-  console.log('[UPLOAD] compression complete — blob size:', (blob.size/1024).toFixed(1)+'KB', 'type:', blob.type);
+  // Only compress if file is over 2MB — small files upload as-is
+  // This avoids canvas crashes on Chrome Android for typical phone photos
+  let blob = file;
+  if (file.size > 2 * 1024 * 1024) {
+    blob = await fileToJpegBlob(file); // never throws — falls back to original
+  }
   onProgress(25);
 
   const path = `${currentUser.id}_${Date.now()}_${Math.random().toString(36).slice(2,7)}.jpg`;
   const bucket = 'post-images';
-  console.log('[UPLOAD] uploading to bucket:', bucket, 'path:', path);
-
-  // Convert blob → ArrayBuffer ONCE before the retry loop.
-  // If a preReadBuffer was passed in (read before composer closed), use it directly.
-  // Otherwise fall back to reading from the blob.
-  // Chrome Android revokes file/blob access after the input is cleared,
-  // so pre-reading before closeComposer() is the safest path.
-  let arrayBuffer;
-  if (preReadBuffer && preReadBuffer.byteLength > 0) {
-    arrayBuffer = preReadBuffer;
-    console.log('[UPLOAD] using pre-read buffer —', arrayBuffer.byteLength, 'bytes');
-  } else {
-    arrayBuffer = await blob.arrayBuffer();
-    console.log('[UPLOAD] arrayBuffer ready —', arrayBuffer.byteLength, 'bytes');
-  }
 
   // Retry up to 4 times with exponential backoff — built for bad networks
   for (let attempt = 1; attempt <= 4; attempt++) {
     try {
-      console.log('[UPLOAD] attempt', attempt, 'of 4');
       onProgress(25 + attempt * 14); // 39 / 53 / 67 / 81
 
       const controller = new AbortController();
@@ -3010,22 +2961,17 @@ async function uploadToStorage(file, onProgress, preReadBuffer = null) {
 
       const { error } = await supabase.storage
         .from(bucket)
-        .upload(path, arrayBuffer, { upsert: true, contentType: 'image/jpeg' });
+        .upload(path, blob, { upsert: true, contentType: 'image/jpeg' });
 
       clearTimeout(timer);
-      if (error) {
-        console.error('[UPLOAD] supabase storage error on attempt', attempt, '—', error);
-        throw error;
-      }
+      if (error) throw error;
 
       onProgress(90);
       const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-      console.log('[UPLOAD] success — public URL:', data.publicUrl);
       onProgress(100);
       return data.publicUrl;
 
     } catch (err) {
-      console.error('[UPLOAD] catch on attempt', attempt, '—', err);
       if (attempt === 4) throw err;
       // Wait before retry: 2s, 4s, 8s
       await new Promise(r => setTimeout(r, attempt * 2000));
@@ -3045,23 +2991,9 @@ async function submitPost() {
   if (btn) btn.disabled = true;
 
   // Snapshot state before composer clears it
-  // IMPORTANT: We must read the file into an ArrayBuffer NOW, before closing
-  // the composer. On Chrome Android, clearing the file input (which closeComposer
-  // does) revokes the browser's access to the File object — making any later
-  // .arrayBuffer() or objectURL call fail with NotReadableError.
+  const fileToUpload = selectedFile;
   const postContent  = content;
   const targetId     = repostTargetId;
-  let fileToUpload = selectedFile;
-  let cachedBuffer = null;
-  if (fileToUpload) {
-    try {
-      cachedBuffer = await fileToUpload.arrayBuffer();
-      console.log('[UPLOAD] file pre-read into buffer —', cachedBuffer.byteLength, 'bytes');
-    } catch(e) {
-      console.error('[UPLOAD] pre-read failed —', e);
-      cachedBuffer = null;
-    }
-  }
 
   // Dismiss composer immediately
   closeComposer(true);
@@ -3093,7 +3025,7 @@ async function submitPost() {
   const doUpload = async () => {
     try {
       // 1. Upload image
-      const imageUrl = await uploadToStorage(fileToUpload, pct => setComposeRing('uploading', pct), cachedBuffer);
+      const imageUrl = await uploadToStorage(fileToUpload, pct => setComposeRing('uploading', pct));
 
       setComposeRing('uploading', 92);
 
