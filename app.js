@@ -3829,54 +3829,483 @@ function closeReplyComposer(commentId) {
 // DISCOVER
 // ══════════════════════════════════════════
 
-async function loadDiscover() {
-  const container = document.getElementById('discover-posts');
-  if (!container || container.dataset.loaded) return;
-  container.dataset.loaded = '1';
+// ══════════════════════════════════════════
+// DISCOVER — full rebuild
+// ══════════════════════════════════════════
 
-  container.innerHTML = '<div class="loading-pulse" style="height:200px"></div>';
+// ── State ──
+const DISC_RECENT_KEY = 'disc_recent_v1';
+const DISC_SOCIAL_PROOF = [
+  '🔥 Trending now',
+  '⭐ Highly rated',
+  '🛒 Added to cart by many',
+  '💬 Lots of buzz',
+  '✅ Frequently repurchased',
+  '⚡ Flash deal',
+];
+
+let discCurrentTab   = 'posts';
+let discCurrentQuery = '';
+let discForYouLoaded = false;
+
+function discGetRecent() {
+  try { return JSON.parse(localStorage.getItem(DISC_RECENT_KEY) || '[]'); }
+  catch { return []; }
+}
+function discSaveRecent(arr) {
+  localStorage.setItem(DISC_RECENT_KEY, JSON.stringify(arr.slice(0,12)));
+}
+function discAddRecent(term) {
+  const arr = discGetRecent().filter(x => x.toLowerCase() !== term.toLowerCase());
+  arr.unshift(term);
+  discSaveRecent(arr);
+}
+
+function discRenderRecent() {
+  const arr  = discGetRecent();
+  const wrap = document.getElementById('disc-recent-section');
+  const box  = document.getElementById('disc-recent-pills');
+  if (!wrap || !box) return;
+  if (!arr.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  box.innerHTML = arr.map(t => `
+    <div class="disc-recent-pill" onclick="discRunSearch('${escHtml(t)}')">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+        <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      ${escHtml(t)}
+      <span class="disc-recent-pill-x" onclick="event.stopPropagation();discRemoveRecent('${escHtml(t)}')">×</span>
+    </div>`).join('');
+}
+
+function discRemoveRecent(term) {
+  discSaveRecent(discGetRecent().filter(x => x !== term));
+  discRenderRecent();
+}
+
+function discClearAllRecent() {
+  discSaveRecent([]);
+  discRenderRecent();
+}
+
+// ── For You grid ──
+async function discLoadForYou() {
+  if (discForYouLoaded) return;
+  discForYouLoaded = true;
+  const grid = document.getElementById('disc-foryou-grid');
+  if (!grid) return;
 
   const { data: posts } = await supabase
     .from('posts')
-    .select(`id,content,image,video,created_at,like_count,user_id,user:users(id,username,avatar)`)
-    .not('image', 'is', null)
+    .select('id,content,image,like_count,user_id,user:users(id,username,avatar)')
+    .not('image','is',null)
     .order('like_count', { ascending: false })
-    .limit(20);
+    .limit(24);
 
-  container.innerHTML = '';
+  grid.innerHTML = '';
   (posts || []).forEach(p => {
     const tile = document.createElement('div');
-    tile.className = 'discover-tile fade-in';
+    tile.className = 'disc-foryou-tile fade-in';
     tile.innerHTML = `
       <img src="${p.image}" alt="" loading="lazy">
-      <div class="discover-tile-overlay">
-        <p class="discover-tile-text">${escHtml(p.content?.slice(0,60) || '')}</p>
-        <div class="discover-tile-author">
-          <img class="discover-tile-avatar" src="${p.user?.avatar||''}" onerror="this.style.display='none'">
-          <span class="discover-tile-username">${escHtml(p.user?.username || '')}</span>
-        </div>
+      <div class="disc-foryou-tile-overlay">
+        <img class="disc-foryou-tile-av" src="${p.user?.avatar||''}" onerror="this.style.display='none'" alt="">
+        <span class="disc-foryou-tile-name">${escHtml(p.user?.username||'')}</span>
       </div>`;
     tile.addEventListener('click', () => openDetail(p.id));
-    container.appendChild(tile);
+    grid.appendChild(tile);
   });
 
-  // Search
-  const searchInput = document.getElementById('discover-search');
-  searchInput?.addEventListener('input', debounce(async e => {
-    const q = e.target.value.trim();
-    if (!q) { container.dataset.loaded = ''; loadDiscover(); return; }
-    container.innerHTML = '';
-    const { data } = await supabase.from('posts')
-      .select(`id,content,image,user_id,user:users(id,username,avatar)`)
-      .ilike('content', `%${q}%`).limit(20);
-    (data || []).forEach(p => {
-      const tile = document.createElement('div');
-      tile.className = 'discover-tile';
-      tile.innerHTML = `${p.image ? `<img src="${p.image}" alt="" loading="lazy">` : `<div style="background:${gradientFor(p.id)};width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:12px"><p style="color:white;font-size:12px;text-align:center">${escHtml(p.content?.slice(0,60)||'')}</p></div>`}<div class="discover-tile-overlay"><p class="discover-tile-text">${escHtml(p.content?.slice(0,60)||'')}</p></div>`;
-      tile.addEventListener('click', () => openDetail(p.id));
-      container.appendChild(tile);
-    });
-  }, 400));
+  if (!posts?.length) {
+    grid.innerHTML = '<p class="disc-no-results"><strong>Nothing yet</strong>Posts will appear here as people share</p>';
+  }
+}
+
+// ── Topic tap ──
+function discTopicTap(btn) {
+  const raw  = btn.textContent.trim();
+  // Strip emoji prefix (first char + space)
+  const term = raw.replace(/^\S+\s/, '');
+  discRunSearch(term);
+}
+
+// ── Run a search ──
+function discRunSearch(term) {
+  const input = document.getElementById('disc-input');
+  if (!input) return;
+  input.value = term;
+  discOnInput(term);
+}
+
+// ── Clear ──
+function discClear() {
+  const input = document.getElementById('disc-input');
+  if (input) input.value = '';
+  discOnInput('');
+  input?.focus();
+}
+
+// ── Tab switch ──
+function discTab(tab, btn) {
+  discCurrentTab = tab;
+  document.querySelectorAll('.disc-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.disc-pane').forEach(p => p.style.display = 'none');
+  const pane = document.getElementById('disc-pane-' + tab);
+  if (pane) pane.style.display = '';
+  // If pane empty, run search again for this tab
+  if (pane && !pane.dataset.loaded) {
+    discFetchResults(discCurrentQuery, tab);
+  }
+}
+
+// ── Input handler ──
+const discOnInput = debounce(function(val) {
+  const q     = (typeof val === 'string' ? val : val?.target?.value || '').trim();
+  const xBtn  = document.getElementById('disc-x-btn');
+  const tabs  = document.getElementById('disc-tabs');
+  const home  = document.getElementById('disc-home');
+  const res   = document.getElementById('disc-results');
+
+  discCurrentQuery = q;
+
+  if (xBtn) xBtn.style.display = q ? '' : 'none';
+
+  if (!q) {
+    // Back to home state
+    if (tabs) tabs.style.display = 'none';
+    if (home) home.style.display = '';
+    if (res)  res.style.display  = 'none';
+    discRenderRecent();
+    return;
+  }
+
+  // Show results state
+  if (tabs) tabs.style.display = 'flex';
+  if (home) home.style.display = 'none';
+  if (res)  res.style.display  = '';
+
+  // Reset all panes
+  ['posts','people','products'].forEach(t => {
+    const p = document.getElementById('disc-pane-' + t);
+    if (p) { p.dataset.loaded = ''; p.style.display = t === discCurrentTab ? '' : 'none'; }
+  });
+
+  discFetchResults(q, discCurrentTab);
+}, 380);
+
+// ── Fetch results for active tab ──
+async function discFetchResults(q, tab) {
+  const pane = document.getElementById('disc-pane-' + tab);
+  if (!pane || pane.dataset.loaded === q) return;
+  pane.dataset.loaded = q;
+
+  pane.innerHTML = discLoadingHTML();
+
+  if (tab === 'posts')    await discFetchPosts(q, pane);
+  if (tab === 'people')   await discFetchPeople(q, pane);
+  if (tab === 'products') await discFetchProducts(q || '', pane);
+
+  // Save to recent after successful fetch
+  discAddRecent(q);
+}
+
+function discLoadingHTML() {
+  return `<div style="padding:16px">
+    <div style="height:14px;border-radius:8px;background:var(--bg3);margin-bottom:10px;width:60%;animation:shimmer 1.4s infinite;background-size:200% 100%;background-image:linear-gradient(90deg,var(--bg3) 25%,var(--bg2) 50%,var(--bg3) 75%)"></div>
+    <div style="height:14px;border-radius:8px;background:var(--bg3);margin-bottom:10px;width:80%;animation:shimmer 1.4s infinite;background-size:200% 100%;background-image:linear-gradient(90deg,var(--bg3) 25%,var(--bg2) 50%,var(--bg3) 75%)"></div>
+    <div style="height:14px;border-radius:8px;background:var(--bg3);width:45%;animation:shimmer 1.4s infinite;background-size:200% 100%;background-image:linear-gradient(90deg,var(--bg3) 25%,var(--bg2) 50%,var(--bg3) 75%)"></div>
+  </div>`;
+}
+
+// ── Posts results ──
+async function discFetchPosts(q, pane) {
+  const { data } = await supabase
+    .from('posts')
+    .select('id,content,image,like_count,user_id,user:users(id,username,avatar)')
+    .ilike('content', `%${q}%`)
+    .order('like_count', { ascending: false })
+    .limit(30);
+
+  if (!data?.length) {
+    pane.innerHTML = `<div class="disc-no-results"><strong>No posts found</strong>Try different words or check spelling</div>`;
+    return;
+  }
+
+  const grid = document.createElement('div');
+  grid.className = 'disc-posts-grid';
+
+  data.forEach(p => {
+    const tile = document.createElement('div');
+    tile.className = 'disc-post-tile';
+    if (p.image) {
+      tile.innerHTML = `<img src="${p.image}" alt="" loading="lazy">`;
+    } else {
+      tile.innerHTML = `<p class="disc-post-tile-text">${escHtml(p.content||'')}</p>`;
+    }
+    tile.addEventListener('click', () => openDetail(p.id));
+    grid.appendChild(tile);
+  });
+
+  pane.innerHTML = '';
+  pane.appendChild(grid);
+}
+
+// ── People results ──
+async function discFetchPeople(q, pane) {
+  const { data } = await supabase
+    .from('users')
+    .select('id,username,avatar,bio,follower_count')
+    .or(`username.ilike.%${q}%,bio.ilike.%${q}%`)
+    .limit(20);
+
+  if (!data?.length) {
+    pane.innerHTML = `<div class="disc-no-results"><strong>No people found</strong>Try searching a username or topic</div>`;
+    return;
+  }
+
+  // Get who current user follows
+  let followingSet = new Set();
+  if (currentUser) {
+    const { data: fl } = await supabase
+      .from('follows')
+      .select('following_id')
+      .eq('follower_id', currentUser.id);
+    (fl || []).forEach(r => followingSet.add(r.following_id));
+  }
+
+  const list = document.createElement('div');
+  list.className = 'disc-people-list';
+
+  data.forEach(u => {
+    if (u.id === currentUser?.id) return; // skip self
+    const isFollowing = followingSet.has(u.id);
+    const row = document.createElement('div');
+    row.className = 'disc-person-row';
+    row.innerHTML = `
+      <img class="disc-person-av" src="${u.avatar||''}" onerror="this.src=''" alt="">
+      <div class="disc-person-info">
+        <div class="disc-person-name">${escHtml(u.username||'')}</div>
+        ${u.bio ? `<div class="disc-person-bio">${escHtml(u.bio)}</div>` : ''}
+      </div>
+      <button class="disc-follow-btn ${isFollowing ? 'following' : ''}"
+        data-uid="${u.id}"
+        onclick="event.stopPropagation(); discToggleFollow(this, '${u.id}')">
+        ${isFollowing ? 'Following' : 'Follow'}
+      </button>`;
+    row.addEventListener('click', () => openProfile(u.id));
+    list.appendChild(row);
+  });
+
+  pane.innerHTML = '';
+  pane.appendChild(list);
+}
+
+async function discToggleFollow(btn, uid) {
+  if (!currentUser) return;
+  const isFollowing = btn.classList.contains('following');
+  btn.disabled = true;
+  if (isFollowing) {
+    await supabase.from('follows').delete()
+      .eq('follower_id', currentUser.id).eq('following_id', uid);
+    btn.classList.remove('following');
+    btn.textContent = 'Follow';
+  } else {
+    await supabase.from('follows').insert({ follower_id: currentUser.id, following_id: uid });
+    btn.classList.add('following');
+    btn.textContent = 'Following';
+  }
+  btn.disabled = false;
+}
+
+// ── Products results ──
+// ── Static demo products — replace with Supabase query when products table is ready ──
+const DEMO_PRODUCTS = [
+  {
+    id: 'demo-1',
+    title: 'Ankara Tote Bag — Handmade',
+    image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&q=80',
+    price: 18500,
+    currency: '₦',
+    sold_count: 342,
+    social: ['🔥 342 people bought this', '⭐ 4.9 star rating', '🛒 12 added to cart today'],
+    seller: { username: '@AdaHandcraft', avatar: 'https://i.pravatar.cc/40?img=1' },
+  },
+  {
+    id: 'demo-2',
+    title: 'Natural Shea Butter Body Cream 500ml',
+    image: 'https://images.unsplash.com/photo-1607006344380-b6775a0824a7?w=400&q=80',
+    price: 5200,
+    currency: '₦',
+    sold_count: 1289,
+    social: ['✅ 1.2K repurchased', '💬 "Best cream ever!"', '⚡ Flash sale — 20% off'],
+    seller: { username: '@GlowByNkechi', avatar: 'https://i.pravatar.cc/40?img=5' },
+  },
+  {
+    id: 'demo-3',
+    title: 'Men's Agbada Set — 3 Piece Custom',
+    image: 'https://images.unsplash.com/photo-1594938298603-c8148c4b4f60?w=400&q=80',
+    price: 95000,
+    currency: '₦',
+    sold_count: 87,
+    social: ['👑 Premium quality fabric', '📦 Ships in 5 days', '🔥 Trending this week'],
+    seller: { username: '@KingsTailors_Abj', avatar: 'https://i.pravatar.cc/40?img=3' },
+  },
+  {
+    id: 'demo-4',
+    title: 'Wireless Earbuds — 48hr Battery',
+    image: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=400&q=80',
+    price: 24000,
+    currency: '₦',
+    sold_count: 673,
+    social: ['📱 Works with all phones', '⚡ Flash sale ends tonight', '🛒 2.1K added to cart'],
+    seller: { username: '@TechVaultNG', avatar: 'https://i.pravatar.cc/40?img=8' },
+  },
+  {
+    id: 'demo-5',
+    title: 'Homemade Chin Chin 1kg — Crispy',
+    image: 'https://images.unsplash.com/photo-1621939514649-280e2ee25f60?w=400&q=80',
+    price: 3500,
+    currency: '₦',
+    sold_count: 2104,
+    social: ['🍪 2.1K sold this month', '✅ Fresh baked daily', '💬 Customers keep coming back'],
+    seller: { username: '@MamaDeliNG', avatar: 'https://i.pravatar.cc/40?img=9' },
+  },
+  {
+    id: 'demo-6',
+    title: 'Luxury Wig — 26" Brazilian Body Wave',
+    image: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=400&q=80',
+    price: 145000,
+    currency: '₦',
+    sold_count: 215,
+    social: ['💅 215 happy customers', '⭐ 5-star reviews only', '🔥 Most wished for'],
+    seller: { username: '@HairByFavour', avatar: 'https://i.pravatar.cc/40?img=47' },
+  },
+  {
+    id: 'demo-7',
+    title: 'Zobo Drink Set — 6 Bottles Premium',
+    image: 'https://images.unsplash.com/photo-1546173159-315724a31696?w=400&q=80',
+    price: 7800,
+    currency: '₦',
+    sold_count: 934,
+    social: ['🌿 No preservatives', '✅ 934 orders delivered', '⚡ Order before 12pm, ship today'],
+    seller: { username: '@ZoboQueenLagos', avatar: 'https://i.pravatar.cc/40?img=32' },
+  },
+  {
+    id: 'demo-8',
+    title: 'Afrobeats Drum Lesson — 4 Week Online',
+    image: 'https://images.unsplash.com/photo-1519892300165-cb5542fb47c7?w=400&q=80',
+    price: 35000,
+    currency: '₦',
+    sold_count: 156,
+    social: ['🎵 156 students enrolled', '📹 Lifetime video access', '🔥 Trending in Music'],
+    seller: { username: '@DrumsByEmeka', avatar: 'https://i.pravatar.cc/40?img=15' },
+  },
+];
+
+async function discFetchProducts(q, pane) {
+  // Filter demo products by query
+  const filtered = q
+    ? DEMO_PRODUCTS.filter(p =>
+        p.title.toLowerCase().includes(q.toLowerCase()) ||
+        p.seller.username.toLowerCase().includes(q.toLowerCase())
+      )
+    : DEMO_PRODUCTS;
+
+  // TODO: When products table is ready, replace above with:
+  // const { data, error } = await supabase
+  //   .from('products')
+  //   .select('id,title,image,price,currency,sold_count,user_id,user:users(id,username,avatar)')
+  //   .or(`title.ilike.%${q}%,description.ilike.%${q}%`)
+  //   .order('sold_count', { ascending: false })
+  //   .limit(20);
+  // const filtered = data || [];
+
+  if (!filtered.length) {
+    pane.innerHTML = `<div class="disc-no-results"><strong>No products found</strong>Try a different search</div>`;
+    return;
+  }
+
+  const grid = document.createElement('div');
+  grid.className = 'disc-products-grid';
+
+  filtered.forEach(prod => {
+    const card     = document.createElement('div');
+    card.className = 'disc-product-card';
+
+    const socialId  = 'sp-' + Math.random().toString(36).slice(2);
+    const price     = Number(prod.price || 0).toLocaleString();
+    const sold      = prod.sold_count ? `${Number(prod.sold_count).toLocaleString()} sold` : '';
+    const firstProof = prod.social?.[0] || DISC_SOCIAL_PROOF[0];
+
+    card.innerHTML = `
+      <div class="disc-product-img-wrap">
+        ${prod.image
+          ? `<img src="${prod.image}" alt="${escHtml(prod.title)}" loading="lazy">`
+          : `<div style="width:100%;height:100%;background:${gradientFor(prod.id)}"></div>`
+        }
+      </div>
+      <div class="disc-product-body">
+        <div class="disc-product-title">${escHtml(prod.title||'')}</div>
+        <div class="disc-product-social" id="${socialId}">${firstProof}</div>
+        <div class="disc-product-price-row">
+          <span class="disc-product-currency">${prod.currency||'₦'}</span>
+          <span class="disc-product-amount">${price}</span>
+          ${sold ? `<span class="disc-product-sold">${sold}</span>` : ''}
+        </div>
+        <div class="disc-product-seller" onclick="event.stopPropagation()">
+          <img class="disc-product-seller-av" src="${prod.seller?.avatar||''}" onerror="this.src=''" alt="">
+          <span class="disc-product-seller-name">${escHtml(prod.seller?.username||'')}</span>
+        </div>
+      </div>`;
+
+    card.addEventListener('click', () => openProduct(prod.id));
+    grid.appendChild(card);
+    discCycleSocialProof(socialId, prod.social);
+  });
+
+  pane.innerHTML = '';
+  pane.appendChild(grid);
+}
+
+// ── Social proof cycling ──
+function discCycleSocialProof(elId, customArr) {
+  const arr = customArr || DISC_SOCIAL_PROOF;
+  let idx = 0;
+  setInterval(() => {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    el.style.opacity = '0';
+    setTimeout(() => {
+      idx = (idx + 1) % arr.length;
+      el.textContent = arr[idx];
+      el.style.opacity = '1';
+    }, 400);
+  }, 3000);
+}
+
+// ── openProduct placeholder ──
+function openProduct(id) {
+  // Product page — coming soon
+  showToast('Product page coming soon');
+}
+
+// ── Main init ──
+async function loadDiscover() {
+  const input = document.getElementById('disc-input');
+  if (!input) return;
+  if (input.dataset.init) return;
+  input.dataset.init = '1';
+
+  // Render recent searches
+  discRenderRecent();
+
+  // Load For You grid
+  discLoadForYou();
+
+  // Wire input
+  input.addEventListener('input', e => discOnInput(e.target.value));
+  input.addEventListener('focus', () => discRenderRecent());
 }
 
 // ══════════════════════════════════════════
