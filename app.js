@@ -2606,30 +2606,35 @@ async function undoRepost(postId, btn) {
 // ══════════════════════════════════════════
 
 function openComposer() {
-  const overlay = document.getElementById('composer-overlay');
-  const sheet   = document.getElementById('composer-sheet');
+  const overlay  = document.getElementById('composer-overlay');
+  const sheet    = document.getElementById('composer-sheet');
+  const previews = document.getElementById('composer-previews');
+
   overlay.classList.remove('hidden');
+
+  if (currentProfile?.avatar) {
+    document.getElementById('composer-avatar').src = currentProfile.avatar;
+  }
 
   requestAnimationFrame(() => {
     sheet.classList.add('open');
     document.getElementById('composer-textarea').focus();
   });
 
-  if (currentProfile?.avatar) {
-    document.getElementById('composer-avatar').src = currentProfile.avatar;
+  // Visual Viewport: shrink sheet height when keyboard appears
+  // The sheet stays anchored at the bottom, previews area shrinks, textarea stays visible
+  function onVP() {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const vvHeight = vv.height;
+    // Cap sheet at viewport height so it sits just above keyboard
+    sheet.style.maxHeight = vvHeight * 0.95 + 'px';
+    // Scroll previews to bottom so latest content stays visible
+    if (previews) previews.scrollTop = previews.scrollHeight;
   }
 
-  // Keyboard avoidance — push sheet above keyboard
-  function onVP() {
-    if (!window.visualViewport) return;
-    const kb = Math.max(0, window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop);
-    if (sheet.classList.contains('open')) {
-      sheet.style.marginBottom = kb + 'px';
-    }
-  }
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', onVP);
-    window.visualViewport.addEventListener('scroll', onVP);
     overlay._vp = onVP;
   }
 }
@@ -2640,11 +2645,10 @@ function closeComposer(instant = false) {
 
   if (overlay._vp && window.visualViewport) {
     window.visualViewport.removeEventListener('resize', overlay._vp);
-    window.visualViewport.removeEventListener('scroll', overlay._vp);
     overlay._vp = null;
   }
 
-  sheet.style.marginBottom = '';
+  sheet.style.maxHeight = '';
 
   if (instant) {
     sheet.style.transition = 'none';
@@ -2666,7 +2670,7 @@ function closeComposer(instant = false) {
     updateComposerBtn();
   };
 
-  instant ? cleanup() : setTimeout(cleanup, 380);
+  instant ? cleanup() : setTimeout(cleanup, 350);
 }
 
 function initComposerFile() {
@@ -2704,18 +2708,12 @@ function initComposerFile() {
   });
 
   const ta = document.getElementById('composer-textarea');
-  ta?.addEventListener('focus', () => {
-    // Scroll textarea into view when keyboard opens, especially with image preview above
-    setTimeout(() => {
-      ta.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }, 100);
-  });
   ta?.addEventListener('input', () => {
     updateComposerBtn();
     updateCharCount(ta.value.length);
+    // Auto-grow textarea up to max-height defined in CSS
     ta.style.height = 'auto';
-    ta.style.height = Math.min(ta.scrollHeight, 200) + 'px';
-    ta.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    ta.style.height = ta.scrollHeight + 'px';
   });
 }
 
