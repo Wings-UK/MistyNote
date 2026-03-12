@@ -2994,9 +2994,15 @@ async function uploadToStorage(file, onProgress) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 45000); // 45s per attempt
 
+      // Convert blob → ArrayBuffer before upload.
+      // Chrome Android has a known issue where Supabase Storage SDK's
+      // internal insertSync throws a TypeError when passed a Blob directly.
+      // Passing an ArrayBuffer with explicit contentType bypasses this.
+      const arrayBuffer = await blob.arrayBuffer();
+
       const { error } = await supabase.storage
         .from(bucket)
-        .upload(path, blob, { upsert: true, contentType: 'image/jpeg' });
+        .upload(path, arrayBuffer, { upsert: true, contentType: 'image/jpeg' });
 
       clearTimeout(timer);
       if (error) {
