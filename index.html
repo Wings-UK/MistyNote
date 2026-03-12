@@ -477,21 +477,31 @@
   ══════════════════════════════════════════ -->
   <div class="composer-overlay hidden" id="composer-overlay">
     <div class="composer-sheet" id="composer-sheet">
-      <div class="composer-handle"></div>
+
+      <!-- Top bar -->
       <div class="composer-top">
         <button class="composer-cancel" onclick="closeComposer()">Cancel</button>
-        <div class="composer-avatar-wrap">
-          <img id="composer-avatar" class="composer-user-avatar" src="">
-        </div>
+        <img id="composer-avatar" class="composer-user-avatar" src="">
         <button class="composer-post-btn" id="composer-post-btn" onclick="submitPost()" disabled>Post</button>
       </div>
-      <div class="composer-body">
-        <div class="composer-input-row">
-          <textarea class="composer-textarea" id="composer-textarea" placeholder="What's happening?" rows="3"></textarea>
-        </div>
+
+      <!-- Previews — scrollable, sits above textarea -->
+      <div class="composer-previews" id="composer-previews">
         <div id="composer-repost-preview"></div>
-        <div class="composer-media-preview" id="composer-media-preview"></div>
+        <div id="composer-media-preview"></div>
       </div>
+
+      <!-- Textarea — pinned above toolbar, always visible -->
+      <div class="composer-input-wrap">
+        <textarea class="composer-textarea" id="composer-textarea"
+          placeholder="What's on your mind?"
+          rows="3"
+          autocapitalize="sentences"
+          autocorrect="on"></textarea>
+        <div class="composer-char-count" id="composer-char-count">280</div>
+      </div>
+
+      <!-- Toolbar -->
       <div class="composer-toolbar">
         <div class="composer-tools">
           <label class="composer-tool-btn" for="composer-file">
@@ -502,8 +512,8 @@
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><path d="M8 13s1.5 2 4 2 4-2 4-2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="9" y1="9" x2="9.01" y2="9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><line x1="15" y1="9" x2="15.01" y2="9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
           </button>
         </div>
-        <div class="composer-char-count" id="composer-char-count">280</div>
       </div>
+
     </div>
   </div>
 
