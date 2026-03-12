@@ -4143,7 +4143,7 @@ const DEMO_PRODUCTS = [
   },
   {
     id: 'demo-3',
-    title: 'Men's Agbada Set — 3 Piece Custom',
+    title: "Men's Agbada Set — 3 Piece Custom",
     image: 'https://images.unsplash.com/photo-1594938298603-c8148c4b4f60?w=400&q=80',
     price: 95000,
     currency: '₦',
