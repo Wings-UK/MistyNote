@@ -373,129 +373,134 @@
      MOMENTS ROW — MistyNote signature stories
      Wide cards, not circles. Social + commerce ready.
   ══════════════════════════════════════════ */
-  .stories-row {
-    display: flex; gap: 10px; overflow-x: auto;
-    padding: 14px 16px 16px;
+  /* ══════════════════════════════════════════
+     MOMENTS ROW — Concept C (Landscape Cards)
+  ══════════════════════════════════════════ */
+  .moments-row {
+    display: flex; align-items: center; gap: 8px;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
     scrollbar-width: none; -ms-overflow-style: none;
+    padding: 12px 16px 14px;
   }
-  .stories-row:empty { display: none; }
-  .stories-row::-webkit-scrollbar { display: none; }
+  .moments-row::-webkit-scrollbar { display: none; }
 
-  /* Each moment card — tall pill, not a circle */
-  .story-item {
+  /* ── Add button ── */
+  .moment-add {
     flex-shrink: 0;
-    width: 76px; height: 116px;
-    border-radius: 18px;
-    position: relative;
-    overflow: hidden;
+    width: 52px; height: 76px;
+    border-radius: 14px;
+    border: 2px dashed rgba(108,71,255,0.35);
+    background: rgba(108,71,255,0.06);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 5px;
     cursor: pointer;
+    transition: background 0.15s;
+  }
+  .moment-add:active { background: rgba(108,71,255,0.12); }
+  .moment-add-plus {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .moment-add span {
+    font-size: 9px; font-weight: 700;
+    color: var(--accent); letter-spacing: 0.3px;
+  }
+
+  /* ── Landscape card ── */
+  .moment-card {
+    flex-shrink: 0;
+    width: 116px; height: 76px;
+    border-radius: 14px;
+    position: relative; overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.18s cubic-bezier(0.34,1.4,0.64,1);
     -webkit-tap-highlight-color: transparent;
-    transition: transform 0.18s cubic-bezier(0.34,1.4,0.64,1),
-                box-shadow 0.18s ease;
   }
-  .story-item:active {
-    transform: scale(0.93);
+  .moment-card:active { transform: scale(0.94); }
+
+  /* Unseen — accent ring */
+  .moment-card:not(.seen) {
+    box-shadow: 0 0 0 2px var(--accent), 0 4px 14px rgba(108,71,255,0.25);
+  }
+  /* Live — red pulsing ring */
+  .moment-card.live:not(.seen) {
+    box-shadow: 0 0 0 2px #ff3b5c, 0 4px 14px rgba(255,59,92,0.3);
+    animation: liveRingPulse 1.8s ease-in-out infinite;
+  }
+  @keyframes liveRingPulse {
+    0%,100% { box-shadow: 0 0 0 2px #ff3b5c, 0 4px 14px rgba(255,59,92,0.3); }
+    50%      { box-shadow: 0 0 0 3px #ff3b5c, 0 4px 20px rgba(255,59,92,0.5); }
   }
 
-  /* Background — gradient fill for no-image cards, image for real ones */
-  .story-bg {
-    position: absolute; inset: 0;
-    background: linear-gradient(160deg, var(--accent) 0%, var(--red) 100%);
-    border-radius: inherit;
-  }
-  .story-bg img {
-    width: 100%; height: 100%; object-fit: cover;
-    border-radius: inherit;
+  /* Seen — greyscale + low opacity */
+  .moment-card.seen {
+    filter: grayscale(1);
+    opacity: 0.45;
+    box-shadow: none;
   }
 
-  /* Dark vignette so text is always readable */
-  .story-item::after {
-    content: '';
+  .moment-card-bg {
     position: absolute; inset: 0;
-    border-radius: inherit;
+    background-size: cover; background-position: center;
+  }
+  .moment-card-bg img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .moment-card-overlay {
+    position: absolute; inset: 0;
     background: linear-gradient(
-      to bottom,
-      transparent 30%,
+      135deg,
+      rgba(0,0,0,0) 40%,
       rgba(0,0,0,0.55) 100%
     );
-    pointer-events: none;
   }
 
-  /* Seen state — desaturated border */
-  .story-item.seen .story-bg {
-    opacity: 0.55;
+  /* Avatar — top left inside card */
+  .moment-card-av-wrap {
+    position: absolute; top: 7px; left: 8px; z-index: 2;
+    width: 26px; height: 26px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.9);
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  }
+  .moment-card-av {
+    width: 100%; height: 100%; object-fit: cover; display: block;
   }
 
-  /* Unseen — glowing accent border */
-  .story-item:not(.seen):not(.story-add-item) {
-    box-shadow:
-      0 0 0 2.5px var(--accent),
-      0 4px 16px rgba(108,71,255,0.3);
-  }
-
-  /* Name at bottom */
-  .story-name {
-    position: absolute; bottom: 8px; left: 0; right: 0; z-index: 2;
+  /* Name — bottom left */
+  .moment-card-name {
+    position: absolute; bottom: 7px; left: 8px; right: 8px; z-index: 2;
     font-size: 10px; font-weight: 700; color: #fff;
-    text-align: center; padding: 0 4px;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     text-shadow: 0 1px 4px rgba(0,0,0,0.5);
   }
 
-  /* Avatar — top of card */
-  .story-avatar-wrap {
-    position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
-    z-index: 2;
-  }
-  .story-avatar {
-    width: 34px; height: 34px; border-radius: 50%; object-fit: cover;
-    border: 2px solid rgba(255,255,255,0.9);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-  }
-
-  /* Commerce badge — shows 🛍️ for product moments */
-  .story-commerce-badge {
-    position: absolute; top: 6px; right: 6px; z-index: 3;
-    width: 18px; height: 18px; border-radius: 50%;
-    background: var(--gold);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 9px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-  }
-
-  /* Live badge */
-  .story-live-badge {
-    position: absolute; top: 6px; left: 6px; z-index: 3;
-    background: var(--red); color: #fff;
-    font-size: 8px; font-weight: 800; letter-spacing: 0.05em;
-    padding: 2px 5px; border-radius: 4px;
-    text-transform: uppercase;
-    box-shadow: 0 1px 4px rgba(255,59,92,0.4);
+  /* Live pill — top right */
+  .moment-live-pill {
+    position: absolute; top: 7px; right: 7px; z-index: 3;
+    background: #ff3b5c; color: #fff;
+    font-size: 8px; font-weight: 800;
+    padding: 2px 7px; border-radius: 8px;
+    letter-spacing: 0.5px;
     animation: livePulse 1.8s ease-in-out infinite;
   }
   @keyframes livePulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.65; }
+    0%,100% { opacity: 1; }
+    50%      { opacity: 0.7; }
   }
 
-  /* Add story card */
-  .story-add-item {
-    background: var(--bg2);
-    border: 1.5px dashed var(--border);
-    box-shadow: none;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 6px;
-  }
-  .story-add-item::after { display: none; }
-  .story-add-icon {
-    width: 32px; height: 32px; border-radius: 50%;
-    background: var(--accent-soft);
-    display: flex; align-items: center; justify-content: center;
-    color: var(--accent);
-  }
-  .story-add-label {
-    font-size: 10px; font-weight: 700; color: var(--text3);
-    text-align: center; line-height: 1.2;
+  /* Type label — product, sale etc */
+  .moment-type-label {
+    position: absolute; bottom: 24px; left: 8px; z-index: 3;
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    border-radius: 8px;
+    padding: 2px 7px;
+    font-size: 8px; font-weight: 800;
+    color: #fff; letter-spacing: 0.3px;
   }
   
   /* ══════════════════════════════════════════
