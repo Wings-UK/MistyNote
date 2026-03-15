@@ -1033,9 +1033,10 @@
   }
 
   /* Top bar */
+  /* ── TOP BAR — no extra padding, slide page doesn't need status bar offset ── */
   .chat-topbar {
     display: flex; align-items: center; gap: 10px;
-    padding: 52px 12px 12px;
+    padding: 12px 12px 12px;
     background: var(--bg);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
@@ -1085,24 +1086,32 @@
     flex-shrink: 0;
   }
 
-  /* Messages scroll area */
+  /* ── MESSAGES AREA — African Adinkra watermark background ── */
   .chat-messages {
     flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
-    padding: 12px 14px 8px;
-    display: flex; flex-direction: column; gap: 3px;
+    padding: 10px 12px 8px;
+    display: flex; flex-direction: column;
     scrollbar-width: none;
+    position: relative;
+    /* Warm creamy African art background */
+    background-color: var(--chat-bg, #fdf8f0);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' opacity='0.045'%3E%3C!-- Adinkra Gye Nyame inspired --%3E%3Ccircle cx='40' cy='40' r='18' stroke='%23a0522d' stroke-width='1.5' fill='none'/%3E%3Ccircle cx='40' cy='40' r='10' stroke='%23a0522d' stroke-width='1' fill='none'/%3E%3Cline x1='40' y1='16' x2='40' y2='22' stroke='%23a0522d' stroke-width='1.5'/%3E%3Cline x1='40' y1='58' x2='40' y2='64' stroke='%23a0522d' stroke-width='1.5'/%3E%3Cline x1='16' y1='40' x2='22' y2='40' stroke='%23a0522d' stroke-width='1.5'/%3E%3Cline x1='58' y1='40' x2='64' y2='40' stroke='%23a0522d' stroke-width='1.5'/%3E%3Ccircle cx='40' cy='16' r='2.5' fill='%23a0522d'/%3E%3Ccircle cx='40' cy='64' r='2.5' fill='%23a0522d'/%3E%3Ccircle cx='16' cy='40' r='2.5' fill='%23a0522d'/%3E%3Ccircle cx='64' cy='40' r='2.5' fill='%23a0522d'/%3E%3Cpath d='M28 28 Q40 20 52 28 Q60 40 52 52 Q40 60 28 52 Q20 40 28 28Z' stroke='%23a0522d' stroke-width='0.8' fill='none'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 80px 80px;
+  }
+  [data-theme="dark"] .chat-messages {
+    background-color: var(--bg);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' opacity='0.04'%3E%3Ccircle cx='40' cy='40' r='18' stroke='%23c4a882' stroke-width='1.5' fill='none'/%3E%3Ccircle cx='40' cy='40' r='10' stroke='%23c4a882' stroke-width='1' fill='none'/%3E%3Cline x1='40' y1='16' x2='40' y2='22' stroke='%23c4a882' stroke-width='1.5'/%3E%3Cline x1='40' y1='58' x2='40' y2='64' stroke='%23c4a882' stroke-width='1.5'/%3E%3Cline x1='16' y1='40' x2='22' y2='40' stroke='%23c4a882' stroke-width='1.5'/%3E%3Cline x1='58' y1='40' x2='64' y2='40' stroke='%23c4a882' stroke-width='1.5'/%3E%3Ccircle cx='40' cy='16' r='2.5' fill='%23c4a882'/%3E%3Ccircle cx='40' cy='64' r='2.5' fill='%23c4a882'/%3E%3Ccircle cx='16' cy='40' r='2.5' fill='%23c4a882'/%3E%3Ccircle cx='64' cy='40' r='2.5' fill='%23c4a882'/%3E%3Cpath d='M28 28 Q40 20 52 28 Q60 40 52 52 Q40 60 28 52 Q20 40 28 28Z' stroke='%23c4a882' stroke-width='0.8' fill='none'/%3E%3C/svg%3E");
   }
   .chat-messages::-webkit-scrollbar { display: none; }
 
   /* Loading dots */
   .chat-loading {
-    display: flex; gap: 6px; justify-content: center;
-    padding: 30px 0;
+    display: flex; gap: 6px; justify-content: center; padding: 30px 0;
   }
   .chat-loading-dot {
     width: 8px; height: 8px; border-radius: 50%;
-    background: var(--text3);
-    animation: chatLoadBounce 1.2s infinite;
+    background: var(--text3); animation: chatLoadBounce 1.2s infinite;
   }
   .chat-loading-dot:nth-child(2) { animation-delay: 0.2s; }
   .chat-loading-dot:nth-child(3) { animation-delay: 0.4s; }
@@ -1113,7 +1122,7 @@
 
   /* Date divider */
   .chat-date-divider {
-    display: flex; align-items: center; gap: 10px; margin: 8px 0;
+    display: flex; align-items: center; gap: 10px; margin: 10px 0;
   }
   .chat-date-divider::before, .chat-date-divider::after {
     content: ''; flex: 1; height: 1px; background: var(--border);
@@ -1121,11 +1130,17 @@
   .chat-date-divider span {
     font-size: 11px; color: var(--text3); font-weight: 600;
     letter-spacing: 0.4px; white-space: nowrap;
+    background: var(--chat-bg, #fdf8f0); padding: 0 6px; border-radius: 8px;
   }
+  [data-theme="dark"] .chat-date-divider span { background: var(--bg); }
 
-  /* Message rows */
+  /* ── MESSAGE ROWS ──
+     Same sender = 2px gap (tight cluster)
+     Different sender = 10px gap (visual separation)
+  ── */
   .chat-msg-row {
-    display: flex; align-items: flex-end; gap: 7px;
+    display: flex; align-items: flex-end;
+    margin-bottom: 2px;
     animation: msgAppear 0.22s ease forwards;
   }
   @keyframes msgAppear {
@@ -1133,41 +1148,64 @@
     to   { opacity: 1; transform: translateY(0); }
   }
   .chat-msg-row.sent { flex-direction: row-reverse; }
+  /* 10px gap when sender switches */
+  .chat-msg-row.new-sender { margin-top: 10px; }
 
-  .chat-msg-av {
-    width: 26px; height: 26px; border-radius: 50%;
-    flex-shrink: 0; margin-bottom: 2px; object-fit: cover;
-    background: var(--bg3);
-  }
-  .chat-msg-av.hidden { visibility: hidden; }
+  /* No avatars — clean 1-on-1 chat */
+  .chat-msg-av { display: none; }
 
-  /* Standard bubble */
+  /* ── BUBBLES ── */
   .chat-bubble {
-    max-width: 72%; padding: 10px 14px;
+    max-width: 76%;
+    padding: 8px 12px;
     border-radius: 18px;
-    font-size: 15px; line-height: 1.5; word-break: break-word;
+    font-size: 15px; line-height: 1.5;
+    word-break: break-word;
     position: relative;
+    /* overflow hidden clips the tail shape */
   }
   .chat-msg-row.sent .chat-bubble {
     background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
-    border-bottom-right-radius: 5px; color: white;
-    box-shadow: 0 3px 16px rgba(108,71,255,0.3);
+    border-bottom-right-radius: 5px;
+    color: white;
+    box-shadow: 0 2px 12px rgba(108,71,255,0.25);
   }
   .chat-msg-row.recv .chat-bubble {
-    background: var(--bg3);
+    background: #ffffff;
     border-bottom-left-radius: 5px;
-    border: 1px solid var(--border);
+    border: 1px solid rgba(0,0,0,0.07);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    color: #1a1a1a;
+  }
+  [data-theme="dark"] .chat-msg-row.recv .chat-bubble {
+    background: var(--bg3); color: var(--text);
+    border-color: var(--border);
+    box-shadow: none;
   }
 
-  /* Bubble time + ticks */
-  .chat-bubble-meta {
-    display: flex; align-items: center; justify-content: flex-end;
-    gap: 4px; margin-top: 4px; font-size: 10px;
+  /* ── TIMESTAMP — floats inline with last line of text ──
+     The float trick: meta floats right, text wraps naturally around it.
+     The min-width spacer forces a new line if text is too long.
+  ── */
+  .chat-bubble-text {
+    display: block;
   }
-  .chat-msg-row.sent  .chat-bubble-meta { color: rgba(255,255,255,0.55); }
-  .chat-msg-row.recv  .chat-bubble-meta { color: var(--text3); }
+  .chat-bubble-meta {
+    float: right;
+    display: flex; align-items: center; gap: 3px;
+    font-size: 10px; margin-left: 6px;
+    /* Shift down slightly to align with text baseline */
+    position: relative; top: 3px;
+    clear: none;
+  }
+  .chat-msg-row.sent  .chat-bubble-meta { color: rgba(255,255,255,0.6); }
+  .chat-msg-row.recv  .chat-bubble-meta { color: rgba(0,0,0,0.35); }
+  [data-theme="dark"] .chat-msg-row.recv .chat-bubble-meta { color: var(--text3); }
+  /* Clearfix so bubble stretches to contain floated meta */
+  .chat-bubble::after { content: ''; display: table; clear: both; }
+
   .chat-tick { display: flex; }
-  .chat-tick.read svg path { stroke: #a78bfa; }
+  .chat-tick.read svg path { stroke: #c4b5fd; }
 
   /* Bubble reaction badge */
   .chat-bubble-reaction {
