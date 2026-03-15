@@ -4843,22 +4843,13 @@ async function loadChatMessages(convId) {
 // ── Build a message element ──
 function buildMessageEl(msg, prevSenderId) {
   const isSent     = msg.sender_id === currentUser?.id;
-  const showAv     = !isSent && msg.sender_id !== prevSenderId;
+  const isNewSender = prevSenderId !== null && msg.sender_id !== prevSenderId;
   const timeStr    = msgFormatTime(msg.created_at);
-  const senderUser = msg.sender || activeChatUser;
 
   const row = document.createElement('div');
-  row.className = `chat-msg-row ${isSent ? 'sent' : 'recv'}`;
+  // Add new-sender class when sender switches — creates 10px gap
+  row.className = `chat-msg-row ${isSent ? 'sent' : 'recv'}${isNewSender ? ' new-sender' : ''}`;
   row.dataset.msgId = msg.id;
-
-  // Avatar (received only)
-  if (!isSent) {
-    const av = document.createElement('img');
-    av.className = 'chat-msg-av' + (showAv ? '' : ' hidden');
-    av.src = senderUser?.avatar || '';
-    av.onerror = () => { av.style.background = 'var(--bg3)'; av.removeAttribute('src'); };
-    row.appendChild(av);
-  }
 
   // Build bubble based on type
   let bubbleEl;
@@ -4874,14 +4865,10 @@ function buildMessageEl(msg, prevSenderId) {
   } else if (msg.type === 'order_update') {
     bubbleEl = buildOrderBubble(msg, timeStr);
   } else {
-    // Default text bubble
+    // Text bubble — timestamp floats inline with last line
     const bubble = document.createElement('div');
     bubble.className = 'chat-bubble';
-    bubble.innerHTML = `${escHtml(msg.content || '')}
-      <div class="chat-bubble-meta">
-        <span>${timeStr}</span>
-        ${isSent ? `<span class="chat-tick"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}
-      </div>`;
+    bubble.innerHTML = `${escHtml(msg.content || '')}<span class="chat-bubble-meta">${timeStr}${isSent ? `<span class="chat-tick"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</span>`;
     bubbleEl = bubble;
   }
 
