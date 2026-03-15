@@ -1434,7 +1434,7 @@ async function showUserProfile(userId, tapEl) {
             <img class="prf-avatar" src="${escHtml(profile.avatar||'')}" onerror="this.src=''" alt="">
           </div>
           <div class="prf-avatar-action-btns">
-            <button class="prf-btn prf-btn-icon" onclick="showToast('DMs coming soon 💬')">
+            <button class="prf-btn prf-btn-icon" onclick="openDM('${userId}')">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
             </button>
             <button class="prf-btn ${isFollowing ? 'prf-btn-following' : 'prf-btn-primary'}" id="follow-btn-${userId}" onclick="toggleFollow('${userId}',this)">${isFollowing ? 'Following' : 'Follow'}</button>
@@ -4478,6 +4478,641 @@ async function loadDiscover() {
   // Wire input
   input.addEventListener('input', e => discOnInput(e.target.value));
   input.addEventListener('focus', () => discRenderRecent());
+}
+
+// ══════════════════════════════════════════
+// MESSAGING
+// ══════════════════════════════════════════
+
+// ── State ──
+let activeChatId       = null;  // current conversation id
+let activeChatUserId   = null;  // the other user's id
+let activeChatUser     = null;  // the other user's profile object
+let msgRealtimeSub     = null;  // realtime subscription
+let msgTypingTimer     = null;
+let msgInboxLoaded     = false;
+
+// ── Helpers ──
+function msgTimeSince(iso) {
+  const diff = (Date.now() - new Date(iso)) / 1000;
+  if (diff < 60)      return 'now';
+  if (diff < 3600)    return Math.floor(diff / 60) + 'm';
+  if (diff < 86400)   return Math.floor(diff / 3600) + 'h';
+  if (diff < 604800)  return Math.floor(diff / 86400) + 'd';
+  return new Date(iso).toLocaleDateString('en-GB', { day:'numeric', month:'short' });
+}
+function msgFormatTime(iso) {
+  return new Date(iso).toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+}
+
+// ── Get or create conversation between current user and another user ──
+async function msgGetOrCreateConversation(otherUserId) {
+  if (!currentUser) return null;
+
+  // Check if conversation already exists
+  const { data: myConvs } = await supabase
+    .from('conversation_participants')
+    .select('conversation_id')
+    .eq('user_id', currentUser.id);
+
+  if (myConvs?.length) {
+    const myConvIds = myConvs.map(r => r.conversation_id);
+    const { data: sharedConvs } = await supabase
+      .from('conversation_participants')
+      .select('conversation_id')
+      .eq('user_id', otherUserId)
+      .in('conversation_id', myConvIds);
+
+    if (sharedConvs?.length) {
+      return sharedConvs[0].conversation_id;
+    }
+  }
+
+  // Create new conversation
+  const { data: conv, error } = await supabase
+    .from('conversations')
+    .insert({})
+    .select('id')
+    .single();
+
+  if (error || !conv) return null;
+
+  // Add both participants
+  await supabase.from('conversation_participants').insert([
+    { conversation_id: conv.id, user_id: currentUser.id },
+    { conversation_id: conv.id, user_id: otherUserId },
+  ]);
+
+  return conv.id;
+}
+
+// ── Open DM from anywhere in the app ──
+async function openDM(userId) {
+  if (!currentUser) { showToast('Sign in to send messages'); return; }
+  if (userId === currentUser.id) { showToast("You can't message yourself"); return; }
+
+  // Get user profile
+  const { data: user } = await supabase
+    .from('users')
+    .select('id,username,avatar,bio,location')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (!user) { showToast('User not found'); return; }
+
+  const convId = await msgGetOrCreateConversation(userId);
+  if (!convId) { showToast('Could not open chat'); return; }
+
+  openChat(convId, user);
+}
+
+// ── Open messages inbox (from feed header DM button) ──
+function openMessagesInbox() {
+  slideTo('messages', () => {
+    loadMessages();
+  });
+}
+
+// ── Load inbox ──
+async function loadMessages() {
+  if (!currentUser) return;
+  if (msgInboxLoaded) return;
+  msgInboxLoaded = true;
+
+  const list  = document.getElementById('msg-inbox-list');
+  const empty = document.getElementById('msg-inbox-empty');
+  if (!list) return;
+
+  list.innerHTML = '<div class="chat-loading"><div class="chat-loading-dot"></div><div class="chat-loading-dot"></div><div class="chat-loading-dot"></div></div>';
+
+  // Get conversations I'm part of
+  const { data: myParts } = await supabase
+    .from('conversation_participants')
+    .select('conversation_id, last_read_at')
+    .eq('user_id', currentUser.id);
+
+  if (!myParts?.length) {
+    list.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+
+  const convIds = myParts.map(r => r.conversation_id);
+  const readMap = {};
+  myParts.forEach(r => readMap[r.conversation_id] = r.last_read_at);
+
+  // Get conversations with last message info
+  const { data: convs } = await supabase
+    .from('conversations')
+    .select('id, last_message, last_message_at, last_message_type, updated_at')
+    .in('id', convIds)
+    .order('updated_at', { ascending: false });
+
+  if (!convs?.length) {
+    list.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+
+  // Get other participants for each conversation
+  const { data: allParts } = await supabase
+    .from('conversation_participants')
+    .select('conversation_id, user_id, user:users(id,username,avatar)')
+    .in('conversation_id', convIds)
+    .neq('user_id', currentUser.id);
+
+  const partMap = {};
+  (allParts || []).forEach(p => { partMap[p.conversation_id] = p.user; });
+
+  // Count unread messages
+  const { data: unreadCounts } = await supabase
+    .from('messages')
+    .select('conversation_id')
+    .in('conversation_id', convIds)
+    .neq('sender_id', currentUser.id)
+    .is('deleted_at', null);
+
+  const unreadMap = {};
+  (unreadCounts || []).forEach(m => {
+    const readAt = readMap[m.conversation_id];
+    // simplified — count all messages from others as potential unreads
+    unreadMap[m.conversation_id] = (unreadMap[m.conversation_id] || 0) + 1;
+  });
+
+  list.innerHTML = '';
+  if (empty) empty.style.display = 'none';
+
+  convs.forEach(conv => {
+    const otherUser = partMap[conv.id];
+    if (!otherUser) return;
+
+    const unread  = unreadMap[conv.id] || 0;
+    const preview = conv.last_message || 'Start a conversation';
+    const timeStr = conv.last_message_at ? msgTimeSince(conv.last_message_at) : '';
+
+    const row = document.createElement('div');
+    row.className = 'msg-conv-row';
+    row.innerHTML = `
+      <div class="msg-conv-av-wrap">
+        <img class="msg-conv-av" src="${otherUser.avatar||''}" onerror="this.style.background='var(--bg3)';this.removeAttribute('src')" alt="">
+      </div>
+      <div class="msg-conv-body">
+        <div class="msg-conv-name-row">
+          <span class="msg-conv-name">${escHtml(otherUser.username||'')}</span>
+          <span class="msg-conv-time">${timeStr}</span>
+        </div>
+        <div class="msg-conv-preview-row">
+          <span class="msg-conv-preview${unread ? ' unread' : ''}">${escHtml(preview)}</span>
+          ${unread ? `<div class="msg-conv-unread-badge">${unread > 9 ? '9+' : unread}</div>` : ''}
+        </div>
+      </div>`;
+    row.addEventListener('click', () => openChat(conv.id, otherUser));
+    list.appendChild(row);
+  });
+
+  // Check message requests
+  const { data: requests } = await supabase
+    .from('message_requests')
+    .select('id')
+    .eq('to_user_id', currentUser.id)
+    .eq('status', 'pending');
+
+  if (requests?.length) {
+    const banner = document.getElementById('msg-requests-banner');
+    const badge  = document.getElementById('msg-requests-badge');
+    const text   = document.getElementById('msg-requests-count-text');
+    if (banner) banner.style.display = 'flex';
+    if (badge)  badge.textContent = requests.length;
+    if (text)   text.textContent  = `${requests.length} ${requests.length === 1 ? 'person wants' : 'people want'} to chat`;
+  }
+}
+
+// ── Open a chat ──
+function openChat(convId, otherUser) {
+  activeChatId     = convId;
+  activeChatUserId = otherUser.id;
+  activeChatUser   = otherUser;
+
+  // Set topbar
+  const nameEl   = document.getElementById('chat-topbar-name');
+  const statusEl = document.getElementById('chat-topbar-status');
+  const avEl     = document.getElementById('chat-topbar-av');
+  if (nameEl)   nameEl.textContent = otherUser.username || '';
+  if (statusEl) { statusEl.textContent = 'MistyNote'; statusEl.className = 'chat-topbar-status'; }
+  if (avEl) {
+    if (otherUser.avatar) {
+      avEl.innerHTML = `<img src="${otherUser.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.parentElement.style.background='var(--bg3)'">`;
+    } else {
+      avEl.style.background = 'var(--accent-soft)';
+      avEl.innerHTML = '';
+    }
+  }
+
+  // Clear and slide in
+  const msgsEl = document.getElementById('chat-messages');
+  if (msgsEl) msgsEl.innerHTML = '<div class="chat-loading"><div class="chat-loading-dot"></div><div class="chat-loading-dot"></div><div class="chat-loading-dot"></div></div>';
+
+  slideTo('chat', async () => {
+    await loadChatMessages(convId);
+    subscribeToChat(convId);
+    markConvRead(convId);
+  });
+}
+
+// ── Close chat ──
+function closeChat() {
+  if (msgRealtimeSub) {
+    supabase.removeChannel(msgRealtimeSub);
+    msgRealtimeSub = null;
+  }
+  activeChatId = null;
+  activeChatUser = null;
+
+  const el = document.getElementById('page-chat');
+  if (el) el.classList.remove('active');
+  slideStack.pop();
+}
+
+// ── Close messages inbox (back button) ──
+function closeMessagesInbox() {
+  msgInboxLoaded = false; // allow refresh next open
+  const el = document.getElementById('page-messages');
+  if (el) el.classList.remove('active');
+  slideStack.pop();
+}
+
+// ── Load messages for a conversation ──
+async function loadChatMessages(convId) {
+  const msgsEl = document.getElementById('chat-messages');
+  if (!msgsEl) return;
+
+  const { data: messages, error } = await supabase
+    .from('messages')
+    .select(`id, type, content, media_url, media_duration,
+             cash_amount, cash_currency, cash_note, cash_status,
+             product_id, offer_amount, offer_status,
+             order_status, reply_to_id, created_at, sender_id,
+             sender:users!sender_id(id, username, avatar)`)
+    .eq('conversation_id', convId)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: true })
+    .limit(50);
+
+  if (error) {
+    msgsEl.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3)">Could not load messages</div>';
+    return;
+  }
+
+  msgsEl.innerHTML = '';
+
+  if (!messages?.length) {
+    msgsEl.innerHTML = `<div style="text-align:center;padding:40px 24px;color:var(--text3);font-size:14px">
+      <div style="font-size:36px;margin-bottom:10px">👋</div>
+      Say hello to ${escHtml(activeChatUser?.username || '')}
+    </div>`;
+    return;
+  }
+
+  let lastDate = null;
+  let lastSenderId = null;
+
+  messages.forEach((msg, idx) => {
+    const msgDate = new Date(msg.created_at).toDateString();
+    if (msgDate !== lastDate) {
+      const divider = document.createElement('div');
+      divider.className = 'chat-date-divider';
+      const today = new Date().toDateString();
+      const yesterday = new Date(Date.now() - 86400000).toDateString();
+      divider.innerHTML = `<span>${msgDate === today ? 'Today' : msgDate === yesterday ? 'Yesterday' : new Date(msg.created_at).toLocaleDateString('en-GB', {day:'numeric',month:'short'})}</span>`;
+      msgsEl.appendChild(divider);
+      lastDate = msgDate;
+    }
+
+    const el = buildMessageEl(msg, lastSenderId);
+    if (el) msgsEl.appendChild(el);
+    lastSenderId = msg.sender_id;
+  });
+
+  msgsEl.scrollTop = msgsEl.scrollHeight;
+}
+
+// ── Build a message element ──
+function buildMessageEl(msg, prevSenderId) {
+  const isSent     = msg.sender_id === currentUser?.id;
+  const showAv     = !isSent && msg.sender_id !== prevSenderId;
+  const timeStr    = msgFormatTime(msg.created_at);
+  const senderUser = msg.sender || activeChatUser;
+
+  const row = document.createElement('div');
+  row.className = `chat-msg-row ${isSent ? 'sent' : 'recv'}`;
+  row.dataset.msgId = msg.id;
+
+  // Avatar (received only)
+  if (!isSent) {
+    const av = document.createElement('img');
+    av.className = 'chat-msg-av' + (showAv ? '' : ' hidden');
+    av.src = senderUser?.avatar || '';
+    av.onerror = () => { av.style.background = 'var(--bg3)'; av.removeAttribute('src'); };
+    row.appendChild(av);
+  }
+
+  // Build bubble based on type
+  let bubbleEl;
+
+  if (msg.type === 'cash') {
+    bubbleEl = buildCashBubble(msg, isSent, timeStr);
+  } else if (msg.type === 'product') {
+    bubbleEl = buildProductBubble(msg, isSent, timeStr);
+  } else if (msg.type === 'voice') {
+    bubbleEl = buildVoiceBubble(msg, isSent, timeStr);
+  } else if (msg.type === 'offer') {
+    bubbleEl = buildOfferBubble(msg, isSent, timeStr);
+  } else if (msg.type === 'order_update') {
+    bubbleEl = buildOrderBubble(msg, timeStr);
+  } else {
+    // Default text bubble
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble';
+    bubble.innerHTML = `${escHtml(msg.content || '')}
+      <div class="chat-bubble-meta">
+        <span>${timeStr}</span>
+        ${isSent ? `<span class="chat-tick"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}
+      </div>`;
+    bubbleEl = bubble;
+  }
+
+  if (bubbleEl) row.appendChild(bubbleEl);
+  return row;
+}
+
+function buildCashBubble(msg, isSent, timeStr) {
+  const currency = msg.cash_currency === 'NGN' ? '₦' : '$';
+  const amount   = Number(msg.cash_amount || 0).toLocaleString();
+  const div = document.createElement('div');
+  div.className = 'chat-cash-bubble';
+  div.onclick = () => showToast('Cash transfer details — coming soon');
+  div.innerHTML = `
+    <div class="chat-cash-shimmer"></div>
+    <div class="chat-cash-inner">
+      <div class="chat-cash-label">💸 ${isSent ? 'Cash Sent' : 'Cash Received'}</div>
+      <div class="chat-cash-amount-row">
+        <span class="chat-cash-currency">${currency}</span>
+        <span class="chat-cash-amount">${amount}</span>
+      </div>
+      ${msg.cash_note ? `<div class="chat-cash-note">${escHtml(msg.cash_note)}</div>` : ''}
+      <div class="chat-cash-status">
+        <div class="chat-cash-status-dot"></div>
+        ${msg.cash_status === 'held' ? 'Held in escrow' : msg.cash_status === 'released' ? 'Released ✓' : 'Pending'}
+      </div>
+      <div style="font-size:10px;color:rgba(255,184,0,0.5);margin-top:8px;text-align:right">${timeStr}</div>
+    </div>`;
+  return div;
+}
+
+function buildProductBubble(msg, isSent, timeStr) {
+  const div = document.createElement('div');
+  div.className = 'chat-product-bubble';
+  div.onclick = () => showToast('Product page — coming soon');
+  div.innerHTML = `
+    <div class="chat-product-bubble-img" style="background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:36px">🛒</div>
+    <div class="chat-product-bubble-body">
+      <div class="chat-product-bubble-title">Product</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px;text-align:right">${timeStr}</div>
+    </div>`;
+  return div;
+}
+
+function buildVoiceBubble(msg, isSent, timeStr) {
+  const waveId = 'wv-' + msg.id.slice(0,8);
+  const dur    = msg.media_duration || 0;
+  const durStr = dur < 60 ? `0:${String(dur).padStart(2,'0')}` : `${Math.floor(dur/60)}:${String(dur%60).padStart(2,'0')}`;
+
+  const bubble = document.createElement('div');
+  bubble.className = 'chat-bubble';
+  bubble.innerHTML = `
+    <div class="chat-voice-bubble">
+      <button class="chat-voice-play" onclick="chatPlayVoice(this,'${waveId}')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg>
+      </button>
+      <div class="chat-voice-waveform" id="${waveId}"></div>
+      <span class="chat-voice-dur">${durStr}</span>
+    </div>
+    <div class="chat-bubble-meta"><span>${timeStr}</span></div>`;
+
+  // Build waveform bars after insert
+  setTimeout(() => {
+    const wv = document.getElementById(waveId);
+    if (!wv) return;
+    const heights = [4,8,14,10,18,12,22,16,20,14,8,18,24,16,12,20,10,16,8,12];
+    wv.innerHTML = heights.map(h => `<div class="chat-voice-bar" style="height:${h}px"></div>`).join('');
+  }, 0);
+
+  return bubble;
+}
+
+function buildOfferBubble(msg, isSent, timeStr) {
+  const currency = '₦';
+  const amount   = Number(msg.offer_amount || 0).toLocaleString();
+  const div = document.createElement('div');
+  div.className = 'chat-offer-bubble';
+  const isPending = msg.offer_status === 'pending';
+  div.innerHTML = `
+    <div class="chat-offer-header">
+      <div class="chat-offer-label">💬 Price Offer</div>
+      <div class="chat-offer-product">Product negotiation</div>
+    </div>
+    <div class="chat-offer-body">
+      <div class="chat-offer-amount-row">
+        <span class="chat-offer-currency">${currency}</span>
+        <span class="chat-offer-amount">${amount}</span>
+      </div>
+      ${!isSent && isPending ? `
+        <div class="chat-offer-actions">
+          <button class="chat-offer-btn chat-offer-accept" onclick="chatRespondOffer('${msg.id}','accepted')">Accept</button>
+          <button class="chat-offer-btn chat-offer-counter" onclick="chatRespondOffer('${msg.id}','countered')">Counter</button>
+          <button class="chat-offer-btn chat-offer-decline" onclick="chatRespondOffer('${msg.id}','declined')">Decline</button>
+        </div>` : `<div style="font-size:12px;color:var(--text3);text-transform:capitalize">${msg.offer_status}</div>`}
+      <div style="font-size:10px;color:var(--text3);margin-top:8px;text-align:right">${timeStr}</div>
+    </div>`;
+  return div;
+}
+
+function buildOrderBubble(msg, timeStr) {
+  const steps  = ['Confirmed','Packed','Shipped','Delivered'];
+  const active = steps.findIndex(s => s.toLowerCase() === (msg.order_status||'').toLowerCase());
+  const div = document.createElement('div');
+  div.className = 'chat-order-bubble';
+  let stepsHtml = '<div class="chat-order-steps">';
+  steps.forEach((s, i) => {
+    const cls = i < active ? 'done' : i === active ? 'active' : '';
+    stepsHtml += `
+      <div class="chat-order-step">
+        <div class="chat-order-dot ${cls}">${i < active ? '✓' : i === active ? '→' : ''}</div>
+        <div class="chat-order-step-label ${cls}">${s}</div>
+      </div>`;
+    if (i < steps.length - 1) {
+      stepsHtml += `<div class="chat-order-line ${i < active ? 'done' : ''}"></div>`;
+    }
+  });
+  stepsHtml += '</div>';
+  div.innerHTML = `<div class="chat-order-label">📦 Order Status</div>${stepsHtml}
+    <div style="font-size:10px;color:var(--text3);margin-top:10px;text-align:right">${timeStr}</div>`;
+  return div;
+}
+
+// ── Send a text message ──
+async function chatSend() {
+  const field = document.getElementById('chat-input-field');
+  const text  = field?.value?.trim();
+  if (!text || !activeChatId || !currentUser) return;
+
+  field.value = '';
+  field.style.height = 'auto';
+
+  // Optimistic UI — append immediately
+  const tmpMsg = {
+    id: 'tmp-' + Date.now(),
+    type: 'text',
+    content: text,
+    sender_id: currentUser.id,
+    created_at: new Date().toISOString(),
+    sender: currentProfile,
+  };
+  const msgsEl = document.getElementById('chat-messages');
+  const el = buildMessageEl(tmpMsg, null);
+  if (el && msgsEl) {
+    msgsEl.appendChild(el);
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+  }
+
+  // Send to Supabase
+  const { error } = await supabase.from('messages').insert({
+    conversation_id: activeChatId,
+    sender_id: currentUser.id,
+    type: 'text',
+    content: text,
+  });
+
+  if (error) showToast('Message failed to send');
+
+  // Update last_read
+  markConvRead(activeChatId);
+}
+
+// ── Subscribe to realtime messages ──
+function subscribeToChat(convId) {
+  if (msgRealtimeSub) supabase.removeChannel(msgRealtimeSub);
+
+  msgRealtimeSub = supabase
+    .channel('chat-' + convId)
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'messages',
+      filter: `conversation_id=eq.${convId}`,
+    }, payload => {
+      const msg = payload.new;
+      // Don't add if it's our own optimistic message
+      if (msg.sender_id === currentUser?.id) return;
+
+      // Fetch sender details
+      supabase.from('users').select('id,username,avatar').eq('id', msg.sender_id).maybeSingle()
+        .then(({ data: sender }) => {
+          msg.sender = sender;
+          const msgsEl = document.getElementById('chat-messages');
+          if (!msgsEl) return;
+          const el = buildMessageEl(msg, null);
+          if (el) {
+            msgsEl.appendChild(el);
+            msgsEl.scrollTop = msgsEl.scrollHeight;
+          }
+          markConvRead(convId);
+        });
+    })
+    .subscribe();
+}
+
+// ── Mark conversation as read ──
+async function markConvRead(convId) {
+  if (!currentUser) return;
+  await supabase
+    .from('conversation_participants')
+    .update({ last_read_at: new Date().toISOString() })
+    .eq('conversation_id', convId)
+    .eq('user_id', currentUser.id)
+    .catch(() => {});
+}
+
+// ── Input helpers ──
+function chatInputResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+}
+function chatInputKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    chatSend();
+  }
+}
+
+// ── Quick action stubs (to be built out) ──
+function chatSendCash() {
+  showToast('Cash transfer — coming in next update 💸');
+}
+function chatTagProduct() {
+  showToast('Tag a product — coming soon 🛒');
+}
+function chatMakeOffer() {
+  showToast('Price negotiation — coming soon 💬');
+}
+function chatSendInvoice() {
+  showToast('Invoice generator — coming soon 🧾');
+}
+function chatRecordVoice() {
+  showToast('Voice notes — coming soon 🎙');
+}
+function chatAttach() {
+  showToast('Attach file — coming soon');
+}
+function chatOpenProfile() {
+  if (activeChatUserId) openDM(activeChatUserId);
+}
+function chatMoreOptions() {
+  showToast('More options — coming soon');
+}
+function chatPlayVoice(btn, waveId) {
+  const bars = document.getElementById(waveId)?.querySelectorAll('.chat-voice-bar');
+  if (!bars?.length) return;
+  let idx = 0;
+  btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="6" y="4" width="4" height="16" fill="currentColor"/><rect x="14" y="4" width="4" height="16" fill="currentColor"/></svg>`;
+  const iv = setInterval(() => {
+    if (idx < bars.length) { bars[idx].classList.add('played'); idx++; }
+    else {
+      clearInterval(iv);
+      bars.forEach(b => b.classList.remove('played'));
+      btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg>`;
+    }
+  }, 200);
+}
+async function chatRespondOffer(msgId, status) {
+  await supabase.from('messages').update({ offer_status: status }).eq('id', msgId);
+  showToast(status === 'accepted' ? 'Offer accepted ✓' : status === 'declined' ? 'Offer declined' : 'Counter sent');
+  loadChatMessages(activeChatId);
+}
+
+function msgShowRequests() {
+  showToast('Message requests — coming soon');
+}
+function msgStartNew() {
+  showToast('New message — coming soon');
+}
+function msgSearch(val) {
+  // Filter visible conv rows
+  const rows = document.querySelectorAll('.msg-conv-row');
+  rows.forEach(r => {
+    const name = r.querySelector('.msg-conv-name')?.textContent?.toLowerCase() || '';
+    r.style.display = name.includes(val.toLowerCase()) ? '' : 'none';
+  });
 }
 
 // ══════════════════════════════════════════
