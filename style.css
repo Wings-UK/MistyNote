@@ -1026,9 +1026,10 @@
   /* ══════════════════════════════════════════
      CHAT VIEW
   ══════════════════════════════════════════ */
-  #page-chat {
+  #page-chat, #page-messages {
+    padding-bottom: 0;
     display: flex; flex-direction: column;
-    overflow: hidden; padding-bottom: 0;
+    overflow: hidden;
   }
 
   /* Top bar */
@@ -1369,8 +1370,9 @@
   /* Input bar */
   .chat-input-bar {
     display: flex; align-items: flex-end; gap: 8px;
-    padding: 8px 14px 28px; flex-shrink: 0;
+    padding: 8px 14px calc(16px + var(--safe-bottom)); flex-shrink: 0;
     background: var(--bg);
+    border-top: 1px solid var(--border);
   }
   .chat-input-action {
     width: 36px; height: 36px; border-radius: 50%;
