@@ -4509,7 +4509,7 @@ function msgFormatTime(iso) {
 async function msgGetOrCreateConversation(otherUserId) {
   if (!currentUser) return null;
 
-  // Check if conversation already exists
+  // Check if conversation already exists between these two users
   const { data: myConvs } = await supabase
     .from('conversation_participants')
     .select('conversation_id')
@@ -4528,26 +4528,38 @@ async function msgGetOrCreateConversation(otherUserId) {
     }
   }
 
-  // Create new conversation
-  const { data: conv, error } = await supabase
+  // Create conversation — insert with created_by so RLS can validate
+  const { data: conv, error: convErr } = await supabase
     .from('conversations')
-    .insert({})
+    .insert({ created_by: currentUser.id })
     .select('id')
     .single();
 
-  if (error || !conv) return null;
+  if (convErr) {
+    console.error('Conv create error:', convErr.message, convErr.code);
+    return null;
+  }
+  if (!conv) return null;
 
-  // Add participants — insert separately due to RLS (can only insert own user_id)
-  await supabase.from('conversation_participants').insert({
-    conversation_id: conv.id, user_id: currentUser.id
-  });
-  // Insert other participant using service role workaround:
-  // We use upsert to avoid duplicate errors, RLS allows insert if user_id = auth.uid()
-  // For the other participant, we rely on a DB trigger or they join when they first open
-  // For now insert directly — works if RLS allows it, else they see it when they open
-  await supabase.from('conversation_participants').insert({
-    conversation_id: conv.id, user_id: otherUserId
-  }).catch(() => {}); // silently ignore if RLS blocks — other user joins on first open
+  // Insert self as participant
+  const { error: p1Err } = await supabase
+    .from('conversation_participants')
+    .insert({ conversation_id: conv.id, user_id: currentUser.id });
+
+  if (p1Err) {
+    console.error('Participant 1 error:', p1Err.message);
+    return null;
+  }
+
+  // Insert other participant
+  const { error: p2Err } = await supabase
+    .from('conversation_participants')
+    .insert({ conversation_id: conv.id, user_id: otherUserId });
+
+  if (p2Err) {
+    console.error('Participant 2 error:', p2Err.message);
+    // Still return conv — other user joins when they open
+  }
 
   return conv.id;
 }
