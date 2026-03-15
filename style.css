@@ -387,7 +387,7 @@
   /* ── Add button ── */
   .moment-add {
     flex-shrink: 0;
-    width: 52px; height: 76px;
+    width: 52px; height: 96px;
     border-radius: 14px;
     border: 2px dashed rgba(108,71,255,0.35);
     background: rgba(108,71,255,0.06);
@@ -411,7 +411,7 @@
   /* ── Landscape card ── */
   .moment-card {
     flex-shrink: 0;
-    width: 116px; height: 76px;
+    width: 116px; height: 96px;
     border-radius: 14px;
     position: relative; overflow: hidden;
     cursor: pointer;
@@ -491,16 +491,15 @@
     50%      { opacity: 0.7; }
   }
 
-  /* Type label — product, sale etc */
+  /* Type icon — product, sale etc — top right corner */
   .moment-type-label {
-    position: absolute; bottom: 24px; left: 8px; z-index: 3;
-    background: rgba(0,0,0,0.55);
+    position: absolute; top: 7px; right: 7px; z-index: 3;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: rgba(0,0,0,0.5);
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
-    border-radius: 8px;
-    padding: 2px 7px;
-    font-size: 8px; font-weight: 800;
-    color: #fff; letter-spacing: 0.3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; line-height: 1;
   }
   
   /* ══════════════════════════════════════════
