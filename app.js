@@ -1689,7 +1689,6 @@ async function loadFeed(reset = false) {
   const list = document.getElementById('feed-list');
   if (!list) return;
 
-  // Reset must happen before the guard — otherwise feedExhausted blocks a tab switch
   if (reset) {
     feedOffset = 0; feedExhausted = false; feedLoading = false;
     loadedPostIds.clear(); list.innerHTML = '';
@@ -1698,76 +1697,21 @@ async function loadFeed(reset = false) {
   if (feedLoading || feedExhausted) return;
   feedLoading = true;
 
-  const PER_PAGE = 10;
+  const PER_PAGE = 15;
 
-  // Show skeletons
   if (feedOffset === 0) {
     list.innerHTML = Array(5).fill(0).map(() => skeletonPost()).join('');
   }
 
   try {
-    let query = supabase
-      .from('posts')
-      .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
-               user:users(id,username,avatar),
-               reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar)),
-               comments(count)`)
-      .order('created_at', { ascending: false })
-      .range(feedOffset, feedOffset + PER_PAGE - 1);
-
-    // Following tab — fetch only posts from people current user follows
-    if (currentFeedTab === 'following' && currentUser) {
-      const { data: followingRows } = await supabase
-        .from('follows')
-        .select('following_id')
-        .eq('follower_id', currentUser.id);
-
-      const followingIds = followingRows?.map(r => r.following_id) || [];
-
-      if (followingIds.length === 0) {
-        // Not following anyone yet — show empty state and bail cleanly
-        feedExhausted = true;
-        if (feedOffset === 0) {
-          const list = document.getElementById('feed-list');
-          if (list) list.innerHTML = `<div class="empty-state"><div class="empty-icon">👥</div><p>No posts yet</p><span>Follow people to see their posts here</span></div>`;
-        }
-        feedLoading = false;
-        return;
-      }
-      query = query.in('user_id', followingIds);
-    }
-
-    const { data: posts, error } = await query;
-
-    if (error) throw error;
-
-    if (feedOffset === 0) list.innerHTML = '';
-
-    if (!posts || posts.length === 0) {
-      feedExhausted = true;
-      if (feedOffset === 0) list.innerHTML = `<div class="empty-state"><div class="empty-icon">🌙</div><p>Nothing here yet</p><span>Be the first to post!</span></div>`;
+    // ── FOLLOWING TAB — pure chronological from followed users ──
+    if (currentFeedTab === 'following') {
+      await loadFollowingFeed(list, PER_PAGE);
       return;
     }
 
-    for (const p of posts) {
-      if (loadedPostIds.has(p.id)) continue;
-      loadedPostIds.add(p.id);
-      const el = createFeedPost(p);
-      if (el) { list.appendChild(el); observePost(el); }
-    }
-
-    feedOffset += posts.length;
-    if (posts.length < PER_PAGE) feedExhausted = true;
-
-    // Batch check likes and reposts
-    const ids = [...loadedPostIds];
-    checkLikedPosts(ids);
-    checkRepostedPosts(ids);
-    checkSavedPosts(ids);
-    reObserveAllFeedPosts();
-
-    // Seed demo moment rings on first load
-    if (feedOffset <= PER_PAGE) seedDemoMoments(posts);
+    // ── EXPLORE TAB — Phase 2 algorithm ──
+    await loadExploreFeed(list, PER_PAGE);
 
   } catch (e) {
     console.error('Feed error:', e);
@@ -1775,6 +1719,222 @@ async function loadFeed(reset = false) {
   } finally {
     feedLoading = false;
   }
+}
+
+// ── FOLLOWING FEED — chronological from followed users only ──
+async function loadFollowingFeed(list, PER_PAGE) {
+  try {
+    if (!currentUser) { feedLoading = false; return; }
+
+    const { data: followingRows } = await supabase
+      .from('follows').select('following_id').eq('follower_id', currentUser.id);
+
+    const followingIds = followingRows?.map(r => r.following_id) || [];
+
+    if (followingIds.length === 0) {
+      feedExhausted = true;
+      if (feedOffset === 0) {
+        list.innerHTML = `<div class="empty-state"><div class="empty-icon">👥</div><p>No posts yet</p><span>Follow people to see their posts here</span></div>`;
+      }
+      return;
+    }
+
+    const { data: posts, error } = await supabase
+      .from('posts')
+      .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
+               user:users(id,username,avatar),
+               reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar)),
+               comments(count)`)
+      .in('user_id', followingIds)
+      .neq('user_id', currentUser.id)
+      .order('created_at', { ascending: false })
+      .range(feedOffset, feedOffset + PER_PAGE - 1);
+
+    if (error) throw error;
+    renderFeedPosts(list, posts, PER_PAGE);
+  } finally {
+    feedLoading = false;
+  }
+}
+
+// ── EXPLORE FEED — Phase 2 algorithm ──
+async function loadExploreFeed(list, PER_PAGE) {
+  try {
+    const SELECT = `id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
+      user:users(id,username,avatar,location),
+      reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar)),
+      comments(count)`;
+
+    const TWO_DAYS_AGO = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    const TWO_HOURS_AGO = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+
+    // Fetch user's following list and their location
+    let followingIds = [];
+    let userLocation  = currentProfile?.location || null;
+    let userCountry   = null;
+
+    if (currentUser) {
+      const { data: fl } = await supabase
+        .from('follows').select('following_id').eq('follower_id', currentUser.id);
+      followingIds = fl?.map(r => r.following_id) || [];
+    }
+
+    // Parse country from location string e.g. "Lagos, Nigeria" → "Nigeria"
+    if (userLocation) {
+      const parts = userLocation.split(',');
+      userCountry = parts[parts.length - 1]?.trim() || null;
+    }
+
+    // ── Fetch friends-of-friends ──
+    let fofIds = [];
+    if (followingIds.length > 0) {
+      const { data: fofRows } = await supabase
+        .from('follows')
+        .select('following_id')
+        .in('follower_id', followingIds)
+        .not('following_id', 'in', `(${[...(currentUser ? [currentUser.id] : []), ...followingIds].join(',') || 'null'})`)
+        .limit(50);
+      fofIds = [...new Set(fofRows?.map(r => r.following_id) || [])];
+    }
+
+    // ── Run all bucket queries in parallel ──
+    const [
+      bucket1Result,  // People I follow
+      bucket2Result,  // Friends of friends
+      bucket3Result,  // Trending right now (last 2hrs)
+      bucket4Result,  // Location-based
+      bucket5Result,  // Everything else (fallback)
+    ] = await Promise.all([
+
+      // Bucket 1 — Following (30%)
+      followingIds.length > 0
+        ? supabase.from('posts').select(SELECT)
+            .in('user_id', followingIds)
+            .gte('created_at', TWO_DAYS_AGO)
+            .order('created_at', { ascending: false })
+            .limit(12)
+        : Promise.resolve({ data: [] }),
+
+      // Bucket 2 — Friends of friends (25%)
+      fofIds.length > 0
+        ? supabase.from('posts').select(SELECT)
+            .in('user_id', fofIds)
+            .gte('created_at', TWO_DAYS_AGO)
+            .order('created_at', { ascending: false })
+            .limit(10)
+        : Promise.resolve({ data: [] }),
+
+      // Bucket 3 — Trending now, velocity = high likes in last 2hrs (20%)
+      supabase.from('posts').select(SELECT)
+        .gte('created_at', TWO_HOURS_AGO)
+        .order('like_count', { ascending: false })
+        .limit(8),
+
+      // Bucket 4 — Location (15%) — posts from users in same country
+      userCountry
+        ? supabase.from('posts').select(SELECT)
+            .gte('created_at', TWO_DAYS_AGO)
+            .order('created_at', { ascending: false })
+            .limit(50) // we filter by location client-side since location is on users
+        : Promise.resolve({ data: [] }),
+
+      // Bucket 5 — General recent (fallback/filler)
+      supabase.from('posts').select(SELECT)
+        .gte('created_at', TWO_DAYS_AGO)
+        .order('created_at', { ascending: false })
+        .limit(20),
+    ]);
+
+    // ── Filter bucket 4 by country ──
+    const locationPosts = (bucket4Result.data || []).filter(p =>
+      p.user?.location && p.user.location.includes(userCountry)
+    ).slice(0, 6);
+
+    // ── Build weighted pool ──
+    // Assign each post a bucket weight — higher = more likely to appear early
+    const WEIGHTS = { b1: 30, b2: 25, b3: 20, b4: 15, b5: 10 };
+    const pool = new Map(); // id → { post, score }
+
+    const addToPool = (posts, bucketWeight) => {
+      (posts || []).forEach((p, idx) => {
+        if (pool.has(p.id)) {
+          // Already in pool — boost its score
+          pool.get(p.id).score += bucketWeight * 0.5;
+        } else {
+          // Recency bonus — newer posts score higher within their bucket
+          const ageHours = (Date.now() - new Date(p.created_at)) / 3600000;
+          const recencyBonus = Math.max(0, 48 - ageHours) / 48; // 0–1
+          // Engagement velocity bonus
+          const engBonus = Math.min(p.like_count || 0, 100) / 100;
+          // Location bonus — extra weight if same country
+          const locBonus = userCountry && p.user?.location?.includes(userCountry) ? 8 : 0;
+          const score = bucketWeight + (recencyBonus * 10) + (engBonus * 8) + locBonus;
+          pool.set(p.id, { post: p, score });
+        }
+      });
+    };
+
+    addToPool(bucket1Result.data, WEIGHTS.b1);
+    addToPool(bucket2Result.data, WEIGHTS.b2);
+    addToPool(bucket3Result.data, WEIGHTS.b3);
+    addToPool(locationPosts,      WEIGHTS.b4);
+    addToPool(bucket5Result.data, WEIGHTS.b5);
+
+    // ── Sort pool by score descending ──
+    let ranked = Array.from(pool.values())
+      .sort((a, b) => b.score - a.score)
+      .map(v => v.post);
+
+    // ── Skip already loaded posts ──
+    ranked = ranked.filter(p => !loadedPostIds.has(p.id));
+
+    // ── Apply pagination window ──
+    const page = ranked.slice(feedOffset, feedOffset + PER_PAGE);
+
+    if (feedOffset === 0) list.innerHTML = '';
+
+    if (!page.length) {
+      feedExhausted = true;
+      if (feedOffset === 0) {
+        list.innerHTML = `<div class="empty-state"><div class="empty-icon">🌙</div><p>Nothing here yet</p><span>Be the first to post!</span></div>`;
+      }
+      return;
+    }
+
+    renderFeedPosts(list, page, PER_PAGE);
+
+  } finally {
+    feedLoading = false;
+  }
+}
+
+// ── Shared render helper ──
+function renderFeedPosts(list, posts, PER_PAGE) {
+  if (!posts || !posts.length) {
+    feedExhausted = true;
+    if (feedOffset === 0) list.innerHTML = `<div class="empty-state"><div class="empty-icon">🌙</div><p>Nothing here yet</p><span>Be the first to post!</span></div>`;
+    return;
+  }
+
+  if (feedOffset === 0) list.innerHTML = '';
+
+  for (const p of posts) {
+    if (loadedPostIds.has(p.id)) continue;
+    loadedPostIds.add(p.id);
+    const el = createFeedPost(p);
+    if (el) { list.appendChild(el); observePost(el); }
+  }
+
+  feedOffset += posts.length;
+  if (posts.length < PER_PAGE) feedExhausted = true;
+
+  const ids = [...loadedPostIds];
+  checkLikedPosts(ids);
+  checkRepostedPosts(ids);
+  checkSavedPosts(ids);
+  reObserveAllFeedPosts();
+
+  if (feedOffset <= PER_PAGE) seedDemoMoments(posts);
 }
 
 function setFeedTab(tab, btn) {
