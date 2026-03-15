@@ -320,6 +320,17 @@ async function detectAndSaveLocation() {
   );
 }
 
+function sortMomentsRow() {
+  const row = document.getElementById('stories-row');
+  if (!row) return;
+  // Move all .seen cards to the end, keeping unseen at front
+  const seen   = Array.from(row.querySelectorAll('.moment-card.seen'));
+  const unseen = Array.from(row.querySelectorAll('.moment-card:not(.seen)'));
+  // Re-append: add button stays first (it's not .moment-card), then unseen, then seen
+  unseen.forEach(el => row.appendChild(el));
+  seen.forEach(el  => row.appendChild(el));
+}
+
 async function bootApp(isDeepLink = false) {
   document.getElementById('auth-screen').style.display = 'none';
 
@@ -344,6 +355,7 @@ async function bootApp(isDeepLink = false) {
   initComposerFile();
   // Delay location detection slightly — Chrome needs page to be fully interactive
   setTimeout(() => detectAndSaveLocation(), 2000);
+  sortMomentsRow();
   initIntersectionObserver();
   requestAnimationFrame(initFeedTabBar);
   initCommentBarInput();
