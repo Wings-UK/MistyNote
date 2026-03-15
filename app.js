@@ -594,6 +594,11 @@ function slideTo(pageId, setupFn) {
     if (id !== pageId) document.getElementById('page-' + id)?.classList.remove('active');
   });
 
+  // Hide bottom nav for slide pages that need full screen
+  if (['messages','chat'].includes(pageId)) {
+    document.getElementById('bottom-nav').style.display = 'none';
+  }
+
   // If leaving detail, hide comment bar and restore bottom nav
   if (slideStack[slideStack.length - 2] === 'detail' || document.getElementById('comment-bar')?.style.display === 'flex') {
     if (pageId !== 'detail') {
@@ -4749,6 +4754,20 @@ function closeChat() {
   const el = document.getElementById('page-chat');
   if (el) el.classList.remove('active');
   slideStack.pop();
+
+  // If returning to messages inbox, keep nav hidden
+  const returningTo = slideStack[slideStack.length - 1];
+  if (returningTo === 'messages') {
+    document.getElementById('page-messages')?.classList.add('active');
+  } else {
+    // Returning all the way back — restore nav
+    document.getElementById('bottom-nav').style.display = '';
+    const backTo = lastMainPage || 'feed';
+    document.getElementById('page-' + backTo)?.classList.add('active');
+    document.querySelectorAll('.nav-btn[data-page]').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.page === backTo);
+    });
+  }
 }
 
 // ── Close messages inbox (back button) ──
@@ -4757,7 +4776,8 @@ function closeMessagesInbox() {
   const el = document.getElementById('page-messages');
   if (el) el.classList.remove('active');
   slideStack.pop();
-  // Restore the main page we came from
+  // Restore nav and main page
+  document.getElementById('bottom-nav').style.display = '';
   const backTo = lastMainPage || 'feed';
   document.getElementById('page-' + backTo)?.classList.add('active');
   document.querySelectorAll('.nav-btn[data-page]').forEach(btn => {
