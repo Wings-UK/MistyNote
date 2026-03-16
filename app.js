@@ -5125,27 +5125,54 @@ function buildMessageEl(msg, prevSenderId) {
   } else if (msg.type === 'order_update') {
     bubbleEl = buildOrderBubble(msg, timeStr);
   } else {
-    // Text bubble — timestamp floats inline with last line
-    const bubble = document.createElement('div');
-    bubble.className = 'chat-bubble';
-    bubble.innerHTML = `${escHtml(msg.content || '')}<span class="chat-bubble-meta">${timeStr}${isSent ? `<span class="chat-tick"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</span>`;
-    bubbleEl = bubble;
+    const content  = msg.content || '';
+    const url      = extractFirstUrl(content);
+    const isUrlOnly = url && content.trim() === url.trim();
 
-    // Detect URLs and fetch OG preview
-    const url = extractFirstUrl(msg.content || '');
     if (url) {
-      // Add preview placeholder below bubble
-      const previewWrap = document.createElement('div');
-      previewWrap.className = 'chat-link-preview-wrap';
-      previewWrap.innerHTML = `<div class="chat-link-preview loading"><div class="chat-link-preview-shimmer"></div></div>`;
-      row.appendChild(bubble);
-      row.appendChild(previewWrap);
-      // Fetch OG data async — don't block render
+      // ── URL message ──
+      // Show shimmer placeholder immediately
+      const previewCard = document.createElement('div');
+      previewCard.className = `chat-og-outer ${isSent ? 'sent' : 'recv'}`;
+      previewCard.innerHTML = `<div class="chat-og-shimmer"><div class="chat-og-shimmer-img"></div><div class="chat-og-shimmer-lines"><div></div><div></div></div></div>`;
+      row.appendChild(previewCard);
+
+      // If there's text besides the URL, show a small text bubble above
+      if (!isUrlOnly) {
+        const textOnly = content.replace(url, '').trim();
+        if (textOnly) {
+          const textBubble = document.createElement('div');
+          textBubble.className = 'chat-bubble';
+          textBubble.innerHTML = `${linkifyText(textOnly)}<span class="chat-bubble-meta">${timeStr}${isSent ? `<span class="chat-tick"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</span>`;
+          row.insertBefore(textBubble, previewCard);
+        }
+      }
+
+      // Fetch OG async
       fetchOgPreview(url).then(og => {
-        if (!og) { previewWrap.remove(); return; }
-        previewWrap.innerHTML = buildOgCard(og, url, isSent);
-      }).catch(() => previewWrap.remove());
-      return row; // early return since we appended manually
+        if (!og) {
+          // Fallback — show plain URL bubble
+          previewCard.outerHTML = '';
+          const fallback = document.createElement('div');
+          fallback.className = 'chat-bubble';
+          fallback.innerHTML = `<a href="${escHtml(url)}" target="_blank" rel="noopener noreferrer" class="post-link" onclick="event.stopPropagation()">${escHtml(url)}</a><span class="chat-bubble-meta">${timeStr}${isSent ? `<span class="chat-tick"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</span>`;
+          row.appendChild(fallback);
+          return;
+        }
+        // Build rich preview card
+        previewCard.innerHTML = buildOgCard(og, url, isSent, timeStr, isUrlOnly);
+      }).catch(() => {
+        previewCard.remove();
+      });
+
+      return row;
+
+    } else {
+      // Plain text bubble
+      const bubble = document.createElement('div');
+      bubble.className = 'chat-bubble';
+      bubble.innerHTML = `${linkifyText(content)}<span class="chat-bubble-meta">${timeStr}${isSent ? `<span class="chat-tick"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</span>`;
+      bubbleEl = bubble;
     }
   }
 
@@ -5197,17 +5224,22 @@ async function fetchOgPreview(url) {
 }
 
 // ── Build OG preview card HTML ──
-function buildOgCard(og, url, isSent) {
-  const imgHtml = og.image
-    ? `<img class="chat-og-img" src="${escHtml(og.image)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+function buildOgCard(og, url, isSent, timeStr, isUrlOnly) {
+  const safeUrl  = escHtml(url);
+  const imgHtml  = og.image
+    ? `<img class="chat-og-img" src="${escHtml(og.image)}" alt="" loading="lazy" onerror="this.remove()">`
+    : '';
+  const metaHtml = isUrlOnly && timeStr
+    ? `<div class="chat-og-meta">${timeStr}${isSent ? `<span class="chat-tick"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</div>`
     : '';
   return `
-    <div class="chat-og-card ${isSent ? 'sent' : 'recv'}" onclick="window.open('${escHtml(url)}','_blank')">
+    <div class="chat-og-card ${isSent ? 'sent' : 'recv'}" onclick="window.open('${safeUrl}','_blank')">
       ${imgHtml}
       <div class="chat-og-body">
-        <div class="chat-og-domain">${escHtml(og.domain)}</div>
-        ${og.title ? `<div class="chat-og-title">${escHtml(og.title.slice(0, 80))}</div>` : ''}
-        ${og.description ? `<div class="chat-og-desc">${escHtml(og.description.slice(0, 100))}</div>` : ''}
+        <div class="chat-og-domain">${escHtml(og.siteName || og.domain)}</div>
+        ${og.title       ? `<div class="chat-og-title">${escHtml(og.title.slice(0,80))}</div>` : ''}
+        ${og.description ? `<div class="chat-og-desc">${escHtml(og.description.slice(0,120))}</div>` : ''}
+        ${metaHtml}
       </div>
     </div>`;
 }
