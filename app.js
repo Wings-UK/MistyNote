@@ -4810,10 +4810,9 @@ async function loadChatMessages(convId) {
   msgsEl.innerHTML = '';
 
   if (!messages?.length) {
-    msgsEl.innerHTML = `<div style="text-align:center;padding:40px 24px;color:var(--text3);font-size:14px">
-      <div style="font-size:36px;margin-bottom:10px">👋</div>
-      Say hello to ${escHtml(activeChatUser?.username || '')}
-    </div>`;
+    msgsEl.innerHTML = '';
+    // Show static demo bubbles so the UI is always visible
+    renderStaticDemoChat(msgsEl);
     return;
   }
 
@@ -4989,6 +4988,179 @@ function buildOrderBubble(msg, timeStr) {
   div.innerHTML = `<div class="chat-order-label">📦 Order Status</div>${stepsHtml}
     <div style="font-size:10px;color:var(--text3);margin-top:10px;text-align:right">${timeStr}</div>`;
   return div;
+}
+
+// ── Static demo chat — shows all message types for UI preview ──
+function renderStaticDemoChat(msgsEl) {
+  const them = activeChatUser?.username || 'them';
+  const items = [
+    { type: 'date', label: 'Today' },
+    { type: 'recv', text: `Hi! 👋 Welcome to MistyNote messaging` },
+    { type: 'sent', text: `Hey! This is looking great 🔥` },
+    { type: 'recv', text: `Check out this product I have for you` },
+    { type: 'product-recv' },
+    { type: 'sent-offer' },
+    { type: 'recv', text: `Let me think about it...` },
+    { type: 'cash-sent' },
+    { type: 'order-recv' },
+    { type: 'voice-recv' },
+    { type: 'sent', text: `Thank you! Will confirm when delivered 🙏` },
+    { type: 'recv-reaction', text: `Can't wait! 😊`, reaction: '❤️ 1' },
+  ];
+
+  const now = new Date();
+  const fmt = (d) => d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  let lastSender = null;
+
+  items.forEach((item, idx) => {
+    if (item.type === 'date') {
+      const d = document.createElement('div');
+      d.className = 'chat-date-divider';
+      d.innerHTML = `<span>${item.label}</span>`;
+      msgsEl.appendChild(d);
+      lastSender = null;
+      return;
+    }
+
+    const isSent = item.type.startsWith('sent') || item.type === 'cash-sent';
+    const isNewSender = lastSender !== null && (isSent ? 'sent' : 'recv') !== lastSender;
+    const timeStr = fmt(new Date(now - (items.length - idx) * 60000));
+
+    if (item.type === 'recv' || item.type === 'sent' || item.type === 'recv-reaction') {
+      const row = document.createElement('div');
+      row.className = `chat-msg-row ${isSent ? 'sent' : 'recv'}${isNewSender ? ' new-sender' : ''}`;
+      const bubble = document.createElement('div');
+      bubble.className = 'chat-bubble';
+      if (item.reaction) {
+        bubble.innerHTML = `${escHtml(item.text)}<span class="chat-bubble-meta">${timeStr}</span>`;
+        const react = document.createElement('div');
+        react.className = 'chat-bubble-reaction';
+        react.textContent = item.reaction;
+        bubble.appendChild(react);
+      } else {
+        bubble.innerHTML = `${escHtml(item.text)}<span class="chat-bubble-meta">${timeStr}${isSent ? `<span class="chat-tick"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</span>`;
+      }
+      row.appendChild(bubble);
+      msgsEl.appendChild(row);
+
+    } else if (item.type === 'product-recv') {
+      const row = document.createElement('div');
+      row.className = `chat-msg-row recv${isNewSender ? ' new-sender' : ''}`;
+      const card = document.createElement('div');
+      card.className = 'chat-product-bubble';
+      card.onclick = () => showToast('Product page — coming soon');
+      card.innerHTML = `
+        <div class="chat-product-bubble-img" style="background:linear-gradient(135deg,#1a0a10,#3d1525);display:flex;align-items:center;justify-content:center;font-size:40px">👜</div>
+        <div class="chat-product-bubble-body">
+          <div class="chat-product-bubble-title">Ankara Tote Bag — Handmade Premium</div>
+          <div class="chat-product-price-row">
+            <span class="chat-product-currency">₦</span>
+            <span class="chat-product-price">18,500</span>
+            <span style="font-size:11px;color:var(--text3);margin-left:4px">342 sold</span>
+          </div>
+          <button class="chat-product-btn" onclick="event.stopPropagation();showToast('View product')">View Product</button>
+        </div>`;
+      row.appendChild(card);
+      msgsEl.appendChild(row);
+
+    } else if (item.type === 'sent-offer') {
+      const row = document.createElement('div');
+      row.className = `chat-msg-row sent${isNewSender ? ' new-sender' : ''}`;
+      const card = document.createElement('div');
+      card.className = 'chat-offer-bubble';
+      card.innerHTML = `
+        <div class="chat-offer-header">
+          <div class="chat-offer-label">💬 Price Offer</div>
+          <div class="chat-offer-product">Ankara Tote Bag</div>
+        </div>
+        <div class="chat-offer-body">
+          <div class="chat-offer-amount-row">
+            <span class="chat-offer-currency">₦</span>
+            <span class="chat-offer-amount">15,000</span>
+          </div>
+          <div style="font-size:12px;color:var(--text3);margin-bottom:10px">My offer</div>
+          <div class="chat-offer-actions">
+            <button class="chat-offer-btn chat-offer-accept" onclick="showToast('Offer accepted ✓')">Accept</button>
+            <button class="chat-offer-btn chat-offer-counter" onclick="showToast('Counter sent')">Counter</button>
+          </div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:8px;text-align:right">${timeStr}</div>
+        </div>`;
+      row.appendChild(card);
+      msgsEl.appendChild(row);
+
+    } else if (item.type === 'cash-sent') {
+      const row = document.createElement('div');
+      row.className = `chat-msg-row sent${isNewSender ? ' new-sender' : ''}`;
+      const card = document.createElement('div');
+      card.className = 'chat-cash-bubble';
+      card.onclick = () => showToast('Cash transfer details — coming soon');
+      card.innerHTML = `
+        <div class="chat-cash-shimmer"></div>
+        <div class="chat-cash-inner">
+          <div class="chat-cash-label">💸 Cash Sent</div>
+          <div class="chat-cash-amount-row">
+            <span class="chat-cash-currency">₦</span>
+            <span class="chat-cash-amount">15,000</span>
+          </div>
+          <div class="chat-cash-note">For: Ankara Tote Bag</div>
+          <div class="chat-cash-status">
+            <div class="chat-cash-status-dot"></div>
+            Held in escrow · Awaiting delivery
+          </div>
+          <div style="font-size:10px;color:rgba(255,184,0,0.5);margin-top:8px;text-align:right">${timeStr}</div>
+        </div>`;
+      row.appendChild(card);
+      msgsEl.appendChild(row);
+
+    } else if (item.type === 'order-recv') {
+      const row = document.createElement('div');
+      row.className = `chat-msg-row recv${isNewSender ? ' new-sender' : ''}`;
+      const card = document.createElement('div');
+      card.className = 'chat-order-bubble';
+      card.innerHTML = `
+        <div class="chat-order-label">📦 Order Status</div>
+        <div class="chat-order-steps">
+          <div class="chat-order-step"><div class="chat-order-dot done">✓</div><div class="chat-order-step-label done">Confirmed</div></div>
+          <div class="chat-order-line done"></div>
+          <div class="chat-order-step"><div class="chat-order-dot done">✓</div><div class="chat-order-step-label done">Packed</div></div>
+          <div class="chat-order-line done"></div>
+          <div class="chat-order-step"><div class="chat-order-dot active">→</div><div class="chat-order-step-label active">Shipped</div></div>
+          <div class="chat-order-line"></div>
+          <div class="chat-order-step"><div class="chat-order-dot">🏠</div><div class="chat-order-step-label">Delivered</div></div>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-top:10px;text-align:right">${timeStr}</div>`;
+      row.appendChild(card);
+      msgsEl.appendChild(row);
+
+    } else if (item.type === 'voice-recv') {
+      const waveId = 'demo-wave-' + idx;
+      const row = document.createElement('div');
+      row.className = `chat-msg-row recv${isNewSender ? ' new-sender' : ''}`;
+      const bubble = document.createElement('div');
+      bubble.className = 'chat-bubble';
+      bubble.innerHTML = `
+        <div class="chat-voice-bubble">
+          <button class="chat-voice-play" onclick="chatPlayVoice(this,'${waveId}')">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg>
+          </button>
+          <div class="chat-voice-waveform" id="${waveId}"></div>
+          <span class="chat-voice-dur">0:12</span>
+        </div>
+        <div class="chat-bubble-meta" style="float:right;margin-top:4px">${timeStr}</div>`;
+      setTimeout(() => {
+        const wv = document.getElementById(waveId);
+        if (!wv) return;
+        const heights = [4,8,14,10,18,12,22,16,20,14,8,18,24,16,12,20,10,16,8,12];
+        wv.innerHTML = heights.map(h => `<div class="chat-voice-bar" style="height:${h}px"></div>`).join('');
+      }, 50);
+      row.appendChild(bubble);
+      msgsEl.appendChild(row);
+    }
+
+    lastSender = isSent ? 'sent' : 'recv';
+  });
+
+  msgsEl.scrollTop = msgsEl.scrollHeight;
 }
 
 // ── Send a text message ──
