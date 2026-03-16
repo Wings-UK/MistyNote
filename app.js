@@ -2023,8 +2023,8 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
   const textLimit = (p.image || p.video) ? 150 : 300;
   const truncated = text.length > textLimit;
   const displayText = truncated
-    ? text.slice(0, textLimit).trimEnd() + `...<br><span class="reer">see more</span>`
-    : escHtml(text);
+    ? linkifyText(text.slice(0, textLimit).trimEnd()) + `...<br><span class="reer">see more</span>`
+    : linkifyText(text);
 
   // ── Main content: repost vs normal ──
   let mainContentHTML = '';
@@ -3508,7 +3508,7 @@ async function openDetail(postId, scrollToComments = false) {
         </div>
 
         <!-- TEXT -->
-        ${p.content ? `<p class="dp-text">${escHtml(p.content)}</p>` : ''}
+        ${p.content ? `<p class="dp-text">${linkifyText(p.content)}</p>` : ''}
 
         <!-- MEDIA -->
         ${mediaHtml}
@@ -5159,23 +5159,26 @@ function extractFirstUrl(text) {
   return match ? match[0] : null;
 }
 
-// ── Fetch OG data via jsonlink.io ──
+// ── Linkify text — makes URLs clickable ──
+function linkifyText(text) {
+  const escaped = escHtml(text);
+  return escaped.replace(
+    /https?:\/\/[^\s&lt;&gt;"]+/g,
+    url => `<a href="${url}" target="_blank" rel="noopener noreferrer" class="post-link" onclick="event.stopPropagation()">${url}</a>`
+  );
+}
+
+// ── Fetch OG data via our own Cloudflare Pages Function ──
 const ogCache = {};
 async function fetchOgPreview(url) {
   if (ogCache[url] !== undefined) return ogCache[url];
   try {
-    const res  = await fetch(`https://jsonlink.io/api/extract?url=${encodeURIComponent(url)}`);
+    const res  = await fetch(`/api/og?url=${encodeURIComponent(url)}`);
+    if (!res.ok) { ogCache[url] = null; return null; }
     const data = await res.json();
-    if (!data || data.error) { ogCache[url] = null; return null; }
-    const og = {
-      title:       data.title       || '',
-      description: data.description || '',
-      image:       data.images?.[0] || '',
-      domain:      new URL(url).hostname.replace('www.', ''),
-      url,
-    };
-    ogCache[url] = og;
-    return og;
+    if (!data || data.error || !data.title) { ogCache[url] = null; return null; }
+    ogCache[url] = data;
+    return data;
   } catch {
     ogCache[url] = null;
     return null;
