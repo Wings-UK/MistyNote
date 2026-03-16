@@ -112,7 +112,42 @@ export async function onRequest(context) {
 
   const tags = buildTags(meta);
 
-  return new HTMLRewriter()
+  const transformed = new HTMLRewriter()
     .on('head', new HeadInjector(tags))
     .transform(response);
+
+  // ── Security headers ──
+  const headers = new Headers(transformed.headers);
+
+  // Content Security Policy — blocks XSS, only allows scripts from self
+  headers.set('Content-Security-Policy',
+    "default-src 'self'; " +
+    "script-src 'self' 'unsafe-inline'; " +   // unsafe-inline needed for inline scripts in index.html
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+    "font-src 'self' https://fonts.gstatic.com; " +
+    "img-src 'self' data: blob: https:; " +   // https: allows all image CDNs
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://nominatim.openstreetmap.org; " +
+    "media-src 'self' blob: https:; " +
+    "frame-ancestors 'none';"                  // prevents clickjacking
+  );
+
+  // Prevent MIME sniffing
+  headers.set('X-Content-Type-Options', 'nosniff');
+
+  // Prevent clickjacking
+  headers.set('X-Frame-Options', 'DENY');
+
+  // Force HTTPS
+  headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+
+  // Don't send referrer to external sites
+  headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+  // Limit browser features
+  headers.set('Permissions-Policy', 'geolocation=(self), microphone=(self), camera=()');
+
+  return new Response(transformed.body, {
+    status:  transformed.status,
+    headers,
+  });
 }
