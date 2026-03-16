@@ -1399,6 +1399,7 @@ function renderProfileGrid(posts, profile, containerId, isOwn) {
 // ══════════════════════════════════════════
 // ── SELF TAP — pulse instead of navigating ──────────────────
 function selfTap(el) {
+  console.log('[selfTap] called');
   if (!el) return;
   el.classList.remove('self-pulse');
   void el.offsetWidth; // force reflow to restart animation
@@ -1407,8 +1408,9 @@ function selfTap(el) {
 }
 
 async function showUserProfile(userId, tapEl) {
-  if (!userId) return;
-  if (userId === currentUser?.id) { selfTap(tapEl); return; }
+  console.log('[showUserProfile] called with userId=' + userId);
+  if (!userId) { console.warn('[showUserProfile] no userId — returning'); return; }
+  if (userId === currentUser?.id) { console.log('[showUserProfile] own profile — selfTap'); selfTap(tapEl); return; }
   injectProfileStyles();
 
   slideTo('user-profile', async () => {
@@ -2090,7 +2092,7 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
 
   el.innerHTML = `
     <div class="cust-name">
-      <a class="post-avatar-link" onclick="${(isProfilePage && (isOwnPost || isViewingUser)) ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
+      <a class="post-avatar-link" onclick="console.log('[AVATAR TAP] postId=${p.id} userId=${p.user_id} isOwnPost=${isOwnPost} isProfilePage=${isProfilePage} action=${(isProfilePage && (isOwnPost || isViewingUser)) ? 'selfTap' : isOwnPost ? 'myProfile' : 'showUserProfile'}');${(isProfilePage && (isOwnPost || isViewingUser)) ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
         <img class="small-photo" src="${user.avatar || ''}" onerror="this.style.display='none'" alt="">
       </a>
       <div class="post-meta">
@@ -2188,7 +2190,8 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
       if (tired) { tired.innerHTML = escHtml(text); e.stopPropagation(); return; }
     }
     // Block navigation for any interactive element
-    if (e.target.closest('.post-avatar-link'))  return;
+    console.log('[FEED CLICK] tag=' + e.target.tagName + ' class=' + e.target.className + ' postId=' + el.dataset.postId + ' closestAvatar=' + !!e.target.closest('.post-avatar-link'));
+    if (e.target.closest('.post-avatar-link'))  { console.log('[FEED CLICK] blocked by avatar check'); return; }
     if (e.target.closest('.post-author-link'))  return;
     if (e.target.closest('.post-link'))         return;
     if (e.target.closest('a'))                  return;
@@ -2199,6 +2202,8 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
       openDetail(e.target.closest('[data-original-id]')?.dataset.originalId || orig?.id);
       return;
     }
+    console.log('[FEED CLICK] opening detail for postId=' + postId);
+    console.log('[OPEN DETAIL] postId=' + postId + ' target=' + e.target.className + ' tagName=' + e.target.tagName);
     openDetail(postId);
   });
 
