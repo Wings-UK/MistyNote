@@ -526,8 +526,14 @@
       <div id="uprf-header-identity" style="display:flex;align-items:center;gap:10px;opacity:0;transition:opacity .25s ease;pointer-events:none;">
         <img id="uprf-header-avatar" src="" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.6);">
       </div>
-      <div style="display:flex;align-items:center;gap:10px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <!-- Follow button — shown when not following -->
         <button id="uprf-header-follow" onclick="" class="mini-follow-btn">Follow</button>
+        <!-- Message button — shown when already following -->
+        <button id="uprf-header-message" onclick="" class="mini-follow-btn mini-msg-btn" style="display:none">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Message
+        </button>
         <button class="header-action" id="user-profile-more" onclick="openProfileShare(viewingProfile)" style="background:transparent !important; border:none; box-shadow:none;">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="5" r="1.5" fill="white"/><circle cx="12" cy="12" r="1.5" fill="white"/><circle cx="12" cy="19" r="1.5" fill="white"/></svg>
         </button>
