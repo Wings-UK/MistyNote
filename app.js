@@ -2149,23 +2149,30 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
   `;
 
   // ── Event listeners ──
+  // Store post ID on element — read from DOM not closure to prevent stale ID bug
+  el.dataset.postId = p.id;
+
   el.addEventListener('click', e => {
     if (el.dataset.blockNavigation === 'true') return;
+
+    // Always read post ID from the DOM element, never from closure
+    const postId = el.dataset.postId;
+    if (!postId) return;
 
     if (e.target.closest('.dots')) {
       showPostMenu(p, el, e.target.closest('.dots'));
       return;
     }
     if (e.target.closest('.heart-ai')) {
-      toggleLike(p.id, e.target.closest('.heart-ai'));
+      toggleLike(postId, e.target.closest('.heart-ai'));
       return;
     }
     if (e.target.closest('.repost-btn')) {
-      handleRepost(p.id, e.target.closest('.repost-btn'), p.user_id);
+      handleRepost(postId, e.target.closest('.repost-btn'), p.user_id);
       return;
     }
     if (e.target.closest('.comment-btn')) {
-      openDetail(p.id, true);
+      openDetail(postId, true);
       return;
     }
     if (e.target.closest('.share-action')) {
@@ -2173,19 +2180,26 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
       return;
     }
     if (e.target.closest('.save-btn')) {
-      toggleSave(p.id, e.target.closest('.save-btn'));
+      toggleSave(postId, e.target.closest('.save-btn'));
       return;
     }
     if (e.target.closest('.reer')) {
       const tired = e.target.closest('.tired');
       if (tired) { tired.innerHTML = escHtml(text); e.stopPropagation(); return; }
     }
-    if (e.target.closest('.post-avatar-link') || e.target.closest('.post-author-link')) return;
+    // Block navigation for any interactive element
+    if (e.target.closest('.post-avatar-link'))  return;
+    if (e.target.closest('.post-author-link'))  return;
+    if (e.target.closest('.post-link'))         return;
+    if (e.target.closest('a'))                  return;
+    if (e.target.closest('input, textarea, button, select')) return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.target.closest('.comment-bar'))       return;
     if (e.target.closest('.view-original') || e.target.closest('.quote-card')) {
       openDetail(e.target.closest('[data-original-id]')?.dataset.originalId || orig?.id);
       return;
     }
-    openDetail(p.id);
+    openDetail(postId);
   });
 
   // Repost button — check initial state
@@ -2217,7 +2231,7 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
   // Long-press for post menu
   let lpTimer;
   el.addEventListener('touchstart', e => {
-    if (e.target.closest('.heart-ai, .repost-btn, .comment-btn, .donate-btn, .save-btn, .dots, .post-avatar-link, .post-author-link')) return;
+    if (e.target.closest('.heart-ai, .repost-btn, .comment-btn, .donate-btn, .save-btn, .dots, .post-avatar-link, .post-author-link, .post-link, input, textarea, button, a')) return;
     lpTimer = setTimeout(() => showPostMenu(p, el, null, true), 550);
   }, { passive: true });
   el.addEventListener('touchmove', () => clearTimeout(lpTimer), { passive: true });
