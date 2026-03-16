@@ -5130,10 +5130,72 @@ function buildMessageEl(msg, prevSenderId) {
     bubble.className = 'chat-bubble';
     bubble.innerHTML = `${escHtml(msg.content || '')}<span class="chat-bubble-meta">${timeStr}${isSent ? `<span class="chat-tick"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</span>`;
     bubbleEl = bubble;
+
+    // Detect URLs and fetch OG preview
+    const url = extractFirstUrl(msg.content || '');
+    if (url) {
+      // Add preview placeholder below bubble
+      const previewWrap = document.createElement('div');
+      previewWrap.className = 'chat-link-preview-wrap';
+      previewWrap.innerHTML = `<div class="chat-link-preview loading"><div class="chat-link-preview-shimmer"></div></div>`;
+      row.appendChild(bubble);
+      row.appendChild(previewWrap);
+      // Fetch OG data async — don't block render
+      fetchOgPreview(url).then(og => {
+        if (!og) { previewWrap.remove(); return; }
+        previewWrap.innerHTML = buildOgCard(og, url, isSent);
+      }).catch(() => previewWrap.remove());
+      return row; // early return since we appended manually
+    }
   }
 
   if (bubbleEl) row.appendChild(bubbleEl);
   return row;
+}
+
+// ── Extract first URL from text ──
+function extractFirstUrl(text) {
+  const match = text.match(/https?:\/\/[^\s]+/);
+  return match ? match[0] : null;
+}
+
+// ── Fetch OG data via jsonlink.io ──
+const ogCache = {};
+async function fetchOgPreview(url) {
+  if (ogCache[url] !== undefined) return ogCache[url];
+  try {
+    const res  = await fetch(`https://jsonlink.io/api/extract?url=${encodeURIComponent(url)}`);
+    const data = await res.json();
+    if (!data || data.error) { ogCache[url] = null; return null; }
+    const og = {
+      title:       data.title       || '',
+      description: data.description || '',
+      image:       data.images?.[0] || '',
+      domain:      new URL(url).hostname.replace('www.', ''),
+      url,
+    };
+    ogCache[url] = og;
+    return og;
+  } catch {
+    ogCache[url] = null;
+    return null;
+  }
+}
+
+// ── Build OG preview card HTML ──
+function buildOgCard(og, url, isSent) {
+  const imgHtml = og.image
+    ? `<img class="chat-og-img" src="${escHtml(og.image)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+    : '';
+  return `
+    <div class="chat-og-card ${isSent ? 'sent' : 'recv'}" onclick="window.open('${escHtml(url)}','_blank')">
+      ${imgHtml}
+      <div class="chat-og-body">
+        <div class="chat-og-domain">${escHtml(og.domain)}</div>
+        ${og.title ? `<div class="chat-og-title">${escHtml(og.title.slice(0, 80))}</div>` : ''}
+        ${og.description ? `<div class="chat-og-desc">${escHtml(og.description.slice(0, 100))}</div>` : ''}
+      </div>
+    </div>`;
 }
 
 function buildCashBubble(msg, isSent, timeStr) {
