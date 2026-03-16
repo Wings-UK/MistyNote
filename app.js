@@ -575,6 +575,12 @@ function slideTo(pageId, setupFn) {
   const el = document.getElementById('page-' + pageId);
   if (!el) return;
 
+  // Block ALL post taps during slide — prevents ghost clicks from landing on profile posts
+  document.querySelectorAll('[data-post-id]').forEach(post => {
+    post.dataset.blockNavigation = 'true';
+    setTimeout(() => { post.dataset.blockNavigation = 'false'; }, 600);
+  });
+
   // Track which main page we're leaving
   const mainPages = ['feed','discover','notifications','profile'];
   mainPages.forEach(id => {
@@ -1412,6 +1418,10 @@ async function showUserProfile(userId, tapEl) {
   if (!userId) { console.warn('[showUserProfile] no userId — returning'); return; }
   if (userId === currentUser?.id) { console.log('[showUserProfile] own profile — selfTap'); selfTap(tapEl); return; }
   injectProfileStyles();
+
+  // Clear immediately — prevents ghost click landing on previous user's posts
+  const body = document.getElementById('user-profile-body');
+  if (body) body.innerHTML = '<div class="loading-pulse" style="height:300px;margin:0"></div>';
 
   slideTo('user-profile', async () => {
     const body = document.getElementById('user-profile-body');
