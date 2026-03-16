@@ -4255,7 +4255,7 @@ async function discFetchPosts(q, pane) {
 async function discFetchPeople(q, pane) {
   const { data } = await supabase
     .from('users')
-    .select('id,username,avatar,bio,follower_count')
+    .select('id,username,avatar,bio,followers')
     .or(`username.ilike.%${q}%,bio.ilike.%${q}%`)
     .limit(20);
 
@@ -4534,7 +4534,7 @@ function buildSuggestCard(user, isFollowing) {
       <img class="prf-suggest-av" src="${user.avatar||''}" onerror="this.style.background='var(--bg3)';this.removeAttribute('src')" alt="">
     </div>
     <div class="prf-suggest-name" onclick="showUserProfile('${user.id}')">${escHtml(user.username||'')}</div>
-    <div class="prf-suggest-followers">${fmtNum(user.follower_count||0)} followers</div>
+    <div class="prf-suggest-followers">${fmtNum(user.followers||user.follower_count||0)} followers</div>
     <button class="prf-suggest-follow-btn ${isFollowing ? 'following' : ''}"
       data-uid="${user.id}"
       onclick="suggestFollow(this,'${user.id}')">
@@ -4573,18 +4573,22 @@ async function loadSuggestedForMe() {
   // Get who I already follow
   const { data: following } = await supabase
     .from('follows').select('following_id').eq('follower_id', currentUser.id);
-  const followingIds = new Set((following || []).map(r => r.following_id));
-  followingIds.add(currentUser.id); // exclude self
+  const followingIds = (following || []).map(r => r.following_id);
+  const excludeIds   = [...followingIds, currentUser.id];
 
-  // Get top users by follower count that I don't follow
-  const { data: users } = await supabase
+  // Fetch a batch of users then filter client-side — avoids .not('id','in') syntax issues
+  const { data: allUsers, error } = await supabase
     .from('users')
-    .select('id,username,avatar,follower_count,location')
-    .not('id', 'in', `(${[...followingIds].join(',') || currentUser.id})`)
-    .order('follower_count', { ascending: false })
-    .limit(10);
+    .select('id,username,avatar,followers,location')
+    .neq('id', currentUser.id)
+    .order('followers', { ascending: false })
+    .limit(50);
 
-  if (!users?.length) return;
+  if (error) console.error('Suggest error:', error.message);
+
+  const users = (allUsers || []).filter(u => !excludeIds.includes(u.id)).slice(0, 10);
+
+  if (!users.length) return;
 
   list.innerHTML = '';
   users.forEach(u => list.appendChild(buildSuggestCard(u, false)));
@@ -4635,12 +4639,6 @@ async function renderSuggestedForOtherProfile(userId, username) {
   const list = document.getElementById(`${boxId}-list`);
   if (!list) return;
 
-  // Get followers of this user
-  const { data: theirFollowers } = await supabase
-    .from('follows').select('follower_id').eq('following_id', userId).limit(50);
-  const followerIds = (theirFollowers || []).map(r => r.follower_id);
-  if (!followerIds.length) { box.style.display = 'none'; return; }
-
   // Get who I already follow
   const { data: myFollowing } = await supabase
     .from('follows').select('following_id').eq('follower_id', currentUser.id);
@@ -4648,21 +4646,43 @@ async function renderSuggestedForOtherProfile(userId, username) {
   myFollowingIds.add(currentUser.id);
   myFollowingIds.add(userId); // exclude the profile owner
 
-  // Get top accounts among those followers that I don't follow
-  const candidates = followerIds.filter(id => !myFollowingIds.has(id));
+  // Strategy: show who this user follows that I don't follow yet
+  // More useful than their followers when there are few users
+  const { data: theyFollow } = await supabase
+    .from('follows').select('following_id').eq('follower_id', userId).limit(50);
+  let candidates = (theyFollow || []).map(r => r.following_id).filter(id => !myFollowingIds.has(id));
+
+  // Fallback: if they don't follow many people, show popular users I don't follow
+  if (candidates.length < 3) {
+    const { data: popular } = await supabase
+      .from('users')
+      .select('id')
+      .neq('id', currentUser.id)
+      .neq('id', userId)
+      .order('followers', { ascending: false })
+      .limit(30);
+    const popularIds = (popular || []).map(r => r.id).filter(id => !myFollowingIds.has(id));
+    candidates = [...new Set([...candidates, ...popularIds])];
+  }
+
   if (!candidates.length) { box.style.display = 'none'; return; }
 
-  const { data: users } = await supabase
+  const { data: users, error: uErr } = await supabase
     .from('users')
-    .select('id,username,avatar,follower_count')
+    .select('id,username,avatar,followers')
     .in('id', candidates.slice(0, 20))
-    .order('follower_count', { ascending: false })
+    .order('followers', { ascending: false })
     .limit(8);
 
-  if (!users?.length) { box.style.display = 'none'; return; }
+  if (uErr) console.error('Suggest other error:', uErr.message);
+  if (!users?.length) {
+    box.style.display = 'none';
+    return;
+  }
 
   list.innerHTML = '';
   users.forEach(u => list.appendChild(buildSuggestCard(u, myFollowingIds.has(u.id))));
+  console.log('suggest: rendered', users.length, 'cards');
 }
 
 // ══════════════════════════════════════════
