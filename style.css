@@ -631,6 +631,87 @@
   .load-more-trigger { height: 20px; }
   
   /* ══════════════════════════════════════════
+     PROFILE SUGGESTION BOX
+  ══════════════════════════════════════════ */
+  .prf-suggest-box {
+    margin: 0 14px 14px;
+    background: rgba(108,71,255,0.04);
+    border: 1px solid rgba(108,71,255,0.12);
+    border-radius: 18px;
+    overflow: hidden;
+    backdrop-filter: blur(4px);
+  }
+  .prf-suggest-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px 8px;
+  }
+  .prf-suggest-title {
+    font-size: 13px; font-weight: 700; color: var(--text2);
+  }
+  .prf-suggest-close {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--bg3); color: var(--text3);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .prf-suggest-close:active { opacity: 0.7; }
+
+  /* Horizontal scroll row of cards */
+  .prf-suggest-scroll {
+    display: flex; gap: 10px;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 0 14px 14px;
+  }
+  .prf-suggest-scroll::-webkit-scrollbar { display: none; }
+
+  /* Individual user card */
+  .prf-suggest-card {
+    flex-shrink: 0; width: 100px;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 5px; cursor: pointer;
+  }
+  .prf-suggest-av-wrap {
+    width: 60px; height: 60px; border-radius: 50%;
+    overflow: hidden; flex-shrink: 0;
+    border: 2px solid var(--border);
+    background: var(--bg3);
+  }
+  .prf-suggest-av {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .prf-suggest-name {
+    font-size: 12px; font-weight: 700; color: var(--text);
+    text-align: center; width: 100%;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .prf-suggest-followers {
+    font-size: 11px; color: var(--text3); text-align: center;
+  }
+  .prf-suggest-follow-btn {
+    padding: 6px 14px; border-radius: 20px;
+    font-size: 12px; font-weight: 700;
+    background: var(--accent); color: white;
+    border: none; cursor: pointer; font-family: var(--font);
+    transition: all 0.15s; white-space: nowrap;
+  }
+  .prf-suggest-follow-btn.following {
+    background: transparent; color: var(--accent);
+    border: 1.5px solid var(--accent);
+  }
+  .prf-suggest-follow-btn:active { opacity: 0.75; transform: scale(0.95); }
+
+  /* Mini follow button in floating header */
+  .mini-msg-btn {
+    display: flex; align-items: center; gap: 5px;
+    padding: 6px 12px; border-radius: 20px;
+    font-size: 12px; font-weight: 700;
+    background: rgba(255,255,255,0.2);
+    color: white; border: 1px solid rgba(255,255,255,0.3);
+    backdrop-filter: blur(4px);
+  }
+
+  /* ══════════════════════════════════════════
      DISCOVER — world class rebuild
   ══════════════════════════════════════════ */
 
