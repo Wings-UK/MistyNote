@@ -6289,34 +6289,52 @@ async function openProfileShare(profile) {
   overlay.classList.remove('hidden');
   setTimeout(() => sheet.classList.add('open'), 10);
 
-  // Load top followers of current user to share to
   const row = document.getElementById('share-followers-row');
-  if (currentUser) {
-    try {
-      const { data: follows } = await supabase
-        .from('follows')
-        .select('following_id, following:users!follows_following_id_fkey(id, username, avatar)')
-        .eq('follower_id', currentUser.id)
-        .limit(6);
+  if (!row) return;
 
-      if (follows && follows.length > 0) {
-        row.innerHTML = follows.map(f => {
-          const u = f.following;
-          const avatar = u?.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${u?.username}`;
-          return `
-            <div class="share-person" onclick="shareToDM('${u.id}', '${escHtml(u.username)}')">
-              <img class="share-person-avatar" src="${avatar}" onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${u?.username}'">
-              <span class="share-person-name">${escHtml(u.username)}</span>
-            </div>`;
-        }).join('');
-      } else {
-        row.innerHTML = '<span style="font-size:13px;color:var(--text3);padding:8px 0;">No one to show yet</span>';
-      }
-    } catch(e) {
-      row.innerHTML = '<span style="font-size:13px;color:var(--text3);padding:8px 0;">Could not load</span>';
-    }
-  } else {
+  if (!currentUser) {
     row.innerHTML = '<span style="font-size:13px;color:var(--text3);padding:8px 0;">Sign in to share</span>';
+    return;
+  }
+
+  row.innerHTML = '<span style="font-size:13px;color:var(--text3);padding:8px 0;">Loading…</span>';
+
+  try {
+    // Get people I follow — simple query without fkey alias
+    const { data: follows } = await supabase
+      .from('follows')
+      .select('following_id')
+      .eq('follower_id', currentUser.id)
+      .limit(10);
+
+    if (!follows?.length) {
+      row.innerHTML = '<span style="font-size:13px;color:var(--text3);padding:8px 0;">Follow people to share with them</span>';
+      return;
+    }
+
+    const ids = follows.map(f => f.following_id);
+    const { data: users } = await supabase
+      .from('users')
+      .select('id,username,avatar')
+      .in('id', ids)
+      .limit(8);
+
+    if (!users?.length) {
+      row.innerHTML = '<span style="font-size:13px;color:var(--text3);padding:8px 0;">No one to show yet</span>';
+      return;
+    }
+
+    row.innerHTML = users.map(u => {
+      const avatar = u.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${u.username}`;
+      return `
+        <div class="share-person" onclick="shareToDM('${u.id}','${escHtml(u.username)}')">
+          <img class="share-person-avatar" src="${avatar}" onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${u.username}'" alt="">
+          <span class="share-person-name">${escHtml(u.username)}</span>
+        </div>`;
+    }).join('');
+
+  } catch(e) {
+    row.innerHTML = '<span style="font-size:13px;color:var(--text3);padding:8px 0;">Could not load</span>';
   }
 }
 
@@ -6358,14 +6376,36 @@ function shareToApp(app) {
   window.open(links[app], '_blank');
 }
 
-function shareToDM(userId, username) {
+async function shareToDM(userId, username) {
   if (!shareSheetProfile) return;
-  const url = getProfileUrl(shareSheetProfile);
-  // DM share — for now copies link and shows toast (DM feature pending)
-  navigator.clipboard?.writeText(url).then(() => {
-    showToast(`Link copied — send to ${username} 💜`);
-  });
   closeProfileShare();
+
+  const profileUrl  = getProfileUrl(shareSheetProfile);
+  const shareText   = `Check out ${shareSheetProfile.username} on MistyNote 👤\n${profileUrl}`;
+
+  // Get or create conversation with this user
+  const convId = await msgGetOrCreateConversation(userId);
+  if (!convId) { showToast('Could not open DM'); return; }
+
+  // Get user profile for chat header
+  const { data: user } = await supabase
+    .from('users').select('id,username,avatar').eq('id', userId).maybeSingle();
+  if (!user) { showToast('User not found'); return; }
+
+  // Open chat
+  openChat(convId, user);
+
+  // Send the share message after a short delay so chat loads first
+  setTimeout(async () => {
+    await supabase.from('messages').insert({
+      conversation_id: convId,
+      sender_id: currentUser.id,
+      type: 'text',
+      content: shareText,
+    });
+    // Reload messages to show it
+    loadChatMessages(convId);
+  }, 600);
 }
 
 function copyProfileLink() {
