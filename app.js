@@ -1989,7 +1989,7 @@ function renderFeedPosts(list, posts, PER_PAGE) {
   checkSavedPosts(ids);
   reObserveAllFeedPosts();
 
-  if (feedOffset <= PER_PAGE) seedDemoMoments(posts);
+  // moment rings removed from feed
 }
 
 function setFeedTab(tab, btn) {
@@ -2273,32 +2273,6 @@ function injectFeedPostStyles() {
     }
     .post-avatar-link { flex-shrink: 0; text-decoration: none; }
     /* Avatar ring wrap */
-    .avatar-moment-wrap {
-      position: relative; flex-shrink: 0;
-      width: 38px; height: 38px;
-    }
-    .avatar-moment-ring {
-      position: absolute; inset: -2.5px; border-radius: 50%;
-      background: linear-gradient(135deg, var(--accent), #a78bfa);
-      z-index: 0; opacity: 0;
-      transition: opacity 0.2s;
-    }
-    .avatar-moment-ring.live    { background: linear-gradient(135deg, var(--red), #ff8c42); }
-    .avatar-moment-ring.commerce { background: linear-gradient(135deg, var(--gold), #ff8c42); }
-    .avatar-moment-ring.live_commerce { background: linear-gradient(135deg, var(--red), var(--gold)); }
-    .avatar-moment-wrap.has-moment .avatar-moment-ring { opacity: 1; }
-    .avatar-moment-wrap.has-moment .small-photo { border: 2px solid var(--bg); position: relative; z-index: 1; }
-
-    /* Live pulse on ring */
-    .avatar-moment-wrap.has-moment.live .avatar-moment-ring,
-    .avatar-moment-wrap.has-moment.live_commerce .avatar-moment-ring {
-      animation: ringPulse 2s ease-in-out infinite;
-    }
-    @keyframes ringPulse {
-      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(255,59,92,0.4); }
-      50% { opacity: 0.8; box-shadow: 0 0 0 4px rgba(255,59,92,0); }
-    }
-
     .small-photo {
       width: 38px;
       height: 38px;
