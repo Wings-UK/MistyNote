@@ -4266,7 +4266,7 @@ async function discFetchPosts(q, pane) {
     const tile = document.createElement('div');
     tile.className = 'disc-post-tile';
     if (p.image) {
-      tile.innerHTML = `<img src="${p.image}" alt="" loading="lazy">`;
+      tile.innerHTML = `<img src="${escHtml(p.image)}" alt="" loading="lazy">`;
     } else {
       tile.innerHTML = `<p class="disc-post-tile-text">${escHtml(p.content||'')}</p>`;
     }
@@ -5164,7 +5164,18 @@ function linkifyText(text) {
   const escaped = escHtml(text);
   return escaped.replace(
     /https?:\/\/[^\s&lt;&gt;"]+/g,
-    url => `<a href="${url}" target="_blank" rel="noopener noreferrer" class="post-link" onclick="event.stopPropagation()">${url}</a>`
+    url => {
+      // Strict URL validation — only allow http/https, reject javascript: and data: schemes
+      try {
+        const parsed = new URL(url);
+        if (!['http:', 'https:'].includes(parsed.protocol)) return url;
+        // Double-escape the href to prevent attribute injection
+        const safeHref = url.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer nofollow" class="post-link" onclick="event.stopPropagation()">${url}</a>`;
+      } catch {
+        return url; // invalid URL — just show as text
+      }
+    }
   );
 }
 
