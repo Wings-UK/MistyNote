@@ -1683,6 +1683,11 @@ async function refreshFollowCounts(userId) {
   const followerEl = document.querySelector(`#uprf-followers-${userId}`);
   if (followerEl) followerEl.textContent = fmtNum(data.followers || 0);
 
+  // Update follower count on any suggestion card for this user
+  document.querySelectorAll(`.prf-suggest-card[data-uid="${userId}"] .prf-suggest-followers`).forEach(el => {
+    el.textContent = fmtNum(data.followers || 0) + ' followers';
+  });
+
   // Update own following count on ME page
   if (currentUser) {
     const { data: me } = await supabase
@@ -4529,6 +4534,7 @@ function dismissSuggestBox(boxId) {
 function buildSuggestCard(user, isFollowing) {
   const card = document.createElement('div');
   card.className = 'prf-suggest-card';
+  card.dataset.uid = user.id;
   card.innerHTML = `
     <div class="prf-suggest-av-wrap" onclick="showUserProfile('${user.id}')">
       <img class="prf-suggest-av" src="${user.avatar||''}" onerror="this.style.background='var(--bg3)';this.removeAttribute('src')" alt="">
@@ -4547,17 +4553,50 @@ async function suggestFollow(btn, uid) {
   if (!currentUser) return;
   const isFollowing = btn.classList.contains('following');
   btn.disabled = true;
-  if (isFollowing) {
-    await supabase.from('follows').delete()
-      .eq('follower_id', currentUser.id).eq('following_id', uid);
-    btn.classList.remove('following');
-    btn.textContent = 'Follow';
-  } else {
-    await supabase.from('follows').insert({ follower_id: currentUser.id, following_id: uid });
-    btn.classList.add('following');
-    btn.textContent = 'Following';
+
+  // Optimistic UI — update button instantly
+  btn.classList.toggle('following', !isFollowing);
+  btn.textContent = isFollowing ? 'Follow' : 'Following';
+
+  // Optimistic — update the follower count on the card instantly
+  const card = btn.closest('.prf-suggest-card');
+  const followerEl = card?.querySelector('.prf-suggest-followers');
+  if (followerEl) {
+    const current = parseInt(followerEl.textContent.replace(/[^0-9]/g, '')) || 0;
+    const newCount = isFollowing ? Math.max(0, current - 1) : current + 1;
+    followerEl.textContent = fmtNum(newCount) + ' followers';
   }
+
+  // Optimistic — update my Following count in my profile stats instantly
+  const myFollowingEl = document.querySelector('#prf-following-count');
+  if (myFollowingEl) {
+    const current = parseInt(myFollowingEl.textContent.replace(/[^0-9]/g, '')) || 0;
+    const newCount = isFollowing ? Math.max(0, current - 1) : current + 1;
+    myFollowingEl.textContent = fmtNum(newCount);
+    if (currentProfile) currentProfile.following = newCount;
+  }
+
+  if (isFollowing) {
+    const { error } = await supabase.from('follows').delete()
+      .eq('follower_id', currentUser.id).eq('following_id', uid);
+    if (error) {
+      // Revert on failure
+      btn.classList.add('following'); btn.textContent = 'Following';
+      if (followerEl) followerEl.textContent = fmtNum((parseInt(followerEl.textContent)||0)+1) + ' followers';
+    }
+  } else {
+    const { error } = await supabase.from('follows').insert({ follower_id: currentUser.id, following_id: uid });
+    if (error) {
+      // Revert on failure
+      btn.classList.remove('following'); btn.textContent = 'Follow';
+      if (followerEl) followerEl.textContent = fmtNum(Math.max(0,(parseInt(followerEl.textContent)||0)-1)) + ' followers';
+    }
+  }
+
   btn.disabled = false;
+
+  // Confirm real counts from DB after action (non-blocking)
+  setTimeout(() => refreshFollowCounts(uid), 500);
 }
 
 // ── Load "People you might vibe with" on own profile ──
