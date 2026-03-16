@@ -1577,12 +1577,13 @@ async function showUserProfile(userId, tapEl) {
     const syncHeaderBtn = () => {
       if (!mainFollowBtn) return;
       const isFollowing = mainFollowBtn.classList.contains('prf-btn-following');
-      miniFollow.textContent = isFollowing ? 'Following' : 'Follow';
-      miniFollow.classList.toggle('following', isFollowing);
-      // Swap buttons
+      // Always show Follow text (legacy) but we hide/show via display
+      miniFollow.textContent = 'Follow';
       if (miniMsgBtn) {
-        miniFollow.style.display  = isFollowing ? 'none'  : '';
-        miniMsgBtn.style.display  = isFollowing ? 'flex'  : 'none';
+        // If following: hide Follow entirely, show Message
+        // If not following: show Follow, hide Message
+        miniFollow.style.display  = isFollowing ? 'none' : '';
+        miniMsgBtn.style.display  = isFollowing ? 'flex' : 'none';
       }
       // Also trigger recommendation box when following
       if (isFollowing) renderSuggestedForOtherProfile(userId, profile.username);
@@ -1596,11 +1597,32 @@ async function showUserProfile(userId, tapEl) {
     if (upPage._uprfAvatarObs) upPage._uprfAvatarObs.disconnect();
     upPage._uprfAvatarObs = new IntersectionObserver(([entry]) => {
       const visible = entry.isIntersecting;
-      miniIdentity.style.opacity  = visible ? '0' : '1';
+      miniIdentity.style.opacity       = visible ? '0' : '1';
       miniIdentity.style.pointerEvents = visible ? 'none' : 'auto';
-      miniFollow.style.display    = 'block';
-      miniFollow.style.opacity    = visible ? '0' : '1';
-      miniFollow.style.pointerEvents = visible ? 'none' : 'auto';
+
+      // Check current follow state to decide which button to show
+      const nowFollowing = mainFollowBtn?.classList.contains('prf-btn-following');
+      if (nowFollowing) {
+        // Show Message, hide Follow
+        miniFollow.style.display         = 'none';
+        miniFollow.style.opacity         = '0';
+        miniFollow.style.pointerEvents   = 'none';
+        if (miniMsgBtn) {
+          miniMsgBtn.style.display       = visible ? 'none' : 'flex';
+          miniMsgBtn.style.opacity       = visible ? '0' : '1';
+          miniMsgBtn.style.pointerEvents = visible ? 'none' : 'auto';
+        }
+      } else {
+        // Show Follow, hide Message
+        miniFollow.style.display         = 'block';
+        miniFollow.style.opacity         = visible ? '0' : '1';
+        miniFollow.style.pointerEvents   = visible ? 'none' : 'auto';
+        if (miniMsgBtn) {
+          miniMsgBtn.style.display       = 'none';
+          miniMsgBtn.style.opacity       = '0';
+          miniMsgBtn.style.pointerEvents = 'none';
+        }
+      }
     }, { root: upPage, threshold: 0 });
     if (avatarWrap) upPage._uprfAvatarObs.observe(avatarWrap);
   });
