@@ -2102,9 +2102,9 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
 
   el.innerHTML = `
     <div class="cust-name">
-      <a class="post-avatar-link" onclick="console.log('[AVATAR TAP] postId=${p.id} userId=${p.user_id} isOwnPost=${isOwnPost} isProfilePage=${isProfilePage} action=${(isProfilePage && (isOwnPost || isViewingUser)) ? 'selfTap' : isOwnPost ? 'myProfile' : 'showUserProfile'}');${(isProfilePage && (isOwnPost || isViewingUser)) ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
+      <div class="post-avatar-link">
         <img class="small-photo" src="${user.avatar || ''}" onerror="this.style.display='none'" alt="">
-      </a>
+      </div>
       <div class="post-meta">
         <a class="post-author-link" onclick="${(isProfilePage && (isOwnPost || isViewingUser)) ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
           <span class="jerry">${escHtml(user.username)}</span>
@@ -2285,8 +2285,16 @@ function injectFeedPostStyles() {
       align-items: center;
       gap: 10px;
       margin-bottom: 8px;
+      position: relative;
+      z-index: 5;
     }
-    .post-avatar-link { flex-shrink: 0; text-decoration: none; }
+    .post-avatar-link {
+      flex-shrink: 0; text-decoration: none;
+      position: relative; z-index: 10;
+      display: block;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .small-photo { pointer-events: none; }
     /* Avatar ring wrap */
     .small-photo {
       width: 38px;
