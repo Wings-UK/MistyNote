@@ -1090,6 +1090,17 @@ async function renderMyProfile() {
         <span class="prf-storefront-pill">Soon</span>
       </div>
 
+      <!-- PEOPLE TO FOLLOW BOX -->
+      <div class="prf-suggest-box" id="prf-suggest-own" style="display:none">
+        <div class="prf-suggest-header">
+          <span class="prf-suggest-title">People you might vibe with</span>
+          <button class="prf-suggest-close" onclick="dismissSuggestBox('prf-suggest-own')" aria-label="Dismiss">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+        <div class="prf-suggest-scroll" id="prf-suggest-own-list"></div>
+      </div>
+
       <!-- ICON TAB BAR -->
       <div class="prf-icon-tabs" id="prf-tabs">
         <div class="prf-icon-tab active" data-tab="list" onclick="switchPrfTab('list',this)">
@@ -1183,6 +1194,9 @@ async function renderMyProfile() {
     }
   }, { root: myPage, threshold: 0 });
   if (myAvatarWrap) myPage._myprfAvatarObs.observe(myAvatarWrap);
+
+  // Load people suggestions after profile renders
+  setTimeout(() => loadSuggestedForMe(), 100);
 }
 
 function switchPrfTab(tab, el) {
@@ -1551,21 +1565,30 @@ async function showUserProfile(userId, tapEl) {
     const miniAvatar   = document.getElementById('uprf-header-avatar');
     const miniFollow   = document.getElementById('uprf-header-follow');
 
-    // Set mini avatar src and wire follow button to main follow btn
+    // Set mini avatar src and wire follow/message buttons
     miniAvatar.src = profile.avatar || '';
     const mainFollowBtn = document.getElementById(`follow-btn-${userId}`);
+    const miniMsgBtn    = document.getElementById('uprf-header-message');
 
-    // Follow state already baked into button at render time — no post-render check needed
-    miniFollow.onclick = () => mainFollowBtn?.click();
-    // Sync follow label + state to match main button
-    const syncFollowLabel = () => {
+    miniFollow.onclick  = () => mainFollowBtn?.click();
+    if (miniMsgBtn) miniMsgBtn.onclick = () => openDM(userId);
+
+    // Sync: if following → show Message, hide Follow. If not → show Follow, hide Message
+    const syncHeaderBtn = () => {
       if (!mainFollowBtn) return;
       const isFollowing = mainFollowBtn.classList.contains('prf-btn-following');
       miniFollow.textContent = isFollowing ? 'Following' : 'Follow';
       miniFollow.classList.toggle('following', isFollowing);
+      // Swap buttons
+      if (miniMsgBtn) {
+        miniFollow.style.display  = isFollowing ? 'none'  : '';
+        miniMsgBtn.style.display  = isFollowing ? 'flex'  : 'none';
+      }
+      // Also trigger recommendation box when following
+      if (isFollowing) renderSuggestedForOtherProfile(userId, profile.username);
     };
-    syncFollowLabel();
-    const followObserver = new MutationObserver(syncFollowLabel);
+    syncHeaderBtn();
+    const followObserver = new MutationObserver(syncHeaderBtn);
     if (mainFollowBtn) followObserver.observe(mainFollowBtn, { attributes:true, attributeFilter:['class'] });
 
     // Watch avatar element — when it leaves viewport top, show mini
@@ -4483,6 +4506,163 @@ async function loadDiscover() {
   // Wire input
   input.addEventListener('input', e => discOnInput(e.target.value));
   input.addEventListener('focus', () => discRenderRecent());
+}
+
+// ══════════════════════════════════════════
+// PROFILE SUGGESTIONS
+// ══════════════════════════════════════════
+
+// ── Dismiss a suggestion box for the session ──
+function dismissSuggestBox(boxId) {
+  const box = document.getElementById(boxId);
+  if (box) {
+    box.style.transition = 'opacity 0.2s, max-height 0.3s';
+    box.style.opacity = '0';
+    box.style.maxHeight = '0';
+    box.style.overflow = 'hidden';
+    setTimeout(() => box.style.display = 'none', 300);
+  }
+  sessionStorage.setItem('dismissed_' + boxId, '1');
+}
+
+// ── Build a suggestion user card ──
+function buildSuggestCard(user, isFollowing) {
+  const card = document.createElement('div');
+  card.className = 'prf-suggest-card';
+  card.innerHTML = `
+    <div class="prf-suggest-av-wrap" onclick="showUserProfile('${user.id}')">
+      <img class="prf-suggest-av" src="${user.avatar||''}" onerror="this.style.background='var(--bg3)';this.removeAttribute('src')" alt="">
+    </div>
+    <div class="prf-suggest-name" onclick="showUserProfile('${user.id}')">${escHtml(user.username||'')}</div>
+    <div class="prf-suggest-followers">${fmtNum(user.follower_count||0)} followers</div>
+    <button class="prf-suggest-follow-btn ${isFollowing ? 'following' : ''}"
+      data-uid="${user.id}"
+      onclick="suggestFollow(this,'${user.id}')">
+      ${isFollowing ? 'Following' : 'Follow'}
+    </button>`;
+  return card;
+}
+
+async function suggestFollow(btn, uid) {
+  if (!currentUser) return;
+  const isFollowing = btn.classList.contains('following');
+  btn.disabled = true;
+  if (isFollowing) {
+    await supabase.from('follows').delete()
+      .eq('follower_id', currentUser.id).eq('following_id', uid);
+    btn.classList.remove('following');
+    btn.textContent = 'Follow';
+  } else {
+    await supabase.from('follows').insert({ follower_id: currentUser.id, following_id: uid });
+    btn.classList.add('following');
+    btn.textContent = 'Following';
+  }
+  btn.disabled = false;
+}
+
+// ── Load "People you might vibe with" on own profile ──
+async function loadSuggestedForMe() {
+  if (!currentUser) return;
+  const boxId = 'prf-suggest-own';
+  if (sessionStorage.getItem('dismissed_' + boxId)) return;
+
+  const box  = document.getElementById(boxId);
+  const list = document.getElementById('prf-suggest-own-list');
+  if (!box || !list) return;
+
+  // Get who I already follow
+  const { data: following } = await supabase
+    .from('follows').select('following_id').eq('follower_id', currentUser.id);
+  const followingIds = new Set((following || []).map(r => r.following_id));
+  followingIds.add(currentUser.id); // exclude self
+
+  // Get top users by follower count that I don't follow
+  const { data: users } = await supabase
+    .from('users')
+    .select('id,username,avatar,follower_count,location')
+    .not('id', 'in', `(${[...followingIds].join(',') || currentUser.id})`)
+    .order('follower_count', { ascending: false })
+    .limit(10);
+
+  if (!users?.length) return;
+
+  list.innerHTML = '';
+  users.forEach(u => list.appendChild(buildSuggestCard(u, false)));
+  box.style.display = '';
+}
+
+// ── Load "People who follow @X also follow" on other profile ──
+async function renderSuggestedForOtherProfile(userId, username) {
+  if (!currentUser) return;
+  const boxId = `prf-suggest-other-${userId}`;
+  if (sessionStorage.getItem('dismissed_' + boxId)) return;
+
+  // Find existing box or create it
+  let box = document.getElementById(boxId);
+  if (!box) {
+    // Insert after prf-btn-row in user profile body
+    const body = document.getElementById('user-profile-body');
+    if (!body) return;
+    const tabBar = body.querySelector('.prf-icon-tabs');
+    if (!tabBar) return;
+
+    box = document.createElement('div');
+    box.className = 'prf-suggest-box';
+    box.id = boxId;
+    box.innerHTML = `
+      <div class="prf-suggest-header">
+        <span class="prf-suggest-title">People who follow ${escHtml(username)} also follow</span>
+        <button class="prf-suggest-close" onclick="dismissSuggestBox('${boxId}')" aria-label="Dismiss">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="prf-suggest-scroll" id="${boxId}-list">
+        <div style="padding:20px;text-align:center;color:var(--text3)">Loading…</div>
+      </div>`;
+    tabBar.parentNode.insertBefore(box, tabBar);
+
+    // Animate in
+    box.style.opacity = '0';
+    box.style.maxHeight = '0';
+    box.style.overflow = 'hidden';
+    setTimeout(() => {
+      box.style.transition = 'opacity 0.3s, max-height 0.4s';
+      box.style.opacity = '1';
+      box.style.maxHeight = '300px';
+    }, 50);
+  }
+
+  const list = document.getElementById(`${boxId}-list`);
+  if (!list) return;
+
+  // Get followers of this user
+  const { data: theirFollowers } = await supabase
+    .from('follows').select('follower_id').eq('following_id', userId).limit(50);
+  const followerIds = (theirFollowers || []).map(r => r.follower_id);
+  if (!followerIds.length) { box.style.display = 'none'; return; }
+
+  // Get who I already follow
+  const { data: myFollowing } = await supabase
+    .from('follows').select('following_id').eq('follower_id', currentUser.id);
+  const myFollowingIds = new Set((myFollowing || []).map(r => r.following_id));
+  myFollowingIds.add(currentUser.id);
+  myFollowingIds.add(userId); // exclude the profile owner
+
+  // Get top accounts among those followers that I don't follow
+  const candidates = followerIds.filter(id => !myFollowingIds.has(id));
+  if (!candidates.length) { box.style.display = 'none'; return; }
+
+  const { data: users } = await supabase
+    .from('users')
+    .select('id,username,avatar,follower_count')
+    .in('id', candidates.slice(0, 20))
+    .order('follower_count', { ascending: false })
+    .limit(8);
+
+  if (!users?.length) { box.style.display = 'none'; return; }
+
+  list.innerHTML = '';
+  users.forEach(u => list.appendChild(buildSuggestCard(u, myFollowingIds.has(u.id))));
 }
 
 // ══════════════════════════════════════════
