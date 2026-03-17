@@ -370,7 +370,8 @@ async function bootApp(isDeepLink = false) {
     // Restore feed visibility and load in background
     if (feedEl) feedEl.style.visibility = '';
     setTimeout(() => {
-      loadFeed();
+      // Only load feed if not already loading from bootApp
+      if (!feedLoading && loadedPostIds.size === 0) loadFeed();
       loadNotifications();
       loadInitialNotifCount();
     }, 600);
@@ -549,7 +550,9 @@ function navTo(pageId) {
     loadDiscover();
   }
   if (pageId === 'feed') {
-    if (loadedPostIds.size === 0) loadFeed();
+    const feedList = document.getElementById('feed-list');
+    const hasPosts = feedList && feedList.querySelector('.poster');
+    if (!hasPosts && !feedLoading) loadFeed();
   }
 }
 
@@ -1762,7 +1765,7 @@ async function loadFeed(reset = false) {
   }
 
   if (feedLoading || feedExhausted) return;
-  feedLoading = true;
+  feedLoading = true; // set synchronously — prevents concurrent calls
 
   const PER_PAGE = 15;
 
