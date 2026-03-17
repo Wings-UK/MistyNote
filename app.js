@@ -3930,6 +3930,68 @@ async function loadComments(postId) {
   });
 }
 
+// ── Detect MistyNote profile URL ──
+function extractMistyNoteProfile(text) {
+  const match = text.match(/https?:\/\/mistynote\.pages\.dev\/profile\/([a-zA-Z0-9_]+)/);
+  return match ? match[1] : null;
+}
+
+// ── Build compact comment link preview ──
+// Phase 1: external URL — left image + domain + title
+// Phase 2: MistyNote profile — purple @username pill
+async function buildCommentLinkPreview(text) {
+  const profileUsername = extractMistyNoteProfile(text);
+
+  // Phase 2 — MistyNote profile link → purple @username pill
+  if (profileUsername) {
+    // Fetch user from DB
+    const { data: user } = await supabase
+      .from('users')
+      .select('id,username,avatar')
+      .eq('username', profileUsername)
+      .maybeSingle();
+
+    if (user) {
+      const pill = document.createElement('div');
+      pill.className = 'comment-profile-pill';
+      pill.onclick = (e) => { e.stopPropagation(); showUserProfile(user.id); };
+      pill.innerHTML = `
+        <img class="comment-pill-av" src="${escHtml(user.avatar||'')}" onerror="this.style.display='none'" alt="">
+        <span class="comment-pill-name">@${escHtml(user.username)}</span>`;
+      return pill;
+    }
+  }
+
+  // Phase 1 — external URL → compact left-image card
+  const url = extractFirstUrl(text);
+  if (!url || url.includes('mistynote.pages.dev')) return null;
+
+  const og = await fetchOgPreview(url).catch(() => null);
+  if (!og) return null;
+
+  const card = document.createElement('div');
+  card.className = 'comment-link-card';
+  card.onclick = (e) => { e.stopPropagation(); window.open(url, '_blank'); };
+  card.innerHTML = `
+    ${og.image ? `<img class="comment-link-img" src="${escHtml(og.image)}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
+    <div class="comment-link-body">
+      <div class="comment-link-domain">${escHtml(og.siteName || og.domain || '')}</div>
+      <div class="comment-link-title">${escHtml((og.title || '').slice(0, 80))}</div>
+    </div>`;
+  return card;
+}
+
+// ── Strip URLs from comment text for display ──
+function commentDisplayText(text) {
+  const profileUsername = extractMistyNoteProfile(text);
+  if (profileUsername) {
+    return text.replace(/https?:\/\/mistynote\.pages\.dev\/profile\/[a-zA-Z0-9_]+/g, '').trim();
+  }
+  const url = extractFirstUrl(text);
+  if (url) return text.replace(url, '').trim();
+  return text;
+}
+
 function buildCommentEl(c, parentId, likedSet, postId) {
   const u = c.user || { username: '@unknown', avatar: '' };
   const isOwn = currentUser && c.user_id === currentUser.id;
@@ -3950,7 +4012,8 @@ function buildCommentEl(c, parentId, likedSet, postId) {
         <span class="comment-name" onclick="showUserProfile('${c.user_id}',this)">${escHtml(u.username)}</span>
         <span class="comment-time">${timeSince(c.created_at)}</span>
       </div>
-      ${c.content ? `<p class="comment-text">${escHtml(c.content)}</p>` : ''}
+      ${c.content ? `<p class="comment-text">${linkifyText(commentDisplayText(c.content))}</p>` : ''}
+      <div class="comment-link-preview-wrap" id="clp-${c.id}"></div>
       ${c.image_url ? `
         <div class="comment-media">
           <img class="comment-img" src="${c.image_url}" alt="" loading="lazy" onclick="openMediaViewer('${c.image_url}')">
@@ -4013,6 +4076,17 @@ function buildCommentEl(c, parentId, likedSet, postId) {
     replyTa.style.height = 'auto';
     replyTa.style.height = Math.min(replyTa.scrollHeight, 100) + 'px';
   });
+
+  // Trigger link preview for URLs in comment
+  if (c.content && extractFirstUrl(c.content)) {
+    const previewWrap = wrap.querySelector(`[id="clp-${c.id}"]`);
+    if (previewWrap) {
+      buildCommentLinkPreview(c.content).then(previewEl => {
+        if (!previewEl || !previewWrap.isConnected) return;
+        previewWrap.appendChild(previewEl);
+      });
+    }
+  }
 
   // Like comment
   wrap.querySelector('.like-comment-btn')?.addEventListener('click', e => {
