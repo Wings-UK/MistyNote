@@ -2258,19 +2258,21 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
   // Store post ID on element — read from DOM not closure to prevent stale ID bug
   el.dataset.postId = p.id;
 
-  // Fetch OG preview for URL posts (no image/video)
+  // Fetch OG preview AFTER innerHTML is set — so el.querySelector works
   if (!p.image && !p.video && !isRepost) {
     const postUrl = extractFirstUrl(p.content || '');
     if (postUrl) {
-      // Use direct reference — not getElementById which can find wrong element in profile tabs
       const wrap = el.querySelector('.post-og-wrap');
       if (wrap) {
         fetchOgPreview(postUrl).then(og => {
-          if (!wrap.isConnected) return; // element removed from DOM — skip
-          if (!og) { wrap.remove(); return; }
-          wrap.innerHTML = buildPostOgCard(og, postUrl);
+          if (!el.isConnected) return;
+          const w = el.querySelector('.post-og-wrap');
+          if (!w) return;
+          if (!og) { w.remove(); return; }
+          w.innerHTML = buildPostOgCard(og, postUrl);
         }).catch(() => {
-          if (wrap.isConnected) wrap.remove();
+          const w = el.querySelector('.post-og-wrap');
+          if (w) w.remove();
         });
       }
     }
