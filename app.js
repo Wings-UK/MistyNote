@@ -1821,7 +1821,13 @@ async function loadFollowingFeed(list, PER_PAGE) {
       .range(feedOffset, feedOffset + PER_PAGE - 1);
 
     if (error) throw error;
-    renderFeedPosts(list, posts, PER_PAGE);
+    // Deduplicate before render
+    const uniquePosts = [];
+    const seenIds = new Set();
+    for (const p of posts || []) {
+      if (!seenIds.has(p.id)) { seenIds.add(p.id); uniquePosts.push(p); }
+    }
+    renderFeedPosts(list, uniquePosts, PER_PAGE);
   } finally {
     feedLoading = false;
   }
@@ -1959,7 +1965,7 @@ async function loadExploreFeed(list, PER_PAGE) {
     ranked = ranked.filter(p => !loadedPostIds.has(p.id));
 
     // ── Apply pagination window ──
-    const page = ranked.slice(0, PER_PAGE);
+    const page = ranked.slice(feedOffset, feedOffset + PER_PAGE);
 
     if (feedOffset === 0) list.innerHTML = '';
 
@@ -1971,7 +1977,13 @@ async function loadExploreFeed(list, PER_PAGE) {
       return;
     }
 
-    renderFeedPosts(list, page, PER_PAGE);
+    // Final dedup safety net
+    const safePage = [];
+    const safeIds = new Set();
+    for (const p of page) {
+      if (!safeIds.has(p.id)) { safeIds.add(p.id); safePage.push(p); }
+    }
+    renderFeedPosts(list, safePage, PER_PAGE);
 
   } finally {
     feedLoading = false;
@@ -2604,11 +2616,12 @@ function observePost(el) {
   if (el && el.dataset.postId) getViewObserver().observe(el);
 }
 
-// ── Debug: find duplicate post elements within feed-list only ──
+// ── Debug: find duplicate TOP-LEVEL post elements within feed-list ──
 function debugFindDuplicatePosts() {
   const feedList = document.getElementById('feed-list');
   if (!feedList) return;
-  const all = feedList.querySelectorAll('[data-post-id]');
+  // Only check direct .poster children — not child elements that also have data-post-id
+  const all = feedList.querySelectorAll(':scope > .poster[data-post-id]');
   const seen = {};
   let dupes = 0;
   all.forEach(el => {
@@ -2624,7 +2637,7 @@ function debugFindDuplicatePosts() {
     seen[id] = el;
   });
   if (dupes === 0) console.log('[NO DUPLICATES IN FEED] Feed is clean');
-  else console.warn('[FOUND ' + dupes + ' DUPLICATE(S) IN FEED]');
+  else console.warn('[FOUND ' + dupes + ' REAL DUPLICATE(S) IN FEED]');
 }
 
 function reObserveAllFeedPosts() {
