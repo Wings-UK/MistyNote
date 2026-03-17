@@ -1986,6 +1986,13 @@ function renderFeedPosts(list, posts, PER_PAGE) {
   if (feedOffset === 0) list.innerHTML = '';
 
   for (const p of posts) {
+    // Remove any existing element with this post ID before adding — eliminates duplicates
+    const existing = list.querySelector(`[data-post-id="${p.id}"]`);
+    if (existing) {
+      console.warn('[FEED] removing duplicate post element:', p.id);
+      existing.remove();
+      loadedPostIds.delete(p.id);
+    }
     if (loadedPostIds.has(p.id)) continue;
     loadedPostIds.add(p.id);
     const el = createFeedPost(p);
@@ -2002,6 +2009,8 @@ function renderFeedPosts(list, posts, PER_PAGE) {
   reObserveAllFeedPosts();
 
   // moment rings removed from feed
+  // Scan DOM for duplicate post elements
+  setTimeout(debugFindDuplicatePosts, 800);
 }
 
 function setFeedTab(tab, btn) {
@@ -2102,9 +2111,9 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
 
   el.innerHTML = `
     <div class="cust-name">
-      <div class="post-avatar-link">
+      <a class="post-avatar-link" onclick="${(isProfilePage && (isOwnPost || isViewingUser)) ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
         <img class="small-photo" src="${user.avatar || ''}" onerror="this.style.display='none'" alt="">
-      </div>
+      </a>
       <div class="post-meta">
         <a class="post-author-link" onclick="${(isProfilePage && (isOwnPost || isViewingUser)) ? 'selfTap(this)' : isOwnPost ? 'navTo(\'profile\')' : `showUserProfile('${p.user_id}',this)`};event.stopPropagation()">
           <span class="jerry">${escHtml(user.username)}</span>
@@ -2165,10 +2174,24 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
   el.dataset.postId = p.id;
 
   el.addEventListener('click', e => {
+    // ── Avatar/author FIRST — before anything else ──
+    if (e.target.closest('.post-avatar-link') || e.target.closest('.post-author-link')) {
+      e.stopPropagation();
+      return;
+    }
+
     if (el.dataset.blockNavigation === 'true') return;
 
     // Always read post ID from the DOM element, never from closure
     const postId = el.dataset.postId;
+
+    // Log EVERY click on ANY post
+    console.log('[POST CLICK]',
+      'postId=' + postId,
+      'username=' + (el.querySelector('.jerry')?.textContent || '?'),
+      'target=' + e.target.tagName + '.' + e.target.className.split(' ')[0]
+    );
+
     if (!postId) return;
 
     if (e.target.closest('.dots')) {
@@ -2277,6 +2300,7 @@ function injectFeedPostStyles() {
       position: relative;
       cursor: pointer;
       overflow: hidden;
+      touch-action: manipulation;
     }
     .poster:hover { background-color: rgb(250,250,250); }
 
@@ -2577,6 +2601,29 @@ function getViewObserver() {
 
 function observePost(el) {
   if (el && el.dataset.postId) getViewObserver().observe(el);
+}
+
+// ── Debug: find duplicate post elements in DOM ──
+function debugFindDuplicatePosts() {
+  const all = document.querySelectorAll('[data-post-id]');
+  const seen = {};
+  let dupes = 0;
+  all.forEach(el => {
+    const id = el.dataset.postId;
+    if (!id) return;
+    if (seen[id]) {
+      dupes++;
+      console.error('[DUPLICATE POST]', id,
+        'owner1:', seen[id].querySelector('.jerry')?.textContent,
+        'owner2:', el.querySelector('.jerry')?.textContent,
+        'page1:', seen[id].closest('[id]')?.id,
+        'page2:', el.closest('[id]')?.id
+      );
+    }
+    seen[id] = el;
+  });
+  if (dupes === 0) console.log('[NO DUPLICATES] DOM is clean');
+  else console.warn('[FOUND ' + dupes + ' DUPLICATE(S)]');
 }
 
 function reObserveAllFeedPosts() {
@@ -3210,6 +3257,8 @@ async function submitPost() {
 // ══════════════════════════════════════════
 
 async function openDetail(postId, scrollToComments = false) {
+  console.log('[openDetail] postId=' + postId);
+  console.trace('[openDetail] call stack');
   if (!postId) return;
   detailPostId = postId;
   detailCommentParentId = null;
