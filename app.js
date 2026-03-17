@@ -3936,33 +3936,9 @@ function extractMistyNoteProfile(text) {
   return match ? match[1] : null;
 }
 
-// ── Build compact comment link preview ──
-// Phase 1: external URL — left image + domain + title
-// Phase 2: MistyNote profile — purple @username pill
+// ── Build compact comment link preview (external URLs only) ──
+// MistyNote profile URLs are handled inline by linkifyText as @mentions
 async function buildCommentLinkPreview(text) {
-  const profileUsername = extractMistyNoteProfile(text);
-
-  // Phase 2 — MistyNote profile link → purple @username pill
-  if (profileUsername) {
-    // Fetch user from DB
-    const { data: user } = await supabase
-      .from('users')
-      .select('id,username,avatar')
-      .eq('username', profileUsername)
-      .maybeSingle();
-
-    if (user) {
-      const pill = document.createElement('div');
-      pill.className = 'comment-profile-pill';
-      pill.onclick = (e) => { e.stopPropagation(); showUserProfile(user.id); };
-      pill.innerHTML = `
-        <img class="comment-pill-av" src="${escHtml(user.avatar||'')}" onerror="this.style.display='none'" alt="">
-        <span class="comment-pill-name">@${escHtml(user.username)}</span>`;
-      return pill;
-    }
-  }
-
-  // Phase 1 — external URL → compact left-image card
   const url = extractFirstUrl(text);
   if (!url || url.includes('mistynote.pages.dev')) return null;
 
@@ -3982,13 +3958,15 @@ async function buildCommentLinkPreview(text) {
 }
 
 // ── Strip URLs from comment text for display ──
+// linkifyText handles @mentions and profile URLs inline,
+// so we only need to strip external URLs that have a separate preview card
 function commentDisplayText(text) {
-  const profileUsername = extractMistyNoteProfile(text);
-  if (profileUsername) {
-    return text.replace(/https?:\/\/mistynote\.pages\.dev\/profile\/[a-zA-Z0-9_]+/g, '').trim();
-  }
+  // Profile URLs are converted to @mentions by linkifyText — no strip needed
+  // Only strip external non-mistynote URLs (they get a card below)
   const url = extractFirstUrl(text);
-  if (url) return text.replace(url, '').trim();
+  if (url && !url.includes('mistynote.pages.dev')) {
+    return text.replace(url, '').trim();
+  }
   return text;
 }
 
@@ -5435,24 +5413,48 @@ function extractFirstUrl(text) {
   return match ? match[0] : null;
 }
 
-// ── Linkify text — makes URLs clickable ──
+// ── Linkify text — @mentions, MistyNote profile URLs, external URLs ──
 function linkifyText(text) {
+  // Step 1 — replace MistyNote profile URLs with @username before escaping
+  text = text.replace(
+    /https?:\/\/mistynote\.pages\.dev\/profile\/([a-zA-Z0-9_]+)/g,
+    (match, username) => '@' + username
+  );
+
+  // Step 2 — escape HTML
   const escaped = escHtml(text);
-  return escaped.replace(
+
+  // Step 3 — @username → purple tappable span
+  let result = escaped.replace(
+    /@([a-zA-Z0-9_]+)/g,
+    (match, username) =>
+      '<span class="mention-link" onclick="event.stopPropagation();handleMentionTap(\'' + username + '\')" data-username="' + username + '">@' + username + '</span>'
+  );
+
+  // Step 4 — remaining external URLs → tappable links
+  result = result.replace(
     /https?:\/\/[^\s&lt;&gt;"]+/g,
     url => {
-      // Strict URL validation — only allow http/https, reject javascript: and data: schemes
       try {
         const parsed = new URL(url);
         if (!['http:', 'https:'].includes(parsed.protocol)) return url;
-        // Double-escape the href to prevent attribute injection
         const safeHref = url.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-        return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer nofollow" class="post-link" onclick="event.stopPropagation()">${url}</a>`;
+        return '<a href="' + safeHref + '" target="_blank" rel="noopener noreferrer nofollow" class="post-link" onclick="event.stopPropagation()">' + url + '</a>';
       } catch {
-        return url; // invalid URL — just show as text
+        return url;
       }
     }
   );
+
+  return result;
+}
+
+// ── Handle @mention tap — look up user and open profile ──
+async function handleMentionTap(username) {
+  const { data: user } = await supabase
+    .from('users').select('id').eq('username', username).maybeSingle();
+  if (user?.id) showUserProfile(user.id);
+  else showToast('@' + username + ' not found');
 }
 
 // ── Fetch OG data via our own Cloudflare Pages Function ──
