@@ -1372,6 +1372,62 @@
   .chat-offer-decline { background: var(--bg2); color: var(--text2); }
   .chat-offer-counter { background: var(--accent-soft); color: var(--accent2); }
 
+  /* ── Comment Link Preview ── */
+
+  /* Phase 2 — MistyNote profile pill */
+  .comment-profile-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(108,71,255,0.1);
+    border: 1px solid rgba(108,71,255,0.25);
+    border-radius: 20px;
+    padding: 4px 10px 4px 5px;
+    margin-top: 5px;
+    cursor: pointer;
+    transition: background 0.15s;
+    max-width: 100%;
+  }
+  .comment-profile-pill:active { background: rgba(108,71,255,0.2); }
+  .comment-pill-av {
+    width: 22px; height: 22px; border-radius: 50%;
+    object-fit: cover; flex-shrink: 0;
+  }
+  .comment-pill-name {
+    font-size: 13px; font-weight: 700;
+    color: #6C47FF;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  /* Phase 1 — compact external link card */
+  .comment-link-card {
+    display: flex; align-items: center; gap: 10px;
+    margin-top: 7px;
+    border: 1px solid var(--border, #e5e7eb);
+    border-radius: 12px; overflow: hidden;
+    cursor: pointer; background: var(--bg2);
+    transition: opacity 0.15s;
+    max-width: 100%;
+  }
+  .comment-link-card:active { opacity: 0.8; }
+  .comment-link-img {
+    width: 56px; height: 56px;
+    object-fit: cover; flex-shrink: 0;
+    display: block;
+  }
+  .comment-link-body {
+    flex: 1; min-width: 0; padding: 8px 10px 8px 0;
+  }
+  .comment-link-domain {
+    font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--text3); margin-bottom: 2px;
+  }
+  .comment-link-title {
+    font-size: 13px; font-weight: 700;
+    color: var(--text); line-height: 1.3;
+    display: -webkit-box; -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden;
+  }
+
   /* ── Post URL Preview Card (X/Twitter style) ── */
   .post-og-wrap {
     margin: 6px 0 4px;
