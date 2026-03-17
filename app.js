@@ -2146,6 +2146,29 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
       </div>
     `;
   } else {
+    // Detect URL in post — hide raw URL, show preview card in place of image
+    const postUrl    = extractFirstUrl(text);
+    const textWithoutUrl = postUrl ? text.replace(postUrl, '').trim() : text;
+    const hasMedia   = !!(p.image || p.video);
+
+    // Build text display — strip URL from visible text if no other media
+    const cleanText  = (!hasMedia && postUrl) ? textWithoutUrl : text;
+    const cleanLimit = (hasMedia || (!hasMedia && postUrl)) ? 150 : 300;
+    const cleanTrunc = cleanText.length > cleanLimit;
+    const cleanDisplay = cleanTrunc
+      ? linkifyText(cleanText.slice(0, cleanLimit).trimEnd()) + `...<br><span class="reer">see more</span>`
+      : linkifyText(cleanText);
+
+    // URL preview placeholder — only when no real image/video
+    const urlPreviewHtml = (!hasMedia && postUrl)
+      ? `<div class="post-og-wrap" id="post-og-${p.id}">
+           <div class="post-og-shimmer">
+             <div class="post-og-shimmer-img"></div>
+             <div class="post-og-shimmer-body"><div></div><div></div></div>
+           </div>
+         </div>`
+      : '';
+
     mainContentHTML = `
       ${p.image ? `<div class="laptop1"><img src="${p.image}" class="laptop" alt="" loading="lazy"></div>` : ''}
 
@@ -2165,9 +2188,9 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
         </div>
       ` : ''}
 
-      <div class="tir">
-        <p class="tired">${displayText}</p>
-      </div>
+      ${urlPreviewHtml}
+
+      ${cleanDisplay || cleanText ? `<div class="tir"><p class="tired">${cleanDisplay}</p></div>` : ''}
     `;
   }
 
@@ -2234,6 +2257,22 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
   // ── Event listeners ──
   // Store post ID on element — read from DOM not closure to prevent stale ID bug
   el.dataset.postId = p.id;
+
+  // Fetch OG preview for URL posts (no image/video)
+  if (!p.image && !p.video && !isRepost) {
+    const postUrl = extractFirstUrl(p.content || '');
+    if (postUrl) {
+      const wrapId = `post-og-${p.id}`;
+      fetchOgPreview(postUrl).then(og => {
+        const wrap = document.getElementById(wrapId);
+        if (!wrap) return;
+        if (!og) { wrap.remove(); return; }
+        wrap.innerHTML = buildPostOgCard(og, postUrl);
+      }).catch(() => {
+        document.getElementById(wrapId)?.remove();
+      });
+    }
+  }
 
   el.addEventListener('click', e => {
     // ── Avatar/author FIRST — before anything else ──
@@ -5332,6 +5371,20 @@ async function fetchOgPreview(url) {
     ogCache[url] = null;
     return null;
   }
+}
+
+// ── Build OG preview card for FEED POSTS (X/Twitter style) ──
+function buildPostOgCard(og, url) {
+  const safeUrl = escHtml(url);
+  return `
+    <div class="post-og-card" onclick="event.stopPropagation();window.open('${safeUrl}','_blank')">
+      ${og.image ? `<div class="post-og-img-wrap"><img class="post-og-img" src="${escHtml(og.image)}" alt="" loading="lazy" onerror="this.closest('.post-og-img-wrap').remove()"></div>` : ''}
+      <div class="post-og-body">
+        <div class="post-og-domain">${escHtml(og.siteName || og.domain || '')}</div>
+        ${og.title ? `<div class="post-og-title">${escHtml(og.title.slice(0, 100))}</div>` : ''}
+        ${og.description ? `<div class="post-og-desc">${escHtml(og.description.slice(0, 140))}</div>` : ''}
+      </div>
+    </div>`;
 }
 
 // ── Build OG preview card HTML ──
