@@ -1784,6 +1784,7 @@
   .quote-card:active { background: var(--bg3); border-color: var(--accent); }
   /* Detail page only — add horizontal margin since dp-wrap has no padding */
   .dp-wrap .quote-card { margin-left: 10px; margin-right: 10px; }
+  .dp-wrap .post-og-wrap { margin-left: 10px; margin-right: 10px; }
   .quote-card-inner { padding: 11px 13px 12px; }
   .quote-card-header {
     display: flex; align-items: center; gap: 7px; margin-bottom: 7px;
