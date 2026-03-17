@@ -1952,11 +1952,11 @@ async function loadExploreFeed(list, PER_PAGE) {
       .sort((a, b) => b.score - a.score)
       .map(v => v.post);
 
-    // ── Skip already loaded posts ──
+    // ── Filter already-loaded BEFORE slicing — prevents duplicates reaching render ──
     ranked = ranked.filter(p => !loadedPostIds.has(p.id));
 
     // ── Apply pagination window ──
-    const page = ranked.slice(feedOffset, feedOffset + PER_PAGE);
+    const page = ranked.slice(0, PER_PAGE);
 
     if (feedOffset === 0) list.innerHTML = '';
 
@@ -1985,19 +1985,17 @@ function renderFeedPosts(list, posts, PER_PAGE) {
 
   if (feedOffset === 0) list.innerHTML = '';
 
+  let blocked = 0;
   for (const p of posts) {
-    // Remove any existing element with this post ID before adding — eliminates duplicates
-    const existing = list.querySelector(`[data-post-id="${p.id}"]`);
-    if (existing) {
-      console.warn('[FEED] removing duplicate post element:', p.id);
-      existing.remove();
-      loadedPostIds.delete(p.id);
+    if (loadedPostIds.has(p.id)) {
+      blocked++;
+      continue; // already rendered — skip
     }
-    if (loadedPostIds.has(p.id)) continue;
     loadedPostIds.add(p.id);
     const el = createFeedPost(p);
     if (el) { list.appendChild(el); observePost(el); }
   }
+  if (blocked > 0) console.warn('[renderFeedPosts] blocked', blocked, 'duplicates');
 
   feedOffset += posts.length;
   if (posts.length < PER_PAGE) feedExhausted = true;
@@ -2603,9 +2601,11 @@ function observePost(el) {
   if (el && el.dataset.postId) getViewObserver().observe(el);
 }
 
-// ── Debug: find duplicate post elements in DOM ──
+// ── Debug: find duplicate post elements within feed-list only ──
 function debugFindDuplicatePosts() {
-  const all = document.querySelectorAll('[data-post-id]');
+  const feedList = document.getElementById('feed-list');
+  if (!feedList) return;
+  const all = feedList.querySelectorAll('[data-post-id]');
   const seen = {};
   let dupes = 0;
   all.forEach(el => {
@@ -2613,17 +2613,15 @@ function debugFindDuplicatePosts() {
     if (!id) return;
     if (seen[id]) {
       dupes++;
-      console.error('[DUPLICATE POST]', id,
+      console.error('[DUPLICATE IN FEED]', id,
         'owner1:', seen[id].querySelector('.jerry')?.textContent,
-        'owner2:', el.querySelector('.jerry')?.textContent,
-        'page1:', seen[id].closest('[id]')?.id,
-        'page2:', el.closest('[id]')?.id
+        'owner2:', el.querySelector('.jerry')?.textContent
       );
     }
     seen[id] = el;
   });
-  if (dupes === 0) console.log('[NO DUPLICATES] DOM is clean');
-  else console.warn('[FOUND ' + dupes + ' DUPLICATE(S)]');
+  if (dupes === 0) console.log('[NO DUPLICATES IN FEED] Feed is clean');
+  else console.warn('[FOUND ' + dupes + ' DUPLICATE(S) IN FEED]');
 }
 
 function reObserveAllFeedPosts() {
