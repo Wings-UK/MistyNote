@@ -2161,7 +2161,7 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
 
     // URL preview placeholder — only when no real image/video
     const urlPreviewHtml = (!hasMedia && postUrl)
-      ? `<div class="post-og-wrap" id="post-og-${p.id}">
+      ? `<div class="post-og-wrap">
            <div class="post-og-shimmer">
              <div class="post-og-shimmer-img"></div>
              <div class="post-og-shimmer-body"><div></div><div></div></div>
@@ -2262,15 +2262,17 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
   if (!p.image && !p.video && !isRepost) {
     const postUrl = extractFirstUrl(p.content || '');
     if (postUrl) {
-      const wrapId = `post-og-${p.id}`;
-      fetchOgPreview(postUrl).then(og => {
-        const wrap = document.getElementById(wrapId);
-        if (!wrap) return;
-        if (!og) { wrap.remove(); return; }
-        wrap.innerHTML = buildPostOgCard(og, postUrl);
-      }).catch(() => {
-        document.getElementById(wrapId)?.remove();
-      });
+      // Use direct reference — not getElementById which can find wrong element in profile tabs
+      const wrap = el.querySelector('.post-og-wrap');
+      if (wrap) {
+        fetchOgPreview(postUrl).then(og => {
+          if (!wrap.isConnected) return; // element removed from DOM — skip
+          if (!og) { wrap.remove(); return; }
+          wrap.innerHTML = buildPostOgCard(og, postUrl);
+        }).catch(() => {
+          if (wrap.isConnected) wrap.remove();
+        });
+      }
     }
   }
 
@@ -3611,6 +3613,23 @@ async function openDetail(postId, scrollToComments = false) {
       mediaHtml = `<div class="dp-media"><img src="${p.image}" alt="" onclick="openImageFS('${p.image}')"></div>`;
     } else if (p.video) {
       mediaHtml = `<div class="dp-media"><div class="dp-video-wrap" onclick="openVideoFS('${p.video}')"><video preload="metadata"><source src="${p.video}#t=0.5" type="video/mp4"></video><div class="dp-play-overlay"><div class="dp-play-circle"><svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M5 3l14 9L5 21V3z"/></svg></div></div></div></div>`;
+    } else if (p.content) {
+      // URL preview — same as feed
+      const dpUrl = extractFirstUrl(p.content);
+      if (dpUrl) {
+        mediaHtml = `<div class="post-og-wrap" id="dp-og-${p.id}">
+          <div class="post-og-shimmer">
+            <div class="post-og-shimmer-img"></div>
+            <div class="post-og-shimmer-body"><div></div><div></div></div>
+          </div>
+        </div>`;
+        fetchOgPreview(dpUrl).then(og => {
+          const wrap = document.getElementById(`dp-og-${p.id}`);
+          if (!wrap) return;
+          if (!og) { wrap.remove(); return; }
+          wrap.innerHTML = buildPostOgCard(og, dpUrl);
+        }).catch(() => document.getElementById(`dp-og-${p.id}`)?.remove());
+      }
     }
 
     // ── Quoted card ──
@@ -3657,8 +3676,12 @@ async function openDetail(postId, scrollToComments = false) {
             : ''}
         </div>
 
-        <!-- TEXT -->
-        ${p.content ? `<p class="dp-text">${linkifyText(p.content)}</p>` : ''}
+        <!-- TEXT — strip bare URL if it's the whole post or has no media -->
+        ${p.content ? (() => {
+          const dpUrl = extractFirstUrl(p.content);
+          const dpClean = (!p.image && !p.video && dpUrl) ? p.content.replace(dpUrl, '').trim() : p.content;
+          return dpClean ? `<p class="dp-text">${linkifyText(dpClean)}</p>` : '';
+        })() : ''}
 
         <!-- MEDIA -->
         ${mediaHtml}
