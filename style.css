@@ -1414,7 +1414,11 @@
     display: block;
   }
   .comment-link-body {
-    flex: 1; min-width: 0; padding: 8px 10px 8px 0;
+    flex: 1; min-width: 0; padding: 8px 10px;
+  }
+  /* When image is present, remove left padding from body (image provides visual separation) */
+  .comment-link-img + .comment-link-body {
+    padding-left: 0;
   }
   .comment-link-domain {
     font-size: 10px; font-weight: 700;
@@ -1427,6 +1431,15 @@
     display: -webkit-box; -webkit-line-clamp: 2;
     -webkit-box-orient: vertical; overflow: hidden;
   }
+
+  /* ── @mention link ── */
+  .mention-link {
+    color: #6C47FF;
+    font-weight: 600;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mention-link:active { opacity: 0.7; }
 
   /* ── Post URL Preview Card (X/Twitter style) ── */
   .post-og-wrap {
