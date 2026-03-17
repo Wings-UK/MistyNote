@@ -1408,7 +1408,6 @@ function renderProfileGrid(posts, profile, containerId, isOwn) {
 // ══════════════════════════════════════════
 // ── SELF TAP — pulse instead of navigating ──────────────────
 function selfTap(el) {
-  console.log('[selfTap] called');
   if (!el) return;
   el.classList.remove('self-pulse');
   void el.offsetWidth; // force reflow to restart animation
@@ -1417,9 +1416,8 @@ function selfTap(el) {
 }
 
 async function showUserProfile(userId, tapEl) {
-  console.log('[showUserProfile] called with userId=' + userId);
-  if (!userId) { console.warn('[showUserProfile] no userId — returning'); return; }
-  if (userId === currentUser?.id) { console.log('[showUserProfile] own profile — selfTap'); selfTap(tapEl); return; }
+  if (!userId) return;
+  if (userId === currentUser?.id) { selfTap(tapEl); return; }
   injectProfileStyles();
 
   // Clear immediately — prevents ghost click landing on previous user's posts
@@ -2199,12 +2197,6 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
     const postId = el.dataset.postId;
 
     // Log EVERY click on ANY post
-    console.log('[POST CLICK]',
-      'postId=' + postId,
-      'username=' + (el.querySelector('.jerry')?.textContent || '?'),
-      'target=' + e.target.tagName + '.' + e.target.className.split(' ')[0]
-    );
-
     if (!postId) return;
 
     if (e.target.closest('.dots')) {
@@ -2236,8 +2228,6 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
       if (tired) { tired.innerHTML = escHtml(text); e.stopPropagation(); return; }
     }
     // Block navigation for any interactive element
-    console.log('[FEED CLICK] tag=' + e.target.tagName + ' class=' + e.target.className + ' postId=' + el.dataset.postId + ' closestAvatar=' + !!e.target.closest('.post-avatar-link'));
-    if (e.target.closest('.post-avatar-link'))  { console.log('[FEED CLICK] blocked by avatar check'); return; }
     if (e.target.closest('.post-author-link'))  return;
     if (e.target.closest('.post-link'))         return;
     if (e.target.closest('a'))                  return;
@@ -2248,8 +2238,20 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
       openDetail(e.target.closest('[data-original-id]')?.dataset.originalId || orig?.id);
       return;
     }
-    console.log('[FEED CLICK] opening detail for postId=' + postId);
-    console.log('[OPEN DETAIL] postId=' + postId + ' target=' + e.target.className + ' tagName=' + e.target.tagName);
+    // Log which post is being opened vs what's at that screen position
+    const rect = el.getBoundingClientRect();
+    const elementsAtPoint = document.elementsFromPoint(e.clientX, e.clientY);
+    const postersAtPoint = elementsAtPoint.filter(x => x.dataset?.postId).map(x => ({
+      postId: x.dataset.postId,
+      username: x.querySelector('.jerry')?.textContent
+    }));
+    console.log('[OPEN DETAIL]',
+      'firing postId=' + postId,
+      'username=' + (el.querySelector('.jerry')?.textContent || '?'),
+      'tapX=' + Math.round(e.clientX) + ' tapY=' + Math.round(e.clientY),
+      'elRect top=' + Math.round(rect.top) + ' bottom=' + Math.round(rect.bottom),
+      'postersAtPoint=', JSON.stringify(postersAtPoint)
+    );
     openDetail(postId);
   });
 
