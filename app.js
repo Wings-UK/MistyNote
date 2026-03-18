@@ -5434,17 +5434,7 @@ function openChat(convId, otherUser) {
     subscribeToChat(convId);
     markConvRead(convId);
 
-    // Check if other user has already read — mark ticks immediately
-    const { data: otherPart } = await supabase
-      .from('conversation_participants')
-      .select('last_read_at')
-      .eq('conversation_id', convId)
-      .neq('user_id', currentUser.id)
-      .maybeSingle();
-    if (otherPart?.last_read_at) {
-      document.querySelectorAll('#chat-messages .chat-msg-row.sent .chat-tick')
-        .forEach(el => el.classList.add('read'));
-    }
+    // Status updates handled by realtime subscription on messages table
   });
 }
 
@@ -5504,7 +5494,7 @@ async function loadChatMessages(convId) {
     .select(`id, type, content, media_url, media_duration,
              cash_amount, cash_currency, cash_note, cash_status,
              product_id, offer_amount, offer_status,
-             order_status, reply_to_id, created_at, sender_id,
+             order_status, reply_to_id, created_at, sender_id, status,
              sender:users!sender_id(id, username, avatar)`)
     .eq('conversation_id', convId)
     .is('deleted_at', null)
@@ -5589,7 +5579,7 @@ function buildMessageEl(msg, prevSenderId) {
         if (textOnly) {
           const textBubble = document.createElement('div');
           textBubble.className = 'chat-bubble';
-          textBubble.innerHTML = `${linkifyText(textOnly)}<span class="chat-bubble-meta">${timeStr}${isSent ? `<span class="chat-tick"><svg width="16" height="12" viewBox="0 0 28 16" fill="none"><path d="M1 8l4 4L14 3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 8l4 4L20 3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</span>`;
+          textBubble.innerHTML = `${linkifyText(textOnly)}<span class="chat-bubble-meta">${timeStr}${isSent ? `${buildTick(msg?.status || 'sent')}` : ''}</span>`;
           msgCol.appendChild(textBubble);
         }
       }
@@ -5607,7 +5597,7 @@ function buildMessageEl(msg, prevSenderId) {
           previewCard.remove();
           const fallback = document.createElement('div');
           fallback.className = 'chat-bubble';
-          fallback.innerHTML = `<a href="${escHtml(url)}" target="_blank" rel="noopener noreferrer" class="post-link" onclick="event.stopPropagation()">${escHtml(url)}</a><span class="chat-bubble-meta">${timeStr}${isSent ? `<span class="chat-tick"><svg width="16" height="12" viewBox="0 0 28 16" fill="none"><path d="M1 8l4 4L14 3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 8l4 4L20 3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</span>`;
+          fallback.innerHTML = `<a href="${escHtml(url)}" target="_blank" rel="noopener noreferrer" class="post-link" onclick="event.stopPropagation()">${escHtml(url)}</a><span class="chat-bubble-meta">${timeStr}${isSent ? `${buildTick(msg?.status || 'sent')}` : ''}</span>`;
           msgCol.appendChild(fallback);
           return;
         }
@@ -5623,7 +5613,7 @@ function buildMessageEl(msg, prevSenderId) {
       // Plain text bubble
       const bubble = document.createElement('div');
       bubble.className = 'chat-bubble';
-      bubble.innerHTML = `${linkifyText(content)}<span class="chat-bubble-meta">${timeStr}${isSent ? `<span class="chat-tick"><svg width="16" height="12" viewBox="0 0 28 16" fill="none"><path d="M1 8l4 4L14 3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 8l4 4L20 3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</span>`;
+      bubble.innerHTML = `${linkifyText(content)}<span class="chat-bubble-meta">${timeStr}${isSent ? `${buildTick(msg?.status || 'sent')}` : ''}</span>`;
       bubbleEl = bubble;
     }
   }
@@ -5720,7 +5710,7 @@ function buildOgCard(og, url, isSent, timeStr, isUrlOnly) {
     ? `<img class="chat-og-img" src="${escHtml(og.image)}" alt="" loading="lazy" onerror="this.remove()">`
     : '';
   const metaHtml = isUrlOnly && timeStr
-    ? `<div class="chat-og-meta">${timeStr}${isSent ? `<span class="chat-tick"><svg width="16" height="12" viewBox="0 0 28 16" fill="none"><path d="M1 8l4 4L14 3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 8l4 4L20 3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</div>`
+    ? `<div class="chat-og-meta">${timeStr}${isSent ? `${buildTick(msg?.status || 'sent')}` : ''}</div>`
     : '';
   return `
     <div class="chat-og-card ${isSent ? 'sent' : 'recv'}" onclick="window.open('${safeUrl}','_blank')">
@@ -5897,7 +5887,7 @@ function renderStaticDemoChat(msgsEl) {
         react.textContent = item.reaction;
         bubble.appendChild(react);
       } else {
-        bubble.innerHTML = `${escHtml(item.text)}<span class="chat-bubble-meta">${timeStr}${isSent ? `<span class="chat-tick"><svg width="16" height="12" viewBox="0 0 28 16" fill="none"><path d="M1 8l4 4L14 3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 8l4 4L20 3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</span>`;
+        bubble.innerHTML = `${escHtml(item.text)}<span class="chat-bubble-meta">${timeStr}${isSent ? `${buildTick(msg?.status || 'sent')}` : ''}</span>`;
       }
       row.appendChild(bubble);
       msgsEl.appendChild(row);
@@ -6023,6 +6013,63 @@ function renderStaticDemoChat(msgsEl) {
 }
 
 // ── Send a text message ──
+// ── Build tick SVG based on message status ──
+// sent = 1 grey tick, delivered = 2 grey ticks, seen = 2 purple ticks
+function buildTick(status) {
+  if (status === 'seen') {
+    // Double purple ticks
+    return '<span class="chat-tick seen"><svg width="18" height="10" viewBox="0 0 22 10" fill="none">' +
+      '<path d="M1 5l3.5 4L13 1" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '<path d="M6 5l3.5 4L18 1" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '</svg></span>';
+  } else if (status === 'delivered') {
+    // Double grey ticks
+    return '<span class="chat-tick delivered"><svg width="18" height="10" viewBox="0 0 22 10" fill="none">' +
+      '<path d="M1 5l3.5 4L13 1" stroke="rgba(255,255,255,0.6)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '<path d="M6 5l3.5 4L18 1" stroke="rgba(255,255,255,0.6)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '</svg></span>';
+  } else {
+    // Single grey tick (sent to server)
+    return '<span class="chat-tick sent-only"><svg width="12" height="10" viewBox="0 0 16 10" fill="none">' +
+      '<path d="M1 5l4 4L15 1" stroke="rgba(255,255,255,0.55)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '</svg></span>';
+  }
+}
+
+// ── Update tick on a specific message element ──
+function updateMsgTick(msgId, status) {
+  const row = document.querySelector(`.chat-msg-row[data-msg-id="${msgId}"]`);
+  if (!row) return;
+  const tick = row.querySelector('.chat-tick');
+  if (!tick) return;
+  tick.outerHTML = buildTick(status);
+}
+
+// ── Mark all messages in chat as seen (called when recipient opens chat) ──
+async function markMessagesSeen(convId) {
+  if (!currentUser) return;
+  // Update all unread messages NOT sent by me to seen — and my sent messages seen by other
+  await supabase
+    .from('messages')
+    .update({ status: 'seen' })
+    .eq('conversation_id', convId)
+    .neq('sender_id', currentUser.id)
+    .in('status', ['sent', 'delivered'])
+    .catch(() => {});
+}
+
+// ── Mark messages as delivered (recipient is online/app open) ──
+async function markMessagesDelivered(convId) {
+  if (!currentUser) return;
+  await supabase
+    .from('messages')
+    .update({ status: 'delivered' })
+    .eq('conversation_id', convId)
+    .neq('sender_id', currentUser.id)
+    .eq('status', 'sent')
+    .catch(() => {});
+}
+
 async function chatSend() {
   const field = document.getElementById('chat-input-field');
   const text  = field?.value?.trim();
@@ -6054,12 +6101,18 @@ async function chatSend() {
   updateInboxRow(activeChatId, text, tmpMsg.created_at);
 
   // Send to Supabase
-  const { error } = await supabase.from('messages').insert({
+  const { data: sentMsg, error } = await supabase.from('messages').insert({
     conversation_id: activeChatId,
     sender_id: currentUser.id,
     type: 'text',
     content: text,
-  });
+    status: 'sent',
+  }).select('id').single();
+
+  // Update the optimistic message tick to confirm delivery
+  if (sentMsg?.id && el) {
+    el.dataset.msgId = sentMsg.id;
+  }
 
   if (error) showToast('Message failed to send');
 
@@ -6072,6 +6125,8 @@ function subscribeToChat(convId) {
 
   msgRealtimeSub = supabase
     .channel('chat-' + convId)
+
+    // ── New message arrives ──
     .on('postgres_changes', {
       event: 'INSERT',
       schema: 'public',
@@ -6079,13 +6134,20 @@ function subscribeToChat(convId) {
       filter: `conversation_id=eq.${convId}`,
     }, payload => {
       const msg = payload.new;
-      if (msg.sender_id === currentUser?.id) return;
+
+      if (msg.sender_id === currentUser?.id) {
+        // My own message confirmed by server — update msgId on optimistic element
+        const tmpEl = document.querySelector(`.chat-msg-row[data-msg-id^="tmp-"]`);
+        if (tmpEl) tmpEl.dataset.msgId = msg.id;
+        return;
+      }
+
+      // Incoming message from other user
       supabase.from('users').select('id,username,avatar').eq('id', msg.sender_id).maybeSingle()
         .then(({ data: sender }) => {
           msg.sender = sender;
           const msgsEl = document.getElementById('chat-messages');
           if (!msgsEl) return;
-          // Get last sender from DOM for correct gap
           const lastRow = msgsEl.querySelector('.chat-msg-row:last-child');
           const lastSenderId = lastRow ? (lastRow.classList.contains('sent') ? currentUser?.id : activeChatUserId) : null;
           const el = buildMessageEl(msg, lastSenderId);
@@ -6094,23 +6156,31 @@ function subscribeToChat(convId) {
             msgsEl.scrollTop = msgsEl.scrollHeight;
           }
           markConvRead(convId);
-          // Update inbox last message preview in real-time
+          markMessagesSeen(convId);
           updateInboxRow(convId, msg.content || '', msg.created_at);
         });
     })
+
+    // ── Message status updated (sent → delivered → seen) ──
     .on('postgres_changes', {
       event: 'UPDATE',
       schema: 'public',
-      table: 'conversation_participants',
+      table: 'messages',
       filter: `conversation_id=eq.${convId}`,
     }, payload => {
-      // Other user read the chat — turn our sent ticks lavender
-      if (payload.new.user_id !== currentUser?.id) {
-        document.querySelectorAll('#chat-messages .chat-msg-row.sent .chat-tick')
-          .forEach(el => el.classList.add('read'));
+      const msg = payload.new;
+      // Only update ticks on MY sent messages
+      if (msg.sender_id === currentUser?.id && msg.status) {
+        updateMsgTick(msg.id, msg.status);
       }
     })
+
     .subscribe();
+
+  // Mark incoming messages as delivered immediately (I'm online and in this chat)
+  markMessagesDelivered(convId);
+  // Mark as seen (I'm looking at it)
+  markMessagesSeen(convId);
 }
 
 // ── Update inbox row with latest message (real-time) ──
@@ -6150,14 +6220,17 @@ function subscribeToInbox(convIds) {
       if (timeEl)  timeEl.textContent  = msgTimeSince(conv.updated_at);
       // Add unread badge if not currently in this chat
       if (activeChatId !== conv.id) {
-        let badge = row.querySelector('.msg-conv-unread-badge');
-        if (!badge) {
-          badge = document.createElement('div');
-          badge.className = 'msg-conv-unread-badge';
-          row.querySelector('.msg-conv-meta')?.appendChild(badge);
+        const previewRow = row.querySelector('.msg-conv-preview-row');
+        if (previewRow) {
+          let badge = previewRow.querySelector('.msg-conv-unread-badge');
+          if (!badge) {
+            badge = document.createElement('div');
+            badge.className = 'msg-conv-unread-badge';
+            previewRow.appendChild(badge);
+          }
+          const current = parseInt(badge.textContent) || 0;
+          badge.textContent = current + 1 > 9 ? '9+' : current + 1;
         }
-        const current = parseInt(badge.textContent) || 0;
-        badge.textContent = current + 1 > 9 ? '9+' : current + 1;
       }
       // Move to top
       const list = document.getElementById('msg-inbox-list');
@@ -6181,6 +6254,22 @@ async function markConvRead(convId) {
   if (badge) badge.remove();
   const preview = document.querySelector(`.msg-conv-row[data-conv-id="${convId}"] .msg-conv-preview`);
   if (preview) preview.classList.remove('unread');
+}
+
+// ── Show "Seen" below last sent message ──
+function showSeenIndicator() {
+  const msgsEl = document.getElementById('chat-messages');
+  if (!msgsEl) return;
+  // Remove any existing seen label
+  msgsEl.querySelector('.chat-seen-label')?.remove();
+  // Find last sent row
+  const sentRows = msgsEl.querySelectorAll('.chat-msg-row.sent');
+  const lastSent = sentRows[sentRows.length - 1];
+  if (!lastSent) return;
+  const seen = document.createElement('div');
+  seen.className = 'chat-seen-label';
+  seen.textContent = 'Seen';
+  lastSent.after(seen);
 }
 
 // ── Input helpers ──
