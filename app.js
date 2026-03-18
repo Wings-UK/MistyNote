@@ -5329,19 +5329,21 @@ async function loadMessages() {
   const partMap = {};
   (allParts || []).forEach(p => { partMap[p.conversation_id] = p.user; });
 
-  // Count unread messages
-  const { data: unreadCounts } = await supabase
+  // Count unread messages — only messages after my last_read_at
+  const { data: unreadMsgs } = await supabase
     .from('messages')
-    .select('conversation_id')
+    .select('conversation_id, created_at')
     .in('conversation_id', convIds)
     .neq('sender_id', currentUser.id)
     .is('deleted_at', null);
 
   const unreadMap = {};
-  (unreadCounts || []).forEach(m => {
+  (unreadMsgs || []).forEach(m => {
     const readAt = readMap[m.conversation_id];
-    // simplified — count all messages from others as potential unreads
-    unreadMap[m.conversation_id] = (unreadMap[m.conversation_id] || 0) + 1;
+    // Only count if message is newer than last_read_at (or never read)
+    if (!readAt || new Date(m.created_at) > new Date(readAt)) {
+      unreadMap[m.conversation_id] = (unreadMap[m.conversation_id] || 0) + 1;
+    }
   });
 
   list.innerHTML = '';
@@ -5357,6 +5359,7 @@ async function loadMessages() {
 
     const row = document.createElement('div');
     row.className = 'msg-conv-row';
+    row.dataset.convId = conv.id;
     row.innerHTML = `
       <div class="msg-conv-av-wrap">
         <img class="msg-conv-av" src="${otherUser.avatar||''}" onerror="this.style.background='var(--bg3)';this.removeAttribute('src')" alt="">
@@ -5421,6 +5424,18 @@ function openChat(convId, otherUser) {
     await loadChatMessages(convId);
     subscribeToChat(convId);
     markConvRead(convId);
+
+    // Check if other user has already read — mark ticks immediately
+    const { data: otherPart } = await supabase
+      .from('conversation_participants')
+      .select('last_read_at')
+      .eq('conversation_id', convId)
+      .neq('user_id', currentUser.id)
+      .maybeSingle();
+    if (otherPart?.last_read_at) {
+      document.querySelectorAll('#chat-messages .chat-msg-row.sent .chat-tick')
+        .forEach(el => el.classList.add('read'));
+    }
   });
 }
 
@@ -6047,10 +6062,7 @@ function subscribeToChat(convId) {
       filter: `conversation_id=eq.${convId}`,
     }, payload => {
       const msg = payload.new;
-      // Don't add if it's our own optimistic message
       if (msg.sender_id === currentUser?.id) return;
-
-      // Fetch sender details
       supabase.from('users').select('id,username,avatar').eq('id', msg.sender_id).maybeSingle()
         .then(({ data: sender }) => {
           msg.sender = sender;
@@ -6064,6 +6076,18 @@ function subscribeToChat(convId) {
           markConvRead(convId);
         });
     })
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'conversation_participants',
+      filter: `conversation_id=eq.${convId}`,
+    }, payload => {
+      // Other user read the chat — turn our sent ticks lavender
+      if (payload.new.user_id !== currentUser?.id) {
+        document.querySelectorAll('#chat-messages .chat-msg-row.sent .chat-tick')
+          .forEach(el => el.classList.add('read'));
+      }
+    })
     .subscribe();
 }
 
@@ -6076,6 +6100,12 @@ async function markConvRead(convId) {
     .eq('conversation_id', convId)
     .eq('user_id', currentUser.id)
     .catch(() => {});
+
+  // Update badge on inbox row immediately without full reload
+  const badge = document.querySelector(`.msg-conv-row[data-conv-id="${convId}"] .msg-conv-unread-badge`);
+  if (badge) badge.remove();
+  const preview = document.querySelector(`.msg-conv-row[data-conv-id="${convId}"] .msg-conv-preview`);
+  if (preview) preview.classList.remove('unread');
 }
 
 // ── Input helpers ──
