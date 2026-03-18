@@ -5423,6 +5423,12 @@ function openChat(convId, otherUser) {
   const msgsEl = document.getElementById('chat-messages');
   if (msgsEl) msgsEl.innerHTML = '<div class="chat-loading"><div class="chat-loading-dot"></div><div class="chat-loading-dot"></div><div class="chat-loading-dot"></div></div>';
 
+  // Clear badge immediately from inbox row
+  const inboxBadge = document.querySelector(`.msg-conv-row[data-conv-id="${convId}"] .msg-conv-unread-badge`);
+  if (inboxBadge) inboxBadge.remove();
+  const inboxPreview = document.querySelector(`.msg-conv-row[data-conv-id="${convId}"] .msg-conv-preview`);
+  if (inboxPreview) inboxPreview.classList.remove('unread');
+
   slideTo('chat', async () => {
     await loadChatMessages(convId);
     subscribeToChat(convId);
@@ -5583,7 +5589,7 @@ function buildMessageEl(msg, prevSenderId) {
         if (textOnly) {
           const textBubble = document.createElement('div');
           textBubble.className = 'chat-bubble';
-          textBubble.innerHTML = `${linkifyText(textOnly)}<span class="chat-bubble-meta">${timeStr}${isSent ? `<span class="chat-tick"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</span>`;
+          textBubble.innerHTML = `${linkifyText(textOnly)}<span class="chat-bubble-meta">${timeStr}${isSent ? `<span class="chat-tick"><svg width="16" height="12" viewBox="0 0 28 16" fill="none"><path d="M1 8l4 4L14 3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 8l4 4L20 3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</span>`;
           msgCol.appendChild(textBubble);
         }
       }
@@ -5601,7 +5607,7 @@ function buildMessageEl(msg, prevSenderId) {
           previewCard.remove();
           const fallback = document.createElement('div');
           fallback.className = 'chat-bubble';
-          fallback.innerHTML = `<a href="${escHtml(url)}" target="_blank" rel="noopener noreferrer" class="post-link" onclick="event.stopPropagation()">${escHtml(url)}</a><span class="chat-bubble-meta">${timeStr}${isSent ? `<span class="chat-tick"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</span>`;
+          fallback.innerHTML = `<a href="${escHtml(url)}" target="_blank" rel="noopener noreferrer" class="post-link" onclick="event.stopPropagation()">${escHtml(url)}</a><span class="chat-bubble-meta">${timeStr}${isSent ? `<span class="chat-tick"><svg width="16" height="12" viewBox="0 0 28 16" fill="none"><path d="M1 8l4 4L14 3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 8l4 4L20 3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</span>`;
           msgCol.appendChild(fallback);
           return;
         }
@@ -5617,7 +5623,7 @@ function buildMessageEl(msg, prevSenderId) {
       // Plain text bubble
       const bubble = document.createElement('div');
       bubble.className = 'chat-bubble';
-      bubble.innerHTML = `${linkifyText(content)}<span class="chat-bubble-meta">${timeStr}${isSent ? `<span class="chat-tick"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</span>`;
+      bubble.innerHTML = `${linkifyText(content)}<span class="chat-bubble-meta">${timeStr}${isSent ? `<span class="chat-tick"><svg width="16" height="12" viewBox="0 0 28 16" fill="none"><path d="M1 8l4 4L14 3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 8l4 4L20 3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</span>`;
       bubbleEl = bubble;
     }
   }
@@ -5714,7 +5720,7 @@ function buildOgCard(og, url, isSent, timeStr, isUrlOnly) {
     ? `<img class="chat-og-img" src="${escHtml(og.image)}" alt="" loading="lazy" onerror="this.remove()">`
     : '';
   const metaHtml = isUrlOnly && timeStr
-    ? `<div class="chat-og-meta">${timeStr}${isSent ? `<span class="chat-tick"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</div>`
+    ? `<div class="chat-og-meta">${timeStr}${isSent ? `<span class="chat-tick"><svg width="16" height="12" viewBox="0 0 28 16" fill="none"><path d="M1 8l4 4L14 3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 8l4 4L20 3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</div>`
     : '';
   return `
     <div class="chat-og-card ${isSent ? 'sent' : 'recv'}" onclick="window.open('${safeUrl}','_blank')">
@@ -5891,7 +5897,7 @@ function renderStaticDemoChat(msgsEl) {
         react.textContent = item.reaction;
         bubble.appendChild(react);
       } else {
-        bubble.innerHTML = `${escHtml(item.text)}<span class="chat-bubble-meta">${timeStr}${isSent ? `<span class="chat-tick"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</span>`;
+        bubble.innerHTML = `${escHtml(item.text)}<span class="chat-bubble-meta">${timeStr}${isSent ? `<span class="chat-tick"><svg width="16" height="12" viewBox="0 0 28 16" fill="none"><path d="M1 8l4 4L14 3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 8l4 4L20 3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</span>`;
       }
       row.appendChild(bubble);
       msgsEl.appendChild(row);
