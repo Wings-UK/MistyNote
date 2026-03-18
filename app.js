@@ -5448,6 +5448,9 @@ function closeChat() {
   activeChatId = null;
   activeChatUser = null;
 
+  // Force inbox to reload with fresh unread counts
+  msgInboxLoaded = false;
+
   const el = document.getElementById('page-chat');
   if (el) el.classList.remove('active');
   slideStack.pop();
