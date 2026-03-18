@@ -2322,6 +2322,11 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
       if (tired) { tired.innerHTML = escHtml(text); e.stopPropagation(); return; }
     }
     // Block navigation for any interactive element
+    if (e.target.closest('.mention-link')) {
+      e.stopPropagation();
+      handleMentionTap(e.target.closest('.mention-link').dataset.username);
+      return;
+    }
     if (e.target.closest('.post-author-link'))  return;
     if (e.target.closest('.post-link'))         return;
     if (e.target.closest('a'))                  return;
@@ -2364,7 +2369,7 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
   // Long-press for post menu
   let lpTimer;
   el.addEventListener('touchstart', e => {
-    if (e.target.closest('.heart-ai, .repost-btn, .comment-btn, .donate-btn, .save-btn, .dots, .post-avatar-link, .post-author-link, .post-link, input, textarea, button, a')) return;
+    if (e.target.closest('.heart-ai, .repost-btn, .comment-btn, .donate-btn, .save-btn, .dots, .post-avatar-link, .post-author-link, .post-link, .mention-link, input, textarea, button, a')) return;
     lpTimer = setTimeout(() => showPostMenu(p, el, null, true), 550);
   }, { passive: true });
   el.addEventListener('touchmove', () => clearTimeout(lpTimer), { passive: true });
@@ -5546,33 +5551,37 @@ function buildMessageEl(msg, prevSenderId) {
     const isUrlOnly = url && content.trim() === url.trim();
 
     if (url) {
-      // ── URL message ──
-      // Show shimmer placeholder immediately
-      const previewCard = document.createElement('div');
-      previewCard.className = `chat-og-outer ${isSent ? 'sent' : 'recv'}`;
-      previewCard.innerHTML = `<div class="chat-og-shimmer"><div class="chat-og-shimmer-img"></div><div class="chat-og-shimmer-lines"><div></div><div></div></div></div>`;
-      row.appendChild(previewCard);
+      // ── URL message — wrap in column so text + card stack correctly ──
+      const msgCol = document.createElement('div');
+      msgCol.className = `chat-url-col ${isSent ? 'sent' : 'recv'}`;
+      row.appendChild(msgCol);
 
-      // If there's text besides the URL, show a small text bubble above
+      // Text above if there's content besides the URL
       if (!isUrlOnly) {
         const textOnly = content.replace(url, '').trim();
         if (textOnly) {
           const textBubble = document.createElement('div');
           textBubble.className = 'chat-bubble';
           textBubble.innerHTML = `${linkifyText(textOnly)}<span class="chat-bubble-meta">${timeStr}${isSent ? `<span class="chat-tick"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</span>`;
-          row.insertBefore(textBubble, previewCard);
+          msgCol.appendChild(textBubble);
         }
       }
+
+      // Preview card below text
+      const previewCard = document.createElement('div');
+      previewCard.className = `chat-og-outer ${isSent ? 'sent' : 'recv'}`;
+      previewCard.innerHTML = `<div class="chat-og-shimmer"><div class="chat-og-shimmer-img"></div><div class="chat-og-shimmer-lines"><div></div><div></div></div></div>`;
+      msgCol.appendChild(previewCard);
 
       // Fetch OG async
       fetchOgPreview(url).then(og => {
         if (!og) {
           // Fallback — show plain URL bubble
-          previewCard.outerHTML = '';
+          previewCard.remove();
           const fallback = document.createElement('div');
           fallback.className = 'chat-bubble';
           fallback.innerHTML = `<a href="${escHtml(url)}" target="_blank" rel="noopener noreferrer" class="post-link" onclick="event.stopPropagation()">${escHtml(url)}</a><span class="chat-bubble-meta">${timeStr}${isSent ? `<span class="chat-tick"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 12l5 5L20 7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : ''}</span>`;
-          row.appendChild(fallback);
+          msgCol.appendChild(fallback);
           return;
         }
         // Build rich preview card
