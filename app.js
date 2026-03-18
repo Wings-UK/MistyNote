@@ -3075,7 +3075,9 @@ function openComposer() {
 
   requestAnimationFrame(() => {
     sheet.classList.add('open');
-    document.getElementById('composer-textarea').focus();
+    const composerTA = document.getElementById('composer-textarea');
+    composerTA.focus();
+    wireMentionInput(composerTA, null);
   });
 
   // Visual Viewport: shrink sheet height when keyboard appears
@@ -3748,6 +3750,8 @@ async function openDetail(postId, scrollToComments = false) {
 
     // Comment bar placeholder
     document.getElementById('comment-input').placeholder = `Reply to ${user.username}...`;
+    // Wire mention autocomplete to comment input
+    wireMentionInput(document.getElementById('comment-input'), postId);
 
     // Comment bar — wire like button
     const cbLike = document.getElementById('cb-like-btn');
@@ -3837,7 +3841,26 @@ function focusCommentBar() {
   document.getElementById('comment-input')?.focus();
 }
 
+// ══════════════════════════════════════════
+// MENTION AUTOCOMPLETE
+// ══════════════════════════════════════════
+
+let mentionDebounceTimer = null;
+let mentionActiveInput   = null; // which textarea is being typed in
+let mentionPostId        = null; // for comment priority
+
+function insertMentionInComposer() {
+  const input = document.getElementById('composer-textarea');
+  if (!input) return;
+  const pos = input.selectionStart;
+  input.value = input.value.slice(0, pos) + '@' + input.value.slice(pos);
+  input.setSelectionRange(pos + 1, pos + 1);
+  input.focus();
+  input.dispatchEvent(new Event('input'));
+}
+
 function insertMention() {
+  // Called by @ button — insert @ and trigger tray
   const input = document.getElementById('comment-input');
   if (!input) return;
   const pos = input.selectionStart;
@@ -3845,6 +3868,171 @@ function insertMention() {
   input.setSelectionRange(pos + 1, pos + 1);
   input.focus();
   input.dispatchEvent(new Event('input'));
+}
+
+// Wire mention autocomplete to a textarea
+function wireMentionInput(inputEl, postId = null) {
+  if (!inputEl || inputEl._mentionWired) return;
+  inputEl._mentionWired = true;
+
+  inputEl.addEventListener('input', () => {
+    mentionActiveInput = inputEl;
+    mentionPostId = postId;
+    clearTimeout(mentionDebounceTimer);
+    const trigger = getMentionTrigger(inputEl);
+    if (!trigger || trigger.query.length < 1) {
+      hideMentionTray();
+      return;
+    }
+    mentionDebounceTimer = setTimeout(() => fetchMentionSuggestions(trigger.query, inputEl), 180);
+  });
+
+  inputEl.addEventListener('keydown', e => {
+    if (e.key === 'Escape') hideMentionTray();
+  });
+
+  inputEl.addEventListener('blur', () => {
+    // Delay so tap on tray item registers first
+    setTimeout(hideMentionTray, 200);
+  });
+}
+
+// Get current @query from cursor position
+function getMentionTrigger(input) {
+  const val = input.value;
+  const pos = input.selectionStart;
+  const before = val.slice(0, pos);
+  const match = before.match(/@([a-zA-Z0-9_]*)$/);
+  if (!match) return null;
+  return { query: match[1], start: pos - match[0].length };
+}
+
+// Fetch users matching query with priority order
+async function fetchMentionSuggestions(query, inputEl) {
+  if (!query && query !== '') return;
+
+  const tray = document.getElementById('mention-tray');
+  const list = document.getElementById('mention-tray-list');
+  if (!tray || !list) return;
+
+  // Show tray with loading state
+  list.innerHTML = '<div class="mention-loading">Searching…</div>';
+  positionMentionTray(inputEl);
+  tray.classList.remove('hidden');
+
+  try {
+    const results = [];
+    const seen = new Set();
+
+    const add = (users) => {
+      (users || []).forEach(u => {
+        if (!seen.has(u.id)) { seen.add(u.id); results.push(u); }
+      });
+    };
+
+    // Priority 1 — commenters on this post (comment context only)
+    if (mentionPostId && query.length >= 1) {
+      const { data: commenters } = await supabase
+        .from('comments')
+        .select('user:users(id,username,avatar,followers)')
+        .eq('post_id', mentionPostId)
+        .limit(30);
+      const commentUsers = (commenters || [])
+        .map(c => c.user).filter(Boolean)
+        .filter(u => u.username?.toLowerCase().startsWith(query.toLowerCase()));
+      add(commentUsers);
+    }
+
+    // Priority 2 — people I follow
+    if (currentUser && query.length >= 1) {
+      const { data: following } = await supabase
+        .from('follows')
+        .select('user:users!following_id(id,username,avatar,followers)')
+        .eq('follower_id', currentUser.id)
+        .limit(50);
+      const followUsers = (following || [])
+        .map(f => f.user).filter(Boolean)
+        .filter(u => u.username?.toLowerCase().startsWith(query.toLowerCase()));
+      add(followUsers);
+    }
+
+    // Priority 3 — platform search (only if 2+ chars)
+    if (query.length >= 2 && results.length < 6) {
+      const { data: platformUsers } = await supabase
+        .from('users')
+        .select('id,username,avatar,followers')
+        .ilike('username', query + '%')
+        .order('followers', { ascending: false })
+        .limit(6);
+      add(platformUsers || []);
+    }
+
+    const top = results.slice(0, 6);
+
+    if (!top.length) {
+      list.innerHTML = '<div class="mention-empty">No users found</div>';
+      return;
+    }
+
+    list.innerHTML = '';
+    top.forEach(user => {
+      const item = document.createElement('div');
+      item.className = 'mention-item';
+      item.innerHTML = `
+        <img class="mention-av" src="${escHtml(user.avatar||'')}" onerror="this.style.background='var(--bg3)';this.removeAttribute('src')" alt="">
+        <div class="mention-info">
+          <span class="mention-username">@${escHtml(user.username)}</span>
+          <span class="mention-followers">${fmtNum(user.followers||0)} followers</span>
+        </div>`;
+      item.onmousedown = item.ontouchstart = (e) => {
+        e.preventDefault();
+        completeMention(user.username, inputEl);
+      };
+      list.appendChild(item);
+    });
+
+    positionMentionTray(inputEl);
+
+  } catch(err) {
+    list.innerHTML = '<div class="mention-empty">Could not load</div>';
+  }
+}
+
+function positionMentionTray(inputEl) {
+  const tray = document.getElementById('mention-tray');
+  if (!tray || !inputEl) return;
+  const rect = inputEl.getBoundingClientRect();
+  // Position just above the input
+  tray.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
+  tray.style.left   = '0';
+  tray.style.right  = '0';
+}
+
+function completeMention(username, inputEl) {
+  if (!inputEl) return;
+  const trigger = getMentionTrigger(inputEl);
+  if (!trigger) return;
+  const before = inputEl.value.slice(0, trigger.start);
+  const after  = inputEl.value.slice(inputEl.selectionStart);
+  const insert = '@' + username + ' ';
+  inputEl.value = before + insert + after;
+  const newPos = before.length + insert.length;
+  inputEl.setSelectionRange(newPos, newPos);
+  inputEl.focus();
+  inputEl.dispatchEvent(new Event('input'));
+  hideMentionTray();
+}
+
+function hideMentionTray() {
+  const tray = document.getElementById('mention-tray');
+  if (tray) tray.classList.add('hidden');
+  mentionActiveInput = null;
+}
+
+// Wire mention to composer textarea
+function wireMentionToComposer() {
+  const textarea = document.getElementById('composer-textarea');
+  if (textarea) wireMentionInput(textarea, null);
 }
 
 function triggerCommentImage() {
