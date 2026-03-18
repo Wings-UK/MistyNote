@@ -1243,8 +1243,11 @@
   .chat-msg-row.recv  .chat-bubble-meta { color: rgba(0,0,0,0.35); }
   [data-theme="dark"] .chat-msg-row.recv .chat-bubble-meta { color: var(--text3); }
   .chat-bubble::after { content: ''; display: table; clear: both; }
-  .chat-tick { display: flex; }
-  .chat-tick.read svg path { stroke: #c4b5fd; }
+  /* ── Message status ticks ── */
+  .chat-tick { display: inline-flex; align-items: center; margin-left: 2px; }
+  .chat-tick.sent-only  { opacity: 0.55; }  /* 1 grey tick — sent to server */
+  .chat-tick.delivered  { opacity: 0.7;  }  /* 2 grey ticks — recipient online */
+  .chat-tick.seen svg path { stroke: #a78bfa !important; } /* 2 purple ticks — opened */
 
   /* Bubble reaction */
   .chat-bubble-reaction {
