@@ -6113,9 +6113,11 @@ function subscribeToChat(convId) {
       event: 'UPDATE',
       schema: 'public',
       table: 'conversation_participants',
-      filter: `conversation_id=eq.${convId}`,
     }, payload => {
-      if (payload.new.user_id !== currentUser?.id) {
+      // Check it's this conversation and NOT the current user
+      if (payload.new.conversation_id === convId &&
+          payload.new.user_id !== currentUser?.id &&
+          payload.new.last_read_at) {
         showSeenIndicator();
       }
     })
@@ -6182,34 +6184,25 @@ function subscribeToInbox(convIds) {
 // ── Mark conversation as read ──
 async function markConvRead(convId) {
   if (!currentUser) return;
-  await supabase
+  const now = new Date().toISOString();
+  
+  // Update DB — no catch so we know if it fails
+  const { error } = await supabase
     .from('conversation_participants')
-    .update({ last_read_at: new Date().toISOString() })
+    .update({ last_read_at: now })
     .eq('conversation_id', convId)
-    .eq('user_id', currentUser.id)
-    .catch(() => {});
+    .eq('user_id', currentUser.id);
 
-  // Update badge on inbox row immediately without full reload
+  if (error) {
+    console.warn('markConvRead failed:', error.message);
+    return;
+  }
+
+  // Update badge on inbox row immediately
   const badge = document.querySelector(`.msg-conv-row[data-conv-id="${convId}"] .msg-conv-unread-badge`);
   if (badge) badge.remove();
   const preview = document.querySelector(`.msg-conv-row[data-conv-id="${convId}"] .msg-conv-preview`);
   if (preview) preview.classList.remove('unread');
-}
-
-// ── Show "Seen" below last sent message ──
-function showSeenIndicator() {
-  const msgsEl = document.getElementById('chat-messages');
-  if (!msgsEl) return;
-  // Remove any existing seen label
-  msgsEl.querySelector('.chat-seen-label')?.remove();
-  // Find last sent row
-  const sentRows = msgsEl.querySelectorAll('.chat-msg-row.sent');
-  const lastSent = sentRows[sentRows.length - 1];
-  if (!lastSent) return;
-  const seen = document.createElement('div');
-  seen.className = 'chat-seen-label';
-  seen.textContent = 'Seen';
-  lastSent.after(seen);
 }
 
 // ── Input helpers ──
