@@ -1432,14 +1432,59 @@
     -webkit-box-orient: vertical; overflow: hidden;
   }
 
+  /* ══════════════════════════════════════════
+     MENTION AUTOCOMPLETE TRAY
+  ══════════════════════════════════════════ */
+  .mention-tray {
+    position: fixed;
+    left: 0; right: 0;
+    z-index: 2000;
+    padding: 0 10px 6px;
+    pointer-events: auto;
+  }
+  .mention-tray.hidden { display: none; }
+  .mention-tray-list {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
+    max-height: 240px;
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+  .mention-tray-list::-webkit-scrollbar { display: none; }
+  .mention-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; cursor: pointer;
+    border-bottom: 1px solid var(--border2);
+    transition: background 0.12s;
+  }
+  .mention-item:last-child { border-bottom: none; }
+  .mention-item:active { background: var(--accent-soft); }
+  .mention-av {
+    width: 36px; height: 36px; border-radius: 50%;
+    object-fit: cover; flex-shrink: 0; background: var(--bg3);
+  }
+  .mention-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .mention-username { font-size: 14px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mention-followers { font-size: 11px; color: var(--text3); }
+  .mention-loading, .mention-empty { padding: 14px 16px; font-size: 13px; color: var(--text3); text-align: center; }
+
   /* ── @mention link ── */
   .mention-link {
     color: #6C47FF;
-    font-weight: 600;
+    font-weight: 700;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
   .mention-link:active { opacity: 0.7; }
+  /* Sent purple bubble — white underlined so @mention stands out */
+  .chat-msg-row.sent .mention-link {
+    color: rgba(255,255,255,0.95);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
 
   /* ── Post URL Preview Card (X/Twitter style) ── */
   .post-og-wrap {
