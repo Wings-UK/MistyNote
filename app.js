@@ -3077,6 +3077,7 @@ function openComposer() {
     sheet.classList.add('open');
     const composerTA = document.getElementById('composer-textarea');
     composerTA.focus();
+    composerTA._mentionWired = false; // reset so it re-wires fresh
     wireMentionInput(composerTA, null);
   });
 
