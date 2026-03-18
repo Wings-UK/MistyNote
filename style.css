@@ -1258,7 +1258,16 @@
   .chat-bubble.img-bubble { padding: 4px; background: transparent !important; border: none !important; box-shadow: none !important; }
   .chat-bubble-img { width: 200px; height: 180px; border-radius: 16px; object-fit: cover; display: block; }
 
-    /* ── CASH BUBBLE — from approved preview ── */
+    /* ── URL message column wrapper ── */
+  .chat-url-col {
+    display: flex; flex-direction: column; gap: 4px;
+    max-width: 260px;
+  }
+  .chat-url-col.sent { align-items: flex-end; margin-left: auto; }
+  .chat-url-col.recv { align-items: flex-start; margin-right: auto; }
+  .chat-url-col .chat-og-outer { width: 100%; margin: 0; }
+
+  /* ── CASH BUBBLE — from approved preview ── */
   .chat-cash-bubble {
     max-width: 240px;
     background: linear-gradient(135deg, #1a1a0e 0%, #2a2400 100%);
@@ -1599,14 +1608,14 @@
   .chat-og-body { padding: 11px 13px 12px; }
 
   .chat-og-domain {
-    font-size: 10px; font-weight: 800; letter-spacing: 1px;
-    text-transform: uppercase; margin-bottom: 5px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.6px;
+    text-transform: uppercase; margin-bottom: 3px;
   }
   .chat-og-card.sent .chat-og-domain { color: rgba(255,255,255,0.55); }
   .chat-og-card.recv .chat-og-domain { color: var(--text3); }
 
   .chat-og-title {
-    font-size: 14px; font-weight: 700; line-height: 1.35; margin-bottom: 4px;
+    font-size: 16px; font-weight: 700; line-height: 1.35; margin-bottom: 3px;
     display: -webkit-box; -webkit-line-clamp: 2;
     -webkit-box-orient: vertical; overflow: hidden;
   }
@@ -1615,7 +1624,7 @@
   [data-theme="dark"] .chat-og-card.recv .chat-og-title { color: var(--text); }
 
   .chat-og-desc {
-    font-size: 12px; line-height: 1.45; margin-bottom: 6px;
+    font-size: 15px; line-height: 1.4; margin-bottom: 6px;
     display: -webkit-box; -webkit-line-clamp: 2;
     -webkit-box-orient: vertical; overflow: hidden;
   }
