@@ -5349,6 +5349,9 @@ async function loadMessages() {
   list.innerHTML = '';
   if (empty) empty.style.display = 'none';
 
+  // Subscribe to real-time inbox updates
+  subscribeToInbox(convIds);
+
   convs.forEach(conv => {
     const otherUser = partMap[conv.id];
     if (!otherUser) return;
@@ -6022,7 +6025,7 @@ async function chatSend() {
   field.value = '';
   field.style.height = 'auto';
 
-  // Optimistic UI — append immediately
+  // Optimistic UI — append immediately with correct sender gap
   const tmpMsg = {
     id: 'tmp-' + Date.now(),
     type: 'text',
@@ -6032,11 +6035,17 @@ async function chatSend() {
     sender: currentProfile,
   };
   const msgsEl = document.getElementById('chat-messages');
-  const el = buildMessageEl(tmpMsg, null);
+  // Get last sender from DOM for correct gap
+  const lastRow = msgsEl?.querySelector('.chat-msg-row:last-child');
+  const lastSenderId = lastRow ? (lastRow.classList.contains('sent') ? currentUser.id : activeChatUserId) : null;
+  const el = buildMessageEl(tmpMsg, lastSenderId);
   if (el && msgsEl) {
     msgsEl.appendChild(el);
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
+
+  // Update inbox preview immediately
+  updateInboxRow(activeChatId, text, tmpMsg.created_at);
 
   // Send to Supabase
   const { error } = await supabase.from('messages').insert({
@@ -6048,7 +6057,6 @@ async function chatSend() {
 
   if (error) showToast('Message failed to send');
 
-  // Update last_read
   markConvRead(activeChatId);
 }
 
@@ -6071,12 +6079,17 @@ function subscribeToChat(convId) {
           msg.sender = sender;
           const msgsEl = document.getElementById('chat-messages');
           if (!msgsEl) return;
-          const el = buildMessageEl(msg, null);
+          // Get last sender from DOM for correct gap
+          const lastRow = msgsEl.querySelector('.chat-msg-row:last-child');
+          const lastSenderId = lastRow ? (lastRow.classList.contains('sent') ? currentUser?.id : activeChatUserId) : null;
+          const el = buildMessageEl(msg, lastSenderId);
           if (el) {
             msgsEl.appendChild(el);
             msgsEl.scrollTop = msgsEl.scrollHeight;
           }
           markConvRead(convId);
+          // Update inbox last message preview in real-time
+          updateInboxRow(convId, msg.content || '', msg.created_at);
         });
     })
     .on('postgres_changes', {
@@ -6090,6 +6103,59 @@ function subscribeToChat(convId) {
         document.querySelectorAll('#chat-messages .chat-msg-row.sent .chat-tick')
           .forEach(el => el.classList.add('read'));
       }
+    })
+    .subscribe();
+}
+
+// ── Update inbox row with latest message (real-time) ──
+function updateInboxRow(convId, text, time) {
+  const row = document.querySelector(`.msg-conv-row[data-conv-id="${convId}"]`);
+  if (!row) return;
+  const preview = row.querySelector('.msg-conv-preview');
+  const timeEl  = row.querySelector('.msg-conv-time');
+  if (preview) preview.textContent = text.slice(0, 60) || 'New message';
+  if (timeEl)  timeEl.textContent  = msgTimeSince(time);
+  // Move row to top of inbox
+  const list = document.getElementById('msg-inbox-list');
+  if (list && list.firstChild !== row) list.prepend(row);
+}
+
+// ── Subscribe to inbox updates (new messages in any conversation) ──
+let inboxRealtimeSub = null;
+function subscribeToInbox(convIds) {
+  if (inboxRealtimeSub) supabase.removeChannel(inboxRealtimeSub);
+  if (!convIds?.length) return;
+
+  inboxRealtimeSub = supabase
+    .channel('inbox-updates')
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'conversations',
+    }, payload => {
+      const conv = payload.new;
+      if (!convIds.includes(conv.id)) return;
+      // Update preview and unread badge if message is from other user
+      const row = document.querySelector(`.msg-conv-row[data-conv-id="${conv.id}"]`);
+      if (!row) { msgInboxLoaded = false; return; } // row not in DOM, force reload next open
+      const preview = row.querySelector('.msg-conv-preview');
+      const timeEl  = row.querySelector('.msg-conv-time');
+      if (preview) preview.textContent = (conv.last_message || '').slice(0, 60);
+      if (timeEl)  timeEl.textContent  = msgTimeSince(conv.updated_at);
+      // Add unread badge if not currently in this chat
+      if (activeChatId !== conv.id) {
+        let badge = row.querySelector('.msg-conv-unread-badge');
+        if (!badge) {
+          badge = document.createElement('div');
+          badge.className = 'msg-conv-unread-badge';
+          row.querySelector('.msg-conv-meta')?.appendChild(badge);
+        }
+        const current = parseInt(badge.textContent) || 0;
+        badge.textContent = current + 1 > 9 ? '9+' : current + 1;
+      }
+      // Move to top
+      const list = document.getElementById('msg-inbox-list');
+      if (list && list.firstChild !== row) list.prepend(row);
     })
     .subscribe();
 }
