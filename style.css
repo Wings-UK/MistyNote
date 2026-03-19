@@ -1852,18 +1852,19 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     margin-top: 2px;
   }
-  .ob-follow-btn {
+  .ob-row-follow-btn {
     padding: 7px 18px; border-radius: 999px;
     font-size: 14px; font-weight: 700; font-family: var(--font);
     background: var(--accent); color: #fff;
     border: 2px solid var(--accent); flex-shrink: 0;
     transition: transform 0.15s, background 0.15s;
+    cursor: pointer; pointer-events: auto;
   }
-  .ob-follow-btn.following {
+  .ob-row-follow-btn.following {
     background: transparent; color: var(--accent);
     border: 2px solid var(--accent);
   }
-  .ob-follow-btn:active { transform: scale(0.95); }
+  .ob-row-follow-btn:active { transform: scale(0.95); }
 
   .ob-follow-footer {
     display: flex; align-items: center; justify-content: space-between;
