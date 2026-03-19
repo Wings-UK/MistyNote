@@ -618,6 +618,7 @@ function obGoToStep(step) {
     setTimeout(() => next.classList.remove('slide-in'), 380);
     obCurrentStep = step;
     obUpdateProgress();
+    if (step === 3) obRenderInterests();
     if (step === 4) obLoadSuggestedUsers();
     if (step === 5) obSetupCelebration();
   }, current ? 200 : 0);
@@ -661,7 +662,15 @@ function obHandleAvatar(input) {
 
 function obRenderInterests() {
   const grid = document.getElementById('ob-interests-grid');
-  if (!grid || grid.children.length) return;
+  if (!grid) return;
+  // Always clear and re-render to ensure click listeners are fresh
+  grid.innerHTML = '';
+  obSelectedInterests.clear();
+  // Reset button and hint
+  const btn = document.getElementById('ob-interests-btn');
+  const hint = document.getElementById('ob-interests-hint');
+  if (btn) btn.disabled = true;
+  if (hint) hint.textContent = 'Select at least 3 to continue';
   OB_INTERESTS.forEach(interest => {
     const card = document.createElement('div');
     card.className = 'ob-interest-card';
