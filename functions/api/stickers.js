@@ -11,7 +11,7 @@ export async function onRequest(context) {
   }
 
   const { searchParams } = new URL(context.request.url);
-  const pack = searchParams.get('pack') || 'Milk_Mocha_by_cocopry';
+  const pack = searchParams.get('pack') || 'milk_mocha_daily_emoji_by_cocopry';
   const token = context.env.TELEGRAM_BOT_TOKEN;
 
   if (!token) {
