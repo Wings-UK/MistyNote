@@ -1641,6 +1641,7 @@
     overflow-y: auto; overflow-x: hidden;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
   }
   .ob-step::-webkit-scrollbar { display: none; }
   .ob-step.active { display: flex; }
@@ -1836,6 +1837,7 @@
     background: var(--bg2);
     border: 1px solid var(--border);
     border-radius: 16px; padding: 12px 14px;
+    pointer-events: auto;
   }
   .ob-follow-av {
     width: 46px; height: 46px; border-radius: 50%;
@@ -1858,7 +1860,8 @@
     background: var(--accent); color: #fff;
     border: 2px solid var(--accent); flex-shrink: 0;
     transition: transform 0.15s, background 0.15s;
-    cursor: pointer; pointer-events: auto;
+    cursor: pointer; pointer-events: auto !important;
+    position: relative; z-index: 10;
   }
   .ob-row-follow-btn.following {
     background: transparent; color: var(--accent);
