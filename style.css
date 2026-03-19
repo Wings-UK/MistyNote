@@ -1751,6 +1751,14 @@
   .chat-og-shimmer-lines div:last-child  { width: 85%; }
   @keyframes ogShimmer { to { background-position: -200% 0; } }
 
+  /* ── Sticker bubble in chat ── */
+  .chat-sticker-bubble { background: transparent; padding: 4px; }
+  .chat-sticker-img {
+    width: 100px; height: 100px;
+    object-fit: contain; display: block;
+    border-radius: 8px;
+  }
+
   /* ── ORDER UPDATE — from approved preview ── */
   .chat-order-bubble {
     background: var(--bg3); border: 1px solid var(--border);
