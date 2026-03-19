@@ -3310,21 +3310,17 @@ function renderStickerTile(grid, sticker) {
   const tile = document.createElement('div');
   tile.className = 'sticker-tile';
 
-  if (sticker.is_animated && sticker.file_url) {
-    // Animated TGS sticker via lottie-player
-    const player = document.createElement('lottie-player');
-    player.setAttribute('src', sticker.file_url);
-    player.setAttribute('background', 'transparent');
-    player.setAttribute('speed', '1');
-    player.setAttribute('style', 'width:64px;height:64px');
-    player.setAttribute('hover', '');
-    player.setAttribute('loop', '');
-    tile.appendChild(player);
-  } else if (sticker.file_url) {
-    tile.innerHTML = `<img src="${sticker.file_url}" style="width:64px;height:64px;object-fit:contain" loading="lazy">`;
+  // Use thumbnail (static WebP) for display — TGS animated format needs special handling
+  const displayUrl = sticker.thumb_url || sticker.file_url;
+  if (displayUrl) {
+    tile.innerHTML = `<img src="${escHtml(displayUrl)}" style="width:64px;height:64px;object-fit:contain" loading="lazy" onerror="this.parentElement.style.display='none'">`;
   }
 
-  tile.onclick = () => insertEmojiOrSticker(sticker.file_id, 'sticker', sticker);
+  // Store the full sticker data on the tile
+  tile.dataset.fileUrl = sticker.file_url || '';
+  tile.dataset.thumbUrl = sticker.thumb_url || '';
+  tile.dataset.fileId = sticker.file_id;
+  tile.onclick = () => insertEmojiOrSticker(sticker.file_url || sticker.thumb_url, 'sticker', sticker);
   grid.appendChild(tile);
 }
 
@@ -5717,6 +5713,11 @@ function buildMessageEl(msg, prevSenderId) {
     bubbleEl = buildOfferBubble(msg, isSent, timeStr);
   } else if (msg.type === 'order_update') {
     bubbleEl = buildOrderBubble(msg, timeStr);
+  } else if (msg.type === 'sticker') {
+    const div = document.createElement('div');
+    div.className = 'chat-sticker-bubble';
+    div.innerHTML = msg.content ? `<img src="${escHtml(msg.content)}" class="chat-sticker-img" alt="" loading="lazy">` : '';
+    bubbleEl = div;
   } else {
     const content  = msg.content || '';
     const url      = extractFirstUrl(content);
@@ -6374,26 +6375,28 @@ function chatInputKeydown(e) {
 
 // ── Quick action stubs (to be built out) ──
 // ── Send sticker in DM ──
-async function chatSendSticker(fileId) {
+async function chatSendSticker(fileUrl) {
   if (!activeChatId || !currentUser) return;
   const msgsEl = document.getElementById('chat-messages');
 
-  // Optimistic — show sticker immediately
+  // Optimistic — show sticker image immediately
   const tmpMsg = {
     id: 'tmp-' + Date.now(),
     type: 'sticker',
-    content: fileId,
+    content: fileUrl,  // store URL not file_id
     sender_id: currentUser.id,
     created_at: new Date().toISOString(),
   };
-  const el = buildMessageEl(tmpMsg, null);
+  const lastRow = msgsEl?.querySelector('.chat-msg-row:last-child');
+  const lastSenderId = lastRow ? (lastRow.classList.contains('sent') ? currentUser.id : activeChatUserId) : null;
+  const el = buildMessageEl(tmpMsg, lastSenderId);
   if (el && msgsEl) { msgsEl.appendChild(el); msgsEl.scrollTop = msgsEl.scrollHeight; }
 
   await supabase.from('messages').insert({
     conversation_id: activeChatId,
     sender_id: currentUser.id,
     type: 'sticker',
-    content: fileId,
+    content: fileUrl,
   }).catch(() => {});
 
   markConvRead(activeChatId);
