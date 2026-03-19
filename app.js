@@ -4648,28 +4648,33 @@ async function discLoadForYou() {
 
   const { data: posts } = await supabase
     .from('posts')
-    .select('id,content,image,like_count,user_id,user:users(id,username,avatar)')
-    .not('image','is',null)
+    .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
+             user:users(id,username,avatar),
+             reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar)),
+             comments(count)`)
     .order('like_count', { ascending: false })
-    .limit(24);
+    .limit(20);
 
   grid.innerHTML = '';
-  (posts || []).forEach(p => {
-    const tile = document.createElement('div');
-    tile.className = 'disc-foryou-tile fade-in';
-    tile.innerHTML = `
-      <img src="${p.image}" alt="" loading="lazy">
-      <div class="disc-foryou-tile-overlay">
-        <img class="disc-foryou-tile-av" src="${p.user?.avatar||''}" onerror="this.style.display='none'" alt="">
-        <span class="disc-foryou-tile-name">${escHtml(p.user?.username||'')}</span>
-      </div>`;
-    tile.addEventListener('click', () => openDetail(p.id));
-    grid.appendChild(tile);
-  });
 
   if (!posts?.length) {
     grid.innerHTML = '<p class="disc-no-results"><strong>Nothing yet</strong>Posts will appear here as people share</p>';
+    return;
   }
+
+  (posts || []).forEach(p => {
+    const el = createFeedPost(p, false);
+    if (el) {
+      el.classList.add('fade-in');
+      grid.appendChild(el);
+      observePost(el);
+    }
+  });
+
+  const ids = posts.map(p => p.id);
+  checkLikedPosts(ids);
+  checkRepostedPosts(ids);
+  checkSavedPosts(ids);
 }
 
 // ── Topic tap ──
@@ -4773,7 +4778,10 @@ function discLoadingHTML() {
 async function discFetchPosts(q, pane) {
   const { data } = await supabase
     .from('posts')
-    .select('id,content,image,like_count,user_id,user:users(id,username,avatar)')
+    .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
+             user:users(id,username,avatar),
+             reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar)),
+             comments(count)`)
     .ilike('content', `%${q}%`)
     .order('like_count', { ascending: false })
     .limit(30);
@@ -4783,23 +4791,21 @@ async function discFetchPosts(q, pane) {
     return;
   }
 
-  const grid = document.createElement('div');
-  grid.className = 'disc-posts-grid';
+  pane.innerHTML = '';
+  const list = document.createElement('div');
+  list.style.cssText = 'display:flex;flex-direction:column;gap:10px;padding:10px 0';
 
   data.forEach(p => {
-    const tile = document.createElement('div');
-    tile.className = 'disc-post-tile';
-    if (p.image) {
-      tile.innerHTML = `<img src="${escHtml(p.image)}" alt="" loading="lazy">`;
-    } else {
-      tile.innerHTML = `<p class="disc-post-tile-text">${escHtml(p.content||'')}</p>`;
-    }
-    tile.addEventListener('click', () => openDetail(p.id));
-    grid.appendChild(tile);
+    const el = createFeedPost(p, false);
+    if (el) list.appendChild(el);
   });
 
-  pane.innerHTML = '';
-  pane.appendChild(grid);
+  pane.appendChild(list);
+
+  const ids = data.map(p => p.id);
+  checkLikedPosts(ids);
+  checkRepostedPosts(ids);
+  checkSavedPosts(ids);
 }
 
 // ── People results ──
