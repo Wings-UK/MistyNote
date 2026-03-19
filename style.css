@@ -1449,6 +1449,85 @@
   }
 
   /* ══════════════════════════════════════════
+     EMOJI & STICKER PICKER
+  ══════════════════════════════════════════ */
+  .sticker-picker {
+    position: fixed;
+    left: 8px; right: 8px;
+    z-index: 3000;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    box-shadow: 0 -8px 32px rgba(0,0,0,0.18);
+    overflow: hidden;
+    max-height: 320px;
+    display: flex;
+    flex-direction: column;
+  }
+  .sticker-picker.hidden { display: none; }
+
+  .sticker-picker-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border2);
+    flex-shrink: 0;
+  }
+  .sticker-tab {
+    flex: 1; padding: 10px;
+    font-size: 13px; font-weight: 600;
+    color: var(--text2); background: none;
+    border: none; cursor: pointer;
+    font-family: var(--font);
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+  }
+  .sticker-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .sticker-picker-body { flex: 1; overflow-y: auto; scrollbar-width: none; }
+  .sticker-picker-body::-webkit-scrollbar { display: none; }
+
+  .sticker-tab-pane { padding: 10px; }
+  .sticker-tab-pane.hidden { display: none; }
+
+  /* Emoji grid */
+  .emoji-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 4px;
+  }
+  .emoji-btn {
+    font-size: 22px; padding: 6px;
+    background: none; border: none;
+    cursor: pointer; border-radius: 10px;
+    transition: background 0.1s;
+    line-height: 1;
+  }
+  .emoji-btn:active { background: var(--accent-soft); }
+
+  /* Sticker grid */
+  .sticker-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  .sticker-tile {
+    aspect-ratio: 1;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; border-radius: 12px;
+    padding: 6px;
+    transition: background 0.1s;
+    background: var(--bg2);
+  }
+  .sticker-tile:active { background: var(--accent-soft); transform: scale(0.93); }
+  .sticker-loading, .sticker-setup-msg {
+    text-align: center; padding: 24px;
+    font-size: 13px; color: var(--text3);
+    grid-column: 1 / -1;
+  }
+
+  /* ══════════════════════════════════════════
      MENTION AUTOCOMPLETE TRAY
   ══════════════════════════════════════════ */
   .mention-tray {
