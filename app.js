@@ -3208,6 +3208,161 @@ function updateCharCount(len) {
 
 function insertEmoji() { showToast('Emoji picker coming soon!'); }
 
+// ══════════════════════════════════════════
+// EMOJI & STICKER PICKER
+// ══════════════════════════════════════════
+
+let stickerPickerContext = null; // 'dm' or 'comment'
+let stickersLoaded = false;
+
+// Common emojis grouped
+const EMOJI_LIST = [
+  '😀','😂','🥹','😍','🥰','😘','😎','🤩','😭','😤',
+  '🙏','👏','🔥','❤️','💜','💯','✨','🎉','👀','😏',
+  '🤣','😅','😬','🫡','🫶','💪','👍','👎','🤝','🙌',
+  '😴','🤔','🤯','😱','🥳','🤗','😇','😈','💀','👻',
+  '🍔','🍕','🌮','🍜','🍣','🍦','🎂','🥂','🍻','☕',
+  '💰','🛍️','📦','🚀','🌍','🏆','🎯','💡','📱','💻',
+];
+
+// Milk & Mocha sticker pack — fetched via Telegram Bot API proxy
+const STICKER_PACK = 'Milk_Mocha_by_cocopry';
+let stickerCache = [];
+
+function openStickerPicker(context) {
+  stickerPickerContext = context;
+  const picker = document.getElementById('sticker-picker');
+  if (!picker) return;
+
+  // Position above the triggering button
+  const btnId = context === 'dm' ? 'dm-emoji-btn' : 'comment-emoji-btn';
+  const btn = document.getElementById(btnId);
+  if (btn) {
+    const rect = btn.getBoundingClientRect();
+    picker.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+  }
+
+  picker.classList.toggle('hidden');
+
+  if (!picker.classList.contains('hidden')) {
+    // Populate emoji grid if empty
+    const grid = document.getElementById('sp-emoji-grid');
+    if (grid && !grid.children.length) {
+      EMOJI_LIST.forEach(emoji => {
+        const btn = document.createElement('button');
+        btn.className = 'emoji-btn';
+        btn.textContent = emoji;
+        btn.onclick = () => insertEmojiOrSticker(emoji, 'emoji');
+        grid.appendChild(btn);
+      });
+    }
+    // Load stickers if not yet loaded
+    if (!stickersLoaded) loadStickerPack();
+
+    // Close when tapping outside
+    setTimeout(() => {
+      document.addEventListener('click', closeStickerPickerOutside, { once: true });
+    }, 50);
+  }
+}
+
+function closeStickerPickerOutside(e) {
+  const picker = document.getElementById('sticker-picker');
+  if (picker && !picker.contains(e.target)) {
+    picker.classList.add('hidden');
+  } else if (picker && !picker.classList.contains('hidden')) {
+    document.addEventListener('click', closeStickerPickerOutside, { once: true });
+  }
+}
+
+function switchStickerTab(tab, el) {
+  document.querySelectorAll('.sticker-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.sticker-tab-pane').forEach(p => p.classList.add('hidden'));
+  el.classList.add('active');
+  const pane = document.getElementById(`sp-${tab}-pane`);
+  if (pane) pane.classList.remove('hidden');
+}
+
+async function loadStickerPack() {
+  const grid = document.getElementById('sp-sticker-grid');
+  if (!grid) return;
+
+  try {
+    const res  = await fetch(`/api/stickers?pack=${STICKER_PACK}`);
+    const data = await res.json();
+
+    if (!data.stickers?.length) throw new Error('No stickers returned');
+
+    stickersLoaded = true;
+    stickerCache = data.stickers;
+    grid.innerHTML = '';
+
+    data.stickers.forEach(sticker => renderStickerTile(grid, sticker));
+
+  } catch (err) {
+    grid.innerHTML = `<div class="sticker-setup-msg">
+      <p>⚙️ Add <strong>TELEGRAM_BOT_TOKEN</strong> to your Cloudflare Pages environment variables to enable stickers.</p>
+    </div>`;
+  }
+}
+
+function renderStickerTile(grid, sticker) {
+  const tile = document.createElement('div');
+  tile.className = 'sticker-tile';
+
+  if (sticker.is_animated && sticker.file_url) {
+    // Animated TGS sticker via lottie-player
+    const player = document.createElement('lottie-player');
+    player.setAttribute('src', sticker.file_url);
+    player.setAttribute('background', 'transparent');
+    player.setAttribute('speed', '1');
+    player.setAttribute('style', 'width:64px;height:64px');
+    player.setAttribute('hover', '');
+    player.setAttribute('loop', '');
+    tile.appendChild(player);
+  } else if (sticker.file_url) {
+    tile.innerHTML = `<img src="${sticker.file_url}" style="width:64px;height:64px;object-fit:contain" loading="lazy">`;
+  }
+
+  tile.onclick = () => insertEmojiOrSticker(sticker.file_id, 'sticker', sticker);
+  grid.appendChild(tile);
+}
+
+function insertEmojiOrSticker(value, type, stickerData) {
+  const picker = document.getElementById('sticker-picker');
+  picker?.classList.add('hidden');
+
+  if (type === 'emoji') {
+    // Insert emoji into active input
+    if (stickerPickerContext === 'dm') {
+      const field = document.getElementById('chat-input-field');
+      if (field) {
+        const pos = field.selectionStart || field.value.length;
+        field.value = field.value.slice(0, pos) + value + field.value.slice(pos);
+        field.setSelectionRange(pos + value.length, pos + value.length);
+        field.focus();
+        field.dispatchEvent(new Event('input'));
+      }
+    } else {
+      const field = document.getElementById('comment-input');
+      if (field) {
+        const pos = field.selectionStart || field.value.length;
+        field.value = field.value.slice(0, pos) + value + field.value.slice(pos);
+        field.setSelectionRange(pos + value.length, pos + value.length);
+        field.focus();
+        field.dispatchEvent(new Event('input'));
+      }
+    }
+  } else if (type === 'sticker') {
+    // Send sticker directly
+    if (stickerPickerContext === 'dm') {
+      chatSendSticker(value);
+    } else {
+      submitCommentSticker(value);
+    }
+  }
+}
+
 // ── Feed prepend ──
 function prependPostToFeed(newPost) {
   if (!newPost) return;
@@ -6218,6 +6373,57 @@ function chatInputKeydown(e) {
 }
 
 // ── Quick action stubs (to be built out) ──
+// ── Send sticker in DM ──
+async function chatSendSticker(fileId) {
+  if (!activeChatId || !currentUser) return;
+  const msgsEl = document.getElementById('chat-messages');
+
+  // Optimistic — show sticker immediately
+  const tmpMsg = {
+    id: 'tmp-' + Date.now(),
+    type: 'sticker',
+    content: fileId,
+    sender_id: currentUser.id,
+    created_at: new Date().toISOString(),
+  };
+  const el = buildMessageEl(tmpMsg, null);
+  if (el && msgsEl) { msgsEl.appendChild(el); msgsEl.scrollTop = msgsEl.scrollHeight; }
+
+  await supabase.from('messages').insert({
+    conversation_id: activeChatId,
+    sender_id: currentUser.id,
+    type: 'sticker',
+    content: fileId,
+  }).catch(() => {});
+
+  markConvRead(activeChatId);
+  updateInboxRow(activeChatId, '🐾 Sticker', new Date().toISOString());
+}
+
+// ── Send sticker in comment ──
+async function submitCommentSticker(fileId) {
+  const postId = document.getElementById('comment-bar')?.dataset.postId;
+  if (!postId || !currentUser) return;
+
+  const { data } = await supabase.from('comments').insert({
+    post_id: postId,
+    user_id: currentUser.id,
+    content: '',
+    sticker_url: fileId,
+  }).select(`id,content,created_at,like_count,parent_id,user_id,sticker_url,
+             user:users(id,username,avatar)`).single();
+
+  if (data) {
+    const list = document.getElementById('comments-list');
+    if (list) {
+      const el = buildCommentEl(data, null, new Set(), postId);
+      el.classList.add('fade-up');
+      list.prepend(el);
+    }
+    updateCommentCountDelta(1);
+  }
+}
+
 function chatSendCash() {
   showToast('Cash transfer — coming in next update 💸');
 }
