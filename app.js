@@ -755,10 +755,12 @@ async function obLoadSuggestedUsers() {
 }
 
 async function obToggleFollow(btn, uid) {
-  if (!currentUser) { showToast('Please sign in to follow'); return; }
-  if (!uid) return;
+  console.log('obToggleFollow called', uid, currentUser?.id);
+  if (!currentUser) { showToast('Not signed in'); return; }
+  if (!uid) { showToast('No user ID'); return; }
   const isFollowing = btn.classList.contains('following');
   btn.disabled = true;
+  btn.style.opacity = '0.5';
   if (isFollowing) {
     await supabase.from('follows').delete().eq('follower_id', currentUser.id).eq('following_id', uid).catch(() => {});
     btn.classList.remove('following'); btn.textContent = 'Follow';
@@ -769,6 +771,7 @@ async function obToggleFollow(btn, uid) {
     obFollowCount++;
   }
   btn.disabled = false;
+  btn.style.opacity = '1';
   const ct = document.getElementById('ob-follow-count-text');
   const fb = document.getElementById('ob-follow-btn');
   if (ct) ct.textContent = obFollowCount < 3
