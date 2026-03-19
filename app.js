@@ -639,11 +639,13 @@ async function obSaveProfile() {
       }
     } catch(e) { console.warn('Avatar upload failed:', e); }
   }
+  // Navigate immediately
+  obNext();
+  // Save in background
   if (currentUser) {
-    await supabase.from('users').update({ bio, ...(obAvatarUrl ? { avatar: obAvatarUrl } : {}) }).eq('id', currentUser.id).catch(() => {});
+    supabase.from('users').update({ bio, ...(obAvatarUrl ? { avatar: obAvatarUrl } : {}) }).eq('id', currentUser.id).catch(() => {});
     if (currentProfile) { currentProfile.bio = bio; if (obAvatarUrl) currentProfile.avatar = obAvatarUrl; }
   }
-  obNext();
 }
 
 function obHandleAvatar(input) {
@@ -694,12 +696,14 @@ function obToggleInterest(card, name) {
 }
 
 async function obSaveInterests() {
+  // Navigate immediately so DB errors never block the user
+  obNext();
+  // Save in background
   const interests = Array.from(obSelectedInterests);
   if (currentUser && interests.length >= 3) {
-    await supabase.from('users').update({ interests }).eq('id', currentUser.id).catch(() => {});
+    supabase.from('users').update({ interests }).eq('id', currentUser.id).catch(() => {});
     if (currentProfile) currentProfile.interests = interests;
   }
-  obNext();
 }
 
 async function obLoadSuggestedUsers() {
