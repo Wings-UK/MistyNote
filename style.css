@@ -830,74 +830,17 @@
   }
 
   /* ── For You grid (masonry-style 2-col) ── */
+  /* Discovery — For You and search results use feed post structure */
   .disc-foryou-grid {
-    columns: 2; column-gap: 3px;
-    padding: 0 3px 3px;
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 10px 0;
   }
-  .disc-foryou-tile {
-    break-inside: avoid; margin-bottom: 3px;
-    position: relative; overflow: hidden;
-    cursor: pointer; background: var(--bg3);
-    border-radius: 4px;
-  }
-  .disc-foryou-tile img {
-    width: 100%; display: block;
-    object-fit: cover;
-    transition: transform 0.3s ease;
-  }
-  .disc-foryou-tile:active img { transform: scale(0.97); }
-  .disc-foryou-tile-overlay {
-    position: absolute; bottom: 0; left: 0; right: 0;
-    padding: 24px 8px 8px;
-    background: linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 100%);
-    display: flex; align-items: center; gap: 5px;
-  }
-  .disc-foryou-tile-av {
-    width: 18px; height: 18px; border-radius: 50%;
-    object-fit: cover; flex-shrink: 0;
-    border: 1.5px solid rgba(255,255,255,0.5);
-  }
-  .disc-foryou-tile-name {
-    font-size: 11px; color: rgba(255,255,255,0.9);
-    font-weight: 700; white-space: nowrap;
-    overflow: hidden; text-overflow: ellipsis;
-  }
-  .disc-skeleton {
-    break-inside: avoid; margin-bottom: 3px;
-    border-radius: 4px;
-    background: linear-gradient(90deg, var(--bg3) 25%, var(--bg2) 50%, var(--bg3) 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.4s infinite;
-    height: 160px;
-  }
-  .disc-skeleton:nth-child(2) { height: 220px; }
-  .disc-skeleton:nth-child(3) { height: 190px; }
-  .disc-skeleton:nth-child(4) { height: 140px; }
-  @keyframes shimmer { to { background-position: -200% 0; } }
-
-  /* ── Search results: Posts pane ── */
   .disc-pane { padding-bottom: 8px; }
-  .disc-posts-grid {
-    columns: 2; column-gap: 3px; padding: 0 3px 3px;
-  }
-  .disc-post-tile {
-    break-inside: avoid; margin-bottom: 3px;
-    position: relative; overflow: hidden; cursor: pointer;
-    background: var(--bg3); border-radius: 4px;
-  }
-  .disc-post-tile img {
-    width: 100%; display: block; object-fit: cover;
-  }
-  .disc-post-tile-text {
-    padding: 10px 10px 12px;
-    font-size: 13px; color: var(--text2); line-height: 1.45;
-    display: -webkit-box; -webkit-line-clamp: 4;
-    -webkit-box-orient: vertical; overflow: hidden;
-  }
   .disc-no-results {
     text-align: center; padding: 60px 24px;
     color: var(--text3); font-size: 15px;
   }
+  @keyframes shimmer { to { background-position: -200% 0; } }
   .disc-no-results strong { display: block; font-size: 17px; color: var(--text2); margin-bottom: 6px; }
 
   /* ── Search results: People pane ── */
