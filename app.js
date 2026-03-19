@@ -4850,7 +4850,7 @@ async function discFetchPeople(q, pane) {
         onclick="event.stopPropagation(); discToggleFollow(this, '${u.id}')">
         ${isFollowing ? 'Following' : 'Follow'}
       </button>`;
-    row.addEventListener('click', () => openProfile(u.id));
+    row.addEventListener('click', () => showUserProfile(u.id));
     list.appendChild(row);
   });
 
