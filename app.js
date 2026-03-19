@@ -3213,7 +3213,7 @@ function insertEmoji() { showToast('Emoji picker coming soon!'); }
 // ══════════════════════════════════════════
 
 let stickerPickerContext = null; // 'dm' or 'comment'
-let stickersLoaded = false;
+
 
 // Common emojis grouped
 const EMOJI_LIST = [
@@ -3226,8 +3226,8 @@ const EMOJI_LIST = [
 ];
 
 // Milk & Mocha sticker pack — fetched via Telegram Bot API proxy
-const STICKER_PACK = 'milk_mocha_daily_emoji_by_cocopry';
-let stickerCache = [];
+
+
 
 function openStickerPicker(context) {
   stickerPickerContext = context;
@@ -3256,9 +3256,6 @@ function openStickerPicker(context) {
         grid.appendChild(btn);
       });
     }
-    // Load stickers if not yet loaded
-    if (!stickersLoaded) loadStickerPack();
-
     // Close when tapping outside
     setTimeout(() => {
       document.addEventListener('click', closeStickerPickerOutside, { once: true });
@@ -3275,54 +3272,9 @@ function closeStickerPickerOutside(e) {
   }
 }
 
-function switchStickerTab(tab, el) {
-  document.querySelectorAll('.sticker-tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.sticker-tab-pane').forEach(p => p.classList.add('hidden'));
-  el.classList.add('active');
-  const pane = document.getElementById(`sp-${tab}-pane`);
-  if (pane) pane.classList.remove('hidden');
-}
 
-async function loadStickerPack() {
-  const grid = document.getElementById('sp-sticker-grid');
-  if (!grid) return;
 
-  try {
-    const res  = await fetch(`/api/stickers?pack=${STICKER_PACK}`);
-    const data = await res.json();
 
-    if (!data.stickers?.length) throw new Error('No stickers returned');
-
-    stickersLoaded = true;
-    stickerCache = data.stickers;
-    grid.innerHTML = '';
-
-    data.stickers.forEach(sticker => renderStickerTile(grid, sticker));
-
-  } catch (err) {
-    grid.innerHTML = `<div class="sticker-setup-msg">
-      <p>⚙️ Add <strong>TELEGRAM_BOT_TOKEN</strong> to your Cloudflare Pages environment variables to enable stickers.</p>
-    </div>`;
-  }
-}
-
-function renderStickerTile(grid, sticker) {
-  const tile = document.createElement('div');
-  tile.className = 'sticker-tile';
-
-  // Use thumbnail (static WebP) for display — TGS animated format needs special handling
-  const displayUrl = sticker.thumb_url || sticker.file_url;
-  if (displayUrl) {
-    tile.innerHTML = `<img src="${escHtml(displayUrl)}" style="width:64px;height:64px;object-fit:contain" loading="lazy" onerror="this.parentElement.style.display='none'">`;
-  }
-
-  // Store the full sticker data on the tile
-  tile.dataset.fileUrl = sticker.file_url || '';
-  tile.dataset.thumbUrl = sticker.thumb_url || '';
-  tile.dataset.fileId = sticker.file_id;
-  tile.onclick = () => insertEmojiOrSticker(sticker.file_url || sticker.thumb_url, 'sticker', sticker);
-  grid.appendChild(tile);
-}
 
 function insertEmojiOrSticker(value, type, stickerData) {
   const picker = document.getElementById('sticker-picker');
@@ -5713,11 +5665,6 @@ function buildMessageEl(msg, prevSenderId) {
     bubbleEl = buildOfferBubble(msg, isSent, timeStr);
   } else if (msg.type === 'order_update') {
     bubbleEl = buildOrderBubble(msg, timeStr);
-  } else if (msg.type === 'sticker') {
-    const div = document.createElement('div');
-    div.className = 'chat-sticker-bubble';
-    div.innerHTML = msg.content ? `<img src="${escHtml(msg.content)}" class="chat-sticker-img" alt="" loading="lazy">` : '';
-    bubbleEl = div;
   } else {
     const content  = msg.content || '';
     const url      = extractFirstUrl(content);
@@ -6374,58 +6321,7 @@ function chatInputKeydown(e) {
 }
 
 // ── Quick action stubs (to be built out) ──
-// ── Send sticker in DM ──
-async function chatSendSticker(fileUrl) {
-  if (!activeChatId || !currentUser) return;
-  const msgsEl = document.getElementById('chat-messages');
 
-  // Optimistic — show sticker image immediately
-  const tmpMsg = {
-    id: 'tmp-' + Date.now(),
-    type: 'sticker',
-    content: fileUrl,  // store URL not file_id
-    sender_id: currentUser.id,
-    created_at: new Date().toISOString(),
-  };
-  const lastRow = msgsEl?.querySelector('.chat-msg-row:last-child');
-  const lastSenderId = lastRow ? (lastRow.classList.contains('sent') ? currentUser.id : activeChatUserId) : null;
-  const el = buildMessageEl(tmpMsg, lastSenderId);
-  if (el && msgsEl) { msgsEl.appendChild(el); msgsEl.scrollTop = msgsEl.scrollHeight; }
-
-  await supabase.from('messages').insert({
-    conversation_id: activeChatId,
-    sender_id: currentUser.id,
-    type: 'sticker',
-    content: fileUrl,
-  }).catch(() => {});
-
-  markConvRead(activeChatId);
-  updateInboxRow(activeChatId, '🐾 Sticker', new Date().toISOString());
-}
-
-// ── Send sticker in comment ──
-async function submitCommentSticker(fileId) {
-  const postId = document.getElementById('comment-bar')?.dataset.postId;
-  if (!postId || !currentUser) return;
-
-  const { data } = await supabase.from('comments').insert({
-    post_id: postId,
-    user_id: currentUser.id,
-    content: '',
-    sticker_url: fileId,
-  }).select(`id,content,created_at,like_count,parent_id,user_id,sticker_url,
-             user:users(id,username,avatar)`).single();
-
-  if (data) {
-    const list = document.getElementById('comments-list');
-    if (list) {
-      const el = buildCommentEl(data, null, new Set(), postId);
-      el.classList.add('fade-up');
-      list.prepend(el);
-    }
-    updateCommentCountDelta(1);
-  }
-}
 
 function chatSendCash() {
   showToast('Cash transfer — coming in next update 💸');
