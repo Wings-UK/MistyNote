@@ -18,13 +18,35 @@
        AUTH SCREEN
   ══════════════════════════════════════════ -->
   <script>
-    // Runs before paint — hide auth screen on deep links to prevent flash
+    // Runs synchronously before any paint
+    // Hide auth screen immediately if a Supabase session exists in localStorage
+    // This prevents the auth flash when refreshing while logged in
     (function() {
+      var hide = false;
+      // Check for deep link
       var path = window.location.pathname;
-      var isDeepLink = path.startsWith('/post/') || path.startsWith('/profile/');
-      if (isDeepLink) {
-        document.documentElement.style.setProperty('--auth-display', 'none');
+      if (path.startsWith('/post/') || path.startsWith('/profile/')) {
+        hide = true;
       }
+      // Check for existing Supabase session in localStorage
+      try {
+        var keys = Object.keys(localStorage);
+        for (var i = 0; i < keys.length; i++) {
+          if (keys[i].indexOf('supabase') !== -1 && keys[i].indexOf('auth-token') !== -1) {
+            var val = JSON.parse(localStorage.getItem(keys[i]));
+            if (val && val.access_token) { hide = true; break; }
+          }
+        }
+        // Also check the standard Supabase v2 key format
+        var sbKey = Object.keys(localStorage).find(function(k) {
+          return k.startsWith('sb-') && k.endsWith('-auth-token');
+        });
+        if (sbKey) {
+          var sbVal = JSON.parse(localStorage.getItem(sbKey));
+          if (sbVal && sbVal.access_token) hide = true;
+        }
+      } catch(e) {}
+      document.documentElement.style.setProperty('--auth-display', hide ? 'none' : 'flex');
     })();
   </script>
   <div id="auth-screen" class="auth-screen" style="display:var(--auth-display,flex)">
@@ -140,6 +162,216 @@
         </button>
       </div>
 
+    </div>
+
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       USERNAME PICKER (Google OAuth new users)
+  ══════════════════════════════════════════ -->
+  <div id="username-picker-screen" class="username-picker-screen hidden">
+    <div class="auth-bg">
+      <div class="auth-pattern"></div>
+      <div class="auth-glow-1"></div>
+      <div class="auth-glow-2"></div>
+    </div>
+    <div class="up-content">
+      <div class="up-avatar-wrap">
+        <img id="up-google-avatar" class="up-google-avatar" src="" alt="">
+        <div class="up-avatar-ring"></div>
+      </div>
+      <h2 class="up-title">One last step</h2>
+      <p class="up-sub">Choose a username for your MistyNote account. This is how people will find and mention you.</p>
+      <div class="up-input-wrap" id="up-input-wrap">
+        <span class="up-at">@</span>
+        <input type="text" id="up-username-input" class="up-input"
+          placeholder="yourname"
+          maxlength="15"
+          autocomplete="off"
+          autocapitalize="none"
+          spellcheck="false"
+          oninput="validateUsernamePickerInput(this)">
+      </div>
+      <p class="up-hint" id="up-hint">Letters, numbers and underscores only. Max 15 characters.</p>
+      <p class="up-error hidden" id="up-error"></p>
+      <button class="up-btn" id="up-btn" onclick="submitUsernamePicker()" disabled>
+        <span id="up-btn-text">Let's go 🚀</span>
+        <div class="btn-loader hidden" id="up-loader"></div>
+      </button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       USERNAME PICKER (Google Sign-Up)
+  ══════════════════════════════════════════ -->
+  <div id="username-picker" class="username-picker hidden">
+    <div class="username-picker-bg">
+      <div class="auth-pattern"></div>
+      <div class="auth-glow-1"></div>
+    </div>
+    <div class="username-picker-content">
+      <img id="up-avatar" class="up-avatar" src="" alt="">
+      <h2 class="up-title">One last step</h2>
+      <p class="up-sub">Choose a username for your MistyNote account.</p>
+      <div class="up-input-wrap" id="up-input-wrap">
+        <span class="up-at">@</span>
+        <input type="text" id="up-username-input" class="up-input"
+          placeholder="your_username"
+          maxlength="15" autocomplete="off" autocapitalize="none" spellcheck="false"
+          oninput="validateUsernamePickerInput(this)">
+      </div>
+      <p class="up-hint" id="up-hint">Letters, numbers and underscores only. Max 15 chars.</p>
+      <p class="up-error hidden" id="up-error"></p>
+      <button class="up-btn" id="up-btn" onclick="submitUsernamePicker()" disabled>
+        <span id="up-btn-text">Let's go 🚀</span>
+        <div class="btn-loader hidden" id="up-loader"></div>
+      </button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       ONBOARDING FLOW
+  ══════════════════════════════════════════ -->
+  <div id="onboarding-screen" class="onboarding-screen hidden">
+
+    <!-- Shared background -->
+    <div class="auth-bg">
+      <div class="auth-pattern"></div>
+      <div class="auth-glow-1"></div>
+      <div class="auth-glow-2"></div>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="ob-progress-wrap">
+      <div class="ob-progress-bar" id="ob-progress-bar"></div>
+    </div>
+
+    <!-- ── STEP 1: Welcome ── -->
+    <div class="ob-step active" id="ob-step-1">
+      <div class="ob-step-inner ob-welcome">
+        <div class="ob-welcome-logo">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+            <path d="M5 28C5 28 10 9 24 9C38 9 43 28 43 28" stroke="url(#ob1a)" stroke-width="3.2" stroke-linecap="round"/>
+            <path d="M5 28C5 28 14 19 24 28C34 37 43 28 43 28" stroke="url(#ob1b)" stroke-width="3.2" stroke-linecap="round"/>
+            <circle cx="24" cy="28" r="3.5" fill="url(#ob1a)"/>
+            <defs>
+              <linearGradient id="ob1a" x1="5" y1="28" x2="43" y2="28" gradientUnits="userSpaceOnUse"><stop stop-color="#6C47FF"/><stop offset="1" stop-color="#a78bfa"/></linearGradient>
+              <linearGradient id="ob1b" x1="5" y1="28" x2="43" y2="28" gradientUnits="userSpaceOnUse"><stop stop-color="#a78bfa"/><stop offset="1" stop-color="#6C47FF"/></linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div class="ob-welcome-texts">
+          <div class="ob-welcome-badge">🌍 Made for Africa</div>
+          <h1 class="ob-welcome-title">Welcome to<br>MistyNote</h1>
+          <p class="ob-welcome-sub">Africa's home for buying, selling and connecting — safely. Let's set up your experience in under 2 minutes.</p>
+        </div>
+        <button class="ob-primary-btn" onclick="obNext()">
+          Let's get you set up
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- ── STEP 2: Profile Photo + Bio ── -->
+    <div class="ob-step" id="ob-step-2">
+      <div class="ob-step-inner">
+        <div class="ob-step-header">
+          <h2 class="ob-step-title">Your profile</h2>
+          <p class="ob-step-sub">Add a photo and tell people a bit about yourself.</p>
+        </div>
+
+        <!-- Avatar upload -->
+        <div class="ob-avatar-section">
+          <div class="ob-avatar-wrap" onclick="document.getElementById('ob-avatar-file').click()">
+            <img id="ob-avatar-preview" class="ob-avatar-img" src="" alt="" style="display:none">
+            <div class="ob-avatar-placeholder" id="ob-avatar-placeholder">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </div>
+            <div class="ob-avatar-edit-badge">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            </div>
+          </div>
+          <input type="file" id="ob-avatar-file" accept="image/*" hidden onchange="obHandleAvatar(this)">
+          <p class="ob-avatar-hint">Tap to add a photo <span>(optional)</span></p>
+        </div>
+
+        <!-- Bio -->
+        <div class="ob-bio-wrap">
+          <textarea id="ob-bio-input" class="ob-bio-input"
+            placeholder="Write a short bio — what are you about? What do you sell? What do you love?"
+            maxlength="160"
+            oninput="document.getElementById('ob-bio-count').textContent = (160 - this.value.length) + ' left'"
+            rows="3"></textarea>
+          <span class="ob-bio-count" id="ob-bio-count">160 left</span>
+        </div>
+
+        <div class="ob-step-actions">
+          <button class="ob-skip-btn" onclick="obNext()">Skip for now</button>
+          <button class="ob-primary-btn ob-primary-btn-sm" onclick="obSaveProfile()">
+            Save & Continue
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── STEP 3: Interests ── -->
+    <div class="ob-step" id="ob-step-3">
+      <div class="ob-step-inner">
+        <div class="ob-step-header">
+          <h2 class="ob-step-title">What moves you?</h2>
+          <p class="ob-step-sub">Pick at least 3 interests. We'll personalise your feed around them.</p>
+        </div>
+        <div class="ob-interests-grid" id="ob-interests-grid">
+          <!-- Populated by JS -->
+        </div>
+        <p class="ob-interests-hint" id="ob-interests-hint">Select at least 3 to continue</p>
+        <button class="ob-primary-btn ob-interests-btn" id="ob-interests-btn" onclick="obSaveInterests()" disabled>
+          Continue
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- ── STEP 4: Follow People ── -->
+    <div class="ob-step" id="ob-step-4">
+      <div class="ob-step-inner">
+        <div class="ob-step-header">
+          <h2 class="ob-step-title">Find your people</h2>
+          <p class="ob-step-sub">Follow at least 3 accounts to fill your feed with content you'll love.</p>
+        </div>
+        <div class="ob-follow-list" id="ob-follow-list">
+          <div class="ob-follow-loading">
+            <div class="ob-follow-loading-dot"></div>
+            <div class="ob-follow-loading-dot"></div>
+            <div class="ob-follow-loading-dot"></div>
+          </div>
+        </div>
+        <div class="ob-follow-footer">
+          <p class="ob-follow-count-text" id="ob-follow-count-text">0 of 3 minimum followed</p>
+          <button class="ob-primary-btn ob-primary-btn-sm" id="ob-follow-btn" onclick="obFinishFollowing()" disabled>
+            Continue
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── STEP 5: Celebration ── -->
+    <div class="ob-step" id="ob-step-5">
+      <div class="ob-step-inner ob-celebrate">
+        <div class="ob-confetti" id="ob-confetti"></div>
+        <div class="ob-celebrate-avatar-wrap">
+          <img id="ob-celebrate-avatar" class="ob-celebrate-avatar" src="" alt="">
+          <div class="ob-celebrate-ring"></div>
+        </div>
+        <h2 class="ob-celebrate-title" id="ob-celebrate-title">You're all set! 🎉</h2>
+        <p class="ob-celebrate-sub" id="ob-celebrate-sub">Your feed is ready. Welcome to the MistyNote family.</p>
+        <div class="ob-celebrate-stats" id="ob-celebrate-stats"></div>
+        <button class="ob-primary-btn ob-celebrate-btn" onclick="obFinish()">
+          Take me to MistyNote 🚀
+        </button>
+      </div>
     </div>
 
   </div>
