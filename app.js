@@ -474,7 +474,7 @@ async function bootApp(isDeepLink = false) {
   if (user) {
     const { data: profile } = await supabase
       .from('users')
-      .select('username')
+      .select('username, onboarding_done')
       .eq('id', user.id)
       .maybeSingle();
 
@@ -709,17 +709,34 @@ async function obSaveInterests() {
 async function obLoadSuggestedUsers() {
   const list = document.getElementById('ob-follow-list');
   if (!list) return;
+  obFollowCount = 0; // reset count
   try {
     const { data: users } = await supabase.from('users').select('id,username,avatar,bio,followers')
       .neq('id', currentUser?.id || '').order('followers', { ascending: false }).limit(10);
     if (!users?.length) {
-      list.innerHTML = '<p style="text-align:center;color:rgba(255,255,255,0.3);padding:40px 0;font-size:14px">No suggestions yet. You are an early bird!</p>';
+      list.innerHTML = '<p style="text-align:center;color:var(--text3);padding:40px 0;font-size:14px">No suggestions yet. You are an early bird!</p>';
       const fb = document.getElementById('ob-follow-btn');
       if (fb) fb.disabled = false;
       return;
     }
+
+    // Get who I already follow
+    let alreadyFollowing = new Set();
+    if (currentUser) {
+      const { data: myFollows } = await supabase
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', currentUser.id);
+      (myFollows || []).forEach(f => alreadyFollowing.add(f.following_id));
+    }
+
+    // Pre-count already followed
+    obFollowCount = 0;
+    users.forEach(u => { if (alreadyFollowing.has(u.id)) obFollowCount++; });
+
     list.innerHTML = '';
     users.forEach(user => {
+      const isFollowing = alreadyFollowing.has(user.id);
       const row = document.createElement('div');
       row.className = 'ob-follow-row';
       // Build row with DOM to avoid quote escaping issues
@@ -736,7 +753,8 @@ async function obLoadSuggestedUsers() {
 
       const followBtn = document.createElement('button');
       followBtn.className = 'ob-row-follow-btn';
-      followBtn.textContent = 'Follow';
+      followBtn.textContent = isFollowing ? 'Following' : 'Follow';
+      if (isFollowing) followBtn.classList.add('following');
       followBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         obToggleFollow(followBtn, user.id);
@@ -747,6 +765,15 @@ async function obLoadSuggestedUsers() {
       row.appendChild(followBtn);
       list.appendChild(row);
     });
+
+    // Update counter with pre-existing follows
+    const ct = document.getElementById('ob-follow-count-text');
+    const fb = document.getElementById('ob-follow-btn');
+    if (ct) ct.textContent = obFollowCount < 3
+      ? 'Follow ' + Math.max(0, 3 - obFollowCount) + ' more to continue'
+      : obFollowCount + ' followed';
+    if (fb) fb.disabled = obFollowCount < 3;
+
   } catch(e) {
     list.innerHTML = '<p style="text-align:center;color:rgba(255,255,255,0.3);padding:40px 0;font-size:14px">Could not load suggestions</p>';
     const fb = document.getElementById('ob-follow-btn');
