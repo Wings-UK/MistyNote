@@ -3226,7 +3226,7 @@ const EMOJI_LIST = [
 ];
 
 // Milk & Mocha sticker pack — fetched via Telegram Bot API proxy
-const STICKER_PACK = 'Milk_Mocha_by_cocopry';
+const STICKER_PACK = 'milk_mocha_daily_emoji_by_cocopry';
 let stickerCache = [];
 
 function openStickerPicker(context) {
