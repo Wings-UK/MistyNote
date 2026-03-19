@@ -392,6 +392,35 @@ let isSignup = false;
 function showAuthScreen() {
   document.getElementById('auth-screen').style.display = 'flex';
   document.getElementById('app').classList.add('hidden');
+  showAuthLanding();
+}
+
+function showAuthLanding() {
+  document.getElementById('auth-landing').classList.remove('hidden');
+  document.getElementById('auth-email-screen').classList.add('hidden');
+}
+
+function showEmailAuth(mode = 'login') {
+  document.getElementById('auth-landing').classList.add('hidden');
+  document.getElementById('auth-email-screen').classList.remove('hidden');
+  setAuthTab(mode);
+}
+
+function toggleAuthPassword() {
+  const pw = document.getElementById('auth-password');
+  pw.type = pw.type === 'password' ? 'text' : 'password';
+}
+
+async function handleGoogleAuth() {
+  try {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin }
+    });
+    if (error) throw error;
+  } catch (e) {
+    showToast('Google sign-in failed. Try email instead.');
+  }
 }
 
 function setAuthTab(mode) {
@@ -401,6 +430,11 @@ function setAuthTab(mode) {
   document.getElementById('auth-btn-text').textContent = isSignup ? 'Create Account' : 'Sign In';
   document.getElementById('username-wrap').style.display = isSignup ? 'flex' : 'none';
   document.getElementById('auth-error').textContent = '';
+  // Update header text
+  const title = document.getElementById('auth-form-title');
+  const sub = document.getElementById('auth-form-sub');
+  if (title) title.textContent = isSignup ? 'Create your account' : 'Sign in to MistyNote';
+  if (sub) sub.textContent = isSignup ? 'Join thousands of Africans on MistyNote.' : 'Welcome back. Enter your details below.';
 }
 
 async function handleAuth() {
