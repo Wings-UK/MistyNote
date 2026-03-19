@@ -843,7 +843,17 @@ async function obFinish() {
   hideOnboarding();
   const appEl = document.getElementById('app');
   if (appEl) appEl.classList.remove('hidden');
+
+  // Inject feed styles that bootApp normally handles
+  injectFeedPostStyles();
+  injectEchoesPanel();
+  initIntersectionObserver();
+  sortMomentsRow();
+  requestAnimationFrame(initFeedTabBar);
+  initComposerFile();
   updateNavAvatar();
+  setTimeout(() => detectAndSaveLocation(), 2000);
+
   navTo('feed');
 }
 
