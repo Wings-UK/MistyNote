@@ -735,9 +735,12 @@ async function obLoadSuggestedUsers() {
         '<div class="ob-follow-bio">' + escHtml(user.bio || fmtNum(user.followers || 0) + ' followers') + '</div>';
 
       const followBtn = document.createElement('button');
-      followBtn.className = 'ob-follow-btn';
+      followBtn.className = 'ob-row-follow-btn';
       followBtn.textContent = 'Follow';
-      followBtn.addEventListener('click', () => obToggleFollow(followBtn, user.id));
+      followBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        obToggleFollow(followBtn, user.id);
+      });
 
       row.appendChild(av);
       row.appendChild(info);
@@ -752,7 +755,8 @@ async function obLoadSuggestedUsers() {
 }
 
 async function obToggleFollow(btn, uid) {
-  if (!currentUser) return;
+  if (!currentUser) { showToast('Please sign in to follow'); return; }
+  if (!uid) return;
   const isFollowing = btn.classList.contains('following');
   btn.disabled = true;
   if (isFollowing) {
