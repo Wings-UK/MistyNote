@@ -643,7 +643,7 @@ async function obSaveProfile() {
   obNext();
   // Save in background
   if (currentUser) {
-    supabase.from('users').update({ bio, ...(obAvatarUrl ? { avatar: obAvatarUrl } : {}) }).eq('id', currentUser.id).catch(() => {});
+    supabase.from('users').update({ bio, ...(obAvatarUrl ? { avatar: obAvatarUrl } : {}) }).eq('id', currentUser.id);
     if (currentProfile) { currentProfile.bio = bio; if (obAvatarUrl) currentProfile.avatar = obAvatarUrl; }
   }
 }
@@ -701,7 +701,7 @@ async function obSaveInterests() {
   // Save in background
   const interests = Array.from(obSelectedInterests);
   if (currentUser && interests.length >= 3) {
-    supabase.from('users').update({ interests }).eq('id', currentUser.id).catch(() => {});
+    supabase.from('users').update({ interests }).eq('id', currentUser.id);
     if (currentProfile) currentProfile.interests = interests;
   }
 }
@@ -761,17 +761,36 @@ async function obToggleFollow(btn, uid) {
   const isFollowing = btn.classList.contains('following');
   btn.disabled = true;
   btn.style.opacity = '0.5';
-  if (isFollowing) {
-    await supabase.from('follows').delete().eq('follower_id', currentUser.id).eq('following_id', uid).catch(() => {});
-    btn.classList.remove('following'); btn.textContent = 'Follow';
-    obFollowCount = Math.max(0, obFollowCount - 1);
-  } else {
-    await supabase.from('follows').insert({ follower_id: currentUser.id, following_id: uid }).catch(() => {});
-    btn.classList.add('following'); btn.textContent = 'Following';
-    obFollowCount++;
+  try {
+    if (isFollowing) {
+      const { error } = await supabase.from('follows').delete()
+        .eq('follower_id', currentUser.id).eq('following_id', uid);
+      console.log('Unfollow result:', error);
+      if (!error) {
+        btn.classList.remove('following'); btn.textContent = 'Follow';
+        obFollowCount = Math.max(0, obFollowCount - 1);
+      } else {
+        showToast('Error: ' + error.message);
+      }
+    } else {
+      const { error } = await supabase.from('follows').insert({
+        follower_id: currentUser.id, following_id: uid
+      });
+      console.log('Follow result:', error);
+      if (!error) {
+        btn.classList.add('following'); btn.textContent = 'Following';
+        obFollowCount++;
+      } else {
+        showToast('Error: ' + error.message);
+      }
+    }
+  } catch(e) {
+    console.error('obToggleFollow exception:', e);
+    showToast('Failed: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.style.opacity = '1';
   }
-  btn.disabled = false;
-  btn.style.opacity = '1';
   const ct = document.getElementById('ob-follow-count-text');
   const fb = document.getElementById('ob-follow-btn');
   if (ct) ct.textContent = obFollowCount < 3
@@ -818,7 +837,7 @@ function obLaunchConfetti() {
 
 async function obFinish() {
   if (currentUser) {
-    await supabase.from('users').update({ onboarding_done: true }).eq('id', currentUser.id).catch(() => {});
+    try { await supabase.from('users').update({ onboarding_done: true }).eq('id', currentUser.id); } catch(e) {}
     if (currentProfile) currentProfile.onboarding_done = true;
   }
   hideOnboarding();
