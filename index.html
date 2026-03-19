@@ -714,19 +714,8 @@
 
   <!-- Sticker / Emoji Picker Tray -->
   <div class="sticker-picker hidden" id="sticker-picker">
-    <div class="sticker-picker-tabs">
-      <button class="sticker-tab active" data-tab="emoji" onclick="switchStickerTab('emoji',this)">😊 Emoji</button>
-      <button class="sticker-tab" data-tab="stickers" onclick="switchStickerTab('stickers',this)">🐾 Stickers</button>
-    </div>
     <div class="sticker-picker-body">
-      <div class="sticker-tab-pane active" id="sp-emoji-pane">
-        <div class="emoji-grid" id="sp-emoji-grid"></div>
-      </div>
-      <div class="sticker-tab-pane hidden" id="sp-stickers-pane">
-        <div class="sticker-grid" id="sp-sticker-grid">
-          <div class="sticker-loading">Loading stickers…</div>
-        </div>
-      </div>
+      <div class="emoji-grid" id="sp-emoji-grid"></div>
     </div>
   </div>
 
@@ -950,7 +939,6 @@
     window.supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     window.dispatchEvent(new Event('supabase-ready'));
   </script>
-  <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
   <script src="/app.js"></script>
 </body>
 
