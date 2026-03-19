@@ -722,14 +722,26 @@ async function obLoadSuggestedUsers() {
     users.forEach(user => {
       const row = document.createElement('div');
       row.className = 'ob-follow-row';
-      const imgSrc = escHtml(user.avatar || '');
-      const onErr = "this.style.background='rgba(108,71,255,0.2)';this.removeAttribute('src')";
-      const bioText = escHtml(user.bio || fmtNum(user.followers || 0) + ' followers');
-      const clickFn = 'obToggleFollow(this,\'' + user.id + '\''+ ')';
-      row.innerHTML = '<img class="ob-follow-av" src="' + imgSrc + '" onerror="' + onErr + '" alt="">' +
-        '<div class="ob-follow-info"><div class="ob-follow-name">@' + escHtml(user.username || '') + '</div>' +
-        '<div class="ob-follow-bio">' + bioText + '</div></div>' +
-        '<button class="ob-follow-btn" data-uid="' + user.id + '" onclick="' + clickFn + '">Follow</button>';
+      // Build row with DOM to avoid quote escaping issues
+      const av = document.createElement('img');
+      av.className = 'ob-follow-av';
+      av.src = user.avatar || '';
+      av.alt = '';
+      av.onerror = () => { av.style.background = 'rgba(108,71,255,0.15)'; av.removeAttribute('src'); };
+
+      const info = document.createElement('div');
+      info.className = 'ob-follow-info';
+      info.innerHTML = '<div class="ob-follow-name">@' + escHtml(user.username || '') + '</div>' +
+        '<div class="ob-follow-bio">' + escHtml(user.bio || fmtNum(user.followers || 0) + ' followers') + '</div>';
+
+      const followBtn = document.createElement('button');
+      followBtn.className = 'ob-follow-btn';
+      followBtn.textContent = 'Follow';
+      followBtn.addEventListener('click', () => obToggleFollow(followBtn, user.id));
+
+      row.appendChild(av);
+      row.appendChild(info);
+      row.appendChild(followBtn);
       list.appendChild(row);
     });
   } catch(e) {
