@@ -1612,10 +1612,18 @@
 
   .onboarding-screen {
     position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
     z-index: 1002;
     background: var(--bg);
     font-family: var(--font);
+    overflow: hidden;
+  }
+  /* Lock body scroll when onboarding open */
+  body.ob-open {
+    position: fixed;
+    width: 100%;
     overflow: hidden;
   }
   .onboarding-screen.hidden { display: none !important; }
@@ -1633,30 +1641,29 @@
 
   /* Steps container */
   .ob-step {
-    position: absolute; inset: 0;
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
     display: none; flex-direction: column;
     overflow-y: auto; overflow-x: hidden;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
-    touch-action: pan-y;
   }
   .ob-step::-webkit-scrollbar { display: none; }
   .ob-step.active { display: flex; }
   .ob-step.slide-in  { animation: obSlideIn  0.38s cubic-bezier(0.4,0,0.2,1) both; }
   .ob-step.slide-out { animation: obSlideOut 0.38s cubic-bezier(0.4,0,0.2,1) both; }
-  @keyframes obSlideIn  { from { opacity:0; transform:translateX(40px); } to { opacity:1; transform:translateX(0); } }
-  @keyframes obSlideOut { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(-40px); } }
+  @keyframes obSlideIn  { from { opacity:0; transform:translateX(0); } to { opacity:1; transform:translateX(0); } }
+  @keyframes obSlideOut { from { opacity:1; transform:translateX(0); } to { opacity:0; transform:translateX(0); } }
 
   .ob-step-inner {
     position: relative; z-index: 1;
     width: 100%;
-    padding: 0 24px;
-    padding-top: max(56px, env(safe-area-inset-top, 56px));
-    padding-bottom: max(32px, env(safe-area-inset-bottom, 32px));
+    padding: max(56px, env(safe-area-inset-top, 56px)) 24px max(32px, env(safe-area-inset-bottom, 32px)) 24px !important;
     display: flex; flex-direction: column;
-    min-height: 100vh; min-height: 100dvh;
+    min-height: 100dvh;
     box-sizing: border-box;
-    overflow-x: hidden;
   }
 
   /* ── STEP 0: Username ── */
@@ -1672,6 +1679,7 @@
     background: var(--bg2); border: 1.5px solid var(--border);
     border-radius: 14px; padding: 0 16px;
     width: 100%; margin-bottom: 10px;
+    box-sizing: border-box;
     transition: border-color 0.2s, background 0.2s;
   }
   .ob-username-wrap:focus-within {
