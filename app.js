@@ -575,8 +575,9 @@ let obAvatarFile = null;
 function showOnboarding() {
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('username-picker-screen')?.classList.add('hidden');
-  // Hide app so it doesn't show behind onboarding
   document.getElementById('app')?.classList.add('hidden');
+  // Lock body to prevent keyboard from shifting layout
+  document.body.classList.add('ob-open');
   const screen = document.getElementById('onboarding-screen');
   screen.classList.remove('hidden');
   obCurrentStep = 0;
@@ -595,6 +596,7 @@ function showOnboarding() {
 
 function hideOnboarding() {
   document.getElementById('onboarding-screen').classList.add('hidden');
+  document.body.classList.remove('ob-open');
 }
 
 function obUpdateProgress() {
