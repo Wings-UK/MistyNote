@@ -140,6 +140,10 @@
           <input type="email" id="auth-email" placeholder="Email address" class="auth-input">
         </div>
 
+        <div class="auth-input-wrap" id="username-wrap" style="display:none">
+          <svg class="auth-input-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 006 0v-1a10 10 0 10-3.92 7.94"/></svg>
+          <input type="text" id="auth-username" placeholder="Choose a username" class="auth-input" maxlength="15" autocomplete="off" autocapitalize="none" spellcheck="false">
+        </div>
         <div class="auth-input-wrap">
           <svg class="auth-input-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
           <input type="password" id="auth-password" placeholder="Password" class="auth-input">
@@ -196,47 +200,8 @@
       <div class="ob-progress-bar" id="ob-progress-bar"></div>
     </div>
 
-    <!-- ── STEP 0: Username ── -->
-    <div class="ob-step active" id="ob-step-0">
-      <div class="ob-step-inner">
-        <div class="ob-step-logo">
-          <svg width="40" height="40" viewBox="0 0 48 48" fill="none">
-            <path d="M5 28C5 28 10 9 24 9C38 9 43 28 43 28" stroke="url(#obs1)" stroke-width="3.2" stroke-linecap="round"/>
-            <path d="M5 28C5 28 14 19 24 28C34 37 43 28 43 28" stroke="url(#obs2)" stroke-width="3.2" stroke-linecap="round"/>
-            <circle cx="24" cy="28" r="3.5" fill="url(#obs1)"/>
-            <defs>
-              <linearGradient id="obs1" x1="5" y1="28" x2="43" y2="28" gradientUnits="userSpaceOnUse"><stop stop-color="#6C47FF"/><stop offset="1" stop-color="#a78bfa"/></linearGradient>
-              <linearGradient id="obs2" x1="5" y1="28" x2="43" y2="28" gradientUnits="userSpaceOnUse"><stop stop-color="#a78bfa"/><stop offset="1" stop-color="#6C47FF"/></linearGradient>
-            </defs>
-          </svg>
-        </div>
-        <div class="ob-step-header">
-          <h2 class="ob-step-title">Choose your username</h2>
-          <p class="ob-step-sub">This is how people find and mention you on MistyNote. Choose wisely — it's your identity.</p>
-        </div>
-        <div class="ob-username-wrap" id="ob-username-wrap">
-          <span class="ob-username-at">@</span>
-          <input type="text" id="ob-username-input" class="ob-username-input"
-            placeholder="yourname"
-            maxlength="15"
-            autocomplete="off"
-            autocapitalize="none"
-            spellcheck="false"
-            oninput="obValidateUsername(this)">
-        </div>
-        <p class="ob-username-hint" id="ob-username-hint">Letters, numbers and underscores only. Min 3, max 15.</p>
-        <p class="ob-username-error hidden" id="ob-username-error"></p>
-        <div style="margin-top: auto; padding-top: 24px;">
-          <button class="ob-primary-btn" id="ob-username-btn" onclick="obSaveUsername()" disabled>
-            Continue
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-          </button>
-        </div>
-      </div>
-    </div>
-
     <!-- ── STEP 1: Welcome ── -->
-    <div class="ob-step" id="ob-step-1">
+    <div class="ob-step active" id="ob-step-1">
       <div class="ob-step-inner ob-welcome">
         <div class="ob-welcome-logo">
           <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
