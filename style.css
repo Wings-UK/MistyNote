@@ -30,8 +30,8 @@
     --radius-sm: 10px;
     --shadow: 0 2px 16px rgba(0,0,0,0.06);
     --shadow-lg: 0 8px 40px rgba(0,0,0,0.10);
-    --font: 'Plus Jakarta Sans', -apple-system, sans-serif;
-    --font-display: 'Syne', sans-serif;
+    --font: 'Noto Sans JP', -apple-system, sans-serif;
+    --font-display: 'Noto Sans JP', sans-serif;
   }
   
   [data-theme="dark"] {
