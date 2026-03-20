@@ -632,6 +632,10 @@ function obNext() { obGoToStep(obCurrentStep + 1); }
 
 async function obSaveProfile() {
   const bio = document.getElementById('ob-bio-input')?.value?.trim() || '';
+  const saveBtn = document.getElementById('ob-save-profile-btn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
+
+  // Upload avatar first if selected
   if (obAvatarFile && currentUser) {
     try {
       const ext = obAvatarFile.name.split('.').pop();
@@ -643,13 +647,24 @@ async function obSaveProfile() {
       }
     } catch(e) { console.warn('Avatar upload failed:', e); }
   }
-  // Navigate immediately
-  obNext();
-  // Save in background
+
+  // Save bio + avatar to DB — await so we confirm it worked
   if (currentUser) {
-    supabase.from('users').update({ bio, ...(obAvatarUrl ? { avatar: obAvatarUrl } : {}) }).eq('id', currentUser.id);
-    if (currentProfile) { currentProfile.bio = bio; if (obAvatarUrl) currentProfile.avatar = obAvatarUrl; }
+    try {
+      await supabase.from('users').update({
+        bio,
+        ...(obAvatarUrl ? { avatar: obAvatarUrl } : {})
+      }).eq('id', currentUser.id);
+      // Update local profile
+      if (currentProfile) {
+        currentProfile.bio = bio;
+        if (obAvatarUrl) currentProfile.avatar = obAvatarUrl;
+      }
+    } catch(e) { console.warn('Profile save failed:', e); }
   }
+
+  // Navigate after save completes
+  obNext();
 }
 
 function obHandleAvatar(input) {
@@ -2084,7 +2099,7 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false) {
         </div>
         <button class="prf-masonry-like ${liked ? 'liked' : ''}" data-post-id="${post.id}" onclick="event.stopPropagation(); toggleMasonryLike(this, '${post.id}')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="${liked ? 'rgb(244,7,82)' : 'none'}" stroke="${liked ? 'rgb(244,7,82)' : 'currentColor'}" stroke-width="2">
-            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+            <path d="M12 20.4 C4.8 14.4, 2.4 9.6, 6 6 C8.4 3.6, 10.8 4.8, 11.76 6.72 L12 9.12 L12.24 6.72 C13.2 4.8, 15.6 3.6, 18 6 C21.6 9.6, 19.2 14.4, 12 20.4 Z"/>
           </svg>
           <span class="prf-masonry-like-count">${likes > 0 ? fmtNum(likes) : ''}</span>
         </button>
@@ -3035,7 +3050,7 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
 
             <div class="heart-ai" data-post-id="${p.id}" data-liked="false">
               <svg class="heart-icon heart-clickable" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path class="heart-path" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="none" stroke="#000000" stroke-width="2"/>
+                <path class="heart-path" d="M12 20.4 C4.8 14.4, 2.4 9.6, 6 6 C8.4 3.6, 10.8 4.8, 11.76 6.72 L12 9.12 L12.24 6.72 C13.2 4.8, 15.6 3.6, 18 6 C21.6 9.6, 19.2 14.4, 12 20.4 Z" fill="none" stroke="#000000" stroke-width="2"/>
               </svg>
               <span class="like-count heart-clickable">${p.like_count > 0 ? fmtNum(p.like_count) : ''}</span>
             </div>
@@ -4204,12 +4219,17 @@ async function submitPost() {
         image: null,
         reposted_post_id: targetId || null
       }).select(`
-        id,content,image,video,created_at,like_count,comment_count,repost_count,views,user_id,reposted_post_id,
+        id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
         user:users(id,username,avatar),
+        comments(count),
         reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar))
       `).single();
       if (error) throw error;
       prependPostToFeed(post);
+      // Update repost count on original post
+      if (targetId) syncRepostCount(targetId);
+      // Mark repost button as reposted
+      if (repostTargetBtn) setRepostUI(targetId, true);
     } catch(e) {
       showToast('Post failed — check your connection');
     }
@@ -4233,8 +4253,9 @@ async function submitPost() {
         image: imageUrl,
         reposted_post_id: targetId || null
       }).select(`
-        id,content,image,video,created_at,like_count,comment_count,repost_count,views,user_id,reposted_post_id,
+        id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
         user:users(id,username,avatar),
+        comments(count),
         reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar))
       `).single();
 
@@ -4653,9 +4674,11 @@ async function openDetail(postId, scrollToComments = false) {
 
 
     // Comment bar placeholder
-    document.getElementById('comment-input').placeholder = `Reply to ${user.username}...`;
-    // Wire mention autocomplete to comment input
-    wireMentionInput(document.getElementById('comment-input'), postId);
+    const commentInput = document.getElementById('comment-input');
+    commentInput.placeholder = `Reply to ${user.username}...`;
+    // Reset and re-wire mention autocomplete each time detail opens
+    commentInput._mentionWired = false;
+    wireMentionInput(commentInput, postId);
 
     // Comment bar — wire like button
     const cbLike = document.getElementById('cb-like-btn');
@@ -5095,7 +5118,7 @@ function buildCommentEl(c, parentId, likedSet, postId) {
       <div class="comment-actions-row">
         <button class="comment-action like-comment-btn ${liked ? 'liked' : ''}" data-comment-id="${c.id}">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="${liked ? 'var(--red)' : 'none'}" stroke="${liked ? 'var(--red)' : 'currentColor'}" stroke-width="2">
-            <path class="cmt-heart-path" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+            <path class="cmt-heart-path" d="M12 20.4 C4.8 14.4, 2.4 9.6, 6 6 C8.4 3.6, 10.8 4.8, 11.76 6.72 L12 9.12 L12.24 6.72 C13.2 4.8, 15.6 3.6, 18 6 C21.6 9.6, 19.2 14.4, 12 20.4 Z"/>
           </svg>
           <span class="cmt-like-count">${c.like_count > 0 ? c.like_count : ''}</span>
         </button>
