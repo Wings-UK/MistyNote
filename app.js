@@ -478,12 +478,7 @@ async function bootApp(isDeepLink = false) {
       .eq('id', user.id)
       .maybeSingle();
 
-    if (!profile?.username) {
-      currentUser = user;
-      showUsernamePicker(user);
-      return;
-    }
-    if (!profile?.onboarding_done) {
+    if (!profile?.username || !profile?.onboarding_done) {
       currentUser = user;
       await loadMyProfile();
       showOnboarding();
@@ -582,9 +577,11 @@ function showOnboarding() {
   document.getElementById('username-picker-screen')?.classList.add('hidden');
   const screen = document.getElementById('onboarding-screen');
   screen.classList.remove('hidden');
-  obCurrentStep = 1;
+  obCurrentStep = 0;
   obUpdateProgress();
   obRenderInterests();
+  // Focus username input
+  setTimeout(() => document.getElementById('ob-username-input')?.focus(), 400);
   const googleAvatar = currentProfile?.avatar || '';
   if (googleAvatar) {
     obAvatarUrl = googleAvatar;
@@ -600,7 +597,7 @@ function hideOnboarding() {
 }
 
 function obUpdateProgress() {
-  const pct = (obCurrentStep / 5) * 100;
+  const pct = (obCurrentStep / 5) * 100; // 0-5 steps
   const bar = document.getElementById('ob-progress-bar');
   if (bar) bar.style.width = pct + '%';
 }
@@ -660,6 +657,85 @@ function obHandleAvatar(input) {
     if (ph) ph.style.display = 'none';
   };
   reader.readAsDataURL(file);
+}
+
+// ── Step 0: Username ──
+function obValidateUsername(input) {
+  const val = input.value.replace(/[^a-zA-Z0-9_]/g, '');
+  input.value = val;
+  const wrap = document.getElementById('ob-username-wrap');
+  const hint = document.getElementById('ob-username-hint');
+  const btn  = document.getElementById('ob-username-btn');
+  const err  = document.getElementById('ob-username-error');
+
+  wrap.classList.remove('error', 'success');
+  err.classList.add('hidden');
+
+  if (!val) {
+    hint.textContent = 'Letters, numbers and underscores only. Min 3, max 15.';
+    btn.disabled = true;
+    return;
+  }
+  if (val.length < 3) {
+    hint.textContent = val.length + '/15 — minimum 3 characters';
+    btn.disabled = true;
+    return;
+  }
+  hint.textContent = val.length + '/15';
+  wrap.classList.add('success');
+  btn.disabled = false;
+}
+
+async function obSaveUsername() {
+  const input = document.getElementById('ob-username-input');
+  const btn   = document.getElementById('ob-username-btn');
+  const wrap  = document.getElementById('ob-username-wrap');
+  const err   = document.getElementById('ob-username-error');
+  const username = input.value.trim().toLowerCase();
+
+  if (!username || username.length < 3) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Checking...';
+  err.classList.add('hidden');
+
+  try {
+    // Check not taken
+    const { data: existing } = await supabase
+      .from('users')
+      .select('id')
+      .eq('username', username)
+      .maybeSingle();
+
+    if (existing) {
+      wrap.classList.remove('success');
+      wrap.classList.add('error');
+      err.textContent = 'Username already taken — try another';
+      err.classList.remove('hidden');
+      btn.disabled = false;
+      btn.innerHTML = 'Continue <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>';
+      return;
+    }
+
+    // Save username
+    const googleAvatar = currentUser?.user_metadata?.avatar_url || currentUser?.user_metadata?.picture || '';
+    await supabase.from('users').upsert({
+      id: currentUser.id,
+      username,
+      avatar: googleAvatar,
+      bio: '', location: '', cover: '', followers: 0, following: 0
+    });
+
+    if (currentProfile) currentProfile.username = username;
+    else currentProfile = { id: currentUser.id, username, avatar: googleAvatar };
+
+    obGoToStep(1);
+  } catch(e) {
+    err.textContent = 'Something went wrong. Try again.';
+    err.classList.remove('hidden');
+    btn.disabled = false;
+    btn.innerHTML = 'Continue <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>';
+  }
 }
 
 function obRenderInterests() {
@@ -1130,22 +1206,14 @@ async function handleAuth() {
 
   try {
     if (isSignup) {
-      const rawUsername = document.getElementById('auth-username')?.value || '';
-      const usernameCheck = validateUsername(rawUsername);
-      if (!usernameCheck.valid) { throw new Error(usernameCheck.error); }
-      const cleanUsername = usernameCheck.value;
-
-      // Check username not already taken
-      const { data: existing } = await supabase.from('users').select('id').eq('username', cleanUsername).maybeSingle();
-      if (existing) { throw new Error('Username already taken — try another'); }
-
       const { data, error } = await supabase.auth.signUp({ email, password });
       if (error) throw error;
 
       if (data.user) {
+        // Create bare user record - username set during onboarding
         await supabase.from('users').upsert({
           id: data.user.id,
-          username: cleanUsername,
+          username: '',
           bio: '', location: '', avatar: '', cover: '',
           followers: 0, following: 0
         });
