@@ -4136,7 +4136,19 @@ function prependPostToFeed(newPost) {
   if (newPost.reposted_post_id) {
     repostedPosts.set(newPost.reposted_post_id, newPost.id);
     setRepostUI(newPost.reposted_post_id, true);
-    supabase.rpc('increment_repost_count', { post_id: newPost.reposted_post_id }).catch(() => {});
+    // Increment repost_count directly — don't rely on RPC
+    supabase.from('posts')
+      .select('repost_count')
+      .eq('id', newPost.reposted_post_id)
+      .single()
+      .then(({ data }) => {
+        const newCount = (data?.repost_count || 0) + 1;
+        return supabase.from('posts')
+          .update({ repost_count: newCount })
+          .eq('id', newPost.reposted_post_id);
+      })
+      .then(() => syncRepostCount(newPost.reposted_post_id))
+      .catch(() => {});
     supabase.from('posts').select('user_id').eq('id', newPost.reposted_post_id).single().then(({ data: orig }) => {
       if (orig && orig.user_id !== currentUser.id) {
         supabase.from('notifications').insert({
@@ -4221,17 +4233,14 @@ async function submitPost() {
       }).select(`
         id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
         user:users(id,username,avatar),
-        comments(count),
         reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar))
       `).single();
       if (error) throw error;
       prependPostToFeed(post);
-      // Update repost count on original post
-      if (targetId) syncRepostCount(targetId);
-      // Mark repost button as reposted
-      if (repostTargetBtn) setRepostUI(targetId, true);
+
     } catch(e) {
-      showToast('Post failed — check your connection');
+      console.error('Repost error:', e);
+      showToast('Repost failed — try again');
     }
     return;
   }
@@ -4255,7 +4264,6 @@ async function submitPost() {
       }).select(`
         id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
         user:users(id,username,avatar),
-        comments(count),
         reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar))
       `).single();
 
@@ -4514,7 +4522,7 @@ async function openDetail(postId, scrollToComments = false) {
 
     const { data: p, error } = await supabase
       .from('posts')
-      .select(`id,content,image,video,created_at,like_count,comment_count,repost_count,views,user_id,reposted_post_id,
+      .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
                user:users(id,username,avatar),
                reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar))`)
       .eq('id', postId)
