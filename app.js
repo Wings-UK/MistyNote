@@ -3024,25 +3024,25 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
         <div class="call">
           <div class="mee">
             <div class="comment-btn" data-post-id="${p.id}">
-              <svg xmlns="http://www.w3.org/2000/svg" class="feeling" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" class="feeling" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
               <span>${commentCount > 0 ? fmtNum(commentCount) : ''}</span>
             </div>
 
             <div class="repost-btn" data-post-id="${p.id}" data-reposted="false">
-              <svg xmlns="http://www.w3.org/2000/svg" class="feeling repost-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" class="feeling repost-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
               <span>${p.repost_count > 0 ? fmtNum(p.repost_count) : ''}</span>
             </div>
 
             <div class="heart-ai" data-post-id="${p.id}" data-liked="false">
-              <svg class="heart-icon heart-clickable" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path class="heart-path" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="none" stroke="currentColor" stroke-width="2"/>
+              <svg class="heart-icon heart-clickable" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path class="heart-path" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="none" stroke="#000000" stroke-width="2"/>
               </svg>
               <span class="like-count heart-clickable">${p.like_count > 0 ? fmtNum(p.like_count) : ''}</span>
             </div>
           </div>
           <div class="mee">
-            <div class="donate-btn save-btn" data-post-id="${p.id}"><svg xmlns="http://www.w3.org/2000/svg" class="feeling save-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg></div>
-            <div class="donate-btn share-action" data-post-id="${p.id}"><svg xmlns="http://www.w3.org/2000/svg" class="feeling" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg></div>
+            <div class="donate-btn save-btn" data-post-id="${p.id}"><svg xmlns="http://www.w3.org/2000/svg" class="feeling save-icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg></div>
+            <div class="donate-btn share-action" data-post-id="${p.id}"><svg xmlns="http://www.w3.org/2000/svg" class="feeling" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg></div>
           </div>
         </div>
       </div>
@@ -3183,23 +3183,21 @@ function injectFeedPostStyles() {
   const style = document.createElement('style');
   style.id = 'feed-post-view-styles';
   style.textContent = `
-    #feed-list { display: flex; flex-direction: column; gap: 0; }
+    #feed-list { display: flex; flex-direction: column; gap: 10px; }
 
     .poster {
       display: block;
       width: 100%;
-      background: #ffffff;
-      border: none;
-      border-radius: 0;
-      border-bottom: 1px solid rgba(0,0,0,0.06);
-      padding: 14px 16px 0;
-      transition: background 0.15s;
+      border: 0.5px solid rgb(220,220,220);
+      border-radius: 10px;
+      padding: 10px 10px 0px;
+      transition: background-color 0.2s;
       position: relative;
       cursor: pointer;
       overflow: hidden;
       touch-action: manipulation;
     }
-    .poster:active { background: #fafaf8; }
+    .poster:hover { background-color: rgb(250,250,250); }
 
     .cust-name {
       display: flex;
@@ -3230,7 +3228,7 @@ function injectFeedPostStyles() {
     .post-meta { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
     .post-author-link { display: flex; align-items: center; gap: 4px; text-decoration: none; cursor: pointer; width: fit-content; }
     .post-author-link:hover .jerry { text-decoration: none; }
-    .jerry { font-weight: 700; font-size: 15px; font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; color: var(--text); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .jerry { font-weight: 600; font-size: 15px; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: var(--text); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     /* Consistent username weight across all pages */
     .detail-name, .profile-name, .original-card-name { font-weight: 600; }
     .verif { width: 15px; flex-shrink: 0; display: block; }
@@ -3242,7 +3240,7 @@ function injectFeedPostStyles() {
     .tir {
       padding: 10px 5px 8px;
     }
-    .tired { width: 100%; font-size: 16px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; color: var(--text); font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; }
+    .tired { width: 100%; font-size: 16px; white-space: pre-wrap; word-break: break-word; color: var(--text); }
     .reer { color: rgba(244,7,82,0.7); cursor: pointer; }
 
     .laptop1 { max-width: 100%; margin-top: 10px; padding: 0; overflow: hidden; border-radius: 14px; background: #f4f3f0; max-height: 400px; display: flex; align-items: center; justify-content: center; }
@@ -3264,12 +3262,12 @@ function injectFeedPostStyles() {
       align-items: center;
       margin-top: 10px;
       padding-bottom: 10px;
-      border-bottom: 1px solid rgba(0,0,0,0.05);
+      border-bottom: 0.5px solid rgb(220,220,220);
     }
     .dick { display: flex; gap: 5px; margin-left: 10px; align-items: center; }
     .twits { display: flex; align-items: center; gap: 5px; margin-right: 10px; }
     .lefti { width: 15px; height: 15px; display: block; }
-    .viewe { font-size: 12px; color: var(--text3); margin: 0; line-height: 1; font-family: 'Plus Jakarta Sans', sans-serif; }
+    .viewe { font-size: 13px; color: var(--text2); margin: 0; line-height: 1; }
     .werey { font-weight: 600; }
     .echoes-count { font-weight: 400; color: var(--text2); }
     .echoes-btn { cursor: pointer; transition: color 0.15s; }
@@ -3357,10 +3355,10 @@ function injectFeedPostStyles() {
     .mee { display: flex; gap: 20px; align-items: center; }
     .feeling { width: 22px; }
 
-    .comment-btn { display: flex; width: 55px; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; color: var(--text3); font-weight: 500; }
+    .comment-btn { display: flex; width: 55px; align-items: center; gap: 10px; cursor: pointer; font-size: 15px; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: #000000; }
     .comment-btn:hover { color: var(--text); }
 
-    .repost-btn { display: flex; width: 55px; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; color: var(--text3); font-weight: 500; }
+    .repost-btn { display: flex; width: 55px; align-items: center; gap: 10px; cursor: pointer; font-size: 15px; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: #000000; }
     .repost-btn:hover { color: var(--text); }
     .repost-icon { transition: stroke 0.2s ease; }
     .repost-btn.reposted .repost-icon { stroke: #6C47FF; stroke-width: 2.5; }
@@ -3371,7 +3369,7 @@ function injectFeedPostStyles() {
     .heart-icon { transition: all 0.3s ease; }
     .heart-icon .heart-path { stroke: var(--text); fill: none; transition: all 0.3s ease; }
     .heart-icon.liked .heart-path { fill: rgb(244,7,82); stroke: rgb(244,7,82); }
-    .like-count { font-size: 14px; font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; color: var(--text3); font-weight: 500; }
+    .like-count { font-size: 14px; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: #000000; }
     .like-count.liked { font-weight: 500; color: rgb(244,7,82); }
     .like-count:empty { display: none; }
 
