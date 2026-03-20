@@ -575,13 +575,14 @@ let obAvatarFile = null;
 function showOnboarding() {
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('username-picker-screen')?.classList.add('hidden');
+  // Hide app so it doesn't show behind onboarding
+  document.getElementById('app')?.classList.add('hidden');
   const screen = document.getElementById('onboarding-screen');
   screen.classList.remove('hidden');
   obCurrentStep = 0;
   obUpdateProgress();
   obRenderInterests();
-  // Focus username input
-  setTimeout(() => document.getElementById('ob-username-input')?.focus(), 400);
+  // Don't auto-focus — keyboard opening shifts viewport on Android
   const googleAvatar = currentProfile?.avatar || '';
   if (googleAvatar) {
     obAvatarUrl = googleAvatar;
