@@ -478,7 +478,12 @@ async function bootApp(isDeepLink = false) {
       .eq('id', user.id)
       .maybeSingle();
 
-    if (!profile?.username || !profile?.onboarding_done) {
+    if (!profile?.username) {
+      currentUser = user;
+      showUsernamePicker(user);
+      return;
+    }
+    if (!profile?.onboarding_done) {
       currentUser = user;
       await loadMyProfile();
       showOnboarding();
@@ -580,10 +585,9 @@ function showOnboarding() {
   document.body.classList.add('ob-open');
   const screen = document.getElementById('onboarding-screen');
   screen.classList.remove('hidden');
-  obCurrentStep = 0;
+  obCurrentStep = 1;
   obUpdateProgress();
   obRenderInterests();
-  // Don't auto-focus — keyboard opening shifts viewport on Android
   const googleAvatar = currentProfile?.avatar || '';
   if (googleAvatar) {
     obAvatarUrl = googleAvatar;
@@ -1209,19 +1213,25 @@ async function handleAuth() {
 
   try {
     if (isSignup) {
+      const rawUsername = document.getElementById('auth-username')?.value || '';
+      const usernameCheck = validateUsername(rawUsername);
+      if (!usernameCheck.valid) { throw new Error(usernameCheck.error); }
+      const cleanUsername = usernameCheck.value;
+
+      const { data: existing } = await supabase.from('users').select('id').eq('username', cleanUsername).maybeSingle();
+      if (existing) { throw new Error('Username already taken — try another'); }
+
       const { data, error } = await supabase.auth.signUp({ email, password });
       if (error) throw error;
 
       if (data.user) {
-        // Create bare user record - username set during onboarding
         await supabase.from('users').upsert({
           id: data.user.id,
-          username: '',
+          username: cleanUsername,
           bio: '', location: '', avatar: '', cover: '',
           followers: 0, following: 0
         });
 
-        // Auto-login
         const { error: loginErr } = await supabase.auth.signInWithPassword({ email, password });
         if (!loginErr) {
           currentUser = data.user;
