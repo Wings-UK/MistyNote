@@ -4,13 +4,13 @@
 ══════════════════════════════════════════════════════════════ */
 
 :root {
-    --bg: #ffffff;
-    --bg2: #f7f7f8;
-    --bg3: #efefef;
+    --bg: #f8f7ff;
+    --bg2: #f0eeff;
+    --bg3: #e8e4ff;
     --surface: #ffffff;
     --surface2: rgba(247,247,248,0.95);
-    --border: rgba(0,0,0,0.08);
-    --border2: rgba(0,0,0,0.05);
+    --border: rgba(108,71,255,0.12);
+    --border2: rgba(108,71,255,0.06);
     --text: #0d0d0d;
     --text2: #5c5c6e;
     --text3: #9898a8;
@@ -104,7 +104,7 @@
   .auth-screen {
     position: fixed; inset: 0; z-index: 1000;
     align-items: stretch;
-    background: var(--bg);
+    background: linear-gradient(160deg, #f0ecff 0%, #f8f7ff 40%, #ede8ff 100%);
     overflow: hidden;
     font-family: var(--font);
   }
@@ -116,19 +116,19 @@
   .auth-pattern {
     position: absolute; inset: 0;
     background-image:
-      radial-gradient(circle at 1px 1px, rgba(108,71,255,0.06) 1px, transparent 0);
-    background-size: 32px 32px;
+      radial-gradient(circle at 1px 1px, rgba(108,71,255,0.08) 1px, transparent 0);
+    background-size: 28px 28px;
   }
   .auth-glow-1 {
-    position: absolute; width: 380px; height: 380px; border-radius: 50%;
-    background: radial-gradient(circle, rgba(108,71,255,0.08) 0%, transparent 70%);
-    top: -120px; right: -80px;
+    position: absolute; width: 420px; height: 420px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(108,71,255,0.18) 0%, transparent 65%);
+    top: -140px; right: -100px;
     animation: authGlow 9s ease-in-out infinite;
   }
   .auth-glow-2 {
-    position: absolute; width: 300px; height: 300px; border-radius: 50%;
-    background: radial-gradient(circle, rgba(167,139,250,0.06) 0%, transparent 70%);
-    bottom: -80px; left: -60px;
+    position: absolute; width: 340px; height: 340px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(167,139,250,0.14) 0%, transparent 65%);
+    bottom: -100px; left: -80px;
     animation: authGlow 11s ease-in-out infinite reverse;
   }
   @keyframes authGlow {
@@ -155,7 +155,7 @@
     margin-bottom: auto;
   }
   .auth-wordmark span {
-    font-size: 18px; font-weight: 800; color: var(--text); letter-spacing: -0.3px;
+    font-size: 18px; font-weight: 800; color: #1a0a3d; letter-spacing: -0.3px;
   }
 
   /* Hero */
@@ -172,12 +172,12 @@
     width: fit-content;
   }
   .auth-hero-title {
-    font-size: 42px; font-weight: 900; color: var(--text);
+    font-size: 42px; font-weight: 900; color: #1a0a3d;
     line-height: 1.08; letter-spacing: -1.5px;
     margin-bottom: 16px;
   }
   .auth-hero-sub {
-    font-size: 15px; color: var(--text2);
+    font-size: 15px; color: #5c4a8a;
     line-height: 1.6; max-width: 300px;
   }
 
@@ -189,13 +189,13 @@
   .auth-google-btn {
     display: flex; align-items: center; justify-content: center; gap: 12px;
     padding: 16px; border-radius: 14px; width: 100%;
-    background: var(--text); color: var(--bg);
+    background: #1a0a3d; color: #ffffff;
     font-size: 16px; font-weight: 700;
     font-family: var(--font);
-    box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+    box-shadow: 0 4px 20px rgba(108,71,255,0.25);
     transition: transform 0.15s, box-shadow 0.15s;
   }
-  .auth-google-btn:active { transform: scale(0.97); box-shadow: 0 1px 6px rgba(0,0,0,0.1); }
+  .auth-google-btn:active { transform: scale(0.97); box-shadow: 0 2px 10px rgba(108,71,255,0.2); }
 
   .auth-divider {
     display: flex; align-items: center; gap: 12px;
@@ -209,14 +209,15 @@
   .auth-email-btn {
     display: flex; align-items: center; justify-content: center; gap: 12px;
     padding: 16px; border-radius: 14px; width: 100%;
-    background: var(--bg2);
-    border: 1.5px solid var(--border);
-    color: var(--text);
+    background: rgba(255,255,255,0.7);
+    border: 1.5px solid rgba(108,71,255,0.2);
+    color: #1a0a3d;
     font-size: 16px; font-weight: 600;
     font-family: var(--font);
+    backdrop-filter: blur(8px);
     transition: background 0.15s, border-color 0.15s;
   }
-  .auth-email-btn:active { background: var(--bg3); }
+  .auth-email-btn:active { background: rgba(255,255,255,0.9); }
 
   .auth-terms {
     text-align: center; font-size: 11px;
@@ -229,7 +230,7 @@
   .auth-email-screen {
     position: relative; z-index: 1;
     width: 100%; display: flex; flex-direction: column;
-    padding: 0 28px;
+    padding: 0 24px;
     animation: authFadeUp 0.35s ease both;
   }
   .auth-email-screen.hidden { display: none; }
@@ -251,7 +252,7 @@
     margin-bottom: 20px;
   }
   .auth-form-title {
-    font-size: 26px; font-weight: 800; color: var(--text);
+    font-size: 26px; font-weight: 800; color: #1a0a3d;
     letter-spacing: -0.5px; margin-bottom: 6px;
   }
   .auth-form-sub { font-size: 14px; color: var(--text2); }
@@ -273,13 +274,14 @@
   .auth-form { width: 100%; display: flex; flex-direction: column; gap: 12px; }
   .auth-input-wrap {
     display: flex; align-items: center; gap: 10px;
-    background: var(--bg2); border-radius: 14px;
-    padding: 0 16px; border: 1.5px solid var(--border);
+    background: rgba(255,255,255,0.8); border-radius: 14px;
+    padding: 0 16px; border: 1.5px solid rgba(108,71,255,0.15);
     transition: border-color 0.2s, background 0.2s;
+    backdrop-filter: blur(8px);
   }
   .auth-input-wrap:focus-within {
     border-color: var(--accent);
-    background: rgba(108,71,255,0.06);
+    background: rgba(255,255,255,0.95);
   }
   .auth-input-icon-svg { opacity: 0.5; flex-shrink: 0; color: var(--text); }
   .auth-input {
@@ -1707,7 +1709,7 @@
 
   .ob-step-header { margin-bottom: 28px; }
   .ob-step-title {
-    font-size: 30px; font-weight: 900; color: var(--text);
+    font-size: 30px; font-weight: 900; color: #1a0a3d;
     letter-spacing: -0.8px; margin-bottom: 8px;
   }
   .ob-step-sub {
@@ -1735,7 +1737,7 @@
     width: fit-content; margin-bottom: 20px;
   }
   .ob-welcome-title {
-    font-size: 44px; font-weight: 900; color: var(--text);
+    font-size: 44px; font-weight: 900; color: #1a0a3d;
     line-height: 1.05; letter-spacing: -1.5px; margin-bottom: 16px;
   }
   .ob-welcome-sub {
@@ -1824,12 +1826,13 @@
   .ob-interest-card {
     display: flex; align-items: center; gap: 8px;
     padding: 12px 10px;
-    background: var(--bg2);
-    border: 1.5px solid var(--border);
+    background: rgba(255,255,255,0.7);
+    border: 1.5px solid rgba(108,71,255,0.12);
     border-radius: 14px; cursor: pointer;
     transition: background 0.15s, border-color 0.15s;
     user-select: none; -webkit-tap-highlight-color: transparent;
     min-width: 0; overflow: hidden; box-sizing: border-box;
+    backdrop-filter: blur(8px);
   }
   .ob-interest-card.selected {
     background: rgba(108,71,255,0.2);
@@ -1877,10 +1880,11 @@
 
   .ob-follow-row {
     display: flex; align-items: center; gap: 12px;
-    background: var(--bg2);
-    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.7);
+    border: 1px solid rgba(108,71,255,0.12);
     border-radius: 16px; padding: 12px 14px;
     pointer-events: auto;
+    backdrop-filter: blur(8px);
   }
   .ob-follow-av {
     width: 46px; height: 46px; border-radius: 50%;
