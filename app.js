@@ -4136,19 +4136,9 @@ function prependPostToFeed(newPost) {
   if (newPost.reposted_post_id) {
     repostedPosts.set(newPost.reposted_post_id, newPost.id);
     setRepostUI(newPost.reposted_post_id, true);
-    // Increment repost_count directly — don't rely on RPC
-    supabase.from('posts')
-      .select('repost_count')
-      .eq('id', newPost.reposted_post_id)
-      .single()
-      .then(({ data }) => {
-        const newCount = (data?.repost_count || 0) + 1;
-        return supabase.from('posts')
-          .update({ repost_count: newCount })
-          .eq('id', newPost.reposted_post_id);
-      })
-      .then(() => syncRepostCount(newPost.reposted_post_id))
-      .catch(() => {});
+    // DB trigger handles repost_count increment automatically
+    // Just sync the count after trigger has time to fire
+    setTimeout(() => syncRepostCount(newPost.reposted_post_id), 1200);
     supabase.from('posts').select('user_id').eq('id', newPost.reposted_post_id).single().then(({ data: orig }) => {
       if (orig && orig.user_id !== currentUser.id) {
         supabase.from('notifications').insert({
