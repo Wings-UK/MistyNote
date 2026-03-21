@@ -269,13 +269,27 @@ function hideDeepLinkSplash() {
 
 async function detectAndSaveLocation() {
   if (!currentUser) return;
-  const userId = currentUser.id;
-  if (currentProfile?.location) return;
+  if (currentProfile?.location) {
+    const input = document.getElementById('edit-location');
+    if (input && !input.value) input.value = currentProfile.location;
+    return;
+  }
+  triggerLocationDetect();
+}
 
-  _setLocationDisplay('Detecting…');
+async function triggerLocationDetect() {
+  if (!currentUser) return;
+  const userId = currentUser.id;
+  const btn    = document.getElementById('detect-location-btn');
+  const hint   = document.getElementById('location-hint');
+  const input  = document.getElementById('edit-location');
+
+  if (btn)  { btn.textContent = '…'; btn.disabled = true; }
+  if (hint) hint.textContent = 'Getting your GPS location…';
 
   if (!navigator.geolocation) {
-    _showLocationInput(userId);
+    if (hint) hint.textContent = 'GPS not available — type your city manually';
+    if (btn)  { btn.textContent = 'Detect'; btn.disabled = false; }
     return;
   }
 
@@ -283,25 +297,54 @@ async function detectAndSaveLocation() {
     async (pos) => {
       try {
         const { latitude, longitude } = pos.coords;
+        if (hint) hint.textContent = 'Identifying your city…';
+
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
-          { headers: { 'Accept-Language': 'en' } }
+          `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
         );
         const data = await res.json();
-        const city    = data.address?.city || data.address?.town || data.address?.village || data.address?.county || '';
-        const country = data.address?.country || '';
-        const location = [city, country].filter(Boolean).join(', ');
-        if (location) {
-          await _saveAndShowLocation(location, userId);
+
+        // BigDataCloud fields — locality is more precise than city
+        const city    = data.locality || data.city || data.principalSubdivision || '';
+        const state   = data.principalSubdivision || '';
+        const country = data.countryName || '';
+
+        const parts = [city];
+        if (state && state !== city) parts.push(state);
+        if (country) parts.push(country);
+        const location = parts.filter(Boolean).join(', ');
+
+        if (location && country) {
+          if (input) input.value = location;
+          if (hint)  hint.textContent = '✓ Location detected — save profile to lock it in for 90 days';
+          if (btn)   { btn.textContent = '✓'; btn.disabled = false; }
+          await supabase.from('users')
+            .update({ location, location_last_changed: new Date().toISOString() })
+            .eq('id', userId).catch(() => {});
+          if (currentProfile) {
+            currentProfile.location = location;
+            currentProfile.location_last_changed = new Date().toISOString();
+          }
         } else {
-          _showLocationInput(userId);
+          if (hint) hint.textContent = 'Location unclear — type your city manually';
+          if (btn)  { btn.textContent = 'Retry'; btn.disabled = false; }
         }
       } catch(e) {
-        _showLocationInput(userId);
+        if (hint) hint.textContent = 'Detection failed — type your city manually';
+        if (btn)  { btn.textContent = 'Retry'; btn.disabled = false; }
       }
     },
-    () => { _showLocationInput(userId); },
-    { timeout: 8000, maximumAge: 300000, enableHighAccuracy: false }
+    (err) => {
+      if (err.code === 1) {
+        if (hint) hint.textContent = 'Permission denied — enable location in browser settings';
+      } else if (err.code === 3) {
+        if (hint) hint.textContent = 'GPS timed out — move to open area and retry';
+      } else {
+        if (hint) hint.textContent = 'Could not get location — type your city manually';
+      }
+      if (btn) { btn.textContent = 'Retry'; btn.disabled = false; }
+    },
+    { timeout: 15000, maximumAge: 0, enableHighAccuracy: true }
   );
 }
 
@@ -1849,8 +1892,8 @@ async function renderMyProfile() {
   const [postsRes, likedRes, savedRes] = await Promise.all([
     supabase.from('posts')
       .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
-               user:users(id,username,avatar),
-               reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar))`)
+               user:users(id,username,avatar,location),
+               reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))`)
       .eq('user_id', currentUser.id)
       .order('created_at', { ascending: false })
       .limit(60),
@@ -2286,8 +2329,8 @@ async function showUserProfile(userId, tapEl) {
 
     const { data: posts } = await supabase.from('posts')
       .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
-               user:users(id,username,avatar),
-               reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar))`)
+               user:users(id,username,avatar,location),
+               reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))`)
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(60);
@@ -3276,7 +3319,8 @@ function injectFeedPostStyles() {
       transition: filter 0.15s;
     }
     .small-photo:hover { filter: brightness(0.9); }
-    .post-meta { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+    .post-meta { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+    .post-location { font-size: 11px; color: var(--text3); display:flex; align-items:center; gap:2px; }
     .post-author-link { display: flex; align-items: center; gap: 4px; text-decoration: none; cursor: pointer; width: fit-content; }
     .post-author-link:hover .jerry { text-decoration: none; }
     .jerry { font-weight: 600; font-size: 15px; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: var(--text); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -4258,8 +4302,8 @@ async function submitPost() {
         reposted_post_id: targetId || null
       }).select(`
         id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
-        user:users(id,username,avatar),
-        reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar))
+        user:users(id,username,avatar,location),
+        reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))
       `).single();
       if (error) throw error;
       prependPostToFeed(post);
@@ -4289,8 +4333,8 @@ async function submitPost() {
         reposted_post_id: targetId || null
       }).select(`
         id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
-        user:users(id,username,avatar),
-        reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar))
+        user:users(id,username,avatar,location),
+        reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))
       `).single();
 
       if (error) throw error;
@@ -4361,6 +4405,11 @@ async function openDetail(postId, scrollToComments = false) {
       .dp-avatar-wrap:not(.has-moment) .dp-avatar { border-color: var(--border, #e5e7eb); }
       .dp-avatar:active { opacity: .7; }
       .dp-author-info { flex: 1; min-width: 0; }
+      .dp-location {
+        font-size: 12px; color: var(--text3);
+        display: flex; align-items: center; gap: 3px;
+        margin-top: 2px;
+      }
       .dp-name {
         font-size: 15px; font-weight: 600; color: var(--text);
         cursor: pointer; white-space: nowrap;
@@ -4549,8 +4598,8 @@ async function openDetail(postId, scrollToComments = false) {
     const { data: p, error } = await supabase
       .from('posts')
       .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
-               user:users(id,username,avatar),
-               reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar))`)
+               user:users(id,username,avatar,location),
+               reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))`)
       .eq('id', postId)
       .single();
 
@@ -4633,6 +4682,7 @@ async function openDetail(postId, scrollToComments = false) {
             <div class="dp-name">
               <span onclick="${isOwn ? 'selfTap(this)' : `showUserProfile('${p.user_id}',this)`}">${escHtml(user.username)}</span>
             </div>
+            ${user.location ? `<div class="dp-location"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>${escHtml(user.location)}</div>` : ''}
           </div>
           ${!isOwn
             ? `<button class="dp-follow-btn ${isFollowingAuthor ? 'prf-btn-following' : ''}" id="dp-follow-${postId}" onclick="toggleDetailFollow(this,'${p.user_id}')">${isFollowingAuthor ? 'Following' : 'Follow'}</button>`
@@ -6283,7 +6333,7 @@ async function loadMessages() {
   // Get other participants for each conversation
   const { data: allParts } = await supabase
     .from('conversation_participants')
-    .select('conversation_id, user_id, user:users(id,username,avatar)')
+    .select('conversation_id, user_id, user:users(id,username,avatar,location)')
     .in('conversation_id', convIds)
     .neq('user_id', currentUser.id);
 
@@ -7836,16 +7886,35 @@ function openEditProfile() {
   overlay.classList.remove('hidden');
 
   document.getElementById('edit-username').value = currentProfile.username || '';
-  document.getElementById('edit-bio').value = currentProfile.bio || '';
+  const bioEl = document.getElementById('edit-bio');
+  if (bioEl) {
+    bioEl.value = currentProfile.bio || '';
+    const bioDaysLeft = daysUntilAllowed(currentProfile.bio_last_changed, 90);
+    if (bioDaysLeft > 0) {
+      bioEl.disabled = true;
+      bioEl.style.opacity = '0.5';
+      const bioHint = document.getElementById('edit-bio-hint');
+      if (bioHint) bioHint.textContent = `🔒 Bio locked for ${bioDaysLeft} more day${bioDaysLeft === 1 ? '' : 's'}`;
+    }
+  }
 
-  // Location — pre-fill editable input
+  // Location — pre-fill editable input with lock check
   const locInput = document.getElementById('edit-location');
   const locHint  = document.getElementById('location-hint');
+  const locBtn   = document.getElementById('detect-location-btn');
   if (locInput) {
     locInput.value = currentProfile.location || '';
-    if (!currentProfile.location) {
-      // Auto-detect on open
-      setTimeout(triggerLocationDetect, 500);
+    const locDaysLeft = daysUntilAllowed(currentProfile.location_last_changed, 90);
+    if (locDaysLeft > 0) {
+      locInput.disabled = true;
+      locInput.style.opacity = '0.5';
+      if (locBtn) { locBtn.style.display = 'none'; }
+      if (locHint) locHint.textContent = `📍 Location locked for ${locDaysLeft} more day${locDaysLeft === 1 ? '' : 's'}`;
+    } else if (!currentProfile.location) {
+      if (locHint) locHint.textContent = 'Tap Detect to auto-detect your precise location';
+      setTimeout(triggerLocationDetect, 800);
+    } else {
+      if (locHint) locHint.textContent = 'Location auto-detected — locked for 90 days after saving';
     }
   }
 
