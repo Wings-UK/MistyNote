@@ -471,19 +471,23 @@ async function submitUsernamePicker() {
 // MARKET PAGE
 // ══════════════════════════════════════════
 function showMarket() {
-  // Hide all pages, show market
-  document.querySelectorAll('.page').forEach(p => {
-    p.classList.remove('active');
-    p.style.display = '';
+  // Close any slide pages first
+  if (typeof slideStack !== 'undefined' && slideStack.length > 0) {
+    slideStack.forEach(id => document.getElementById('page-' + id)?.classList.remove('active'));
+    slideStack.length = 0;
+  }
+  document.getElementById('comment-bar').style.display = 'none';
+  document.getElementById('bottom-nav').style.display = 'flex';
+
+  // Switch pages
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-market')?.classList.add('active');
+
+  // Update nav active state
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.page === 'market');
   });
-  const mktPage = document.getElementById('page-market');
-  if (mktPage) { mktPage.classList.add('active'); }
 
-  // Update nav
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  document.querySelector('.nav-btn-market')?.classList.add('active');
-
-  // Start countdown
   startMktCountdown();
 }
 
@@ -1350,6 +1354,8 @@ async function handleLogout() {
 
 function navTo(pageId) {
   if (pageId === 'market') { showMarket(); return; }
+  // Stop market countdown when leaving market
+  if (_mktCountdownInterval) { clearInterval(_mktCountdownInterval); _mktCountdownInterval = null; }
   // If any slide panels are open, close them all cleanly before navigating
   if (slideStack.length > 0) {
     slideStack.forEach(id => {
