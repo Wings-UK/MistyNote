@@ -6419,12 +6419,12 @@ function updateChatStatus(text, online, typing = false) {
 
 // ── Load other user's online status ──
 async function loadChatUserStatus(userId) {
-  // If other user was active in THIS chat session in last 2 mins, show Online immediately
+  // If confirmed online in last 2 mins via ping/typing, show Online
   if (Date.now() - _otherUserLastActiveChatTime < 120000) {
     updateChatStatus('Online', true, false);
     return;
   }
-  // Otherwise check DB — picks up activity from anywhere in the app
+  // Check DB
   const { data } = await supabase
     .from('users')
     .select('last_seen')
@@ -6432,7 +6432,18 @@ async function loadChatUserStatus(userId) {
     .single();
   if (data) {
     const online = isOnline(data.last_seen);
-    updateChatStatus(online ? 'Online' : formatLastSeen(data.last_seen), online);
+    if (online) {
+      // They're online per DB — update our local cache too
+      _otherUserLastActiveChatTime = new Date(data.last_seen).getTime();
+      updateChatStatus('Online', true, false);
+    } else {
+      // Use whichever is more recent — DB or our local session record
+      const mostRecentActivity = Math.max(
+        new Date(data.last_seen).getTime(),
+        _otherUserLastActiveChatTime
+      );
+      updateChatStatus(formatLastSeen(new Date(mostRecentActivity).toISOString()), false);
+    }
   }
 }
 
