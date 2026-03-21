@@ -466,6 +466,48 @@ async function submitUsernamePicker() {
   }
 }
 
+
+// ══════════════════════════════════════════
+// MARKET PAGE
+// ══════════════════════════════════════════
+function showMarket() {
+  // Hide all pages, show market
+  document.querySelectorAll('.page').forEach(p => {
+    p.classList.remove('active');
+    p.style.display = '';
+  });
+  const mktPage = document.getElementById('page-market');
+  if (mktPage) { mktPage.classList.add('active'); }
+
+  // Update nav
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('.nav-btn-market')?.classList.add('active');
+
+  // Start countdown
+  startMktCountdown();
+}
+
+function mktSetCat(btn) {
+  document.querySelectorAll('.mkt-cat').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+let _mktCountdownInterval = null;
+function startMktCountdown() {
+  if (_mktCountdownInterval) return;
+  let secs = 2 * 3600 + 45 * 60 + 18;
+  const el = document.getElementById('mkt-countdown');
+  const tick = () => {
+    if (!el) return;
+    secs = Math.max(0, secs - 1);
+    const h = String(Math.floor(secs / 3600)).padStart(2, '0');
+    const m = String(Math.floor((secs % 3600) / 60)).padStart(2, '0');
+    const s = String(secs % 60).padStart(2, '0');
+    el.textContent = `${h}:${m}:${s}`;
+  };
+  _mktCountdownInterval = setInterval(tick, 1000);
+}
+
 async function bootApp(isDeepLink = false) {
   document.getElementById('auth-screen').style.display = 'none';
 
@@ -1307,6 +1349,7 @@ async function handleLogout() {
 // ══════════════════════════════════════════
 
 function navTo(pageId) {
+  if (pageId === 'market') { showMarket(); return; }
   // If any slide panels are open, close them all cleanly before navigating
   if (slideStack.length > 0) {
     slideStack.forEach(id => {
