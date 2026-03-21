@@ -396,34 +396,44 @@
     padding: 6px 4px;
   }
   .market-nav-icon {
-    width: 48px; height: 34px;
-    background: linear-gradient(135deg, #6C47FF 0%, #9333ea 100%);
-    border-radius: 10px;
+    width: 46px; height: 46px;
+    background: linear-gradient(145deg, #7c3aed 0%, #6C47FF 55%, #4f46e5 100%);
+    border-radius: 14px;
     display: flex; align-items: center; justify-content: center;
     color: white;
-    box-shadow: 0 3px 10px rgba(108,71,255,0.4), 0 1px 3px rgba(108,71,255,0.2);
-    transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s;
+    box-shadow: 0 4px 14px rgba(108,71,255,0.45), 0 1px 4px rgba(108,71,255,0.25);
+    transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.25s;
     position: relative; overflow: hidden;
   }
-  /* shimmer effect on icon */
+  /* double shimmer — sweep + glow pulse */
+  .market-nav-icon::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(circle at 50% 0%, rgba(255,255,255,0.15), transparent 70%);
+    border-radius: 14px;
+  }
   .market-nav-icon::after {
     content: '';
     position: absolute; inset: 0;
-    background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.25) 50%, transparent 60%);
-    background-size: 200% 100%;
-    animation: mktShimmer 3s ease-in-out infinite;
+    background: linear-gradient(110deg,
+      transparent 20%,
+      rgba(255,255,255,0.35) 45%,
+      rgba(255,255,255,0.12) 55%,
+      transparent 80%);
+    background-size: 300% 100%;
+    animation: mktShimmer 2.8s cubic-bezier(0.4,0,0.6,1) infinite;
   }
   @keyframes mktShimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
+    0%   { background-position: 300% 0; opacity: 0; }
+    15%  { opacity: 1; }
+    85%  { opacity: 1; }
+    100% { background-position: -300% 0; opacity: 0; }
   }
   .nav-btn-market.active .market-nav-icon {
-    transform: scale(1.08);
-    box-shadow: 0 5px 16px rgba(108,71,255,0.5), 0 2px 6px rgba(108,71,255,0.3);
+    transform: scale(1.1);
+    box-shadow: 0 6px 20px rgba(108,71,255,0.55), 0 2px 8px rgba(108,71,255,0.3);
   }
-  .nav-btn-market:active .market-nav-icon { transform: scale(0.92); }
-  .nav-btn-market span { font-size: 10px; font-weight: 700; color: var(--text3); letter-spacing: 0.2px; }
-  .nav-btn-market.active span { color: var(--accent); font-weight: 800; }
+  .nav-btn-market:active .market-nav-icon { transform: scale(0.9); }
   .nav-btn-compose:active { transform: scale(0.92); box-shadow: 0 2px 8px rgba(108,71,255,0.3); }
 
   /* Progress ring */
@@ -3665,10 +3675,18 @@
   /* ══════════════════════════════════════════
      MARKET PAGE
   ══════════════════════════════════════════ */
+  #page-market {
+    overflow: hidden !important;
+  }
+  #page-market:not(.active) .mkt-header,
+  #page-market:not(.active) .mkt-scroll {
+    display: none !important;
+  }
   .mkt-page {
     display: flex; flex-direction: column;
     height: 100%; overflow: hidden;
     background: var(--bg);
+    contain: strict;
   }
 
   /* Header */
@@ -3677,7 +3695,8 @@
     background: var(--surface);
     border-bottom: 1px solid var(--border);
     padding-top: max(14px, env(safe-area-inset-top, 14px));
-    z-index: 10;
+    z-index: 1;
+    position: relative;
   }
   .mkt-header-top {
     display: flex; align-items: center; justify-content: space-between;
