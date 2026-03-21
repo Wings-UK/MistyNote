@@ -353,11 +353,12 @@
     -webkit-overflow-scrolling: touch;
     padding-bottom: calc(var(--nav-h) + var(--safe-bottom) + 20px);
     opacity: 0; pointer-events: none;
-    transition: opacity 0.25s ease;
+    visibility: hidden;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
   }
   /* Ensure ALL children of inactive pages are non-interactive */
   .page:not(.active) * { pointer-events: none !important; }
-  .page.active { opacity: 1; pointer-events: all; }
+  .page.active { opacity: 1; pointer-events: all; visibility: visible; }
   .page.slide-page {
     transform: translateX(100%);
     transition: transform 0.35s cubic-bezier(0.4,0,0.2,1), opacity 0s;
@@ -421,13 +422,13 @@
       rgba(255,255,255,0.12) 55%,
       transparent 80%);
     background-size: 300% 100%;
-    animation: mktShimmer 2.8s cubic-bezier(0.4,0,0.6,1) infinite;
+    animation: mktShimmer 8s ease-in-out infinite;
   }
   @keyframes mktShimmer {
-    0%   { background-position: 300% 0; opacity: 0; }
-    15%  { opacity: 1; }
-    85%  { opacity: 1; }
-    100% { background-position: -300% 0; opacity: 0; }
+    0%    { background-position: 300% 0; opacity: 0; }
+    8%    { opacity: 1; }
+    22%   { background-position: -300% 0; opacity: 0; }
+    100%  { background-position: -300% 0; opacity: 0; }
   }
   .nav-btn-market.active .market-nav-icon {
     transform: scale(1.1);
@@ -3677,6 +3678,7 @@
   ══════════════════════════════════════════ */
   #page-market {
     overflow: hidden !important;
+    isolation: isolate;
   }
   #page-market:not(.active) .mkt-header,
   #page-market:not(.active) .mkt-scroll {
