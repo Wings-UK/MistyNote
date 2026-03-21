@@ -274,66 +274,81 @@ async function detectAndSaveLocation() {
 
   _setLocationDisplay('Detecting…');
 
-  // Try GPS first, fall back to IP-based location
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const { latitude, longitude } = pos.coords;
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
-            { headers: { 'Accept-Language': 'en' } }
-          );
-          const data = await res.json();
-          const city    = data.address?.city || data.address?.town || data.address?.village || data.address?.county || '';
-          const country = data.address?.country || '';
-          const location = [city, country].filter(Boolean).join(', ');
-          if (location) {
-            await _saveAndShowLocation(location, userId);
-          } else {
-            await _detectByIP(userId);
-          }
-        } catch(e) {
-          await _detectByIP(userId);
-        }
-      },
-      async (err) => {
-        if (err.code === 1) {
-          // Permission denied — try IP as silent fallback
-          await _detectByIP(userId);
-        } else {
-          await _detectByIP(userId);
-        }
-      },
-      { timeout: 8000, maximumAge: 300000, enableHighAccuracy: false }
-    );
-  } else {
-    await _detectByIP(userId);
+  if (!navigator.geolocation) {
+    _showLocationInput(userId);
+    return;
   }
+
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      try {
+        const { latitude, longitude } = pos.coords;
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+          { headers: { 'Accept-Language': 'en' } }
+        );
+        const data = await res.json();
+        const city    = data.address?.city || data.address?.town || data.address?.village || data.address?.county || '';
+        const country = data.address?.country || '';
+        const location = [city, country].filter(Boolean).join(', ');
+        if (location) {
+          await _saveAndShowLocation(location, userId);
+        } else {
+          _showLocationInput(userId);
+        }
+      } catch(e) {
+        _showLocationInput(userId);
+      }
+    },
+    () => { _showLocationInput(userId); },
+    { timeout: 8000, maximumAge: 300000, enableHighAccuracy: false }
+  );
 }
 
-async function _detectByIP(userId) {
-  try {
-    const res = await fetch('https://ipapi.co/json/');
-    const data = await res.json();
-    const city    = data.city || '';
-    const country = data.country_name || '';
-    const location = [city, country].filter(Boolean).join(', ');
-    if (location) {
+// Show inline text input so user can type their location manually
+function _showLocationInput(userId) {
+  const el = document.getElementById('edit-location-display');
+  if (!el) return;
+  el.innerHTML = '';
+  el.style.cursor = '';
+  el.onclick = null;
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'e.g. Lagos, Nigeria';
+  input.style.cssText = `
+    width: 100%; padding: 8px 12px; border-radius: 10px;
+    border: 1.5px solid var(--accent); background: var(--bg2);
+    font-size: 14px; font-family: var(--font); color: var(--text);
+    outline: none;
+  `;
+
+  const hint = document.createElement('p');
+  hint.textContent = 'GPS unavailable — enter your location manually';
+  hint.style.cssText = 'font-size:11px; color:var(--text3); margin-top:4px;';
+
+  input.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter' && input.value.trim()) {
+      const location = input.value.trim();
       await _saveAndShowLocation(location, userId);
-    } else {
-      _setLocationDisplay('Tap to detect location');
     }
-  } catch(e) {
-    _setLocationDisplay('Tap to detect location');
-  }
+  });
+
+  input.addEventListener('blur', async () => {
+    if (input.value.trim()) {
+      await _saveAndShowLocation(input.value.trim(), userId);
+    }
+  });
+
+  el.appendChild(input);
+  el.appendChild(hint);
+  setTimeout(() => input.focus(), 100);
 }
 
 async function _saveAndShowLocation(location, userId) {
   await supabase.from('users').update({ location }).eq('id', userId).catch(() => {});
   if (currentProfile && currentUser?.id === userId) {
     currentProfile.location = location;
-    _setLocationDisplay(location);
     if (document.getElementById('page-profile')?.classList.contains('active')) {
       renderMyProfile();
     }
@@ -7823,19 +7838,14 @@ function openEditProfile() {
   document.getElementById('edit-username').value = currentProfile.username || '';
   document.getElementById('edit-bio').value = currentProfile.bio || '';
 
-  // Location — read-only display
-  const locDisplay = document.getElementById('edit-location-display');
-  const locHint    = document.getElementById('location-hint');
-  if (locDisplay) {
-    if (currentProfile.location_denied) {
-      locDisplay.textContent = 'Location denied — enable in browser settings';
-      locDisplay.style.color = 'var(--red)';
-    } else if (currentProfile.location) {
-      locDisplay.textContent = currentProfile.location;
-      locDisplay.style.color = '';
-      if (locHint) locHint.textContent = 'Location detected automatically';
-    } else {
-      _setLocationDisplay('Tap to detect location');
+  // Location — pre-fill editable input
+  const locInput = document.getElementById('edit-location');
+  const locHint  = document.getElementById('location-hint');
+  if (locInput) {
+    locInput.value = currentProfile.location || '';
+    if (!currentProfile.location) {
+      // Auto-detect on open
+      setTimeout(triggerLocationDetect, 500);
     }
   }
 
@@ -7965,11 +7975,13 @@ async function saveProfile() {
   }
 
   // ── Build updates ──
+  const locationValue = document.getElementById('edit-location')?.value?.trim() || '';
   const updates = {
     username: usernameCheck.value,
     bio: bioValue,
-    // location is auto-managed by detectAndSaveLocation — not editable here
+    ...(locationValue ? { location: locationValue } : {}),
   };
+  if (locationValue && currentProfile) currentProfile.location = locationValue;
 
   const saveBtn = document.querySelector('.modal-save');
   if (saveBtn) { saveBtn.textContent = '…'; saveBtn.style.opacity = '0.5'; }
