@@ -1251,23 +1251,14 @@
     background: var(--bg3); overflow: hidden;
   }
   .chat-topbar-av img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
-  .chat-topbar-online {
-    position: absolute; bottom: 1px; right: 1px;
-    width: 10px; height: 10px; border-radius: 50%;
-    background: #00c48c; border: 2px solid var(--bg);
-    animation: onlinePulse 2.5s ease-in-out infinite;
-  }
-  @keyframes onlinePulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(0,196,140,0.4); }
-    50% { box-shadow: 0 0 0 4px rgba(0,196,140,0); }
-  }
+  .chat-topbar-online { display: none !important; }
   .chat-topbar-info { flex: 1; min-width: 0; cursor: pointer; }
   .chat-topbar-name { font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .chat-topbar-status {
     font-size: 12px; color: var(--text3); margin-top: 1px;
     transition: color 0.2s;
   }
-  .chat-topbar-status.online { color: #00c48c; font-weight: 500; }
+
   .chat-topbar-status.typing {
     color: var(--accent); font-weight: 500;
   }
