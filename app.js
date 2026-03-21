@@ -476,7 +476,10 @@ function showMarket() {
     slideStack.forEach(id => document.getElementById('page-' + id)?.classList.remove('active'));
     slideStack.length = 0;
   }
+  // Hide all fixed headers that float outside .page elements
   document.getElementById('comment-bar').style.display = 'none';
+  document.getElementById('my-profile-header').style.display = 'none';
+  document.getElementById('user-profile-header').style.display = 'none';
   document.getElementById('bottom-nav').style.display = 'flex';
 
   // Switch pages
