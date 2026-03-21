@@ -486,6 +486,7 @@ async function bootApp(isDeepLink = false) {
     if (!profile?.onboarding_done) {
       currentUser = user;
       await loadMyProfile();
+  startPresenceHeartbeat();
       showOnboarding();
       return;
     }
@@ -6324,6 +6325,168 @@ async function loadMessages() {
 }
 
 // ── Open a chat ──
+// ── Scroll chat to bottom when keyboard opens ──
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', () => {
+    if (activeChatId) {
+      const msgsEl = document.getElementById('chat-messages');
+      if (msgsEl) setTimeout(() => { msgsEl.scrollTop = msgsEl.scrollHeight; }, 50);
+    }
+  });
+}
+
+// ══════════════════════════════════════════
+// ONLINE STATUS + TYPING INDICATORS
+// ══════════════════════════════════════════
+
+let presenceChannel = null;
+let typingTimeout   = null;
+let lastSeenInterval = null;
+let isCurrentlyTyping = false;
+
+// ── Update my last_seen every 30s while app is open ──
+function startPresenceHeartbeat() {
+  if (!currentUser) return;
+  const updateSeen = () => {
+    supabase.from('users')
+      .update({ last_seen: new Date().toISOString() })
+      .eq('id', currentUser.id)
+      .catch(() => {});
+  };
+  updateSeen(); // immediate
+  clearInterval(lastSeenInterval);
+  lastSeenInterval = setInterval(updateSeen, 30000);
+}
+
+// ── Format last seen time ──
+function formatLastSeen(lastSeenStr) {
+  if (!lastSeenStr) return 'Offline';
+  const diff = Date.now() - new Date(lastSeenStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (diff < 120000) return 'Online';
+  if (mins < 60) return `Last seen ${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `Last seen ${hours}h ago`;
+  return `Last seen ${Math.floor(hours/24)}d ago`;
+}
+
+// ── Check if user is online (seen within 2 mins) ──
+function isOnline(lastSeenStr) {
+  if (!lastSeenStr) return false;
+  return Date.now() - new Date(lastSeenStr).getTime() < 120000;
+}
+
+// ── Update chat topbar status ──
+function updateChatStatus(text, online, typing = false) {
+  const statusEl = document.getElementById('chat-topbar-status');
+  const onlineDot = document.getElementById('chat-topbar-online');
+  if (statusEl) {
+    statusEl.textContent = typing ? '✦ typing...' : text;
+    let cls = 'chat-topbar-status';
+    if (typing) cls += ' typing';
+    else if (online) cls += ' online';
+    statusEl.className = cls;
+  }
+  if (onlineDot) {
+    onlineDot.style.display = online || typing ? 'block' : 'none';
+  }
+}
+
+// ── Load other user's online status ──
+async function loadChatUserStatus(userId) {
+  const { data } = await supabase
+    .from('users')
+    .select('last_seen')
+    .eq('id', userId)
+    .single();
+  if (data) {
+    const online = isOnline(data.last_seen);
+    updateChatStatus(online ? 'Online' : formatLastSeen(data.last_seen), online);
+  }
+}
+
+// ── Subscribe to typing + online via Realtime presence ──
+function subscribeToPresence(convId) {
+  if (presenceChannel) {
+    supabase.removeChannel(presenceChannel);
+    presenceChannel = null;
+  }
+
+  presenceChannel = supabase.channel(`presence:${convId}`, {
+    config: { presence: { key: currentUser.id } }
+  });
+
+  presenceChannel
+    .on('presence', { event: 'sync' }, () => {
+      const state = presenceChannel.presenceState();
+      let otherTyping = false;
+      let otherOnline = false;
+
+      Object.entries(state).forEach(([uid, presences]) => {
+        if (uid === currentUser.id) return;
+        const p = presences[0];
+        if (p) {
+          otherOnline = true;
+          if (p.typing) otherTyping = true;
+        }
+      });
+
+      if (otherTyping) {
+        updateChatStatus('typing...', true, true);
+        setInboxTyping(convId, true);
+      } else if (otherOnline) {
+        updateChatStatus('Online', true, false);
+        setInboxTyping(convId, false);
+      } else {
+        loadChatUserStatus(activeChatUserId);
+        setInboxTyping(convId, false);
+      }
+    })
+    .subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        await presenceChannel.track({ typing: false, user_id: currentUser.id });
+      }
+    });
+}
+
+// ── Broadcast typing state ──
+async function broadcastTyping(isTyping) {
+  if (!presenceChannel || isCurrentlyTyping === isTyping) return;
+  isCurrentlyTyping = isTyping;
+  await presenceChannel.track({ typing: isTyping, user_id: currentUser.id }).catch(() => {});
+}
+
+// ── Wire typing detection to chat input ──
+function wireChatTyping() {
+  const input = document.getElementById('chat-input-field');
+  if (!input || input._typingWired) return;
+  input._typingWired = true;
+
+  input.addEventListener('input', () => {
+    broadcastTyping(true);
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => broadcastTyping(false), 2500);
+  });
+
+  input.addEventListener('blur', () => {
+    clearTimeout(typingTimeout);
+    broadcastTyping(false);
+  });
+}
+
+// ── Stop presence when leaving chat ──
+function stopPresence() {
+  clearTimeout(typingTimeout);
+  isCurrentlyTyping = false;
+  if (presenceChannel) {
+    presenceChannel.untrack().catch(() => {});
+    supabase.removeChannel(presenceChannel);
+    presenceChannel = null;
+  }
+  const input = document.getElementById('chat-input-field');
+  if (input) input._typingWired = false;
+}
+
 function openChat(convId, otherUser) {
   activeChatId     = convId;
   activeChatUserId = otherUser.id;
@@ -6334,7 +6497,7 @@ function openChat(convId, otherUser) {
   const statusEl = document.getElementById('chat-topbar-status');
   const avEl     = document.getElementById('chat-topbar-av');
   if (nameEl)   nameEl.textContent = otherUser.username || '';
-  if (statusEl) { statusEl.textContent = 'MistyNote'; statusEl.className = 'chat-topbar-status'; }
+  if (statusEl) { statusEl.textContent = 'Loading...'; statusEl.className = 'chat-topbar-status'; }
   if (avEl) {
     if (otherUser.avatar) {
       avEl.innerHTML = `<img src="${otherUser.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.parentElement.style.background='var(--bg3)'">`;
@@ -6358,6 +6521,9 @@ function openChat(convId, otherUser) {
     await loadChatMessages(convId);
     subscribeToChat(convId);
     markConvRead(convId);
+    loadChatUserStatus(otherUser.id);
+    subscribeToPresence(convId);
+    wireChatTyping();
 
 
   });
@@ -6365,6 +6531,7 @@ function openChat(convId, otherUser) {
 
 // ── Close chat ──
 function closeChat() {
+  stopPresence();
   if (msgRealtimeSub) {
     supabase.removeChannel(msgRealtimeSub);
     msgRealtimeSub = null;
@@ -7068,6 +7235,27 @@ function subscribeToChat(convId) {
 }
 
 // ── Update inbox row with latest message (real-time) ──
+// ── Show typing in inbox row ──
+function setInboxTyping(convId, isTyping) {
+  const row = document.querySelector(`.msg-conv-row[data-conv-id="${convId}"]`);
+  if (!row) return;
+  const preview = row.querySelector('.msg-conv-preview');
+  if (!preview) return;
+  if (isTyping) {
+    if (!preview.dataset.originalText) preview.dataset.originalText = preview.textContent;
+    preview.textContent = 'typing...';
+    preview.style.color = 'var(--accent)';
+    preview.style.fontStyle = 'italic';
+    preview.style.fontWeight = '500';
+  } else {
+    preview.textContent = preview.dataset.originalText || preview.textContent;
+    preview.style.color = '';
+    preview.style.fontStyle = '';
+    preview.style.fontWeight = '';
+    preview.dataset.originalText = '';
+  }
+}
+
 function updateInboxRow(convId, text, time) {
   const row = document.querySelector(`.msg-conv-row[data-conv-id="${convId}"]`);
   if (!row) return;
