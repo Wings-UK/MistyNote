@@ -267,149 +267,69 @@ function hideDeepLinkSplash() {
 // LOCATION — silent auto-detect on every boot
 // ══════════════════════════════════════════
 
+// ── Silent background location detection — every session ──
+// No UI, no manual input, retries automatically, always current
 async function detectAndSaveLocation() {
   if (!currentUser) return;
-  if (currentProfile?.location) {
-    const input = document.getElementById('edit-location');
-    if (input && !input.value) input.value = currentProfile.location;
-    return;
-  }
-  triggerLocationDetect();
+  if (!navigator.geolocation) return;
+  _gpsAttempt(currentUser.id, true, 0);
 }
 
-async function triggerLocationDetect() {
-  if (!currentUser) return;
-  const userId = currentUser.id;
-  const btn    = document.getElementById('detect-location-btn');
-  const hint   = document.getElementById('location-hint');
-  const input  = document.getElementById('edit-location');
-
-  if (btn)  { btn.textContent = '…'; btn.disabled = true; }
-  if (hint) hint.textContent = 'Getting your GPS location…';
-
-  if (!navigator.geolocation) {
-    if (hint) hint.textContent = 'GPS not available — type your city manually';
-    if (btn)  { btn.textContent = 'Detect'; btn.disabled = false; }
-    return;
-  }
-
+function _gpsAttempt(userId, highAccuracy, attempt) {
   navigator.geolocation.getCurrentPosition(
     async (pos) => {
       try {
         const { latitude, longitude } = pos.coords;
-        if (hint) hint.textContent = 'Identifying your city…';
-
         const res = await fetch(
           `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=en`
         );
+        if (!res.ok) throw new Error('api_fail');
         const data = await res.json();
 
-        // BigDataCloud fields — locality is more precise than city
         const city    = data.locality || data.city || data.principalSubdivision || '';
         const state   = data.principalSubdivision || '';
         const country = data.countryName || '';
-
-        const parts = [city];
+        const parts   = [city];
         if (state && state !== city) parts.push(state);
         if (country) parts.push(country);
         const location = parts.filter(Boolean).join(', ');
 
         if (location && country) {
-          if (input) input.value = location;
-          if (hint)  hint.textContent = '✓ Location detected — save profile to lock it in for 90 days';
-          if (btn)   { btn.textContent = '✓'; btn.disabled = false; }
-          await supabase.from('users')
-            .update({ location, location_last_changed: new Date().toISOString() })
-            .eq('id', userId).catch(() => {});
-          if (currentProfile) {
+          // Save silently — update every session so it's always current
+          await supabase.from('users').update({ location }).eq('id', userId).catch(() => {});
+          if (currentProfile && currentUser?.id === userId) {
             currentProfile.location = location;
-            currentProfile.location_last_changed = new Date().toISOString();
+            if (document.getElementById('page-profile')?.classList.contains('active')) {
+              renderMyProfile();
+            }
           }
-        } else {
-          if (hint) hint.textContent = 'Location unclear — type your city manually';
-          if (btn)  { btn.textContent = 'Retry'; btn.disabled = false; }
+        } else if (attempt < 2) {
+          // Data returned but no usable location — retry after delay
+          setTimeout(() => _gpsAttempt(userId, false, attempt + 1), 3000);
         }
       } catch(e) {
-        if (hint) hint.textContent = 'Detection failed — type your city manually';
-        if (btn)  { btn.textContent = 'Retry'; btn.disabled = false; }
+        // API failed — retry up to 2 times with increasing delay
+        if (attempt < 2) {
+          setTimeout(() => _gpsAttempt(userId, false, attempt + 1), (attempt + 1) * 4000);
+        }
       }
     },
     (err) => {
-      if (err.code === 1) {
-        if (hint) hint.textContent = 'Permission denied — enable location in browser settings';
-      } else if (err.code === 3) {
-        if (hint) hint.textContent = 'GPS timed out — move to open area and retry';
-      } else {
-        if (hint) hint.textContent = 'Could not get location — type your city manually';
+      if (err.code === 1) return; // Permission denied — respect user choice, silent
+      // Timeout or unavailable — retry with low accuracy
+      if (highAccuracy && attempt < 2) {
+        setTimeout(() => _gpsAttempt(userId, false, attempt + 1), 2000);
       }
-      if (btn) { btn.textContent = 'Retry'; btn.disabled = false; }
     },
-    { timeout: 15000, maximumAge: 0, enableHighAccuracy: true }
+    {
+      timeout: highAccuracy ? 12000 : 20000,
+      maximumAge: highAccuracy ? 0 : 600000,
+      enableHighAccuracy: highAccuracy
+    }
   );
 }
 
-// Show inline text input so user can type their location manually
-function _showLocationInput(userId) {
-  const el = document.getElementById('edit-location-display');
-  if (!el) return;
-  el.innerHTML = '';
-  el.style.cursor = '';
-  el.onclick = null;
 
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.placeholder = 'e.g. Lagos, Nigeria';
-  input.style.cssText = `
-    width: 100%; padding: 8px 12px; border-radius: 10px;
-    border: 1.5px solid var(--accent); background: var(--bg2);
-    font-size: 14px; font-family: var(--font); color: var(--text);
-    outline: none;
-  `;
-
-  const hint = document.createElement('p');
-  hint.textContent = 'GPS unavailable — enter your location manually';
-  hint.style.cssText = 'font-size:11px; color:var(--text3); margin-top:4px;';
-
-  input.addEventListener('keydown', async (e) => {
-    if (e.key === 'Enter' && input.value.trim()) {
-      const location = input.value.trim();
-      await _saveAndShowLocation(location, userId);
-    }
-  });
-
-  input.addEventListener('blur', async () => {
-    if (input.value.trim()) {
-      await _saveAndShowLocation(input.value.trim(), userId);
-    }
-  });
-
-  el.appendChild(input);
-  el.appendChild(hint);
-  setTimeout(() => input.focus(), 100);
-}
-
-async function _saveAndShowLocation(location, userId) {
-  await supabase.from('users').update({ location }).eq('id', userId).catch(() => {});
-  if (currentProfile && currentUser?.id === userId) {
-    currentProfile.location = location;
-    if (document.getElementById('page-profile')?.classList.contains('active')) {
-      renderMyProfile();
-    }
-  }
-}
-
-function _setLocationDisplay(text) {
-  const el = document.getElementById('edit-location-display');
-  if (!el) return;
-  const isAction = text === 'Tap to detect location';
-  el.textContent = text;
-  el.style.color = text === 'Detecting…' ? 'var(--text3)' : isAction ? 'var(--accent)' : '';
-  el.style.cursor = isAction ? 'pointer' : '';
-  el.onclick = isAction ? () => {
-    if (currentProfile) currentProfile.location = '';
-    detectAndSaveLocation();
-  } : null;
-}
 
 function sortMomentsRow() {
   const row = document.getElementById('stories-row');
@@ -7898,25 +7818,7 @@ function openEditProfile() {
     }
   }
 
-  // Location — pre-fill editable input with lock check
-  const locInput = document.getElementById('edit-location');
-  const locHint  = document.getElementById('location-hint');
-  const locBtn   = document.getElementById('detect-location-btn');
-  if (locInput) {
-    locInput.value = currentProfile.location || '';
-    const locDaysLeft = daysUntilAllowed(currentProfile.location_last_changed, 90);
-    if (locDaysLeft > 0) {
-      locInput.disabled = true;
-      locInput.style.opacity = '0.5';
-      if (locBtn) { locBtn.style.display = 'none'; }
-      if (locHint) locHint.textContent = `📍 Location locked for ${locDaysLeft} more day${locDaysLeft === 1 ? '' : 's'}`;
-    } else if (!currentProfile.location) {
-      if (locHint) locHint.textContent = 'Tap Detect to auto-detect your precise location';
-      setTimeout(triggerLocationDetect, 800);
-    } else {
-      if (locHint) locHint.textContent = 'Location auto-detected — locked for 90 days after saving';
-    }
-  }
+
 
   // ── Show rate limit status ──
   const unError  = document.getElementById('edit-username-error');
@@ -7948,7 +7850,8 @@ function openEditProfile() {
     document.getElementById('edit-bio').disabled = false;
     document.getElementById('edit-bio').style.opacity = '';
   }
-  document.getElementById('edit-location').value = currentProfile.location || '';
+  const _locEl = document.getElementById('edit-location-display');
+  if (_locEl) _locEl.textContent = currentProfile.location || 'Auto-detecting…';
   if (currentProfile.cover) document.getElementById('edit-cover-img').src = currentProfile.cover;
   if (currentProfile.avatar) document.getElementById('edit-avatar-img').src = currentProfile.avatar;
 
@@ -8044,13 +7947,10 @@ async function saveProfile() {
   }
 
   // ── Build updates ──
-  const locationValue = document.getElementById('edit-location')?.value?.trim() || '';
   const updates = {
     username: usernameCheck.value,
     bio: bioValue,
-    ...(locationValue ? { location: locationValue } : {}),
   };
-  if (locationValue && currentProfile) currentProfile.location = locationValue;
 
   const saveBtn = document.querySelector('.modal-save');
   if (saveBtn) { saveBtn.textContent = '…'; saveBtn.style.opacity = '0.5'; }
