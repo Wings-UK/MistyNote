@@ -6353,9 +6353,19 @@ function startPresenceHeartbeat() {
       .eq('id', currentUser.id)
       .catch(() => {});
   };
-  updateSeen(); // immediate
+  updateSeen(); // immediate on load
   clearInterval(lastSeenInterval);
-  lastSeenInterval = setInterval(updateSeen, 60000); // every 60s
+  lastSeenInterval = setInterval(updateSeen, 30000); // every 30s for accuracy
+  // Also update on user interaction
+  ['touchstart', 'click', 'keydown'].forEach(evt => {
+    document.addEventListener(evt, () => {
+      const now = Date.now();
+      if (!window._lastSeenThrottle || now - window._lastSeenThrottle > 30000) {
+        window._lastSeenThrottle = now;
+        updateSeen();
+      }
+    }, { passive: true });
+  });
 }
 
 // ── Format last seen time ──
@@ -6420,13 +6430,14 @@ function subscribeToPresence(convId) {
       if (payload.isTyping) {
         updateChatStatus('typing...', true, true);
         setInboxTyping(convId, true);
-        // Auto-clear after 4s in case stop event missed
+        // Reset safety timer on EVERY typing event — stays active while keys are pressed
         clearTimeout(window._typingClearTimer);
         window._typingClearTimer = setTimeout(() => {
           loadChatUserStatus(activeChatUserId);
           setInboxTyping(convId, false);
         }, 4000);
       } else {
+        // Explicit stop — clear immediately
         clearTimeout(window._typingClearTimer);
         loadChatUserStatus(activeChatUserId);
         setInboxTyping(convId, false);
@@ -6453,9 +6464,20 @@ function wireChatTyping() {
   input._typingWired = true;
 
   input.addEventListener('input', () => {
-    broadcastTyping(true);
+    // Send typing=true on every keystroke
+    if (!isCurrentlyTyping) {
+      broadcastTyping(true);
+    } else {
+      // Already typing — just re-send to keep it alive
+      presenceChannel?.send({
+        type: 'broadcast',
+        event: 'typing',
+        payload: { user_id: currentUser.id, isTyping: true }
+      }).catch(() => {});
+    }
+    // Reset the stop timer on every keystroke
     clearTimeout(typingTimeout);
-    typingTimeout = setTimeout(() => broadcastTyping(false), 2500);
+    typingTimeout = setTimeout(() => broadcastTyping(false), 3000);
   });
 
   input.addEventListener('blur', () => {
@@ -6514,6 +6536,13 @@ function openChat(convId, otherUser) {
     loadChatUserStatus(otherUser.id);
     subscribeToPresence(convId);
     wireChatTyping();
+    // Poll other user's online status every 30s while in chat
+    clearInterval(window._statusPollInterval);
+    window._statusPollInterval = setInterval(() => {
+      if (activeChatUserId && !isCurrentlyTyping) {
+        loadChatUserStatus(activeChatUserId);
+      }
+    }, 30000);
 
 
   });
@@ -6521,6 +6550,7 @@ function openChat(convId, otherUser) {
 
 // ── Close chat ──
 function closeChat() {
+  clearInterval(window._statusPollInterval);
   stopPresence();
   if (msgRealtimeSub) {
     supabase.removeChannel(msgRealtimeSub);
