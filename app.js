@@ -1937,7 +1937,7 @@ async function renderMyProfile() {
         </div>
         <div class="prf-icon-tab" data-tab="likes" onclick="switchPrfTab('likes',this)">
           <div class="prf-icon-tab-dot"></div>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22C12 22 3 16 3 9.5a5.5 5.5 0 0 1 9-4.2A5.5 5.5 0 0 1 21 9.5C21 16 12 22 12 22z"/></svg>
         </div>
         <div class="prf-icon-tab" data-tab="saved" onclick="switchPrfTab('saved',this)">
           <div class="prf-icon-tab-dot"></div>
@@ -2098,7 +2098,7 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false) {
         </div>
         <button class="prf-masonry-like ${liked ? 'liked' : ''}" data-post-id="${post.id}" onclick="event.stopPropagation(); toggleMasonryLike(this, '${post.id}')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="${liked ? 'rgb(244,7,82)' : 'none'}" stroke="${liked ? 'rgb(244,7,82)' : 'currentColor'}" stroke-width="2">
-            <path d="M12 20.4 C4.8 14.4, 2.4 9.6, 6 6 C8.4 3.6, 10.8 4.8, 11.76 6.72 L12 9.12 L12.24 6.72 C13.2 4.8, 15.6 3.6, 18 6 C21.6 9.6, 19.2 14.4, 12 20.4 Z"/>
+            <path d="M12 22C12 22 3 16 3 9.5a5.5 5.5 0 0 1 9-4.2A5.5 5.5 0 0 1 21 9.5C21 16 12 22 12 22z"/>
           </svg>
           <span class="prf-masonry-like-count">${likes > 0 ? fmtNum(likes) : ''}</span>
         </button>
@@ -3049,7 +3049,7 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
 
             <div class="heart-ai" data-post-id="${p.id}" data-liked="false">
               <svg class="heart-icon heart-clickable" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path class="heart-path" d="M12 20.4 C4.8 14.4, 2.4 9.6, 6 6 C8.4 3.6, 10.8 4.8, 11.76 6.72 L12 9.12 L12.24 6.72 C13.2 4.8, 15.6 3.6, 18 6 C21.6 9.6, 19.2 14.4, 12 20.4 Z" fill="none" stroke="#000000" stroke-width="2"/>
+                <path class="heart-path" d="M12 22C12 22 3 16 3 9.5a5.5 5.5 0 0 1 9-4.2A5.5 5.5 0 0 1 21 9.5C21 16 12 22 12 22z" fill="none" stroke="#000000" stroke-width="2"/>
               </svg>
               <span class="like-count heart-clickable">${p.like_count > 0 ? fmtNum(p.like_count) : ''}</span>
             </div>
@@ -3388,23 +3388,20 @@ function injectFeedPostStyles() {
     .like-count.liked { font-weight: 500; color: rgb(244,7,82); }
     .like-count:empty { display: none; }
 
-    @keyframes heartBeat {
-      0% { transform: scale(0.5); }
-      50% { transform: scale(1.7); }
+    @keyframes heartLike {
+      0%   { transform: scale(1); }
+      40%  { transform: scale(1.5); }
+      70%  { transform: scale(1.2); }
       100% { transform: scale(1); }
     }
-    .heart-animation { animation: heartBeat 0.7s ease-in-out; }
-    @keyframes pop {
-      0% { transform: scale(1); }
-      50% { transform: scale(1.5); }
+    @keyframes heartUnlike {
+      0%   { transform: scale(1); }
+      35%  { transform: scale(0.65); }
+      70%  { transform: scale(1.1); }
       100% { transform: scale(1); }
     }
-    @keyframes shrinkFade {
-      0% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(0.5); opacity: 0.5; }
-      100% { transform: scale(1); opacity: 1; }
-    }
-    .unfill-animation { animation: shrinkFade 0.3s ease forwards; }
+    .heart-anim-like   { animation: heartLike   0.35s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+    .heart-anim-unlike { animation: heartUnlike 0.3s  cubic-bezier(0.34,1.56,0.64,1) forwards; }
 
     .donate-btn { display: flex; align-items: center; cursor: pointer; }
     .donate-btn img { width: 22px; opacity: 0.7; }
@@ -3605,9 +3602,14 @@ async function toggleLike(postId, btn) {
   setLikeUI(postId, newLiked, null);
   if (newLiked) likedPosts.add(postId); else likedPosts.delete(postId);
 
-  // Animate
-  btn?.classList.add('heart-pop');
-  setTimeout(() => btn?.classList.remove('heart-pop'), 400);
+  // Animate heart
+  const heartIcon = btn?.querySelector('.heart-icon, svg');
+  if (heartIcon) {
+    heartIcon.classList.remove('heart-anim-like', 'heart-anim-unlike');
+    void heartIcon.offsetWidth; // force reflow to restart animation
+    heartIcon.classList.add(newLiked ? 'heart-anim-like' : 'heart-anim-unlike');
+    setTimeout(() => heartIcon.classList.remove('heart-anim-like', 'heart-anim-unlike'), 400);
+  }
 
   try {
     if (newLiked) {
@@ -3647,7 +3649,7 @@ function setLikeUI(postId, liked, count) {
     const path = container.querySelector('.heart-path');
     if (path) {
       path.setAttribute('fill', liked ? 'rgb(244,7,82)' : 'none');
-      path.setAttribute('stroke', liked ? 'rgb(244,7,82)' : 'currentColor');
+      path.setAttribute('stroke', liked ? 'rgb(244,7,82)' : '#000000');
     }
     if (count !== null && countEl) animateCount(countEl, count);
   });
@@ -5122,7 +5124,7 @@ function buildCommentEl(c, parentId, likedSet, postId) {
       <div class="comment-actions-row">
         <button class="comment-action like-comment-btn ${liked ? 'liked' : ''}" data-comment-id="${c.id}">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="${liked ? 'var(--red)' : 'none'}" stroke="${liked ? 'var(--red)' : 'currentColor'}" stroke-width="2">
-            <path class="cmt-heart-path" d="M12 20.4 C4.8 14.4, 2.4 9.6, 6 6 C8.4 3.6, 10.8 4.8, 11.76 6.72 L12 9.12 L12.24 6.72 C13.2 4.8, 15.6 3.6, 18 6 C21.6 9.6, 19.2 14.4, 12 20.4 Z"/>
+            <path class="cmt-heart-path" d="M12 22C12 22 3 16 3 9.5a5.5 5.5 0 0 1 9-4.2A5.5 5.5 0 0 1 21 9.5C21 16 12 22 12 22z"/>
           </svg>
           <span class="cmt-like-count">${c.like_count > 0 ? c.like_count : ''}</span>
         </button>
@@ -5320,8 +5322,13 @@ async function toggleCommentLike(commentId, btn) {
   btn.classList.toggle('liked', newLiked);
   const path = btn.querySelector('.heart-path');
   if (path) { path.setAttribute('fill', newLiked ? 'var(--red)' : 'none'); path.setAttribute('stroke', newLiked ? 'var(--red)' : 'currentColor'); }
-  btn.classList.add('heart-pop');
-  setTimeout(() => btn.classList.remove('heart-pop'), 400);
+  const cbHeart = btn?.querySelector('svg');
+  if (cbHeart) {
+    cbHeart.classList.remove('heart-anim-like', 'heart-anim-unlike');
+    void cbHeart.offsetWidth;
+    cbHeart.classList.add(liked ? 'heart-anim-unlike' : 'heart-anim-like');
+    setTimeout(() => cbHeart.classList.remove('heart-anim-like', 'heart-anim-unlike'), 400);
+  }
   const sp = btn.querySelector('span');
   const cnt = parseInt(sp?.textContent || '0') || 0;
   if (sp) sp.textContent = newLiked ? cnt + 1 : Math.max(0, cnt - 1) || '';
