@@ -1309,6 +1309,7 @@ async function handleLogout() {
 // ══════════════════════════════════════════
 
 function navTo(pageId) {
+  touchPresence();
   // If any slide panels are open, close them all cleanly before navigating
   if (slideStack.length > 0) {
     slideStack.forEach(id => {
@@ -2233,6 +2234,7 @@ function selfTap(el) {
 }
 
 async function showUserProfile(userId, tapEl) {
+  touchPresence();
   if (!userId) return;
   if (userId === currentUser?.id) { selfTap(tapEl); return; }
   injectProfileStyles();
@@ -2571,6 +2573,7 @@ async function checkFollowState(userId) {
 // ══════════════════════════════════════════
 
 async function loadFeed(reset = false) {
+  touchPresence();
   const list = document.getElementById('feed-list');
   if (!list) return;
 
@@ -3597,6 +3600,7 @@ async function checkRepostedPosts(postIds) {
 }
 
 async function toggleLike(postId, btn) {
+  touchPresence();
   if (!currentUser) { showToast('Sign in to like'); return; }
   const isLiked = btn?.dataset.liked === 'true';
   const countSpan = btn?.querySelector('span');
@@ -4196,6 +4200,7 @@ async function uploadToStorage(file, onProgress) {
 
 // ── Submit post ──
 async function submitPost() {
+  touchPresence();
   const ta      = document.getElementById('composer-textarea');
   const content = ta?.value?.trim() || '';
   const btn     = document.getElementById('composer-post-btn');
@@ -4279,6 +4284,7 @@ async function submitPost() {
 // ══════════════════════════════════════════
 
 async function openDetail(postId, scrollToComments = false) {
+  touchPresence();
   if (!postId) return;
   detailPostId = postId;
   detailCommentParentId = null;
@@ -5259,6 +5265,7 @@ async function submitReplyInline(parentCommentId, postId, btn) {
 }
 
 async function submitComment(postId, parentId, content) {
+  touchPresence();
   const { data, error } = await supabase.from('comments').insert({
     post_id: postId, user_id: currentUser.id, parent_id: parentId || null, content
   }).select(`id,content,created_at,like_count,parent_id,user_id,user:users(id,username,avatar)`).single();
@@ -6199,6 +6206,7 @@ async function openDM(userId) {
 
 // ── Open messages inbox (from feed header DM button) ──
 function openMessagesInbox() {
+  touchPresence();
   slideTo('messages', () => {
     loadMessages();
   });
@@ -6344,46 +6352,52 @@ let typingTimeout   = null;
 let lastSeenInterval = null;
 let isCurrentlyTyping = false;
 
-// ── Update my last_seen every 30s while app is open ──
-function startPresenceHeartbeat() {
+// ══════════════════════════════════════════
+// PRESENCE SYSTEM — Activity-based online status
+// Online = any action within last 10 minutes
+// ══════════════════════════════════════════
+
+let _touchPresenceThrottle = 0;
+
+// ── Touch presence: call on any meaningful user action ──
+function touchPresence() {
   if (!currentUser) return;
-  const updateSeen = () => {
-    supabase.from('users')
-      .update({ last_seen: new Date().toISOString() })
-      .eq('id', currentUser.id)
-      .catch(() => {});
-  };
-  updateSeen(); // immediate on load
-  clearInterval(lastSeenInterval);
-  lastSeenInterval = setInterval(updateSeen, 30000); // every 30s for accuracy
-  // Also update on user interaction
-  ['touchstart', 'click', 'keydown'].forEach(evt => {
-    document.addEventListener(evt, () => {
-      const now = Date.now();
-      if (!window._lastSeenThrottle || now - window._lastSeenThrottle > 30000) {
-        window._lastSeenThrottle = now;
-        updateSeen();
-      }
-    }, { passive: true });
-  });
+  const now = Date.now();
+  // Throttle to once per 60s max — avoids DB hammering
+  if (now - _touchPresenceThrottle < 60000) return;
+  _touchPresenceThrottle = now;
+  supabase.from('users')
+    .update({ last_seen: new Date().toISOString() })
+    .eq('id', currentUser.id)
+    .catch(() => {});
 }
 
-// ── Format last seen time ──
+// ── Heartbeat: safety net every 3 minutes while app is open ──
+function startPresenceHeartbeat() {
+  if (!currentUser) return;
+  touchPresence(); // Immediate on boot
+  clearInterval(lastSeenInterval);
+  lastSeenInterval = setInterval(touchPresence, 180000); // 3 min safety net
+}
+
+// ── Format last seen time — human friendly ──
 function formatLastSeen(lastSeenStr) {
   if (!lastSeenStr) return 'Offline';
   const diff = Date.now() - new Date(lastSeenStr).getTime();
   const mins = Math.floor(diff / 60000);
-  if (diff < 300000) return 'Online';
-  if (mins < 60) return `Last seen ${mins}m ago`;
+  if (diff < 600000) return 'Online';          // within 10 mins = Online
+  if (mins < 60) return `Active ${mins}m ago`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `Last seen ${hours}h ago`;
-  return `Last seen ${Math.floor(hours/24)}d ago`;
+  if (hours < 24) return `Active ${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return 'Active yesterday';
+  return `Active ${days}d ago`;
 }
 
-// ── Check if user is online (seen within 2 mins) ──
+// ── Check if user is online ──
 function isOnline(lastSeenStr) {
   if (!lastSeenStr) return false;
-  return Date.now() - new Date(lastSeenStr).getTime() < 300000; // 5 minutes
+  return Date.now() - new Date(lastSeenStr).getTime() < 600000; // 10 minutes
 }
 
 // ── Update chat topbar status ──
@@ -6500,6 +6514,7 @@ function stopPresence() {
 }
 
 function openChat(convId, otherUser) {
+  touchPresence();
   activeChatId     = convId;
   activeChatUserId = otherUser.id;
   activeChatUser   = otherUser;
@@ -7158,6 +7173,9 @@ function showSeenIndicator() {
 }
 
 async function chatSend() {
+  // Sending a message = definite activity, always update presence
+  _touchPresenceThrottle = 0;
+  touchPresence();
   const field = document.getElementById('chat-input-field');
   const text  = field?.value?.trim();
   if (!text || !activeChatId || !currentUser) return;
