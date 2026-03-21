@@ -6358,13 +6358,14 @@ let isCurrentlyTyping = false;
 // ══════════════════════════════════════════
 
 let _touchPresenceThrottle = 0;
+let _presenceUpdateFn = null;
 
-// ── Touch presence: call on any meaningful user action ──
+// ── Touch presence: fires immediately on any direct user action ──
 function touchPresence() {
   if (!currentUser) return;
   const now = Date.now();
-  // Throttle to once per 60s max — avoids DB hammering
-  if (now - _touchPresenceThrottle < 60000) return;
+  // Light throttle — once per 10s max to avoid rapid-fire updates
+  if (now - _touchPresenceThrottle < 10000) return;
   _touchPresenceThrottle = now;
   supabase.from('users')
     .update({ last_seen: new Date().toISOString() })
@@ -6372,12 +6373,12 @@ function touchPresence() {
     .catch(() => {});
 }
 
-// ── Heartbeat: safety net every 3 minutes while app is open ──
+// ── Heartbeat: safety net every 2 minutes ──
 function startPresenceHeartbeat() {
   if (!currentUser) return;
   touchPresence(); // Immediate on boot
   clearInterval(lastSeenInterval);
-  lastSeenInterval = setInterval(touchPresence, 180000); // 3 min safety net
+  lastSeenInterval = setInterval(touchPresence, 120000); // 2 min safety net
 }
 
 // ── Format last seen time — human friendly ──
@@ -6418,6 +6419,12 @@ function updateChatStatus(text, online, typing = false) {
 
 // ── Load other user's online status ──
 async function loadChatUserStatus(userId) {
+  // If other user was active in THIS chat session in last 2 mins, show Online immediately
+  if (Date.now() - _otherUserLastActiveChatTime < 120000) {
+    updateChatStatus('Online', true, false);
+    return;
+  }
+  // Otherwise check DB — picks up activity from anywhere in the app
   const { data } = await supabase
     .from('users')
     .select('last_seen')
@@ -6429,35 +6436,62 @@ async function loadChatUserStatus(userId) {
   }
 }
 
-// ── Subscribe to typing via Realtime broadcast (no presence needed) ──
+// ── Track when other user was last seen active in THIS chat session ──
+let _otherUserLastActiveChatTime = 0;
+
+// ── Subscribe to typing via Realtime broadcast ──
 function subscribeToPresence(convId) {
   if (presenceChannel) {
     supabase.removeChannel(presenceChannel);
     presenceChannel = null;
   }
+  _otherUserLastActiveChatTime = 0;
 
   presenceChannel = supabase.channel(`typing:${convId}`);
 
   presenceChannel
     .on('broadcast', { event: 'typing' }, ({ payload }) => {
       if (!payload || payload.user_id === currentUser?.id) return;
+
+      // Any typing event = other user is online RIGHT NOW
+      _otherUserLastActiveChatTime = Date.now();
+
       if (payload.isTyping) {
         updateChatStatus('typing...', true, true);
         setInboxTyping(convId, true);
-        // Reset safety timer on EVERY typing event — stays active while keys are pressed
         clearTimeout(window._typingClearTimer);
         window._typingClearTimer = setTimeout(() => {
-          loadChatUserStatus(activeChatUserId);
+          // After typing stops — they're still online (just seen typing)
+          updateChatStatus('Online', true, false);
           setInboxTyping(convId, false);
         }, 4000);
       } else {
-        // Explicit stop — clear immediately
+        // Explicit stop — show Online, not DB last_seen
         clearTimeout(window._typingClearTimer);
-        loadChatUserStatus(activeChatUserId);
+        updateChatStatus('Online', true, false);
         setInboxTyping(convId, false);
+        // Also update their last_seen in our local cache so poll agrees
+        _otherUserLastActiveChatTime = Date.now();
       }
     })
-    .subscribe();
+    .on('broadcast', { event: 'ping' }, ({ payload }) => {
+      // Heartbeat ping from other user — they are online
+      if (!payload || payload.user_id === currentUser?.id) return;
+      _otherUserLastActiveChatTime = Date.now();
+      if (!document.getElementById('chat-topbar-status')?.classList.contains('typing')) {
+        updateChatStatus('Online', true, false);
+      }
+    })
+    .subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        // Send initial ping so other user knows we're here
+        presenceChannel.send({
+          type: 'broadcast',
+          event: 'ping',
+          payload: { user_id: currentUser.id }
+        }).catch(() => {});
+      }
+    });
 }
 
 // ── Broadcast typing state via broadcast ──
@@ -6551,13 +6585,19 @@ function openChat(convId, otherUser) {
     loadChatUserStatus(otherUser.id);
     subscribeToPresence(convId);
     wireChatTyping();
-    // Poll other user's online status every 30s while in chat
+    // Poll other user's online status every 15s while in chat
     clearInterval(window._statusPollInterval);
     window._statusPollInterval = setInterval(() => {
       if (activeChatUserId && !isCurrentlyTyping) {
         loadChatUserStatus(activeChatUserId);
       }
-    }, 30000);
+      // Send ping so other user knows we're still here
+      presenceChannel?.send({
+        type: 'broadcast',
+        event: 'ping',
+        payload: { user_id: currentUser?.id }
+      }).catch(() => {});
+    }, 15000);
 
 
   });
