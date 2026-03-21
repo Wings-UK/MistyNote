@@ -1206,6 +1206,27 @@
   ══════════════════════════════════════════ */
 
   /* Top bar — no status bar padding on slide pages */
+  /* ── Chat page layout — keyboard-safe ── */
+  #page-chat {
+    display: flex !important;
+    flex-direction: column;
+    /* Fixed position so keyboard only pushes input bar, not header */
+    position: fixed !important;
+    top: 0; left: 0; right: 0; bottom: 0;
+    overflow: hidden;
+  }
+  #page-chat .chat-messages {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+  #page-chat .chat-input-bar {
+    flex-shrink: 0;
+    /* Stick to visual bottom even when keyboard is open */
+    position: sticky;
+    bottom: 0;
+  }
+
   .chat-topbar {
     display: flex; align-items: center; gap: 12px;
     padding: 12px 16px 12px;
@@ -1232,11 +1253,28 @@
     position: absolute; bottom: 1px; right: 1px;
     width: 10px; height: 10px; border-radius: 50%;
     background: #00c48c; border: 2px solid var(--bg);
+    animation: onlinePulse 2.5s ease-in-out infinite;
+  }
+  @keyframes onlinePulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(0,196,140,0.4); }
+    50% { box-shadow: 0 0 0 4px rgba(0,196,140,0); }
   }
   .chat-topbar-info { flex: 1; min-width: 0; cursor: pointer; }
   .chat-topbar-name { font-size: 16px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .chat-topbar-status { font-size: 12px; color: var(--text3); margin-top: 1px; }
-  .chat-topbar-status.online { color: #00c48c; }
+  .chat-topbar-status {
+    font-size: 12px; color: var(--text3); margin-top: 1px;
+    transition: color 0.2s;
+  }
+  .chat-topbar-status.online { color: #00c48c; font-weight: 500; }
+  .chat-topbar-status.typing {
+    color: var(--accent); font-weight: 500;
+  }
+  /* Animated typing dots in inbox preview */
+  .msg-conv-preview.typing-preview {
+    color: var(--accent) !important;
+    font-style: italic;
+    font-weight: 500;
+  }
   .chat-topbar-actions { display: flex; gap: 4px; }
   .chat-topbar-action {
     width: 36px; height: 36px; border-radius: 50%;
