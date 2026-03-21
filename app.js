@@ -270,67 +270,87 @@ function hideDeepLinkSplash() {
 async function detectAndSaveLocation() {
   if (!currentUser) return;
   const userId = currentUser.id;
-
-  // If already have location, no need to re-detect
   if (currentProfile?.location) return;
-
-  if (!navigator.geolocation) {
-    _setLocationDisplay('Location unavailable');
-    return;
-  }
 
   _setLocationDisplay('Detecting…');
 
-  navigator.geolocation.getCurrentPosition(
-    async (pos) => {
-      try {
-        const { latitude, longitude } = pos.coords;
-        // Try Nominatim
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
-          { headers: { 'Accept-Language': 'en' } }
-        );
-        const data = await res.json();
-        const city    = data.address?.city || data.address?.town || data.address?.village || data.address?.county || '';
-        const country = data.address?.country_code?.toUpperCase() || data.address?.country || '';
-        const location = [city, country].filter(Boolean).join(', ');
-
-        if (!location) {
-          _setLocationDisplay('');
-          return;
-        }
-
-        await supabase.from('users').update({ location }).eq('id', userId).catch(() => {});
-
-        if (currentProfile && currentUser?.id === userId) {
-          currentProfile.location = location;
-          _setLocationDisplay(location);
-          if (document.getElementById('page-profile')?.classList.contains('active')) {
-            renderMyProfile();
+  // Try GPS first, fall back to IP-based location
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude, longitude } = pos.coords;
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+            { headers: { 'Accept-Language': 'en' } }
+          );
+          const data = await res.json();
+          const city    = data.address?.city || data.address?.town || data.address?.village || data.address?.county || '';
+          const country = data.address?.country || '';
+          const location = [city, country].filter(Boolean).join(', ');
+          if (location) {
+            await _saveAndShowLocation(location, userId);
+          } else {
+            await _detectByIP(userId);
           }
+        } catch(e) {
+          await _detectByIP(userId);
         }
-      } catch(e) {
-        _setLocationDisplay('');
-      }
-    },
-    (err) => {
-      if (err.code === 1) { // PERMISSION_DENIED
-        supabase.from('users').update({ location_denied: true }).eq('id', userId).catch(() => {});
-        if (currentProfile) currentProfile.location_denied = true;
-        _setLocationDisplay('Location denied');
-      } else {
-        _setLocationDisplay('');
-      }
-    },
-    { timeout: 10000, maximumAge: 300000, enableHighAccuracy: false }
-  );
+      },
+      async (err) => {
+        if (err.code === 1) {
+          // Permission denied — try IP as silent fallback
+          await _detectByIP(userId);
+        } else {
+          await _detectByIP(userId);
+        }
+      },
+      { timeout: 8000, maximumAge: 300000, enableHighAccuracy: false }
+    );
+  } else {
+    await _detectByIP(userId);
+  }
+}
+
+async function _detectByIP(userId) {
+  try {
+    const res = await fetch('https://ipapi.co/json/');
+    const data = await res.json();
+    const city    = data.city || '';
+    const country = data.country_name || '';
+    const location = [city, country].filter(Boolean).join(', ');
+    if (location) {
+      await _saveAndShowLocation(location, userId);
+    } else {
+      _setLocationDisplay('Tap to detect location');
+    }
+  } catch(e) {
+    _setLocationDisplay('Tap to detect location');
+  }
+}
+
+async function _saveAndShowLocation(location, userId) {
+  await supabase.from('users').update({ location }).eq('id', userId).catch(() => {});
+  if (currentProfile && currentUser?.id === userId) {
+    currentProfile.location = location;
+    _setLocationDisplay(location);
+    if (document.getElementById('page-profile')?.classList.contains('active')) {
+      renderMyProfile();
+    }
+  }
 }
 
 function _setLocationDisplay(text) {
   const el = document.getElementById('edit-location-display');
   if (!el) return;
+  const isAction = text === 'Tap to detect location';
   el.textContent = text;
-  el.style.color = text === 'Location denied' ? 'var(--red)' : text === 'Detecting…' ? 'var(--text3)' : '';
+  el.style.color = text === 'Detecting…' ? 'var(--text3)' : isAction ? 'var(--accent)' : '';
+  el.style.cursor = isAction ? 'pointer' : '';
+  el.onclick = isAction ? () => {
+    if (currentProfile) currentProfile.location = '';
+    detectAndSaveLocation();
+  } : null;
 }
 
 function sortMomentsRow() {
@@ -7815,16 +7835,7 @@ function openEditProfile() {
       locDisplay.style.color = '';
       if (locHint) locHint.textContent = 'Location detected automatically';
     } else {
-      locDisplay.textContent = 'Tap to detect location';
-      locDisplay.style.color = 'var(--accent)';
-      locDisplay.style.cursor = 'pointer';
-      locDisplay.onclick = () => {
-        locDisplay.textContent = 'Detecting…';
-        locDisplay.style.color = 'var(--text3)';
-        locDisplay.onclick = null;
-        if (currentProfile) currentProfile.location = ''; // allow re-detect
-        detectAndSaveLocation();
-      };
+      _setLocationDisplay('Tap to detect location');
     }
   }
 
