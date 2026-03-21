@@ -6461,6 +6461,22 @@ async function loadChatMessages(convId) {
   });
 
   msgsEl.scrollTop = msgsEl.scrollHeight;
+  assignClusterClasses(msgsEl);
+}
+
+// ── Assign cluster classes for bubble shaping ──
+function assignClusterClasses(container) {
+  const rows = Array.from(container.querySelectorAll('.chat-msg-row'));
+  rows.forEach((row, i) => {
+    const sender = row.classList.contains('sent') ? 'sent' : 'recv';
+    const prevSame = i > 0 && rows[i-1].classList.contains(sender);
+    const nextSame = i < rows.length-1 && rows[i+1].classList.contains(sender);
+    row.classList.remove('cluster-top','cluster-mid','cluster-bot','cluster-only');
+    if (!prevSame && !nextSame) row.classList.add('cluster-only');
+    else if (!prevSame && nextSame) row.classList.add('cluster-top');
+    else if (prevSame && nextSame)  row.classList.add('cluster-mid');
+    else if (prevSame && !nextSame) row.classList.add('cluster-bot');
+  });
 }
 
 // ── Build a message element ──
@@ -6976,6 +6992,7 @@ async function chatSend() {
   const lastRow = msgsEl?.querySelector('.chat-msg-row:last-child');
   const lastSenderId = lastRow ? (lastRow.classList.contains('sent') ? currentUser.id : activeChatUserId) : null;
   const el = buildMessageEl(tmpMsg, lastSenderId);
+  // Re-assign clusters after appending
   if (el && msgsEl) {
     msgsEl.appendChild(el);
     msgsEl.scrollTop = msgsEl.scrollHeight;
