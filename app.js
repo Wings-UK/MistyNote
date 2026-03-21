@@ -511,7 +511,7 @@ async function bootApp(isDeepLink = false) {
   await loadMyProfile();
   updateNavAvatar();
   initComposerFile();
-  // Delay location detection slightly — Chrome needs page to be fully interactive
+  startPresenceHeartbeat(); // ← keep last_seen fresh for ALL users
   setTimeout(() => detectAndSaveLocation(), 2000);
   sortMomentsRow();
   initIntersectionObserver();
@@ -978,6 +978,7 @@ async function obFinish() {
   requestAnimationFrame(initFeedTabBar);
   initComposerFile();
   updateNavAvatar();
+  startPresenceHeartbeat(); // ← keep last_seen fresh after onboarding
   setTimeout(() => detectAndSaveLocation(), 2000);
 
   navTo('feed');
@@ -6360,7 +6361,7 @@ let _tpLast = 0;
 function touchPresence() {
   if (!currentUser) return;
   const now = Date.now();
-  if (now - _tpLast < 15000) return; // max once per 15s
+  if (now - _tpLast < 5000) return; // max once per 5s
   _tpLast = now;
   supabase.from('users')
     .update({ last_seen: new Date().toISOString() })
