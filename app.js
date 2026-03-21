@@ -6355,7 +6355,7 @@ function startPresenceHeartbeat() {
   };
   updateSeen(); // immediate
   clearInterval(lastSeenInterval);
-  lastSeenInterval = setInterval(updateSeen, 30000);
+  lastSeenInterval = setInterval(updateSeen, 60000); // every 60s
 }
 
 // ── Format last seen time ──
@@ -6363,7 +6363,7 @@ function formatLastSeen(lastSeenStr) {
   if (!lastSeenStr) return 'Offline';
   const diff = Date.now() - new Date(lastSeenStr).getTime();
   const mins = Math.floor(diff / 60000);
-  if (diff < 120000) return 'Online';
+  if (diff < 300000) return 'Online';
   if (mins < 60) return `Last seen ${mins}m ago`;
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `Last seen ${hours}h ago`;
@@ -6373,7 +6373,7 @@ function formatLastSeen(lastSeenStr) {
 // ── Check if user is online (seen within 2 mins) ──
 function isOnline(lastSeenStr) {
   if (!lastSeenStr) return false;
-  return Date.now() - new Date(lastSeenStr).getTime() < 120000;
+  return Date.now() - new Date(lastSeenStr).getTime() < 300000; // 5 minutes
 }
 
 // ── Update chat topbar status ──
@@ -6405,55 +6405,45 @@ async function loadChatUserStatus(userId) {
   }
 }
 
-// ── Subscribe to typing + online via Realtime presence ──
+// ── Subscribe to typing via Realtime broadcast (no presence needed) ──
 function subscribeToPresence(convId) {
   if (presenceChannel) {
     supabase.removeChannel(presenceChannel);
     presenceChannel = null;
   }
 
-  presenceChannel = supabase.channel(`presence:${convId}`, {
-    config: { presence: { key: currentUser.id } }
-  });
+  presenceChannel = supabase.channel(`typing:${convId}`);
 
   presenceChannel
-    .on('presence', { event: 'sync' }, () => {
-      const state = presenceChannel.presenceState();
-      let otherTyping = false;
-      let otherOnline = false;
-
-      Object.entries(state).forEach(([uid, presences]) => {
-        if (uid === currentUser.id) return;
-        const p = presences[0];
-        if (p) {
-          otherOnline = true;
-          if (p.typing) otherTyping = true;
-        }
-      });
-
-      if (otherTyping) {
+    .on('broadcast', { event: 'typing' }, ({ payload }) => {
+      if (!payload || payload.user_id === currentUser?.id) return;
+      if (payload.isTyping) {
         updateChatStatus('typing...', true, true);
         setInboxTyping(convId, true);
-      } else if (otherOnline) {
-        updateChatStatus('Online', true, false);
-        setInboxTyping(convId, false);
+        // Auto-clear after 4s in case stop event missed
+        clearTimeout(window._typingClearTimer);
+        window._typingClearTimer = setTimeout(() => {
+          loadChatUserStatus(activeChatUserId);
+          setInboxTyping(convId, false);
+        }, 4000);
       } else {
+        clearTimeout(window._typingClearTimer);
         loadChatUserStatus(activeChatUserId);
         setInboxTyping(convId, false);
       }
     })
-    .subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        await presenceChannel.track({ typing: false, user_id: currentUser.id });
-      }
-    });
+    .subscribe();
 }
 
-// ── Broadcast typing state ──
+// ── Broadcast typing state via broadcast ──
 async function broadcastTyping(isTyping) {
   if (!presenceChannel || isCurrentlyTyping === isTyping) return;
   isCurrentlyTyping = isTyping;
-  await presenceChannel.track({ typing: isTyping, user_id: currentUser.id }).catch(() => {});
+  presenceChannel.send({
+    type: 'broadcast',
+    event: 'typing',
+    payload: { user_id: currentUser.id, isTyping }
+  }).catch(() => {});
 }
 
 // ── Wire typing detection to chat input ──
