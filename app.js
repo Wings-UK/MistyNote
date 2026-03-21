@@ -269,66 +269,68 @@ function hideDeepLinkSplash() {
 
 async function detectAndSaveLocation() {
   if (!currentUser) return;
-  if (!navigator.geolocation) return;
-
-  // Snapshot current user id — prevents race condition if user switches accounts
   const userId = currentUser.id;
+
+  // If already have location, no need to re-detect
+  if (currentProfile?.location) return;
+
+  if (!navigator.geolocation) {
+    _setLocationDisplay('Location unavailable');
+    return;
+  }
+
+  _setLocationDisplay('Detecting…');
 
   navigator.geolocation.getCurrentPosition(
     async (pos) => {
       try {
         const { latitude, longitude } = pos.coords;
-        const res  = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`);
+        // Try Nominatim
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+          { headers: { 'Accept-Language': 'en' } }
+        );
         const data = await res.json();
         const city    = data.address?.city || data.address?.town || data.address?.village || data.address?.county || '';
-        const country = data.address?.country || '';
+        const country = data.address?.country_code?.toUpperCase() || data.address?.country || '';
         const location = [city, country].filter(Boolean).join(', ');
 
-        if (!location) return;
-
-        // Always save GPS location — overrides any old manual value
-        await supabase.from('users')
-          .update({ location })
-          .eq('id', userId)
-          .catch(() => {});
-
-        // Log only if changed
-        const oldLocation = currentProfile?.location;
-        if (oldLocation !== location) {
-          await logProfileChange('location', oldLocation, location).catch(() => {});
+        if (!location) {
+          _setLocationDisplay('');
+          return;
         }
 
-        // Update local profile and UI
+        await supabase.from('users').update({ location }).eq('id', userId).catch(() => {});
+
         if (currentProfile && currentUser?.id === userId) {
           currentProfile.location = location;
-          // Update edit profile display if open
-          const locDisplay = document.getElementById('edit-location-display');
-          if (locDisplay) {
-            locDisplay.textContent = location;
-            locDisplay.style.color = '';
-          }
-          // Refresh profile page if visible
+          _setLocationDisplay(location);
           if (document.getElementById('page-profile')?.classList.contains('active')) {
             renderMyProfile();
           }
         }
-      } catch(_) {
-        // Reverse geocode failed — silently ignore
+      } catch(e) {
+        _setLocationDisplay('');
       }
     },
-    async (err) => {
-      if (err.code === err.PERMISSION_DENIED) {
-        await supabase.from('users')
-          .update({ location_denied: true })
-          .eq('id', userId)
-          .catch(() => {});
-        if (currentProfile && currentUser?.id === userId) {
-          currentProfile.location_denied = true;
-        }
+    (err) => {
+      if (err.code === 1) { // PERMISSION_DENIED
+        supabase.from('users').update({ location_denied: true }).eq('id', userId).catch(() => {});
+        if (currentProfile) currentProfile.location_denied = true;
+        _setLocationDisplay('Location denied');
+      } else {
+        _setLocationDisplay('');
       }
     },
-    { timeout: 10000, maximumAge: 60000 } // max 1 min cache — always get fresh location per session
+    { timeout: 10000, maximumAge: 300000, enableHighAccuracy: false }
   );
+}
+
+function _setLocationDisplay(text) {
+  const el = document.getElementById('edit-location-display');
+  if (!el) return;
+  el.textContent = text;
+  el.style.color = text === 'Location denied' ? 'var(--red)' : text === 'Detecting…' ? 'var(--text3)' : '';
 }
 
 function sortMomentsRow() {
@@ -486,7 +488,6 @@ async function bootApp(isDeepLink = false) {
     if (!profile?.onboarding_done) {
       currentUser = user;
       await loadMyProfile();
-  startPresenceHeartbeat();
       showOnboarding();
       return;
     }
@@ -511,7 +512,6 @@ async function bootApp(isDeepLink = false) {
   await loadMyProfile();
   updateNavAvatar();
   initComposerFile();
-  startPresenceHeartbeat(); // ← keep last_seen fresh for ALL users
   setTimeout(() => detectAndSaveLocation(), 2000);
   sortMomentsRow();
   initIntersectionObserver();
@@ -978,7 +978,6 @@ async function obFinish() {
   requestAnimationFrame(initFeedTabBar);
   initComposerFile();
   updateNavAvatar();
-  startPresenceHeartbeat(); // ← keep last_seen fresh after onboarding
   setTimeout(() => detectAndSaveLocation(), 2000);
 
   navTo('feed');
@@ -1310,7 +1309,6 @@ async function handleLogout() {
 // ══════════════════════════════════════════
 
 function navTo(pageId) {
-  touchPresence();
   // If any slide panels are open, close them all cleanly before navigating
   if (slideStack.length > 0) {
     slideStack.forEach(id => {
@@ -2235,7 +2233,6 @@ function selfTap(el) {
 }
 
 async function showUserProfile(userId, tapEl) {
-  touchPresence();
   if (!userId) return;
   if (userId === currentUser?.id) { selfTap(tapEl); return; }
   injectProfileStyles();
@@ -2574,7 +2571,6 @@ async function checkFollowState(userId) {
 // ══════════════════════════════════════════
 
 async function loadFeed(reset = false) {
-  touchPresence();
   const list = document.getElementById('feed-list');
   if (!list) return;
 
@@ -3601,7 +3597,6 @@ async function checkRepostedPosts(postIds) {
 }
 
 async function toggleLike(postId, btn) {
-  touchPresence();
   if (!currentUser) { showToast('Sign in to like'); return; }
   const isLiked = btn?.dataset.liked === 'true';
   const countSpan = btn?.querySelector('span');
@@ -4201,7 +4196,6 @@ async function uploadToStorage(file, onProgress) {
 
 // ── Submit post ──
 async function submitPost() {
-  touchPresence();
   const ta      = document.getElementById('composer-textarea');
   const content = ta?.value?.trim() || '';
   const btn     = document.getElementById('composer-post-btn');
@@ -4285,7 +4279,6 @@ async function submitPost() {
 // ══════════════════════════════════════════
 
 async function openDetail(postId, scrollToComments = false) {
-  touchPresence();
   if (!postId) return;
   detailPostId = postId;
   detailCommentParentId = null;
@@ -5266,7 +5259,6 @@ async function submitReplyInline(parentCommentId, postId, btn) {
 }
 
 async function submitComment(postId, parentId, content) {
-  touchPresence();
   const { data, error } = await supabase.from('comments').insert({
     post_id: postId, user_id: currentUser.id, parent_id: parentId || null, content
   }).select(`id,content,created_at,like_count,parent_id,user_id,user:users(id,username,avatar)`).single();
@@ -6207,7 +6199,6 @@ async function openDM(userId) {
 
 // ── Open messages inbox (from feed header DM button) ──
 function openMessagesInbox() {
-  touchPresence();
   slideTo('messages', () => {
     loadMessages();
   });
@@ -6353,73 +6344,27 @@ let typingTimeout   = null;
 let lastSeenInterval = null;
 let isCurrentlyTyping = false;
 
-// ══════════════════════════════════════════
-// PRESENCE — Simple activity-based online status
-// ══════════════════════════════════════════
-let _tpLast = 0;
+// ── Chat status helpers (typing only) ──
 
-function touchPresence() {
-  if (!currentUser) return;
-  const now = Date.now();
-  if (now - _tpLast < 5000) return; // max once per 5s
-  _tpLast = now;
-  supabase.from('users')
-    .update({ last_seen: new Date().toISOString() })
-    .eq('id', currentUser.id)
-    .catch(() => {});
-}
-
-function startPresenceHeartbeat() {
-  if (!currentUser) return;
-  touchPresence();
-  clearInterval(lastSeenInterval);
-  lastSeenInterval = setInterval(touchPresence, 60000);
-}
-
-// ── Format last seen time — human friendly ──
-function formatLastSeen(lastSeenStr) {
-  if (!lastSeenStr) return 'Offline';
-  const diff = Date.now() - new Date(lastSeenStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (diff < 600000) return 'Online';
-  if (mins < 2) return 'Active 1m ago';
-  if (mins < 60) return `Active ${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `Active ${hours}h ago`;
-  if (Math.floor(hours/24) === 1) return 'Active yesterday';
-  return `Active ${Math.floor(hours/24)}d ago`;
-}
-
-// ── Check if user is online ──
-function isOnline(lastSeenStr) {
-  if (!lastSeenStr) return false;
-  return (Date.now() - new Date(lastSeenStr).getTime()) < 600000;
+// Restore status to location or MistyNote after typing stops
+function restoreChatStatus() {
+  const location = activeChatUser?.location || '';
+  updateChatStatus(location || 'MistyNote');
 }
 
 // ── Update chat topbar status ──
-function updateChatStatus(text, online, typing = false) {
+function updateChatStatus(text, typing = false) {
   const statusEl = document.getElementById('chat-topbar-status');
   const onlineDot = document.getElementById('chat-topbar-online');
   if (statusEl) {
     statusEl.textContent = typing ? '✦ typing...' : text;
-    let cls = 'chat-topbar-status';
-    if (typing) cls += ' typing';
-    else if (online) cls += ' online';
-    statusEl.className = cls;
+    statusEl.className = 'chat-topbar-status' + (typing ? ' typing' : '');
   }
-  if (onlineDot) {
-    onlineDot.style.display = online || typing ? 'block' : 'none';
-  }
+  if (onlineDot) onlineDot.style.display = 'none';
 }
 
 // ── Load other user's online status ──
-async function loadChatUserStatus(userId) {
-  const { data } = await supabase
-    .from('users').select('last_seen').eq('id', userId).single();
-  if (!data) return;
-  const online = isOnline(data.last_seen);
-  updateChatStatus(online ? 'Online' : formatLastSeen(data.last_seen), online);
-}
+
 
 // ── Subscribe to typing broadcasts only ──
 function subscribeToPresence(convId) {
@@ -6438,12 +6383,12 @@ function subscribeToPresence(convId) {
         setInboxTyping(convId, true);
         clearTimeout(window._typingClearTimer);
         window._typingClearTimer = setTimeout(() => {
-          loadChatUserStatus(activeChatUserId);
+          restoreChatStatus();
           setInboxTyping(convId, false);
         }, 4000);
       } else {
         clearTimeout(window._typingClearTimer);
-        loadChatUserStatus(activeChatUserId);
+        restoreChatStatus();
         setInboxTyping(convId, false);
       }
     })
@@ -6504,7 +6449,6 @@ function stopPresence() {
 }
 
 function openChat(convId, otherUser) {
-  touchPresence();
   activeChatId     = convId;
   activeChatUserId = otherUser.id;
   activeChatUser   = otherUser;
@@ -6514,7 +6458,8 @@ function openChat(convId, otherUser) {
   const statusEl = document.getElementById('chat-topbar-status');
   const avEl     = document.getElementById('chat-topbar-av');
   if (nameEl)   nameEl.textContent = otherUser.username || '';
-  if (statusEl) { statusEl.textContent = 'Loading...'; statusEl.className = 'chat-topbar-status'; }
+  const locationText = otherUser.location || 'MistyNote';
+  if (statusEl) { statusEl.textContent = locationText; statusEl.className = 'chat-topbar-status'; }
   if (avEl) {
     if (otherUser.avatar) {
       avEl.innerHTML = `<img src="${otherUser.avatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%" onerror="this.parentElement.style.background='var(--bg3)'">`;
@@ -6538,7 +6483,6 @@ function openChat(convId, otherUser) {
     await loadChatMessages(convId);
     subscribeToChat(convId);
     markConvRead(convId);
-    loadChatUserStatus(otherUser.id);
     subscribeToPresence(convId);
     wireChatTyping();
     // Poll other user's status every 15s
@@ -6548,8 +6492,7 @@ function openChat(convId, otherUser) {
         loadChatUserStatus(activeChatUserId);
       }
       // Also keep our own presence fresh
-      touchPresence();
-    }, 15000);
+        }, 15000);
 
 
   });
@@ -6557,7 +6500,6 @@ function openChat(convId, otherUser) {
 
 // ── Close chat ──
 function closeChat() {
-  clearInterval(window._statusPollInterval);
   stopPresence();
   if (msgRealtimeSub) {
     supabase.removeChannel(msgRealtimeSub);
@@ -7866,15 +7808,23 @@ function openEditProfile() {
   const locHint    = document.getElementById('location-hint');
   if (locDisplay) {
     if (currentProfile.location_denied) {
-      locDisplay.textContent = 'Location permission denied';
-      locDisplay.style.color = 'var(--red, #ff3b5c)';
-      if (locHint) locHint.textContent = 'Location is required for commerce features — please enable in browser settings';
+      locDisplay.textContent = 'Location denied — enable in browser settings';
+      locDisplay.style.color = 'var(--red)';
     } else if (currentProfile.location) {
       locDisplay.textContent = currentProfile.location;
       locDisplay.style.color = '';
+      if (locHint) locHint.textContent = 'Location detected automatically';
     } else {
-      locDisplay.textContent = 'Detecting…';
-      locDisplay.style.color = 'var(--text3)';
+      locDisplay.textContent = 'Tap to detect location';
+      locDisplay.style.color = 'var(--accent)';
+      locDisplay.style.cursor = 'pointer';
+      locDisplay.onclick = () => {
+        locDisplay.textContent = 'Detecting…';
+        locDisplay.style.color = 'var(--text3)';
+        locDisplay.onclick = null;
+        if (currentProfile) currentProfile.location = ''; // allow re-detect
+        detectAndSaveLocation();
+      };
     }
   }
 
