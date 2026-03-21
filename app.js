@@ -7213,9 +7213,6 @@ function showSeenIndicator() {
 }
 
 async function chatSend() {
-  // Sending a message = definite activity, always update presence
-  _touchPresenceThrottle = 0;
-  touchPresence();
   const field = document.getElementById('chat-input-field');
   const text  = field?.value?.trim();
   if (!text || !activeChatId || !currentUser) return;
