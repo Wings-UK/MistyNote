@@ -51,6 +51,22 @@
   }
   
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  /* ── Global heart like/unlike animations ── */
+  @keyframes heartLike {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.5); }
+    70%  { transform: scale(1.2); }
+    100% { transform: scale(1); }
+  }
+  @keyframes heartUnlike {
+    0%   { transform: scale(1); }
+    35%  { transform: scale(0.65); }
+    70%  { transform: scale(1.1); }
+    100% { transform: scale(1); }
+  }
+  .heart-anim-like   { animation: heartLike   0.35s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+  .heart-anim-unlike { animation: heartUnlike 0.3s  cubic-bezier(0.34,1.56,0.64,1) forwards; }
   
   html, body {
     height: 100%;
@@ -757,13 +773,7 @@
   .post-action svg { transition: transform 0.15s; }
   .post-action:active svg { transform: scale(0.8); }
   
-  @keyframes heartPop {
-    0% { transform: scale(1); }
-    40% { transform: scale(1.4); }
-    70% { transform: scale(0.9); }
-    100% { transform: scale(1); }
-  }
-  .heart-pop { animation: heartPop 0.35s cubic-bezier(0.34,1.56,0.64,1); }
+  /* heart animation — see heart-anim-like/unlike */
   
   /* Skeleton */
   .skeleton-post { padding: 16px; border-bottom: 1px solid var(--border); }
