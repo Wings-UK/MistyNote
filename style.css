@@ -392,24 +392,38 @@
   
   .nav-btn-market {
     flex: 1;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 6px 4px;
   }
   .market-nav-icon {
-    width: 48px; height: 32px;
-    background: linear-gradient(135deg, #6C47FF, #a78bfa);
-    border-radius: 12px;
+    width: 44px; height: 28px;
+    background: linear-gradient(135deg, #6C47FF 0%, #9333ea 100%);
+    border-radius: 10px;
     display: flex; align-items: center; justify-content: center;
     color: white;
-    box-shadow: 0 3px 12px rgba(108,71,255,0.35);
-    transition: transform 0.2s, box-shadow 0.2s;
-    margin-bottom: 2px;
+    box-shadow: 0 3px 10px rgba(108,71,255,0.4), 0 1px 3px rgba(108,71,255,0.2);
+    transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s;
+    position: relative; overflow: hidden;
+  }
+  /* shimmer effect on icon */
+  .market-nav-icon::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.25) 50%, transparent 60%);
+    background-size: 200% 100%;
+    animation: mktShimmer 3s ease-in-out infinite;
+  }
+  @keyframes mktShimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
   }
   .nav-btn-market.active .market-nav-icon {
-    transform: scale(1.05);
-    box-shadow: 0 4px 16px rgba(108,71,255,0.45);
+    transform: scale(1.08);
+    box-shadow: 0 5px 16px rgba(108,71,255,0.5), 0 2px 6px rgba(108,71,255,0.3);
   }
-  .nav-btn-market:active .market-nav-icon { transform: scale(0.93); }
-  .nav-btn-market span { font-size: 10px; font-weight: 700; color: var(--text3); }
-  .nav-btn-market.active span { color: var(--accent); }
+  .nav-btn-market:active .market-nav-icon { transform: scale(0.92); }
+  .nav-btn-market span { font-size: 10px; font-weight: 700; color: var(--text3); letter-spacing: 0.2px; }
+  .nav-btn-market.active span { color: var(--accent); font-weight: 800; }
   .nav-btn-compose:active { transform: scale(0.92); box-shadow: 0 2px 8px rgba(108,71,255,0.3); }
 
   /* Progress ring */
