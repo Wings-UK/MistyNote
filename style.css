@@ -3598,7 +3598,9 @@
 }
 
 /* ── Edit profile field hints & counters ── */
-.edit-field-hint {
+.location-input-wrap { display:flex; align-items:center; gap:8px; padding:10px 14px; background:var(--bg2); border-radius:12px; border:1px solid var(--border); }
+  .location-input-wrap:focus-within { border-color:var(--accent); }
+  .edit-field-hint {
   font-size: 11px;
   font-weight: 400;
   color: var(--text3);
