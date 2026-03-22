@@ -353,12 +353,11 @@
     -webkit-overflow-scrolling: touch;
     padding-bottom: calc(var(--nav-h) + var(--safe-bottom) + 20px);
     opacity: 0; pointer-events: none;
-    visibility: hidden;
-    transition: opacity 0.25s ease, visibility 0.25s ease;
+    transition: opacity 0.25s ease;
   }
   /* Ensure ALL children of inactive pages are non-interactive */
   .page:not(.active) * { pointer-events: none !important; }
-  .page.active { opacity: 1; pointer-events: all; visibility: visible; }
+  .page.active { opacity: 1; pointer-events: all; }
   .page.slide-page {
     transform: translateX(100%);
     transition: transform 0.35s cubic-bezier(0.4,0,0.2,1), opacity 0s;
@@ -810,7 +809,8 @@
   .post-action svg { transition: transform 0.15s; }
   .post-action:active svg { transform: scale(0.8); }
   
-  /* heart animation — see heart-anim-like/unlike */
+  /* Heart like animations handled via inline JS transforms */
+  .heart-ai svg, .cb-like-btn svg { transform-origin: center; will-change: transform; }
   
   /* Skeleton */
   .skeleton-post { padding: 16px; border-bottom: 1px solid var(--border); }
@@ -3682,6 +3682,11 @@
   }
   #page-market:not(.active) .mkt-header,
   #page-market:not(.active) .mkt-scroll {
+    display: none !important;
+  }
+  /* Hide floating profile headers when market is active */
+  #page-market.active ~ #my-profile-header,
+  #page-market.active ~ #user-profile-header {
     display: none !important;
   }
   .mkt-page {
