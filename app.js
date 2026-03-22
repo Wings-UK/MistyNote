@@ -3762,8 +3762,42 @@ function setLikeUI(postId, liked, count) {
   if (cbLike && cbLike.dataset.postId === postId) {
     cbLike.dataset.liked = liked ? 'true' : 'false';
     cbLike.classList.toggle('cb-liked', liked);
-    const cbPath = cbLike.querySelector('.cb-heart-path');
-    if (cbPath) { cbPath.setAttribute('fill', liked ? 'rgb(244,7,82)' : 'none'); cbPath.setAttribute('stroke', liked ? 'rgb(244,7,82)' : 'currentColor'); }
+    // Update SVG fill/stroke + animate
+    const cbSvg = cbLike.querySelector('svg');
+    if (cbSvg) {
+      // Animate
+      cbSvg.style.transition = 'none';
+      cbSvg.style.transform = 'scale(1)';
+      void cbSvg.offsetWidth;
+      if (liked) {
+        cbSvg.style.transition = 'transform 0.12s ease-out';
+        cbSvg.style.transform = 'scale(1.5)';
+        setTimeout(() => { cbSvg.style.transition = 'transform 0.1s ease-in'; cbSvg.style.transform = 'scale(0.9)'; }, 120);
+        setTimeout(() => { cbSvg.style.transition = 'transform 0.08s ease-out'; cbSvg.style.transform = 'scale(1)'; }, 220);
+      } else {
+        cbSvg.style.transition = 'transform 0.1s ease-in';
+        cbSvg.style.transform = 'scale(0.65)';
+        setTimeout(() => { cbSvg.style.transition = 'transform 0.12s cubic-bezier(0.34,1.56,0.64,1)'; cbSvg.style.transform = 'scale(1)'; }, 100);
+      }
+      // Fill after brief delay so animation plays first
+      setTimeout(() => {
+        cbSvg.setAttribute('fill', liked ? 'rgb(244,7,82)' : 'none');
+        cbSvg.setAttribute('stroke', liked ? 'rgb(244,7,82)' : '#000000');
+        const cbPath = cbSvg.querySelector('path');
+        if (cbPath) {
+          cbPath.setAttribute('fill', liked ? 'rgb(244,7,82)' : 'none');
+          cbPath.setAttribute('stroke', liked ? 'rgb(244,7,82)' : '#000000');
+        }
+      }, liked ? 60 : 0);
+    }
+    // Update count
+    if (count !== null) {
+      const cbCount = document.getElementById('cb-like-count');
+      if (cbCount) {
+        cbCount.textContent = count > 0 ? fmtNum(count) : '';
+        cbCount.style.color = liked ? 'rgb(244,7,82)' : '#000000';
+      }
+    }
   }
   // Sync masonry tiles
   document.querySelectorAll(`.prf-masonry-like[data-post-id="${postId}"]`).forEach(btn => {
