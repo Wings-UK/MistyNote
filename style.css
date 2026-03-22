@@ -809,11 +809,18 @@
   .post-action svg { transition: transform 0.15s; }
   .post-action:active svg { transform: scale(0.8); }
   
+  /* Like & repost count weights */
+  .like-count { font-weight: 400; }
+  .like-count.liked { color: rgb(244,7,82) !important; font-weight: 600 !important; }
+  .cb-like-count { font-weight: 400; }
+  .cb-like-count.liked { color: rgb(244,7,82) !important; font-weight: 600 !important; }
+  .repost-btn span { font-weight: 400; transition: color 0.15s, font-weight 0.15s; }
+  .repost-btn.reposted span { color: #6C47FF !important; font-weight: 600 !important; }
   /* Heart like animations handled via inline JS transforms */
   .heart-ai svg, .cb-like-btn svg { transform-origin: center; will-change: transform; }
   /* Like count — bold red when liked, persists on refresh */
-  .like-count.liked { color: rgb(244,7,82) !important; font-weight: 700 !important; }
-  .cb-like-count.liked { color: rgb(244,7,82) !important; font-weight: 700 !important; }
+  .like-count.liked { color: rgb(244,7,82) !important; font-weight: 600 !important; }
+  .cb-like-count.liked { color: rgb(244,7,82) !important; font-weight: 600 !important; }
   
   /* Skeleton */
   .skeleton-post { padding: 16px; border-bottom: 1px solid var(--border); }
