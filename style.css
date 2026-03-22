@@ -811,6 +811,9 @@
   
   /* Heart like animations handled via inline JS transforms */
   .heart-ai svg, .cb-like-btn svg { transform-origin: center; will-change: transform; }
+  /* Like count — bold red when liked, persists on refresh */
+  .like-count.liked { color: rgb(244,7,82) !important; font-weight: 700 !important; }
+  .cb-like-count.liked { color: rgb(244,7,82) !important; font-weight: 700 !important; }
   
   /* Skeleton */
   .skeleton-post { padding: 16px; border-bottom: 1px solid var(--border); }
