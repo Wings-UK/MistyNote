@@ -3437,7 +3437,7 @@ function injectFeedPostStyles() {
     .heart-path { fill: none; stroke: #000000; transition: fill 0.2s ease, stroke 0.2s ease; }
     .heart-ai[data-liked="true"] .heart-path { fill: rgb(244,7,82); stroke: rgb(244,7,82); }
     .like-count { font-size: 14px; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: #000000; font-weight: 400; transition: color 0.15s, font-weight 0.15s; }
-    .like-count.liked { color: rgb(244,7,82); font-weight: 700; }
+    .like-count.liked { color: rgb(244,7,82); font-weight: 600; }
     .like-count:empty { display: none; }
 
     @keyframes heartLike {
@@ -3823,8 +3823,7 @@ function setRepostUI(postId, reposted) {
       svg.setAttribute('stroke-width', reposted ? '2.5' : '2');
     }
     const span = btn.querySelector('span');
-    if (span && reposted) span.style.color = '#6C47FF';
-    else if (span) span.style.color = '';
+    if (span) span.classList.toggle('reposted', reposted);
   });
   // Detail page repost button
   document.querySelectorAll(`.dp-repost-btn[data-post-id="${postId}"], .detail-action.repost-action[data-post-id="${postId}"]`).forEach(btn => {
@@ -4589,7 +4588,7 @@ async function openDetail(postId, scrollToComments = false) {
       .cb-like-count { font-size: 14px; font-weight: 400; color: #000000; transition: color 0.25s, font-weight 0.25s; }
       .cb-action-btn.cb-liked { color: rgb(244,7,82); }
       .cb-action-btn.cb-liked .cb-heart-path { fill: rgb(244,7,82); stroke: rgb(244,7,82); }
-      .cb-action-btn.cb-liked .cb-like-count { color: rgb(244,7,82); font-weight: 500; }
+      .cb-action-btn.cb-liked .cb-like-count { color: rgb(244,7,82); font-weight: 600; }
       .cb-action-btn.cb-reposted { color: #6C47FF; }
       .cb-action-btn.cb-reposted .cb-repost-svg { stroke: #6C47FF; stroke-width: 2.5; }
       .cb-heart-path { transition: all .25s; }
