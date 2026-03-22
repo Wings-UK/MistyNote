@@ -3436,7 +3436,8 @@ function injectFeedPostStyles() {
     .heart-icon { transition: all 0.3s ease; }
     .heart-icon .heart-path { stroke: var(--text); fill: none; transition: all 0.3s ease; }
     .heart-icon.liked .heart-path { fill: rgb(244,7,82); stroke: rgb(244,7,82); }
-    .like-count { font-size: 14px; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: #000000; transition: color 0.15s ease; }
+    .like-count { font-size: 14px; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: #000000; font-weight: 400; transition: color 0.15s, font-weight 0.15s; }
+    .like-count.liked { color: rgb(244,7,82); font-weight: 700; }
     .like-count:empty { display: none; }
 
     @keyframes heartLike {
@@ -3735,10 +3736,12 @@ function setLikeUI(postId, liked, count) {
         path.setAttribute('stroke', liked ? 'rgb(244,7,82)' : '#000000');
       }
     }
-    // Update count immediately — no animation delay
-    if (count !== null && countEl) {
-      countEl.textContent = count > 0 ? fmtNum(count) : '';
-      countEl.style.color = liked ? 'rgb(244,7,82)' : '#000000';
+    // Update count immediately — use CSS class not inline style
+    if (countEl) {
+      countEl.classList.toggle('liked', liked);
+      if (count !== null) {
+        countEl.textContent = count > 0 ? fmtNum(count) : '';
+      }
     }
   });
   // Detail page like button
@@ -3795,7 +3798,7 @@ function setLikeUI(postId, liked, count) {
       const cbCount = document.getElementById('cb-like-count');
       if (cbCount) {
         cbCount.textContent = count > 0 ? fmtNum(count) : '';
-        cbCount.style.color = liked ? 'rgb(244,7,82)' : '#000000';
+        cbCount.classList.toggle('liked', liked);
       }
     }
   }
@@ -3814,6 +3817,7 @@ function setLikeUI(postId, liked, count) {
 function syncLikeCount(postId, count) {
   // Feed hearts
   document.querySelectorAll(`.heart-ai[data-post-id="${postId}"] .like-count`).forEach(sp => {
+    sp.classList.toggle('liked', liked);
     animateCount(sp, count);
   });
   // Detail stat table
@@ -4610,7 +4614,7 @@ async function openDetail(postId, scrollToComments = false) {
       }
       .cb-action-btn:active { transform: scale(.85); }
       .cb-like-btn { display: flex; align-items: center; gap: 10px; width: auto; padding: 0 6px; border-radius: 20px; }
-      .cb-like-count { font-size: 14px; font-weight: 400; color: #000000; transition: color 0.25s; }
+      .cb-like-count { font-size: 14px; font-weight: 400; color: #000000; transition: color 0.25s, font-weight 0.25s; }
       .cb-action-btn.cb-liked { color: rgb(244,7,82); }
       .cb-action-btn.cb-liked .cb-heart-path { fill: rgb(244,7,82); stroke: rgb(244,7,82); }
       .cb-action-btn.cb-liked .cb-like-count { color: rgb(244,7,82); font-weight: 500; }
