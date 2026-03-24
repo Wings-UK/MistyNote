@@ -949,10 +949,13 @@ async function obToggleFollow(btn, uid) {
       const { error } = await supabase.from('follows').insert({
         follower_id: currentUser.id, following_id: uid
       });
-      console.log('Follow result:', error);
       if (!error) {
         btn.classList.add('following'); btn.textContent = 'Following';
         obFollowCount++;
+        if (uid !== currentUser.id) {
+          supabase.from('notifications').insert({ user_id: uid, actor_id: currentUser.id, post_id: null, type: 'follow', read: false })
+            .then(({error:e}) => { if(e) console.warn('ob follow notif error:', e.message); });
+        }
       } else {
         showToast('Error: ' + error.message);
       }
@@ -5430,7 +5433,18 @@ async function toggleCommentLike(commentId, btn) {
 
   if (newLiked) {
     supabase.from('comment_likes').insert({ comment_id: commentId, user_id: currentUser.id }).then(({ error }) => {
-      if (!error) supabase.rpc('increment_comment_like', { cid: commentId, delta: 1 });
+      if (!error) {
+        supabase.rpc('increment_comment_like', { cid: commentId, delta: 1 });
+        // Notify comment author
+        supabase.from('comments').select('user_id, post_id').eq('id', commentId).single().then(({ data: cmt }) => {
+          if (cmt && cmt.user_id !== currentUser.id) {
+            supabase.from('notifications').insert({
+              user_id: cmt.user_id, actor_id: currentUser.id,
+              post_id: cmt.post_id, type: 'like_comment', read: false
+            }).then(({error:e}) => { if(e) console.warn('like_comment notif error:', e.message); });
+          }
+        });
+      }
     });
   } else {
     supabase.from('comment_likes').delete().eq('comment_id', commentId).eq('user_id', currentUser.id).then(() => {
@@ -5792,9 +5806,15 @@ async function discToggleFollow(btn, uid) {
     btn.classList.remove('following');
     btn.textContent = 'Follow';
   } else {
-    await supabase.from('follows').insert({ follower_id: currentUser.id, following_id: uid });
-    btn.classList.add('following');
-    btn.textContent = 'Following';
+    const { error: fe } = await supabase.from('follows').insert({ follower_id: currentUser.id, following_id: uid });
+    if (!fe) {
+      btn.classList.add('following');
+      btn.textContent = 'Following';
+      if (uid !== currentUser.id) {
+        supabase.from('notifications').insert({ user_id: uid, actor_id: currentUser.id, post_id: null, type: 'follow', read: false })
+          .then(({error:e}) => { if(e) console.warn('disc follow notif error:', e.message); });
+      }
+    }
   }
   btn.disabled = false;
 }
