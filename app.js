@@ -1830,9 +1830,10 @@ function injectProfileStyles() {
     .prf-masonry-author { display:flex; align-items:center; gap:5px; min-width:0; flex:1; }
     .prf-masonry-avatar { width:20px; height:20px; border-radius:50%; object-fit:cover; flex-shrink:0; }
     .prf-masonry-username { font-size:11px; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .prf-masonry-like { display:flex; align-items:center; gap:3px; background:none; border:none; cursor:pointer; flex-shrink:0; padding:2px 0; color:var(--text3); -webkit-tap-highlight-color:transparent; }
+    .prf-masonry-like { display:flex; align-items:center; gap:3px; background:none; border:none; cursor:pointer; flex-shrink:0; padding:2px 0; color:#000000; -webkit-tap-highlight-color:transparent; }
     .prf-masonry-like.liked { color:rgb(244,7,82); }
-    .prf-masonry-like-count { font-size:11px; font-weight:500; color:inherit; }
+    .prf-masonry-like-count { font-size:11px; font-weight:400; color:inherit; }
+    .prf-masonry-like.liked .prf-masonry-like-count { font-weight:600; }
 
     /* ── PLACEHOLDERS ── */
     .prf-placeholder { margin:20px 16px; border-radius:18px; padding:24px 20px; display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center; }
@@ -7576,21 +7577,14 @@ function subscribeToPostUpdates() {
       const repostCount  = post.repost_count  ?? 0;
       const viewCount    = post.views         ?? 0;
 
-      // ── Like count ──
-      // Only update if this user didn't trigger it (they already have optimistic UI)
+      // ── Like count — plain update, no animation ──
       document.querySelectorAll(`.heart-ai[data-post-id="${postId}"] .like-count`)
-        .forEach(el => {
-          const currentVal = parseInt(el.textContent || '0') || 0;
-          if (currentVal !== likeCount) animateCount(el, likeCount);
-        });
+        .forEach(el => { el.textContent = likeCount > 0 ? fmtNum(likeCount) : ''; });
 
-      // Detail page like stat
+      // Detail page like stat — plain update
       if (detailPostId === postId) {
         const statEl = document.querySelector(`.detail-stat-n[data-type="likes"]`);
-        if (statEl) {
-          const currentVal = parseInt(statEl.textContent || '0') || 0;
-          if (currentVal !== likeCount) animateCount(statEl, likeCount);
-        }
+        if (statEl) statEl.textContent = fmtNum(likeCount);
       }
 
       // ── Repost count ──
