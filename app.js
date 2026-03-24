@@ -1389,9 +1389,7 @@ function navTo(pageId) {
   });
 
   if (pageId === 'notifications') {
-    unreadCount = 0;
-    updateNotifDot();
-    markAllRead();
+    onNotifPageOpen();
   }
   if (pageId === 'profile') {
     renderMyProfile();
@@ -7488,13 +7486,54 @@ function msgSearch(val) {
 }
 
 // ══════════════════════════════════════════
-// NOTIFICATIONS
+// NOTIFICATIONS — PREMIUM ENGINE
 // ══════════════════════════════════════════
+
+const NOTIF_CONFIG = {
+  GROUPING_WINDOW_MS: 24 * 60 * 60 * 1000,
+  GROUPING_THRESHOLD: 3,
+  BATCH_SIZE: 50,
+  BANNER_DURATION: 4500,
+  BANNER_SWIPE_THRESHOLD: 60,
+};
+
+const NOTIF_TYPES = {
+  like:             { emoji: '❤️',  label: 'liked your post',           badgeClass: 'badge-like',    accentColor: '#f0385a' },
+  comment:          { emoji: '💬',  label: 'replied to your post',      badgeClass: 'badge-comment', accentColor: '#6c47ff' },
+  follow:           { emoji: '👤',  label: 'started following you',     badgeClass: 'badge-follow',  accentColor: '#00b87a' },
+  repost:           { emoji: '🔁',  label: 'reposted your post',        badgeClass: 'badge-repost',  accentColor: '#f5a623' },
+  mention:          { emoji: '📣',  label: 'mentioned you',             badgeClass: 'badge-mention', accentColor: '#00c4ff' },
+  like_comment:     { emoji: '❤️',  label: 'liked your comment',        badgeClass: 'badge-like',    accentColor: '#f0385a' },
+  order_placed:     { emoji: '📦',  label: 'placed an order',           badgeClass: 'badge-order',   accentColor: '#ff6b35' },
+  order_shipped:    { emoji: '🚚',  label: 'Your order has shipped',    badgeClass: 'badge-order',   accentColor: '#ff6b35' },
+  order_delivered:  { emoji: '✅',  label: 'Order delivered!',          badgeClass: 'badge-order',   accentColor: '#00b87a' },
+  payment_received: { emoji: '💰',  label: 'Payment received',          badgeClass: 'badge-wallet',  accentColor: '#00b87a' },
+  wallet_credit:    { emoji: '💳',  label: 'Wallet credited',           badgeClass: 'badge-wallet',  accentColor: '#00b87a' },
+  system:           { emoji: '📢',  label: '',                           badgeClass: 'badge-system',  accentColor: '#5e5e5a' },
+};
+
+const NOTIF_FILTERS = [
+  { id: 'all',      label: 'All',      types: null },
+  { id: 'social',   label: 'Social',   types: ['like','comment','repost','mention','like_comment'] },
+  { id: 'follows',  label: 'Follows',  types: ['follow'] },
+  { id: 'commerce', label: 'Commerce', types: ['order_placed','order_shipped','order_delivered'] },
+  { id: 'wallet',   label: 'Wallet',   types: ['payment_received','wallet_credit'] },
+];
+
+let notifCurrentFilter = 'all';
+let notifRawData = [];
+let bannerQueue = [];
+let bannerShowing = false;
+let bannerTimer = null;
+
+// ── LOAD & RENDER ─────────────────────────
 
 async function loadNotifications() {
   if (!currentUser) return;
   const container = document.getElementById('notif-list');
   if (!container) return;
+
+  renderNotifSkeletons(container, 5);
 
   const { data, error } = await supabase
     .from('notifications')
@@ -7503,61 +7542,439 @@ async function loadNotifications() {
              post:posts!fk_notifications_post_id(id,image,user_id,user:users!user_id(username,avatar))`)
     .eq('user_id', currentUser.id)
     .order('created_at', { ascending: false })
-    .limit(40);
+    .limit(NOTIF_CONFIG.BATCH_SIZE);
 
-  if (!data || !data.length) return;
+  if (error) { container.innerHTML = renderNotifEmpty('Something went wrong', 'Pull down to try again.'); return; }
 
-  container.innerHTML = '';
-  data.forEach(n => {
-    const actor = n.actor || { username: '@someone', avatar: '' };
-    const post = n.post;
+  notifRawData = data || [];
+  renderNotifList(notifCurrentFilter);
+  updateNotifTabCounts();
+}
 
-    let msg = '';
-    if (n.type === 'like') msg = 'liked your post';
-    else if (n.type === 'repost') msg = 'reposted your post';
-    else if (n.type === 'comment') msg = 'replied to your post';
-    else if (n.type === 'follow') msg = 'started following you';
+function renderNotifList(filter) {
+  const container = document.getElementById('notif-list');
+  if (!container) return;
 
-    const item = document.createElement('div');
-    item.className = 'notif-item' + (!n.read ? ' unread' : '');
-    item.innerHTML = `
-      <img class="notif-avatar" src="${actor.avatar||''}" onerror="this.style.display='none'" alt="">
+  const filterDef = NOTIF_FILTERS.find(f => f.id === filter);
+  let items = notifRawData;
+  if (filterDef && filterDef.types) items = items.filter(n => filterDef.types.includes(n.type));
+
+  if (!items.length) {
+    container.innerHTML = renderNotifEmpty(
+      filter === 'all' ? 'All caught up! 🎉' : `No ${filterDef?.label?.toLowerCase()} notifications`,
+      filter === 'all' ? "When people interact with your posts, you'll see it here." : ''
+    );
+    return;
+  }
+
+  const grouped = groupNotifications(items);
+  const now = Date.now();
+  const sections = {
+    new:     { label: 'New',        items: [] },
+    today:   { label: 'Today',      items: [] },
+    week:    { label: 'This week',  items: [] },
+    earlier: { label: 'Earlier',    items: [] },
+  };
+
+  grouped.forEach(g => {
+    const age = now - new Date(g.latestAt).getTime();
+    if (!g.read && age < 1000 * 60 * 60 * 3) sections.new.items.push(g);
+    else if (age < 1000 * 60 * 60 * 24) sections.today.items.push(g);
+    else if (age < 1000 * 60 * 60 * 24 * 7) sections.week.items.push(g);
+    else sections.earlier.items.push(g);
+  });
+
+  let html = '';
+  let delay = 0;
+  Object.entries(sections).forEach(([, section]) => {
+    if (!section.items.length) return;
+    html += `<div class="notif-section-header">${section.label}</div>`;
+    section.items.forEach(g => { html += renderNotifItem(g, delay); delay += 25; });
+  });
+
+  container.innerHTML = html;
+  container.querySelectorAll('.notif-item').forEach(el => attachSwipeDismiss(el));
+}
+
+function groupNotifications(items) {
+  const groups = [];
+  const usedIds = new Set();
+
+  items.forEach(item => {
+    if (usedIds.has(item.id)) return;
+    const canGroup = item.post_id && ['like','repost','comment'].includes(item.type);
+
+    if (canGroup) {
+      const siblings = items.filter(s =>
+        s.id !== item.id && !usedIds.has(s.id) &&
+        s.type === item.type && s.post_id === item.post_id &&
+        Math.abs(new Date(s.created_at) - new Date(item.created_at)) < NOTIF_CONFIG.GROUPING_WINDOW_MS
+      );
+      if (siblings.length >= NOTIF_CONFIG.GROUPING_THRESHOLD - 1) {
+        const all = [item, ...siblings];
+        all.forEach(s => usedIds.add(s.id));
+        groups.push({
+          grouped: true, type: item.type, post: item.post, post_id: item.post_id,
+          actors: all.map(s => s.actor).filter(Boolean),
+          count: all.length, read: all.every(s => s.read),
+          latestAt: item.created_at, ids: all.map(s => s.id),
+        });
+        return;
+      }
+    }
+    usedIds.add(item.id);
+    groups.push({ grouped: false, ...item, actors: [item.actor], latestAt: item.created_at, ids: [item.id] });
+  });
+  return groups;
+}
+
+function renderNotifItem(g, animDelay = 0) {
+  const cfg = NOTIF_TYPES[g.type] || NOTIF_TYPES.system;
+  const isUnread = !g.read;
+
+  let avatarHtml;
+  if (g.grouped && g.actors.length > 1) {
+    const shown = g.actors.slice(0, 3);
+    const extra = g.count - shown.length;
+    let imgs = shown.map((a, i) => {
+      const src = a?.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${a?.id || i}`;
+      return `<img src="${escHtml(src)}" onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${i}'" alt="">`;
+    }).join('');
+    if (extra > 0) imgs += `<span class="stack-more">+${extra > 99 ? '99' : extra}</span>`;
+    avatarHtml = `
+      <div class="notif-avatar-wrap" style="width:52px;height:48px;">
+        <div class="notif-avatar-stack">${imgs}</div>
+        <div class="notif-type-badge ${cfg.badgeClass}">${cfg.emoji}</div>
+      </div>`;
+  } else {
+    const actor = g.actors[0] || {};
+    const src = actor.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${actor.id || 'x'}`;
+    avatarHtml = `
+      <div class="notif-avatar-wrap">
+        <img class="notif-avatar" src="${escHtml(src)}"
+          onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=fallback'" alt="">
+        <div class="notif-type-badge ${cfg.badgeClass}">${cfg.emoji}</div>
+      </div>`;
+  }
+
+  // Build text
+  const actors = g.actors.filter(Boolean);
+  let who = '';
+  if (g.grouped && actors.length > 1) {
+    const names = actors.slice(0, 2).map(a => `<strong>${escHtml(a.username)}</strong>`).join(', ');
+    const rest = g.count - 2;
+    who = rest > 0 ? `${names} <span class="and-others">and ${fmtNum(rest)} others</span>` : names;
+  } else if (actors[0]) {
+    who = `<strong>${escHtml(actors[0].username)}</strong>`;
+  } else {
+    who = '<strong>Someone</strong>';
+  }
+
+  const commentPreview = (g.type === 'comment' && g.comment_text)
+    ? `<div class="notif-comment-preview">"${escHtml(g.comment_text.slice(0,120))}${g.comment_text.length > 120 ? '…' : ''}"</div>`
+    : '';
+
+  const followBtn = (g.type === 'follow' && !g.grouped)
+    ? `<button class="notif-follow-btn" id="nfb-${g.actor_id}" onclick="notifFollowToggle('${g.actor_id}',this);event.stopPropagation()">Follow</button>`
+    : '';
+  if (g.type === 'follow' && !g.grouped) setTimeout(() => loadNotifFollowState(g.actor_id), 100);
+
+  const thumbHtml = (g.post?.image && g.type !== 'follow')
+    ? `<div class="notif-thumb-wrap"><img class="notif-thumb" src="${escHtml(g.post.image)}" alt=""></div>`
+    : '';
+
+  const clickTarget = g.post_id
+    ? `notifItemClick('${g.post_id}',null,'${g.ids.join(',')}')`
+    : `notifItemClick(null,'${g.actor_id || (g.actors[0]?.id) || ''}','${g.ids.join(',')}')`;
+
+  return `
+    <div class="notif-item${isUnread ? ' unread' : ''}${g.grouped ? ' grouped' : ''}"
+         data-ids="${g.ids.join(',')}"
+         style="animation-delay:${animDelay}ms"
+         onclick="${clickTarget}">
+      ${avatarHtml}
       <div class="notif-body">
-        <p class="notif-text"><strong>${escHtml(actor.username)}</strong> ${msg}${n.comment_text ? `: "${escHtml(n.comment_text.slice(0,60))}"` : ''}</p>
-        <p class="notif-time">${timeSince(n.created_at)}</p>
+        <p class="notif-text">${who} ${cfg.label}</p>
+        ${commentPreview}
+        ${followBtn}
+        <div class="notif-meta">
+          <span class="notif-time">${timeSince(g.latestAt)}</span>
+          ${isUnread ? '<span class="notif-unread-dot"></span>' : ''}
+        </div>
       </div>
-      ${post?.image ? `<img class="notif-thumb" src="${post.image}" alt="">` : ''}
-    `;
-    item.addEventListener('click', () => {
-      if (n.post_id) openDetail(n.post_id);
-      else showUserProfile(n.actor_id);
-    });
-    container.appendChild(item);
+      ${thumbHtml}
+    </div>`;
+}
+
+function renderNotifEmpty(title, sub) {
+  return `<div class="notif-empty">
+    <div class="notif-empty-icon">🔔</div>
+    <div class="notif-empty-title">${escHtml(title)}</div>
+    ${sub ? `<p class="notif-empty-sub">${escHtml(sub)}</p>` : ''}
+  </div>`;
+}
+
+function renderNotifSkeletons(container, count) {
+  container.innerHTML = Array.from({ length: count }, () => `
+    <div class="notif-skeleton">
+      <div class="notif-skeleton-avatar loading-pulse"></div>
+      <div class="notif-skeleton-body">
+        <div class="notif-skeleton-line w80 loading-pulse"></div>
+        <div class="notif-skeleton-line w55 loading-pulse"></div>
+      </div>
+    </div>`).join('');
+}
+
+function updateNotifTabCounts() {
+  NOTIF_FILTERS.forEach(f => {
+    const tab = document.getElementById(`ntab-${f.id}`);
+    const countEl = tab?.querySelector('.tab-count');
+    if (!countEl) return;
+    let items = notifRawData;
+    if (f.types) items = items.filter(n => f.types.includes(n.type));
+    const unread = items.filter(n => !n.read).length;
+    countEl.textContent = unread > 0 ? (unread > 99 ? '99+' : unread) : '';
+    countEl.style.display = unread > 0 ? '' : 'none';
   });
 }
+
+function switchNotifFilter(filterId) {
+  notifCurrentFilter = filterId;
+  document.querySelectorAll('.notif-filter-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.filter === filterId);
+  });
+  renderNotifList(filterId);
+}
+
+async function notifItemClick(postId, actorId, idsStr) {
+  const ids = idsStr.split(',').filter(Boolean);
+  if (ids.length) {
+    supabase.from('notifications').update({ read: true }).in('id', ids).catch(() => {});
+    ids.forEach(id => {
+      const el = document.querySelector(`.notif-item[data-ids="${id}"], .notif-item[data-ids^="${id},"], .notif-item[data-ids*=",${id},"], .notif-item[data-ids$=",${id}"]`);
+      if (el) { el.classList.remove('unread'); el.querySelector('.notif-unread-dot')?.remove(); }
+    });
+    unreadCount = Math.max(0, unreadCount - ids.length);
+    updateNotifBadge();
+    updateNotifTabCounts();
+  }
+  if (postId) await openDetail(postId);
+  else if (actorId) await showUserProfile(actorId, null);
+}
+
+async function loadNotifFollowState(actorId) {
+  if (!currentUser) return;
+  const btn = document.getElementById(`nfb-${actorId}`);
+  if (!btn) return;
+  const { data } = await supabase.from('follows')
+    .select('id').eq('follower_id', currentUser.id).eq('following_id', actorId).maybeSingle();
+  if (data) { btn.classList.add('following'); btn.textContent = 'Following'; }
+}
+
+async function notifFollowToggle(actorId, btn) {
+  if (!currentUser) { showToast('Sign in to follow'); return; }
+  const isFollowing = btn.classList.contains('following');
+  btn.classList.toggle('following', !isFollowing);
+  btn.textContent = !isFollowing ? 'Following' : 'Follow';
+  if (isFollowing) {
+    const { error } = await supabase.from('follows').delete().eq('follower_id', currentUser.id).eq('following_id', actorId);
+    if (error) { btn.classList.add('following'); btn.textContent = 'Following'; }
+  } else {
+    const { error } = await supabase.from('follows').insert({ follower_id: currentUser.id, following_id: actorId });
+    if (error) { btn.classList.remove('following'); btn.textContent = 'Follow'; }
+  }
+}
+
+async function markAllNotifsRead() {
+  if (!currentUser) return;
+  await supabase.from('notifications').update({ read: true }).eq('user_id', currentUser.id).eq('read', false);
+  unreadCount = 0;
+  updateNotifBadge();
+  notifRawData.forEach(n => n.read = true);
+  renderNotifList(notifCurrentFilter);
+  updateNotifTabCounts();
+}
+
+// kept as alias so any old internal calls still work
+async function markAllRead() { return markAllNotifsRead(); }
+
+// ── BADGE ──────────────────────────────────
 
 async function loadInitialNotifCount() {
   if (!currentUser) return;
   const { count } = await supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).eq('read', false);
   unreadCount = count || 0;
-  updateNotifDot();
+  updateNotifBadge();
 }
 
-function updateNotifDot() {
+function updateNotifDot() { updateNotifBadge(); }
+
+function updateNotifBadge() {
   const dot = document.getElementById('notif-dot');
   if (dot) dot.style.display = unreadCount > 0 ? 'block' : 'none';
+  const badge = document.getElementById('notif-count-badge');
+  if (badge) {
+    if (unreadCount > 0) { badge.classList.add('visible'); badge.textContent = unreadCount > 99 ? '99+' : unreadCount; }
+    else badge.classList.remove('visible');
+  }
 }
+
+// ── REAL-TIME SUBSCRIPTION ────────────────
 
 function subscribeToNotifs() {
   if (!currentUser || notifChannel) return;
   notifChannel = supabase
     .channel('notifs-' + currentUser.id)
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUser.id}` }, (payload) => {
-      if (!payload.new.read) { unreadCount++; updateNotifDot(); }
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUser.id}` }, async (payload) => {
+      const n = payload.new;
+      if (!n.read) { unreadCount++; updateNotifBadge(); }
       if (navigator.vibrate) navigator.vibrate(40);
+
+      const { data: actor } = await supabase.from('users').select('username,avatar').eq('id', n.actor_id).maybeSingle();
+      let post = null;
+      if (n.post_id) {
+        const { data: p } = await supabase.from('posts').select('image').eq('id', n.post_id).maybeSingle();
+        post = p;
+      }
+      notifRawData.unshift({ ...n, actor, post, actors: [actor] });
+
+      queueNotifBanner({ type: n.type, actor, comment_text: n.comment_text, post_image: post?.image, post_id: n.post_id, actor_id: n.actor_id, id: n.id });
+
+      const notifPage = document.getElementById('page-notifications');
+      if (notifPage?.classList.contains('active')) { renderNotifList(notifCurrentFilter); updateNotifTabCounts(); }
     })
     .subscribe();
 }
+
+// ── BANNER ────────────────────────────────
+
+function queueNotifBanner(data) {
+  bannerQueue.push(data);
+  if (!bannerShowing) showNextBanner();
+}
+
+function showNextBanner() {
+  if (!bannerQueue.length) { bannerShowing = false; return; }
+  bannerShowing = true;
+  showNotifBanner(bannerQueue.shift());
+}
+
+function showNotifBanner(data) {
+  const cfg = NOTIF_TYPES[data.type] || NOTIF_TYPES.system;
+  const actor = data.actor || {};
+  const src = actor.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${actor.id || 'x'}`;
+  const title = actor.username ? `@${actor.username}` : 'MistyNote';
+  const subtitle = (data.type === 'comment' && data.comment_text)
+    ? data.comment_text.slice(0, 60) + (data.comment_text.length > 60 ? '…' : '')
+    : cfg.label;
+
+  const banner = document.getElementById('notif-banner');
+  if (!banner) return;
+
+  banner.style.setProperty('--notif-accent', cfg.accentColor);
+  banner.innerHTML = `
+    <div class="notif-banner-inner" onclick="notifBannerClick('${data.post_id || ''}','${data.actor_id || ''}','${data.id}')">
+      <img class="notif-banner-avatar" src="${escHtml(src)}"
+        onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=fallback'" alt="">
+      <div class="notif-banner-content">
+        <div class="notif-banner-title">${escHtml(title)}</div>
+        <div class="notif-banner-subtitle">${escHtml(subtitle)}</div>
+      </div>
+      ${data.post_image ? `<img class="notif-banner-thumb" src="${escHtml(data.post_image)}" alt="">` : `<span class="notif-banner-time">now</span>`}
+    </div>`;
+
+  requestAnimationFrame(() => { banner.classList.remove('hide'); banner.classList.add('show'); });
+  clearTimeout(bannerTimer);
+  bannerTimer = setTimeout(dismissNotifBanner, NOTIF_CONFIG.BANNER_DURATION);
+  attachBannerSwipe(banner);
+}
+
+function dismissNotifBanner() {
+  const banner = document.getElementById('notif-banner');
+  if (!banner) return;
+  banner.classList.remove('show');
+  banner.classList.add('hide');
+  clearTimeout(bannerTimer);
+  setTimeout(showNextBanner, 400);
+}
+
+function notifBannerClick(postId, actorId, notifId) {
+  dismissNotifBanner();
+  if (postId) openDetail(postId);
+  else if (actorId) showUserProfile(actorId, null);
+  if (notifId) supabase.from('notifications').update({ read: true }).eq('id', notifId).catch(() => {});
+}
+
+function attachBannerSwipe(banner) {
+  let startY = 0, currentY = 0, dragging = false;
+  banner.addEventListener('touchstart', e => { startY = e.touches[0].clientY; dragging = true; clearTimeout(bannerTimer); }, { passive: true });
+  banner.addEventListener('touchmove', e => {
+    if (!dragging) return;
+    currentY = e.touches[0].clientY - startY;
+    if (currentY < 0) { banner.style.transform = `translateY(${currentY}px)`; banner.style.opacity = String(1 + currentY / 120); }
+  }, { passive: true });
+  banner.addEventListener('touchend', () => {
+    dragging = false;
+    if (currentY < -NOTIF_CONFIG.BANNER_SWIPE_THRESHOLD) { dismissNotifBanner(); }
+    else { banner.style.transform = ''; banner.style.opacity = ''; bannerTimer = setTimeout(dismissNotifBanner, NOTIF_CONFIG.BANNER_DURATION); }
+    currentY = 0;
+  });
+}
+
+function attachSwipeDismiss(el) {
+  let startX = 0, currentX = 0, dragging = false;
+  el.addEventListener('touchstart', e => { startX = e.touches[0].clientX; dragging = true; el.classList.add('swiping'); }, { passive: true });
+  el.addEventListener('touchmove', e => {
+    if (!dragging) return;
+    currentX = e.touches[0].clientX - startX;
+    if (currentX < 0) el.style.transform = `translateX(${currentX}px)`;
+  }, { passive: true });
+  el.addEventListener('touchend', () => {
+    dragging = false; el.classList.remove('swiping');
+    if (currentX < -80) {
+      const ids = (el.dataset.ids || '').split(',').filter(Boolean);
+      el.classList.add('dismissed');
+      setTimeout(() => el.remove(), 300);
+      if (ids.length) {
+        supabase.from('notifications').delete().in('id', ids).catch(() => {});
+        notifRawData = notifRawData.filter(n => !ids.includes(String(n.id)));
+        updateNotifTabCounts();
+      }
+    } else { el.style.transform = ''; }
+    currentX = 0;
+  });
+}
+
+// ── PAGE ENTRY ────────────────────────────
+
+function onNotifPageOpen() {
+  buildNotifFilterTabs();
+  loadNotifications();
+  setTimeout(async () => {
+    if (unreadCount > 0) {
+      await supabase.from('notifications').update({ read: true }).eq('user_id', currentUser.id).eq('read', false);
+      unreadCount = 0;
+      updateNotifBadge();
+    }
+  }, 1200);
+}
+
+function buildNotifFilterTabs() {
+  const wrap = document.getElementById('notif-filter-tabs');
+  if (!wrap || wrap.dataset.built) return;
+  wrap.dataset.built = '1';
+  wrap.innerHTML = NOTIF_FILTERS.map(f => `
+    <button id="ntab-${f.id}" class="notif-filter-tab${f.id === 'all' ? ' active' : ''}"
+      data-filter="${f.id}" onclick="switchNotifFilter('${f.id}')">
+      ${f.label}
+      <span class="tab-count" style="display:none"></span>
+    </button>`).join('');
+}
+
+// ── DEMO HELPER (remove in production) ────
+window.demoNotif = function(type = 'like') {
+  queueNotifBanner({ type, actor: { username: 'amara.lagos', avatar: `https://api.dicebear.com/7.x/adventurer/svg?seed=amara` }, comment_text: type === 'comment' ? 'This is so beautiful! 🔥' : null, post_image: null, post_id: null, actor_id: null, id: 'demo-' + Date.now() });
+};
 
 function subscribeToPostUpdates() {
   if (postsChannel) return;
@@ -7765,13 +8182,6 @@ function renderEchoTab(tab) {
       </div>
     `;
   }).join('');
-}
-
-async function markAllRead() {
-  if (!currentUser) return;
-  await supabase.from('notifications').update({ read: true }).eq('user_id', currentUser.id).eq('read', false);
-  unreadCount = 0; updateNotifDot();
-  document.querySelectorAll('.notif-item.unread').forEach(el => el.classList.remove('unread'));
 }
 
 // ══════════════════════════════════════════
