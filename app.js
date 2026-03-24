@@ -2149,8 +2149,8 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false) {
           <span class="prf-masonry-username">${escHtml(uname)}</span>
         </div>
         <button class="prf-masonry-like ${liked ? 'liked' : ''}" data-post-id="${post.id}" onclick="event.stopPropagation(); toggleMasonryLike(this, '${post.id}')">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="${liked ? 'rgb(244,7,82)' : 'none'}" stroke="${liked ? 'rgb(244,7,82)' : 'currentColor'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path class="heart-path" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path class="heart-path" fill="${liked ? 'rgb(244,7,82)' : 'none'}" stroke="${liked ? 'rgb(244,7,82)' : 'currentColor'}" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
           </svg>
           <span class="prf-masonry-like-count">${likes > 0 ? fmtNum(likes) : ''}</span>
         </button>
@@ -3775,13 +3775,8 @@ function setLikeUI(postId, liked, count) {
   // ── 4. Profile masonry tiles (Posts tab, Liked tab) ──
   document.querySelectorAll(`.prf-masonry-like[data-post-id="${postId}"]`).forEach(btn => {
     btn.classList.toggle('liked', liked);
-    // SVG in masonry — update both svg and path
-    const mSvg = btn.querySelector('svg');
-    if (mSvg) {
-      mSvg.setAttribute('fill', liked ? RED : 'none');
-      mSvg.setAttribute('stroke', liked ? RED : 'currentColor');
-    }
-    const mPath = btn.querySelector('.heart-path, path');
+    // Masonry — only update path fill/stroke, never the svg element
+    const mPath = btn.querySelector('.heart-path');
     if (mPath) {
       mPath.setAttribute('fill', liked ? RED : 'none');
       mPath.setAttribute('stroke', liked ? RED : 'currentColor');
@@ -3807,7 +3802,7 @@ function syncLikeCount(postId, count) {
   // Detail stat
   const statEl = document.querySelector(`.detail-stat-n[data-type="likes"]`);
   if (statEl && typeof detailPostId !== 'undefined' && detailPostId === postId) {
-    animateCount(statEl, count);
+    statEl.textContent = fmtNum(count);
   }
   // Comment bar count
   const cbCount = document.getElementById('cb-like-count');
@@ -8658,11 +8653,11 @@ function toggleMasonryLike(btn, postId) {
 
   if (newLiked) likedPosts.add(postId); else likedPosts.delete(postId);
 
+  // Animate FIRST before setLikeUI changes fill
+  animateHeart(btn.querySelector('svg'), newLiked);
+
   // Update all instances everywhere via setLikeUI
   setLikeUI(postId, newLiked, newCount);
-
-  // Animate this masonry heart
-  animateHeart(btn.querySelector('svg'), newLiked);
 
   // DB sync
   if (newLiked) {
