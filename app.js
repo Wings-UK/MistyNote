@@ -8657,16 +8657,25 @@ function toggleMasonryLike(btn, postId) {
   btn.dataset.liked = newLiked ? 'true' : 'false';
   setLikeUI(postId, newLiked, newCount);
 
-  // DB sync
+  // DB sync — then fetch real count and sync everywhere
+  const syncCount = async () => {
+    const { data } = await supabase.from('posts').select('like_count').eq('id', postId).single();
+    if (data) syncLikeCount(postId, data.like_count);
+  };
+
   if (newLiked) {
     supabase.from('likes').insert({ post_id: postId, user_id: currentUser.id }).then(({ error }) => {
       if (error && error.code !== '23505') {
         likedPosts.delete(postId);
         setLikeUI(postId, false, current);
+      } else {
+        syncCount();
       }
     });
   } else {
-    supabase.from('likes').delete().eq('post_id', postId).eq('user_id', currentUser.id);
+    supabase.from('likes').delete()
+      .eq('post_id', postId).eq('user_id', currentUser.id)
+      .then(() => syncCount());
   }
 }
 
