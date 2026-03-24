@@ -3645,6 +3645,34 @@ async function checkRepostedPosts(postIds) {
   });
 }
 
+
+// ── Universal heart animation — call with any SVG element ──
+function animateHeart(svg, toLike) {
+  if (!svg) return;
+  svg.style.transition = 'none';
+  svg.style.transform = 'scale(1)';
+  void svg.offsetWidth; // force reflow
+  if (toLike) {
+    svg.style.transition = 'transform 0.12s ease-out';
+    svg.style.transform = 'scale(1.5)';
+    setTimeout(() => {
+      svg.style.transition = 'transform 0.1s ease-in';
+      svg.style.transform = 'scale(0.88)';
+      setTimeout(() => {
+        svg.style.transition = 'transform 0.08s ease-out';
+        svg.style.transform = 'scale(1)';
+      }, 100);
+    }, 120);
+  } else {
+    svg.style.transition = 'transform 0.1s ease-in';
+    svg.style.transform = 'scale(0.65)';
+    setTimeout(() => {
+      svg.style.transition = 'transform 0.15s cubic-bezier(0.34,1.56,0.64,1)';
+      svg.style.transform = 'scale(1)';
+    }, 100);
+  }
+}
+
 async function toggleLike(postId, btn) {
   if (!currentUser) { showToast('Sign in to like'); return; }
   const isLiked = btn?.dataset.liked === 'true';
@@ -3663,35 +3691,15 @@ async function toggleLike(postId, btn) {
   if (newLiked) likedPosts.add(postId); else likedPosts.delete(postId);
   setLikeUI(postId, newLiked, optimisticCount);
 
-  // ── Smooth heart animation ──
+  // ── Animate feed hearts ──
   allContainers.forEach(container => {
-    const svg = container.querySelector('svg');
-    if (!svg) return;
-    svg.style.transition = 'none';
-    svg.style.transform = 'scale(1)';
-    void svg.offsetWidth;
-    if (newLiked) {
-      // Like: pop up then settle
-      svg.style.transition = 'transform 0.12s ease-out';
-      svg.style.transform = 'scale(1.5)';
-      setTimeout(() => {
-        svg.style.transition = 'transform 0.1s ease-in';
-        svg.style.transform = 'scale(0.9)';
-        setTimeout(() => {
-          svg.style.transition = 'transform 0.08s ease-out';
-          svg.style.transform = 'scale(1)';
-        }, 100);
-      }, 120);
-    } else {
-      // Unlike: shrink then return
-      svg.style.transition = 'transform 0.1s ease-in';
-      svg.style.transform = 'scale(0.65)';
-      setTimeout(() => {
-        svg.style.transition = 'transform 0.12s cubic-bezier(0.34,1.56,0.64,1)';
-        svg.style.transform = 'scale(1)';
-      }, 100);
-    }
+    animateHeart(container.querySelector('svg'), newLiked);
   });
+  // ── Animate detail cb heart ──
+  const cbLikeBtn = document.getElementById('cb-like-btn');
+  if (cbLikeBtn && cbLikeBtn.dataset.postId === postId) {
+    animateHeart(cbLikeBtn.querySelector('svg'), newLiked);
+  }
 
   // ── DB update in background ──
   try {
@@ -3767,7 +3775,12 @@ function setLikeUI(postId, liked, count) {
   // ── 4. Profile masonry tiles (Posts tab, Liked tab) ──
   document.querySelectorAll(`.prf-masonry-like[data-post-id="${postId}"]`).forEach(btn => {
     btn.classList.toggle('liked', liked);
-    // SVG in masonry — fill/stroke
+    // SVG in masonry — update both svg and path
+    const mSvg = btn.querySelector('svg');
+    if (mSvg) {
+      mSvg.setAttribute('fill', liked ? RED : 'none');
+      mSvg.setAttribute('stroke', liked ? RED : 'currentColor');
+    }
     const mPath = btn.querySelector('.heart-path, path');
     if (mPath) {
       mPath.setAttribute('fill', liked ? RED : 'none');
@@ -5419,23 +5432,7 @@ async function toggleCommentLike(commentId, btn) {
   btn.classList.toggle('liked', newLiked);
   const path = btn.querySelector('.heart-path');
   if (path) { path.setAttribute('fill', newLiked ? 'var(--red)' : 'none'); path.setAttribute('stroke', newLiked ? 'var(--red)' : 'currentColor'); }
-  const cbHeart = btn?.querySelector('svg');
-  if (cbHeart) {
-    const toLike = btn.dataset.liked !== 'true';
-    cbHeart.style.transition = 'none';
-    cbHeart.style.transform = 'scale(1)';
-    void cbHeart.offsetWidth;
-    if (toLike) {
-      cbHeart.style.transition = 'transform 0.12s ease-out';
-      cbHeart.style.transform = 'scale(1.5)';
-      setTimeout(() => { cbHeart.style.transition = 'transform 0.1s ease-in'; cbHeart.style.transform = 'scale(0.9)'; }, 120);
-      setTimeout(() => { cbHeart.style.transition = 'transform 0.08s ease-out'; cbHeart.style.transform = 'scale(1)'; }, 220);
-    } else {
-      cbHeart.style.transition = 'transform 0.1s ease-in';
-      cbHeart.style.transform = 'scale(0.65)';
-      setTimeout(() => { cbHeart.style.transition = 'transform 0.12s cubic-bezier(0.34,1.56,0.64,1)'; cbHeart.style.transform = 'scale(1)'; }, 100);
-    }
-  }
+  animateHeart(btn?.querySelector('svg'), btn?.dataset.liked !== 'true');
   const sp = btn.querySelector('span');
   const cnt = parseInt(sp?.textContent || '0') || 0;
   if (sp) sp.textContent = newLiked ? cnt + 1 : Math.max(0, cnt - 1) || '';
@@ -8655,23 +8652,25 @@ function toggleMasonryLike(btn, postId) {
   if (!currentUser) { showToast('Sign in to like'); return; }
   const liked = btn.classList.contains('liked');
   const newLiked = !liked;
-  const svg = btn.querySelector('svg');
   const countEl = btn.querySelector('.prf-masonry-like-count');
   const current = parseInt(countEl?.textContent?.replace(/[^0-9]/g,'')) || 0;
   const newCount = Math.max(0, current + (newLiked ? 1 : -1));
 
-  btn.classList.toggle('liked', newLiked);
-  if (svg) {
-    svg.setAttribute('fill', newLiked ? 'rgb(244,7,82)' : 'none');
-    svg.setAttribute('stroke', newLiked ? 'rgb(244,7,82)' : 'currentColor');
-  }
-  if (countEl) countEl.textContent = newCount > 0 ? fmtNum(newCount) : '';
   if (newLiked) likedPosts.add(postId); else likedPosts.delete(postId);
 
-  // Sync with DB
+  // Update all instances everywhere via setLikeUI
+  setLikeUI(postId, newLiked, newCount);
+
+  // Animate this masonry heart
+  animateHeart(btn.querySelector('svg'), newLiked);
+
+  // DB sync
   if (newLiked) {
     supabase.from('likes').insert({ post_id: postId, user_id: currentUser.id }).then(({ error }) => {
-      if (error && error.code !== '23505') { btn.classList.remove('liked'); }
+      if (error && error.code !== '23505') {
+        likedPosts.delete(postId);
+        setLikeUI(postId, false, current);
+      }
     });
   } else {
     supabase.from('likes').delete().eq('post_id', postId).eq('user_id', currentUser.id);
