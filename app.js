@@ -2148,9 +2148,9 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false) {
           <img class="prf-masonry-avatar" src="${escHtml(avatar)}" onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(uname)}'">
           <span class="prf-masonry-username">${escHtml(uname)}</span>
         </div>
-        <button class="prf-masonry-like ${liked ? 'liked' : ''}" data-post-id="${post.id}" onclick="event.stopPropagation(); toggleMasonryLike(this, '${post.id}')">
+        <button class="prf-masonry-like ${liked ? 'liked' : ''}" data-post-id="${post.id}" data-liked="${liked ? 'true' : 'false'}" onclick="event.stopPropagation(); toggleMasonryLike(this, '${post.id}')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path class="heart-path" fill="${liked ? 'rgb(244,7,82)' : 'none'}" stroke="${liked ? 'rgb(244,7,82)' : 'currentColor'}" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+            <path class="heart-path" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
           </svg>
           <span class="prf-masonry-like-count">${likes > 0 ? fmtNum(likes) : ''}</span>
         </button>
@@ -3436,6 +3436,8 @@ function injectFeedPostStyles() {
     .heart-icon { transition: all 0.3s ease; }
     .heart-path { fill: none; stroke: #000000; transition: fill 0.2s ease, stroke 0.2s ease; }
     .heart-ai[data-liked="true"] .heart-path { fill: rgb(244,7,82); stroke: rgb(244,7,82); }
+    .prf-masonry-like[data-liked="true"] .heart-path { fill: rgb(244,7,82); stroke: rgb(244,7,82); }
+    .cb-like-btn[data-liked="true"] .cb-heart-path { fill: rgb(244,7,82); stroke: rgb(244,7,82); }
     .like-count { font-size: 14px; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: #000000; font-weight: 400; transition: color 0.15s, font-weight 0.15s; }
     .like-count.liked { color: rgb(244,7,82); font-weight: 600; }
     .like-count:empty { display: none; }
@@ -3775,12 +3777,7 @@ function setLikeUI(postId, liked, count) {
   // ── 4. Profile masonry tiles (Posts tab, Liked tab) ──
   document.querySelectorAll(`.prf-masonry-like[data-post-id="${postId}"]`).forEach(btn => {
     btn.classList.toggle('liked', liked);
-    // Masonry — only update path fill/stroke, never the svg element
-    const mPath = btn.querySelector('.heart-path');
-    if (mPath) {
-      mPath.setAttribute('fill', liked ? RED : 'none');
-      mPath.setAttribute('stroke', liked ? RED : 'currentColor');
-    }
+    btn.dataset.liked = liked ? 'true' : 'false'; // CSS handles fill via [data-liked="true"]
     const mCount = btn.querySelector('.prf-masonry-like-count');
     if (mCount && count !== null) mCount.textContent = count > 0 ? fmtNum(count) : '';
   });
@@ -8657,6 +8654,7 @@ function toggleMasonryLike(btn, postId) {
   animateHeart(btn.querySelector('svg'), newLiked);
 
   // Update all instances everywhere via setLikeUI
+  btn.dataset.liked = newLiked ? 'true' : 'false';
   setLikeUI(postId, newLiked, newCount);
 
   // DB sync
