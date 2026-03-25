@@ -953,8 +953,7 @@ async function obToggleFollow(btn, uid) {
         btn.classList.add('following'); btn.textContent = 'Following';
         obFollowCount++;
         if (uid !== currentUser.id) {
-          supabase.from('notifications').insert({ user_id: uid, actor_id: currentUser.id, post_id: null, type: 'follow', read: false })
-            .then(({error:e}) => { if(e) console.warn('ob follow notif error:', e.message); });
+          insertNotification({ user_id: uid, actor_id: currentUser.id, post_id: null, type: 'follow' });
         }
       } else {
         showToast('Error: ' + error.message);
@@ -3722,7 +3721,7 @@ async function toggleLike(postId, btn) {
     if (newLiked) {
       supabase.from('posts').select('user_id').eq('id', postId).single().then(({ data: post }) => {
         if (post && post.user_id !== currentUser.id) {
-          supabase.from('notifications').insert({ user_id: post.user_id, actor_id: currentUser.id, post_id: postId, type: 'like', read: false }).catch(() => {});
+          insertNotification({ user_id: post.user_id, actor_id: currentUser.id, post_id: postId, type: 'like' });
         }
       });
     }
@@ -4247,10 +4246,7 @@ function prependPostToFeed(newPost) {
     setTimeout(() => syncRepostCount(newPost.reposted_post_id), 1200);
     supabase.from('posts').select('user_id').eq('id', newPost.reposted_post_id).single().then(({ data: orig }) => {
       if (orig && orig.user_id !== currentUser.id) {
-        supabase.from('notifications').insert({
-          user_id: orig.user_id, actor_id: currentUser.id,
-          post_id: newPost.reposted_post_id, type: 'repost', read: false
-        }).catch(() => {});
+        insertNotification({ user_id: orig.user_id, actor_id: currentUser.id, post_id: newPost.reposted_post_id, type: 'repost' });
       }
     });
   }
@@ -5388,7 +5384,7 @@ async function submitComment(postId, parentId, content) {
       }
       supabase.from('posts').select('user_id').eq('id', postId).single().then(({ data: post }) => {
         if (post && post.user_id !== currentUser.id) {
-          supabase.from('notifications').insert({ user_id: post.user_id, actor_id: currentUser.id, post_id: postId, type: 'comment', comment_text: content, read: false });
+          insertNotification({ user_id: post.user_id, actor_id: currentUser.id, post_id: postId, type: 'comment', comment_text: content });
         }
       });
     }
@@ -5438,10 +5434,7 @@ async function toggleCommentLike(commentId, btn) {
         // Notify comment author
         supabase.from('comments').select('user_id, post_id').eq('id', commentId).single().then(({ data: cmt }) => {
           if (cmt && cmt.user_id !== currentUser.id) {
-            supabase.from('notifications').insert({
-              user_id: cmt.user_id, actor_id: currentUser.id,
-              post_id: cmt.post_id, type: 'like_comment', read: false
-            }).then(({error:e}) => { if(e) console.warn('like_comment notif error:', e.message); });
+            insertNotification({ user_id: cmt.user_id, actor_id: currentUser.id, post_id: cmt.post_id, type: 'like_comment' });
           }
         });
       }
@@ -5811,8 +5804,7 @@ async function discToggleFollow(btn, uid) {
       btn.classList.add('following');
       btn.textContent = 'Following';
       if (uid !== currentUser.id) {
-        supabase.from('notifications').insert({ user_id: uid, actor_id: currentUser.id, post_id: null, type: 'follow', read: false })
-          .then(({error:e}) => { if(e) console.warn('disc follow notif error:', e.message); });
+        insertNotification({ user_id: uid, actor_id: currentUser.id, post_id: null, type: 'follow' });
       }
     }
   }
@@ -7841,29 +7833,55 @@ function updateNotifBadge() {
 
 // ── REAL-TIME SUBSCRIPTION ────────────────
 
+// ── Safe notification insert — logs errors, never throws ──
+async function insertNotification(payload) {
+  try {
+    const { error } = await supabase.from('notifications').insert({
+      ...payload,
+      read: false,
+      post_id: payload.post_id || null,
+    });
+    if (error) console.warn(`[notif:${payload.type}] Insert failed:`, error.message, error.details);
+    return !error;
+  } catch(e) {
+    console.warn('[notif] Unexpected error:', e.message);
+    return false;
+  }
+}
+
 function subscribeToNotifs() {
   if (!currentUser || notifChannel) return;
   notifChannel = supabase
-    .channel('notifs-' + currentUser.id)
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUser.id}` }, async (payload) => {
+    .channel(`notifs-${currentUser.id}`)
+    .on('postgres_changes', {
+      event: 'INSERT', schema: 'public', table: 'notifications',
+      filter: `user_id=eq.${currentUser.id}`
+    }, async (payload) => {
       const n = payload.new;
       if (!n.read) { unreadCount++; updateNotifBadge(); }
-      if (navigator.vibrate) navigator.vibrate(40);
+      if (navigator.vibrate) navigator.vibrate([40, 20, 40]);
 
-      const { data: actor } = await supabase.from('users').select('username,avatar').eq('id', n.actor_id).maybeSingle();
-      let post = null;
-      if (n.post_id) {
-        const { data: p } = await supabase.from('posts').select('image').eq('id', n.post_id).maybeSingle();
-        post = p;
-      }
-      notifRawData.unshift({ ...n, actor, post, actors: [actor] });
+      // Enrich with actor and post in parallel
+      const [{ data: actor }, { data: postData }] = await Promise.all([
+        supabase.from('users').select('id,username,avatar').eq('id', n.actor_id).maybeSingle(),
+        n.post_id ? supabase.from('posts').select('image').eq('id', n.post_id).maybeSingle() : Promise.resolve({ data: null })
+      ]);
 
-      queueNotifBanner({ type: n.type, actor, comment_text: n.comment_text, post_image: post?.image, post_id: n.post_id, actor_id: n.actor_id, id: n.id });
+      const enriched = { ...n, actor, post: postData, actors: [actor], latestAt: n.created_at, ids: [n.id] };
+      notifRawData.unshift(enriched);
+
+      queueNotifBanner({ type: n.type, actor, comment_text: n.comment_text, post_image: postData?.image, post_id: n.post_id, actor_id: n.actor_id, id: n.id });
 
       const notifPage = document.getElementById('page-notifications');
       if (notifPage?.classList.contains('active')) { renderNotifList(notifCurrentFilter); updateNotifTabCounts(); }
     })
-    .subscribe();
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR') {
+        console.warn('Notif channel error — retrying in 3s');
+        notifChannel = null;
+        setTimeout(subscribeToNotifs, 3000);
+      }
+    });
 }
 
 // ── BANNER ────────────────────────────────
