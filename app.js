@@ -4253,6 +4253,21 @@ function prependPostToFeed(newPost) {
   if (document.getElementById('page-profile')?.classList.contains('active')) {
     renderMyProfile();
   }
+
+  // Mention notifications from post content
+  if (newPost && newPost.content) {
+    const mentionMatches = newPost.content.match(/@([a-zA-Z0-9_]+)/g);
+    if (mentionMatches) {
+      const mentioned = [...new Set(mentionMatches.map(m => m.slice(1).toLowerCase()))];
+      supabase.from('users').select('id,username').in('username', mentioned).then(({ data: users }) => {
+        (users || []).forEach(u => {
+          if (u.id !== currentUser.id) {
+            insertNotification({ user_id: u.id, actor_id: currentUser.id, post_id: newPost.id, type: 'mention' });
+          }
+        });
+      });
+    }
+  }
 }
 
 // ── Image → JPEG blob via canvas, with FileReader fallback ──
@@ -5382,10 +5397,31 @@ async function submitComment(postId, parentId, content) {
         const emptyEl = list.querySelector('.comments-empty');
         if (emptyEl) emptyEl.remove();
       }
+      // Notify post owner
       supabase.from('posts').select('user_id').eq('id', postId).single().then(({ data: post }) => {
         if (post && post.user_id !== currentUser.id) {
           insertNotification({ user_id: post.user_id, actor_id: currentUser.id, post_id: postId, type: 'comment', comment_text: content });
         }
+      });
+    } else {
+      // Reply — notify parent comment author
+      supabase.from('comments').select('user_id').eq('id', parentId).single().then(({ data: parent }) => {
+        if (parent && parent.user_id !== currentUser.id) {
+          insertNotification({ user_id: parent.user_id, actor_id: currentUser.id, post_id: postId, type: 'comment', comment_text: content });
+        }
+      });
+    }
+
+    // Mention notifications — scan for @username in content
+    const mentionMatches = content.match(/@([a-zA-Z0-9_]+)/g);
+    if (mentionMatches) {
+      const mentioned = [...new Set(mentionMatches.map(m => m.slice(1).toLowerCase()))];
+      supabase.from('users').select('id,username').in('username', mentioned).then(({ data: users }) => {
+        (users || []).forEach(u => {
+          if (u.id !== currentUser.id) {
+            insertNotification({ user_id: u.id, actor_id: currentUser.id, post_id: postId, type: 'mention', comment_text: content });
+          }
+        });
       });
     }
   }
@@ -7836,12 +7872,18 @@ function updateNotifBadge() {
 // ── Safe notification insert — logs errors, never throws ──
 async function insertNotification(payload) {
   try {
-    const { error } = await supabase.from('notifications').insert({
-      ...payload,
-      read: false,
-      post_id: payload.post_id || null,
-    });
-    if (error) console.warn(`[notif:${payload.type}] Insert failed:`, error.message, error.details);
+    // Build clean payload — omit post_id entirely if null/undefined (avoids NOT NULL constraint issues)
+    const row = {
+      user_id:      payload.user_id,
+      actor_id:     payload.actor_id,
+      type:         payload.type,
+      read:         false,
+    };
+    if (payload.post_id)      row.post_id      = payload.post_id;
+    if (payload.comment_text) row.comment_text = payload.comment_text;
+
+    const { error } = await supabase.from('notifications').insert(row);
+    if (error) console.warn(`[notif:${payload.type}] Insert failed:`, error.message, error.details || '', error.hint || '');
     return !error;
   } catch(e) {
     console.warn('[notif] Unexpected error:', e.message);
