@@ -1904,15 +1904,19 @@ async function renderMyProfile() {
           : `<div class="prf-cover-gradient"></div>`}
         <div class="prf-cover-bar">
           <div></div>
-          <div class="prf-cover-actions"></div>
+          <div class="prf-cover-actions">
+            <button class="prf-cover-action-btn" onclick="openEditProfile()" title="Change cover photo">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" stroke="white" stroke-width="2"/></svg>
+            </button>
+          </div>
         </div>
       </div>
 
       <!-- AVATAR ROW -->
       <div class="prf-avatar-row">
-        <div class="prf-avatar-wrap">
+        <div class="prf-avatar-wrap" onclick="openEditProfile()" title="Change profile photo">
           <div class="prf-avatar-ring"></div>
-          <img class="prf-avatar" src="${escHtml(profile.avatar||'')}" onerror="this.src=''" alt="">
+          <img class="prf-avatar" src="${escHtml(profile.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(profile.id)}`)}" onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(profile.id)}'" alt="">
         </div>
         <div class="prf-avatar-action-btns">
           <button class="prf-btn prf-btn-icon" onclick="showSettings()">
@@ -2331,7 +2335,7 @@ async function showUserProfile(userId, tapEl) {
         <div class="prf-avatar-row">
           <div class="prf-avatar-wrap">
             <div class="prf-avatar-ring"></div>
-            <img class="prf-avatar" src="${escHtml(profile.avatar||'')}" onerror="this.src=''" alt="">
+            <img class="prf-avatar" src="${escHtml(profile.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(profile.id)}`)}" onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(profile.id)}'" alt="">
           </div>
           <div class="prf-avatar-action-btns">
             <button class="prf-btn prf-btn-icon" onclick="openDM('${userId}')">
@@ -8633,10 +8637,52 @@ async function recordView(postId) {
 }
 
 // ══════════════════════════════════════════
-// IMAGE UPLOAD
+// IMAGE UPLOAD — avatar + cover
 // ══════════════════════════════════════════
 
+async function uploadImage(file, bucket) {
+  if (!file || !currentUser) throw new Error('No file or user');
 
+  // Compress to JPEG before uploading — keeps storage lean, speeds up upload on slow African networks
+  const compressed = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = new Image();
+      img.onload = () => {
+        // Covers up to 1200px wide, avatars up to 400px — enough for any display size
+        const MAX = bucket === 'covers' ? 1200 : 400;
+        const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width  = Math.round(img.width  * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob(
+          blob => blob ? resolve(blob) : reject(new Error('Compression failed')),
+          'image/jpeg',
+          0.82
+        );
+      };
+      img.onerror = reject;
+      img.src = ev.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  // Always write to the same path per user — overwrites old file, no storage bloat
+  const ext  = bucket === 'covers' ? 'cover' : 'avatar';
+  const path = `${currentUser.id}/${ext}.jpg`;
+
+  const { error } = await supabase.storage
+    .from(bucket)
+    .upload(path, compressed, { upsert: true, contentType: 'image/jpeg' });
+
+  if (error) throw error;
+
+  // Cache-bust so the browser actually fetches the new image instead of showing the old one
+  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+  return data.publicUrl + '?t=' + Date.now();
+}
 
 // ══════════════════════════════════════════
 // SHARE
