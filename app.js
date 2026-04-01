@@ -1905,7 +1905,7 @@ async function renderMyProfile() {
         <div class="prf-cover-bar">
           <div></div>
           <div class="prf-cover-actions">
-            <button class="prf-cover-action-btn" onclick="openEditProfile()" title="Change cover photo">
+            <button class="prf-cover-action-btn" onclick="viewProfilePhoto('${escHtml(profile.cover || '')}', 'cover')" title="View cover photo">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" stroke="white" stroke-width="2"/></svg>
             </button>
           </div>
@@ -1914,7 +1914,7 @@ async function renderMyProfile() {
 
       <!-- AVATAR ROW -->
       <div class="prf-avatar-row">
-        <div class="prf-avatar-wrap" onclick="openEditProfile()" title="Change profile photo">
+        <div class="prf-avatar-wrap" onclick="viewProfilePhoto('${escHtml(profile.avatar || '')}', 'avatar')" title="View profile photo">
           <div class="prf-avatar-ring"></div>
           <img class="prf-avatar" src="${escHtml(profile.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(profile.id)}`)}" onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(profile.id)}'" alt="">
         </div>
@@ -8355,6 +8355,41 @@ async function deletePost(postId, el) {
 // EDIT PROFILE
 // ══════════════════════════════════════════
 
+
+// ── Full-screen photo viewer ──
+function viewProfilePhoto(url, type) {
+  if (!url) return;
+  const overlay = document.createElement('div');
+  overlay.style.cssText = `
+    position:fixed;inset:0;z-index:9999;
+    background:rgba(0,0,0,0.95);
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    cursor:pointer;
+  `;
+  const img = document.createElement('img');
+  img.src = url;
+  img.style.cssText = `
+    max-width:100%;max-height:85vh;
+    object-fit:contain;
+    border-radius:${type === 'avatar' ? '50%' : '12px'};
+  `;
+  const closeBtn = document.createElement('button');
+  closeBtn.innerHTML = '✕';
+  closeBtn.style.cssText = `
+    position:absolute;top:16px;right:16px;
+    width:36px;height:36px;border-radius:50%;
+    background:rgba(255,255,255,0.15);
+    color:white;font-size:18px;
+    display:flex;align-items:center;justify-content:center;
+    border:none;cursor:pointer;
+  `;
+  overlay.appendChild(img);
+  overlay.appendChild(closeBtn);
+  overlay.onclick = () => document.body.removeChild(overlay);
+  document.body.appendChild(overlay);
+}
+
 function openEditProfile() {
   // Wire up live username sanitization
   setTimeout(() => {
@@ -8443,10 +8478,25 @@ function openEditProfile() {
   }
   const _locEl = document.getElementById('edit-location-display');
   if (_locEl) _locEl.textContent = currentProfile.location || 'Auto-detecting…';
-  if (currentProfile.cover) document.getElementById('edit-cover-img').src = currentProfile.cover;
-  if (currentProfile.avatar) document.getElementById('edit-avatar-img').src = currentProfile.avatar;
+  const coverImg = document.getElementById('edit-cover-img');
+  const avatarImg = document.getElementById('edit-avatar-img');
+  if (coverImg) {
+    coverImg.src = currentProfile.cover || '';
+    coverImg.onerror = () => { coverImg.src = ''; };
+  }
+  if (avatarImg) {
+    avatarImg.src = currentProfile.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${currentProfile.id}`;
+    avatarImg.onerror = () => { avatarImg.src = ''; };
+  }
 
-  editAvatarFile = null; editCoverFile = null;
+  // Reset file selections
+  editAvatarFile = null;
+  editCoverFile = null;
+  // Reset file inputs so same file can be re-selected
+  const af = document.getElementById('edit-avatar-file');
+  const cf = document.getElementById('edit-cover-file');
+  if (af) af.value = '';
+  if (cf) cf.value = '';
 }
 
 function closeEditProfile() {
@@ -8454,19 +8504,32 @@ function closeEditProfile() {
 }
 
 function previewAvatar(e) {
-  editAvatarFile = e.target.files[0];
-  if (!editAvatarFile) return;
+  const file = e.target.files?.[0];
+  if (!file) return;
+  // Validate
+  if (!file.type.startsWith('image/')) { showToast('Please select an image file'); return; }
+  if (file.size > 5 * 1024 * 1024) { showToast('Image must be under 5MB'); return; }
+  editAvatarFile = file;
   const reader = new FileReader();
-  reader.onload = ev => document.getElementById('edit-avatar-img').src = ev.target.result;
-  reader.readAsDataURL(editAvatarFile);
+  reader.onload = ev => {
+    const img = document.getElementById('edit-avatar-img');
+    if (img) img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
 }
 
 function previewCover(e) {
-  editCoverFile = e.target.files[0];
-  if (!editCoverFile) return;
+  const file = e.target.files?.[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { showToast('Please select an image file'); return; }
+  if (file.size > 10 * 1024 * 1024) { showToast('Image must be under 10MB'); return; }
+  editCoverFile = file;
   const reader = new FileReader();
-  reader.onload = ev => document.getElementById('edit-cover-img').src = ev.target.result;
-  reader.readAsDataURL(editCoverFile);
+  reader.onload = ev => {
+    const img = document.getElementById('edit-cover-img');
+    if (img) img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
 }
 
 // ── Rate limit helpers ──
@@ -8544,11 +8607,34 @@ async function saveProfile() {
   };
 
   const saveBtn = document.querySelector('.modal-save');
-  if (saveBtn) { saveBtn.textContent = '…'; saveBtn.style.opacity = '0.5'; }
+  if (saveBtn) { saveBtn.textContent = '…'; saveBtn.disabled = true; saveBtn.style.opacity = '0.5'; }
 
   try {
-    if (editAvatarFile) updates.avatar = await uploadImage(editAvatarFile, 'avatars');
-    if (editCoverFile)  updates.cover  = await uploadImage(editCoverFile, 'covers');
+    // Upload avatar if changed
+    if (editAvatarFile) {
+      showToast('Uploading profile photo…');
+      try {
+        updates.avatar = await uploadImage(editAvatarFile, 'avatars');
+      } catch(uploadErr) {
+        console.error('[saveProfile] Avatar upload failed:', uploadErr);
+        showToast('Profile photo upload failed: ' + uploadErr.message);
+        if (saveBtn) { saveBtn.textContent = 'Save'; saveBtn.disabled = false; saveBtn.style.opacity = ''; }
+        return;
+      }
+    }
+
+    // Upload cover if changed
+    if (editCoverFile) {
+      showToast('Uploading cover photo…');
+      try {
+        updates.cover = await uploadImage(editCoverFile, 'covers');
+      } catch(uploadErr) {
+        console.error('[saveProfile] Cover upload failed:', uploadErr);
+        showToast('Cover photo upload failed: ' + uploadErr.message);
+        if (saveBtn) { saveBtn.textContent = 'Save'; saveBtn.disabled = false; saveBtn.style.opacity = ''; }
+        return;
+      }
+    }
 
     // Try saving with rate limit columns first
     // If it fails (columns don't exist yet), retry without them
@@ -8641,47 +8727,66 @@ async function recordView(postId) {
 // ══════════════════════════════════════════
 
 async function uploadImage(file, bucket) {
-  if (!file || !currentUser) throw new Error('No file or user');
+  if (!file) throw new Error('No file provided');
+  if (!currentUser) throw new Error('Not logged in');
 
-  // Compress to JPEG before uploading — keeps storage lean, speeds up upload on slow African networks
-  const compressed = await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const img = new Image();
-      img.onload = () => {
-        // Covers up to 1200px wide, avatars up to 400px — enough for any display size
-        const MAX = bucket === 'covers' ? 1200 : 400;
-        const scale = Math.min(1, MAX / Math.max(img.width, img.height));
-        const canvas = document.createElement('canvas');
-        canvas.width  = Math.round(img.width  * scale);
-        canvas.height = Math.round(img.height * scale);
-        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-        canvas.toBlob(
-          blob => blob ? resolve(blob) : reject(new Error('Compression failed')),
-          'image/jpeg',
-          0.82
-        );
-      };
-      img.onerror = reject;
-      img.src = ev.target.result;
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+  // Step 1: Compress image using canvas
+  const compressed = await compressImage(file, bucket === 'covers' ? 1200 : 400);
 
-  // Always write to the same path per user — overwrites old file, no storage bloat
+  // Step 2: Upload to Supabase storage
   const ext  = bucket === 'covers' ? 'cover' : 'avatar';
   const path = `${currentUser.id}/${ext}.jpg`;
 
   const { error } = await supabase.storage
     .from(bucket)
-    .upload(path, compressed, { upsert: true, contentType: 'image/jpeg' });
+    .upload(path, compressed, {
+      upsert: true,
+      contentType: 'image/jpeg',
+    });
 
-  if (error) throw error;
+  if (error) {
+    console.error(`[uploadImage] Storage error (${bucket}):`, error);
+    throw new Error(error.message || 'Upload failed');
+  }
 
-  // Cache-bust so the browser actually fetches the new image instead of showing the old one
+  // Step 3: Get public URL with cache bust
   const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-  return data.publicUrl + '?t=' + Date.now();
+  const url = data.publicUrl + '?t=' + Date.now();
+  console.log(`[uploadImage] Success: ${url}`);
+  return url;
+}
+
+// Standalone image compression — returns a Blob
+function compressImage(file, maxPx) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.onload = ev => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Failed to load image'));
+      img.onload = () => {
+        try {
+          const scale = Math.min(1, maxPx / Math.max(img.width || 1, img.height || 1));
+          const w = Math.round(img.width * scale);
+          const h = Math.round(img.height * scale);
+          const canvas = document.createElement('canvas');
+          canvas.width  = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          canvas.toBlob(
+            blob => blob ? resolve(blob) : reject(new Error('Compression failed')),
+            'image/jpeg',
+            0.85
+          );
+        } catch(e) {
+          reject(e);
+        }
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 // ══════════════════════════════════════════
