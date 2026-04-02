@@ -6781,14 +6781,41 @@ function buildMessageEl(msg, prevSenderId) {
   const timeStr    = msgFormatTime(msg.created_at);
 
   const row = document.createElement('div');
-  // Add new-sender class when sender switches — creates 10px gap
   row.className = `chat-msg-row ${isSent ? 'sent' : 'recv'}${isNewSender ? ' new-sender' : ''}`;
   row.dataset.msgId = msg.id;
+
+  // ── Swipe-to-reply gesture ──
+  attachSwipeReply(row, msg);
+
+  // ── Reply quote ──
+  let replyQuoteHtml = '';
+  const replyData = msg._replySnapshot || null;
+  if (replyData || msg.reply_to_id) {
+    // Use embedded snapshot for optimistic messages, or fetch for loaded ones
+    if (replyData) {
+      replyQuoteHtml = buildReplyQuoteHtml(replyData.senderName, replyData.content, replyData.mediaUrl);
+    } else if (msg.reply_to_id) {
+      // Will be populated async below
+    }
+  }
 
   // Build bubble based on type
   let bubbleEl;
 
-  if (msg.type === 'cash') {
+  if (msg.type === 'image') {
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble img-bubble';
+    const imgSrc = escHtml(msg.media_url || '');
+    bubble.innerHTML = `
+      ${replyQuoteHtml}
+      <img class="chat-bubble-img" src="${imgSrc}" alt="photo" loading="lazy"
+        onclick="chatViewImage('${imgSrc}')"
+        onerror="this.style.opacity='0.3'">
+      ${msg.content ? `<div style="font-size:14px;margin-top:6px;padding:0 2px">${escHtml(msg.content)}</div>` : ''}
+      <span class="chat-bubble-meta">${timeStr}</span>`;
+    bubbleEl = bubble;
+
+  } else if (msg.type === 'cash') {
     bubbleEl = buildCashBubble(msg, isSent, timeStr);
   } else if (msg.type === 'product') {
     bubbleEl = buildProductBubble(msg, isSent, timeStr);
@@ -6804,40 +6831,34 @@ function buildMessageEl(msg, prevSenderId) {
     const isUrlOnly = url && content.trim() === url.trim();
 
     if (url) {
-      // ── URL message — wrap in column so text + card stack correctly ──
       const msgCol = document.createElement('div');
       msgCol.className = `chat-url-col ${isSent ? 'sent' : 'recv'}`;
       row.appendChild(msgCol);
 
-      // Text above if there's content besides the URL
       if (!isUrlOnly) {
         const textOnly = content.replace(url, '').trim();
         if (textOnly) {
           const textBubble = document.createElement('div');
           textBubble.className = 'chat-bubble';
-          textBubble.innerHTML = `${linkifyText(textOnly)}<span class="chat-bubble-meta">${timeStr}${isSent ? `` : ''}</span>`;
+          textBubble.innerHTML = `${replyQuoteHtml}${linkifyText(textOnly)}<span class="chat-bubble-meta">${timeStr}${isSent ? `` : ''}</span>`;
           msgCol.appendChild(textBubble);
         }
       }
 
-      // Preview card below text
       const previewCard = document.createElement('div');
       previewCard.className = `chat-og-outer ${isSent ? 'sent' : 'recv'}`;
       previewCard.innerHTML = `<div class="chat-og-shimmer"><div class="chat-og-shimmer-img"></div><div class="chat-og-shimmer-lines"><div></div><div></div></div></div>`;
       msgCol.appendChild(previewCard);
 
-      // Fetch OG async
       fetchOgPreview(url).then(og => {
         if (!og) {
-          // Fallback — show plain URL bubble
           previewCard.remove();
           const fallback = document.createElement('div');
           fallback.className = 'chat-bubble';
-          fallback.innerHTML = `<a href="${escHtml(url)}" target="_blank" rel="noopener noreferrer" class="post-link" onclick="event.stopPropagation()">${escHtml(url)}</a><span class="chat-bubble-meta">${timeStr}${isSent ? `` : ''}</span>`;
+          fallback.innerHTML = `${replyQuoteHtml}<a href="${escHtml(url)}" target="_blank" rel="noopener noreferrer" class="post-link" onclick="event.stopPropagation()">${escHtml(url)}</a><span class="chat-bubble-meta">${timeStr}${isSent ? `` : ''}</span>`;
           msgCol.appendChild(fallback);
           return;
         }
-        // Build rich preview card
         previewCard.innerHTML = buildOgCard(og, url, isSent, timeStr, isUrlOnly);
       }).catch(() => {
         previewCard.remove();
@@ -6846,16 +6867,111 @@ function buildMessageEl(msg, prevSenderId) {
       return row;
 
     } else {
-      // Plain text bubble
       const bubble = document.createElement('div');
       bubble.className = 'chat-bubble';
-      bubble.innerHTML = `${linkifyText(content)}<span class="chat-bubble-meta">${timeStr}${isSent ? `` : ''}</span>`;
+      bubble.innerHTML = `${replyQuoteHtml}${linkifyText(content)}<span class="chat-bubble-meta">${timeStr}${isSent ? `` : ''}</span>`;
       bubbleEl = bubble;
     }
   }
 
-  if (bubbleEl) row.appendChild(bubbleEl);
+  if (bubbleEl) {
+    row.appendChild(bubbleEl);
+    // Async: fetch reply context if reply_to_id exists but no snapshot
+    if (msg.reply_to_id && !msg._replySnapshot) {
+      fetchAndInjectReplyQuote(row, bubbleEl, msg.reply_to_id, isSent);
+    }
+  }
   return row;
+}
+
+// ── Fetch reply context from DB and inject into bubble ──
+async function fetchAndInjectReplyQuote(row, bubbleEl, replyToId, isSent) {
+  const { data: orig } = await supabase
+    .from('messages')
+    .select('id, content, media_url, type, sender_id, sender:users!sender_id(username)')
+    .eq('id', replyToId)
+    .maybeSingle();
+  if (!orig) return;
+  const senderName = orig.sender?.username || '…';
+  const previewText = orig.type === 'image' ? '📷 Photo' : (orig.content || '').slice(0, 80);
+  const mediaUrl = orig.type === 'image' ? orig.media_url : null;
+  const quoteHtml = buildReplyQuoteHtml(senderName, previewText, mediaUrl);
+  // Prepend inside bubble
+  bubbleEl.insertAdjacentHTML('afterbegin', quoteHtml);
+}
+
+function buildReplyQuoteHtml(senderName, previewText, mediaUrl) {
+  return `
+    <div class="chat-reply-quote" onclick="event.stopPropagation()">
+      <div class="chat-reply-quote-accent"></div>
+      <div class="chat-reply-quote-body">
+        <div class="chat-reply-quote-name">${escHtml(senderName)}</div>
+        <div class="chat-reply-quote-text">${escHtml(previewText)}</div>
+      </div>
+      ${mediaUrl ? `<img class="chat-reply-quote-img" src="${escHtml(mediaUrl)}" alt="">` : ''}
+    </div>`;
+}
+
+// ── Swipe-to-reply: attach touch events ──
+function attachSwipeReply(row, msg) {
+  // Add reply icon
+  const icon = document.createElement('div');
+  icon.className = 'chat-swipe-reply-icon';
+  icon.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 17l-4-4 4-4M5 13h8a6 6 0 016 6" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  row.appendChild(icon);
+
+  const isSent = row.classList.contains('sent');
+  let startX = 0, startY = 0, moved = false, triggered = false;
+
+  row.addEventListener('touchstart', e => {
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    moved = false;
+    triggered = false;
+  }, { passive: true });
+
+  row.addEventListener('touchmove', e => {
+    const dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+    // Only activate on horizontal swipe
+    if (Math.abs(dy) > Math.abs(dx)) return;
+    if (Math.abs(dx) < 8) return;
+
+    const correctDir = isSent ? dx < 0 : dx > 0;
+    if (!correctDir) return;
+
+    moved = true;
+    row.classList.add('swiping');
+    const clamped = Math.min(Math.abs(dx), 60);
+    row.style.transform = isSent
+      ? `translateX(-${clamped}px)`
+      : `translateX(${clamped}px)`;
+
+    if (Math.abs(dx) > 50 && !triggered) {
+      triggered = true;
+      navigator.vibrate?.(30);
+    }
+  }, { passive: true });
+
+  row.addEventListener('touchend', () => {
+    if (triggered && msg.id) chatSetReply(msg.id);
+    row.classList.remove('swiping');
+    row.style.transform = '';
+    moved = false;
+    triggered = false;
+  }, { passive: true });
+}
+
+// ── View full-screen image ──
+function chatViewImage(src) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.95);display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+  overlay.onclick = () => overlay.remove();
+  const img = document.createElement('img');
+  img.src = src;
+  img.style.cssText = 'max-width:95vw;max-height:90vh;object-fit:contain;border-radius:12px';
+  overlay.appendChild(img);
+  document.body.appendChild(overlay);
 }
 
 // ── Extract first URL from text ──
@@ -7268,12 +7384,80 @@ function showSeenIndicator() {
 async function chatSend() {
   const field = document.getElementById('chat-input-field');
   const text  = field?.value?.trim();
-  if (!text || !activeChatId || !currentUser) return;
+  const hasImage = !!chatPendingImage;
+
+  if (!text && !hasImage) return;
+  if (!activeChatId || !currentUser) return;
+
+  // Capture reply & image state then clear immediately
+  const replySnapshot = chatReplyTo ? { ...chatReplyTo } : null;
+  const imageSnapshot = chatPendingImage ? { ...chatPendingImage } : null;
 
   field.value = '';
   field.style.height = 'auto';
+  chatCancelReply();
+  chatCancelImage();
 
-  // Optimistic UI — append immediately with correct sender gap
+  const msgsEl = document.getElementById('chat-messages');
+  const lastRow = msgsEl?.querySelector('.chat-msg-row:last-child');
+  const lastSenderId = lastRow ? (lastRow.classList.contains('sent') ? currentUser.id : activeChatUserId) : null;
+
+  // ── IMAGE SEND ──
+  if (imageSnapshot) {
+    const tmpImgMsg = {
+      id: 'tmp-img-' + Date.now(),
+      type: 'image',
+      content: text || '',
+      media_url: imageSnapshot.dataUrl, // optimistic local URL
+      sender_id: currentUser.id,
+      created_at: new Date().toISOString(),
+      sender: currentProfile,
+      reply_to_id: replySnapshot?.id || null,
+      _replySnapshot: replySnapshot,
+    };
+    const imgEl = buildMessageEl(tmpImgMsg, lastSenderId);
+    if (imgEl && msgsEl) {
+      msgsEl.appendChild(imgEl);
+      msgsEl.scrollTop = msgsEl.scrollHeight;
+    }
+
+    // Upload to Supabase Storage
+    const ext  = imageSnapshot.file.name.split('.').pop() || 'jpg';
+    const path = `chat/${activeChatId}/${currentUser.id}-${Date.now()}.${ext}`;
+    const { data: uploadData, error: uploadErr } = await supabase.storage
+      .from('media')
+      .upload(path, imageSnapshot.file, { contentType: imageSnapshot.file.type, upsert: false });
+
+    if (uploadErr) {
+      showToast('Image upload failed');
+      imgEl?.remove();
+      return;
+    }
+
+    const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(path);
+
+    // Replace optimistic thumb with real URL
+    const thumbEl = imgEl?.querySelector('.chat-bubble-img');
+    if (thumbEl) thumbEl.src = publicUrl;
+
+    const msgPayload = {
+      conversation_id: activeChatId,
+      sender_id: currentUser.id,
+      type: 'image',
+      media_url: publicUrl,
+      content: text || '',
+      reply_to_id: replySnapshot?.id || null,
+    };
+    const { error: insertErr } = await supabase.from('messages').insert(msgPayload);
+    if (insertErr) showToast('Failed to send image');
+    else {
+      updateInboxRow(activeChatId, '📷 Photo', new Date().toISOString());
+      markConvRead(activeChatId);
+    }
+    return;
+  }
+
+  // ── TEXT SEND ──
   const tmpMsg = {
     id: 'tmp-' + Date.now(),
     type: 'text',
@@ -7281,31 +7465,26 @@ async function chatSend() {
     sender_id: currentUser.id,
     created_at: new Date().toISOString(),
     sender: currentProfile,
+    reply_to_id: replySnapshot?.id || null,
+    _replySnapshot: replySnapshot,
   };
-  const msgsEl = document.getElementById('chat-messages');
-  // Get last sender from DOM for correct gap
-  const lastRow = msgsEl?.querySelector('.chat-msg-row:last-child');
-  const lastSenderId = lastRow ? (lastRow.classList.contains('sent') ? currentUser.id : activeChatUserId) : null;
   const el = buildMessageEl(tmpMsg, lastSenderId);
-  // Re-assign clusters after appending
   if (el && msgsEl) {
     msgsEl.appendChild(el);
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
 
-  // Update inbox preview immediately
   updateInboxRow(activeChatId, text, tmpMsg.created_at);
 
-  // Send to Supabase
   const { error } = await supabase.from('messages').insert({
     conversation_id: activeChatId,
     sender_id: currentUser.id,
     type: 'text',
     content: text,
+    reply_to_id: replySnapshot?.id || null,
   });
 
   if (error) showToast('Message failed to send');
-
   markConvRead(activeChatId);
 }
 
@@ -7494,7 +7673,71 @@ function chatRecordVoice() {
   showToast('Voice notes — coming soon 🎙');
 }
 function chatAttach() {
-  showToast('Attach file — coming soon');
+  // Now handled via hidden file input in HTML
+  document.getElementById('chat-img-input')?.click();
+}
+
+// ── Reply-to state ──
+let chatReplyTo = null; // { id, senderName, content, mediaUrl }
+
+function chatSetReply(msgId) {
+  const row = document.querySelector(`.chat-msg-row[data-msg-id="${msgId}"]`);
+  if (!row) return;
+  const bubble = row.querySelector('.chat-bubble');
+  if (!bubble) return;
+
+  const isSent = row.classList.contains('sent');
+  const name = isSent
+    ? (currentProfile?.username || 'You')
+    : (activeChatUser?.username || 'them');
+
+  const imgEl = bubble.querySelector('.chat-bubble-img');
+  const previewText = imgEl ? '📷 Photo' : (bubble.textContent?.trim().slice(0, 80) || '');
+  const mediaUrl = imgEl ? imgEl.src : null;
+
+  chatReplyTo = { id: msgId, senderName: name, content: previewText, mediaUrl };
+
+  const bar = document.getElementById('chat-reply-bar');
+  const nameEl = document.getElementById('chat-reply-bar-name');
+  const textEl = document.getElementById('chat-reply-bar-text');
+  if (bar) bar.style.display = 'flex';
+  if (nameEl) nameEl.textContent = name;
+  if (textEl) textEl.textContent = previewText;
+
+  document.getElementById('chat-input-field')?.focus();
+}
+
+function chatCancelReply() {
+  chatReplyTo = null;
+  const bar = document.getElementById('chat-reply-bar');
+  if (bar) bar.style.display = 'none';
+}
+
+// ── Image attach state ──
+let chatPendingImage = null; // { file, dataUrl }
+
+function chatImageSelected(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { showToast('Please select an image'); return; }
+  if (file.size > 10 * 1024 * 1024) { showToast('Image must be under 10MB'); return; }
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    chatPendingImage = { file, dataUrl: e.target.result };
+    const bar = document.getElementById('chat-img-preview-bar');
+    const thumb = document.getElementById('chat-img-preview-thumb');
+    if (bar) bar.style.display = 'block';
+    if (thumb) thumb.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
+}
+
+function chatCancelImage() {
+  chatPendingImage = null;
+  const bar = document.getElementById('chat-img-preview-bar');
+  if (bar) bar.style.display = 'none';
 }
 function chatOpenProfile() {
   if (activeChatUserId) openDM(activeChatUserId);
