@@ -1517,6 +1517,121 @@
   .chat-msg-row.sent .chat-bubble-img  { border-radius: 16px 16px 4px 16px; }
   .chat-msg-row.recv .chat-bubble-img  { border-radius: 16px 16px 16px 4px; }
 
+  /* ── REPLY BAR (above input) ── */
+  .chat-reply-bar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 14px 8px 10px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    animation: replySlideIn 0.18s ease;
+  }
+  @keyframes replySlideIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+  .chat-reply-bar-accent {
+    width: 3px; min-height: 32px; border-radius: 3px;
+    background: var(--accent); flex-shrink: 0;
+  }
+  .chat-reply-bar-body { flex: 1; min-width: 0; }
+  .chat-reply-bar-name {
+    font-size: 11px; font-weight: 700; color: var(--accent);
+    margin-bottom: 2px;
+  }
+  .chat-reply-bar-text {
+    font-size: 12px; color: var(--text2);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .chat-reply-bar-close {
+    background: none; border: none; padding: 4px; cursor: pointer;
+    color: var(--text3); flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* ── IMAGE PREVIEW BAR (above input) ── */
+  .chat-img-preview-bar {
+    padding: 8px 14px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    animation: replySlideIn 0.18s ease;
+  }
+  .chat-img-preview-wrap {
+    position: relative; display: inline-block;
+  }
+  .chat-img-preview-thumb {
+    width: 72px; height: 72px; border-radius: 10px;
+    object-fit: cover; display: block;
+    border: 2px solid var(--accent);
+  }
+  .chat-img-preview-remove {
+    position: absolute; top: -6px; right: -6px;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #e74c3c; border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: white;
+  }
+
+  /* ── SWIPE-TO-REPLY visual hint on row ── */
+  .chat-msg-row {
+    position: relative;
+    transition: transform 0.2s ease;
+    touch-action: pan-y;
+  }
+  .chat-msg-row.swipe-hint {
+    transform: translateX(40px) !important;
+  }
+  .chat-msg-row.sent.swipe-hint {
+    transform: translateX(-40px) !important;
+  }
+
+  /* ── REPLY QUOTE inside a bubble ── */
+  .chat-reply-quote {
+    display: flex; gap: 8px; align-items: stretch;
+    margin-bottom: 6px;
+    padding: 6px 8px;
+    border-radius: 10px;
+    background: rgba(0,0,0,0.08);
+    cursor: pointer;
+  }
+  .chat-msg-row.sent .chat-reply-quote { background: rgba(0,0,0,0.18); }
+  [data-theme="dark"] .chat-msg-row.recv .chat-reply-quote { background: rgba(255,255,255,0.08); }
+  .chat-reply-quote-accent {
+    width: 3px; border-radius: 2px;
+    background: var(--accent); flex-shrink: 0;
+  }
+  .chat-msg-row.sent .chat-reply-quote-accent { background: rgba(255,255,255,0.7); }
+  .chat-reply-quote-body { min-width: 0; }
+  .chat-reply-quote-name {
+    font-size: 10px; font-weight: 700;
+    color: var(--accent); margin-bottom: 2px;
+  }
+  .chat-msg-row.sent .chat-reply-quote-name { color: rgba(255,255,255,0.85); }
+  .chat-reply-quote-text {
+    font-size: 11px; color: var(--text2); opacity: 0.85;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px;
+  }
+  .chat-msg-row.sent .chat-reply-quote-text { color: rgba(255,255,255,0.7); }
+  .chat-reply-quote-img {
+    width: 36px; height: 36px; border-radius: 6px;
+    object-fit: cover; flex-shrink: 0;
+    margin-left: auto;
+  }
+
+  /* ── REPLY ICON that floats on swipe ── */
+  .chat-swipe-reply-icon {
+    position: absolute;
+    top: 50%; transform: translateY(-50%);
+    width: 28px; height: 28px;
+    background: var(--accent);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.15s;
+    z-index: 2;
+  }
+  .chat-msg-row.sent .chat-swipe-reply-icon { left: -36px; }
+  .chat-msg-row.recv .chat-swipe-reply-icon { right: -36px; }
+  .chat-msg-row.swiping .chat-swipe-reply-icon { opacity: 1; }
+
   /* ── URL MESSAGE ── */
   .chat-url-col {
     display: flex; flex-direction: column; gap: 4px;
