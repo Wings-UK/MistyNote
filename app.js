@@ -6784,8 +6784,8 @@ function buildMessageEl(msg, prevSenderId) {
   row.className = `chat-msg-row ${isSent ? 'sent' : 'recv'}${isNewSender ? ' new-sender' : ''}`;
   row.dataset.msgId = msg.id;
 
-  // ── Swipe-to-reply gesture ──
-  attachSwipeReply(row, msg);
+  // ── Tap to show Snapchat-style popup ──
+  attachTapPopup(row, msg);
 
   // ── Reply quote ──
   let replyQuoteHtml = '';
@@ -6912,54 +6912,150 @@ function buildReplyQuoteHtml(senderName, previewText, mediaUrl) {
     </div>`;
 }
 
-// ── Swipe-to-reply: attach touch events ──
-function attachSwipeReply(row, msg) {
-  // Add reply icon
-  const icon = document.createElement('div');
-  icon.className = 'chat-swipe-reply-icon';
-  icon.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 17l-4-4 4-4M5 13h8a6 6 0 016 6" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-  row.appendChild(icon);
+// ── Tap-to-popup: attach to each message row ──
+function attachTapPopup(row, msg) {
+  let tapTimer = null;
+  let didScroll = false;
+
+  row.addEventListener('touchstart', () => { didScroll = false; }, { passive: true });
+  row.addEventListener('touchmove',  () => { didScroll = true;  }, { passive: true });
+
+  row.addEventListener('touchend', (e) => {
+    if (didScroll) return;
+    // Small delay to distinguish scroll from tap
+    tapTimer = setTimeout(() => showMsgPopup(row, msg), 120);
+  }, { passive: true });
+
+  row.addEventListener('click', (e) => {
+    // Desktop: click bubble directly (not on links/buttons inside)
+    if (e.target.closest('a, button, .chat-reply-quote')) return;
+    showMsgPopup(row, msg);
+  });
+}
+
+function showMsgPopup(row, msg) {
+  // Remove any existing popup
+  closeMsgPopup();
 
   const isSent = row.classList.contains('sent');
-  let startX = 0, startY = 0, moved = false, triggered = false;
+  const isMine = isSent;
 
-  row.addEventListener('touchstart', e => {
-    startX = e.touches[0].clientX;
-    startY = e.touches[0].clientY;
-    moved = false;
-    triggered = false;
-  }, { passive: true });
+  // Backdrop
+  const backdrop = document.createElement('div');
+  backdrop.className = 'chat-popup-backdrop';
+  backdrop.id = 'chat-popup-backdrop';
+  backdrop.addEventListener('click', closeMsgPopup);
+  backdrop.addEventListener('touchstart', closeMsgPopup, { passive: true });
+  document.body.appendChild(backdrop);
 
-  row.addEventListener('touchmove', e => {
-    const dx = e.touches[0].clientX - startX;
-    const dy = e.touches[0].clientY - startY;
-    // Only activate on horizontal swipe
-    if (Math.abs(dy) > Math.abs(dx)) return;
-    if (Math.abs(dx) < 8) return;
+  // Popup container
+  const popup = document.createElement('div');
+  popup.className = 'chat-msg-popup';
+  popup.id = 'chat-msg-popup';
 
-    const correctDir = isSent ? dx < 0 : dx > 0;
-    if (!correctDir) return;
+  // ── Emoji reactions row ──
+  const emojis = ['❤️', '😂', '😮', '😢', '👏', '🔥'];
+  const emojiRow = document.createElement('div');
+  emojiRow.className = 'chat-popup-emojis';
+  emojis.forEach(em => {
+    const btn = document.createElement('button');
+    btn.className = 'chat-popup-emoji-btn';
+    btn.textContent = em;
+    btn.addEventListener('click', () => {
+      showToast(`Reacted ${em}`);
+      closeMsgPopup();
+    });
+    emojiRow.appendChild(btn);
+  });
+  // More emojis button
+  const moreBtn = document.createElement('button');
+  moreBtn.className = 'chat-popup-emoji-more';
+  moreBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg>`;
+  moreBtn.addEventListener('click', () => { showToast('More emojis — coming soon'); closeMsgPopup(); });
+  emojiRow.appendChild(moreBtn);
+  popup.appendChild(emojiRow);
 
-    moved = true;
-    row.classList.add('swiping');
-    const clamped = Math.min(Math.abs(dx), 60);
-    row.style.transform = isSent
-      ? `translateX(-${clamped}px)`
-      : `translateX(${clamped}px)`;
+  // ── Action buttons ──
+  const actions = document.createElement('div');
+  actions.className = 'chat-popup-actions';
 
-    if (Math.abs(dx) > 50 && !triggered) {
-      triggered = true;
-      navigator.vibrate?.(30);
-    }
-  }, { passive: true });
+  const makeAction = (icon, label, cls, fn) => {
+    const btn = document.createElement('button');
+    btn.className = `chat-popup-action${cls ? ' ' + cls : ''}`;
+    btn.innerHTML = `${icon}<span>${label}</span>`;
+    btn.addEventListener('click', () => { fn(); closeMsgPopup(); });
+    return btn;
+  };
 
-  row.addEventListener('touchend', () => {
-    if (triggered && msg.id) chatSetReply(msg.id);
-    row.classList.remove('swiping');
-    row.style.transform = '';
-    moved = false;
-    triggered = false;
-  }, { passive: true });
+  // Reply
+  actions.appendChild(makeAction(
+    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17l-4-4 4-4M5 13h8a6 6 0 016 6"/></svg>`,
+    'Reply', '', () => chatSetReply(msg.id)
+  ));
+
+  // Copy (only for text messages)
+  if (msg.type !== 'image' && msg.content) {
+    actions.appendChild(makeAction(
+      `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`,
+      'Copy', '', () => {
+        navigator.clipboard?.writeText(msg.content).then(() => showToast('Copied'))
+          .catch(() => showToast('Could not copy'));
+      }
+    ));
+  }
+
+  // Forward (stub)
+  actions.appendChild(makeAction(
+    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 004 4h12"/></svg>`,
+    'Forward', '', () => showToast('Forward — coming soon')
+  ));
+
+  // Delete (only for own messages)
+  if (isMine) {
+    actions.appendChild(makeAction(
+      `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg>`,
+      'Delete', 'danger', async () => {
+        const { error } = await supabase.from('messages')
+          .update({ deleted_at: new Date().toISOString() })
+          .eq('id', msg.id);
+        if (!error) row.remove();
+        else showToast('Could not delete');
+      }
+    ));
+  }
+
+  popup.appendChild(actions);
+  document.body.appendChild(popup);
+
+  // ── Position popup near the bubble ──
+  const bubble = row.querySelector('.chat-bubble') || row.querySelector('.chat-product-bubble') || row.querySelector('.chat-cash-bubble');
+  const rect = bubble ? bubble.getBoundingClientRect() : row.getBoundingClientRect();
+  const popupWidth = 220;
+  const margin = 10;
+
+  // Position horizontally
+  let left = isSent
+    ? rect.right - popupWidth
+    : rect.left;
+  left = Math.max(margin, Math.min(left, window.innerWidth - popupWidth - margin));
+
+  // Position vertically — prefer above the bubble
+  const popupEstimatedHeight = 180; // emojis ~52 + actions ~130
+  let top = rect.top - popupEstimatedHeight - 8;
+  if (top < 60) top = rect.bottom + 8; // flip below if no room
+
+  popup.style.left = left + 'px';
+  popup.style.top  = top  + 'px';
+  popup.style.width = popupWidth + 'px';
+
+  // Transform origin for animation
+  popup.style.transformOrigin = isSent ? 'right top' : 'left top';
+  if (top > rect.bottom) popup.style.transformOrigin = isSent ? 'right top' : 'left top';
+}
+
+function closeMsgPopup() {
+  document.getElementById('chat-popup-backdrop')?.remove();
+  document.getElementById('chat-msg-popup')?.remove();
 }
 
 // ── View full-screen image ──
