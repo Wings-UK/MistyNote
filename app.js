@@ -1904,17 +1904,13 @@ async function renderMyProfile() {
           : `<div class="prf-cover-gradient"></div>`}
         <div class="prf-cover-bar">
           <div></div>
-          <div class="prf-cover-actions">
-            <button class="prf-cover-action-btn" onclick="viewProfilePhoto('${escHtml(profile.cover || '')}', 'cover')" title="View cover photo">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" stroke="white" stroke-width="2"/></svg>
-            </button>
-          </div>
+          <div class="prf-cover-actions"></div>
         </div>
       </div>
 
       <!-- AVATAR ROW -->
       <div class="prf-avatar-row">
-        <div class="prf-avatar-wrap" onclick="viewProfilePhoto('${escHtml(profile.avatar || '')}', 'avatar')" title="View profile photo">
+        <div class="prf-avatar-wrap" title="Edit Profile">
           <div class="prf-avatar-ring"></div>
           <img class="prf-avatar" src="${escHtml(profile.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(profile.id)}`)}" onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(profile.id)}'" alt="">
         </div>
@@ -8957,18 +8953,19 @@ function openEditProfile() {
   const coverImg = document.getElementById('edit-cover-img');
   const avatarImg = document.getElementById('edit-avatar-img');
   if (coverImg) {
+    if (coverImg._objUrl) { URL.revokeObjectURL(coverImg._objUrl); coverImg._objUrl = null; }
     coverImg.src = currentProfile.cover || '';
     coverImg.onerror = () => { coverImg.src = ''; };
   }
   if (avatarImg) {
+    if (avatarImg._objUrl) { URL.revokeObjectURL(avatarImg._objUrl); avatarImg._objUrl = null; }
     avatarImg.src = currentProfile.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${currentProfile.id}`;
-    avatarImg.onerror = () => { avatarImg.src = ''; };
+    avatarImg.onerror = () => { avatarImg.src = `https://api.dicebear.com/7.x/adventurer/svg?seed=${currentProfile.id}`; };
   }
 
-  // Reset file selections
+  // Reset file selections and clear inputs so same file can be picked again
   editAvatarFile = null;
   editCoverFile = null;
-  // Reset file inputs so same file can be re-selected
   const af = document.getElementById('edit-avatar-file');
   const cf = document.getElementById('edit-cover-file');
   if (af) af.value = '';
@@ -8982,30 +8979,30 @@ function closeEditProfile() {
 function previewAvatar(e) {
   const file = e.target.files?.[0];
   if (!file) return;
-  // Validate
   if (!file.type.startsWith('image/')) { showToast('Please select an image file'); return; }
-  if (file.size > 5 * 1024 * 1024) { showToast('Image must be under 5MB'); return; }
+  if (file.size > 15 * 1024 * 1024) { showToast('Image must be under 15MB'); return; }
   editAvatarFile = file;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    const img = document.getElementById('edit-avatar-img');
-    if (img) img.src = ev.target.result;
-  };
-  reader.readAsDataURL(file);
+  // Use createObjectURL — works on all mobile browsers, no FileReader needed for preview
+  const img = document.getElementById('edit-avatar-img');
+  if (img) {
+    if (img._objUrl) URL.revokeObjectURL(img._objUrl);
+    img._objUrl = URL.createObjectURL(file);
+    img.src = img._objUrl;
+  }
 }
 
 function previewCover(e) {
   const file = e.target.files?.[0];
   if (!file) return;
   if (!file.type.startsWith('image/')) { showToast('Please select an image file'); return; }
-  if (file.size > 10 * 1024 * 1024) { showToast('Image must be under 10MB'); return; }
+  if (file.size > 15 * 1024 * 1024) { showToast('Image must be under 15MB'); return; }
   editCoverFile = file;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    const img = document.getElementById('edit-cover-img');
-    if (img) img.src = ev.target.result;
-  };
-  reader.readAsDataURL(file);
+  const img = document.getElementById('edit-cover-img');
+  if (img) {
+    if (img._objUrl) URL.revokeObjectURL(img._objUrl);
+    img._objUrl = URL.createObjectURL(file);
+    img.src = img._objUrl;
+  }
 }
 
 // ── Rate limit helpers ──
@@ -9206,62 +9203,70 @@ async function uploadImage(file, bucket) {
   if (!file) throw new Error('No file provided');
   if (!currentUser) throw new Error('Not logged in');
 
-  // Step 1: Compress image using canvas
-  const compressed = await compressImage(file, bucket === 'covers' ? 1200 : 400);
+  const maxPx = bucket === 'covers' ? 1400 : 500;
+  const compressed = await compressImage(file, maxPx);
 
-  // Step 2: Upload to Supabase storage
-  const ext  = bucket === 'covers' ? 'cover' : 'avatar';
-  const path = `${currentUser.id}/${ext}.jpg`;
+  // Always overwrite same path per user — no storage bloat, no rate limit
+  const slot = bucket === 'covers' ? 'cover' : 'avatar';
+  const path = `${currentUser.id}/${slot}.jpg`;
 
   const { error } = await supabase.storage
     .from(bucket)
-    .upload(path, compressed, {
-      upsert: true,
-      contentType: 'image/jpeg',
-    });
+    .upload(path, compressed, { upsert: true, contentType: 'image/jpeg' });
 
   if (error) {
     console.error(`[uploadImage] Storage error (${bucket}):`, error);
     throw new Error(error.message || 'Upload failed');
   }
 
-  // Step 3: Get public URL with cache bust
+  // Cache-bust so browser fetches fresh image immediately
   const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-  const url = data.publicUrl + '?t=' + Date.now();
-  console.log(`[uploadImage] Success: ${url}`);
-  return url;
+  return data.publicUrl + '?t=' + Date.now();
 }
 
-// Standalone image compression — returns a Blob
+// Compress image using createObjectURL — avoids FileReader memory issues on mobile
 function compressImage(file, maxPx) {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Failed to read file'));
-    reader.onload = ev => {
-      const img = new Image();
-      img.onerror = () => reject(new Error('Failed to load image'));
-      img.onload = () => {
-        try {
-          const scale = Math.min(1, maxPx / Math.max(img.width || 1, img.height || 1));
-          const w = Math.round(img.width * scale);
-          const h = Math.round(img.height * scale);
-          const canvas = document.createElement('canvas');
-          canvas.width  = w;
-          canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, w, h);
-          canvas.toBlob(
-            blob => blob ? resolve(blob) : reject(new Error('Compression failed')),
-            'image/jpeg',
-            0.85
-          );
-        } catch(e) {
-          reject(e);
-        }
-      };
-      img.src = ev.target.result;
+    // createObjectURL is instant, synchronous, never fails with "cannot read file"
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Could not load image — file may be corrupted'));
     };
-    reader.readAsDataURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl); // free memory immediately after load
+
+      try {
+        const scale = Math.min(1, maxPx / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
+        const w = Math.max(1, Math.round(img.naturalWidth  * scale));
+        const h = Math.max(1, Math.round(img.naturalHeight * scale));
+
+        const canvas = document.createElement('canvas');
+        canvas.width  = w;
+        canvas.height = h;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject(new Error('Canvas not supported')); return; }
+
+        ctx.drawImage(img, 0, 0, w, h);
+
+        canvas.toBlob(
+          blob => {
+            if (!blob) { reject(new Error('Compression produced no output')); return; }
+            resolve(blob);
+          },
+          'image/jpeg',
+          0.85
+        );
+      } catch (err) {
+        reject(err);
+      }
+    };
+
+    img.src = objectUrl;
   });
 }
 
