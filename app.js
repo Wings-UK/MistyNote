@@ -6718,8 +6718,8 @@ async function loadChatMessages(convId) {
              sender:users!sender_id(id, username, avatar)`)
     .eq('conversation_id', convId)
     .is('deleted_at', null)
-    .order('created_at', { ascending: true })
-    .limit(50);
+    .order('created_at', { ascending: false })
+    .limit(100);
 
   if (error) {
     msgsEl.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3)">Could not load messages</div>';
@@ -6730,15 +6730,17 @@ async function loadChatMessages(convId) {
 
   if (!messages?.length) {
     msgsEl.innerHTML = '';
-    // Show static demo bubbles so the UI is always visible
     renderStaticDemoChat(msgsEl);
     return;
   }
 
+  // Reverse so oldest is at top, newest at bottom
+  const ordered = [...messages].reverse();
+
   let lastDate = null;
   let lastSenderId = null;
 
-  messages.forEach((msg, idx) => {
+  ordered.forEach((msg, idx) => {
     const msgDate = new Date(msg.created_at).toDateString();
     if (msgDate !== lastDate) {
       const divider = document.createElement('div');
@@ -6912,145 +6914,153 @@ function buildReplyQuoteHtml(senderName, previewText, mediaUrl) {
     </div>`;
 }
 
-// ── Tap-to-popup: attach to each message row ──
+// ── Tap-to-popup: attach to bubble element only ──
 function attachTapPopup(row, msg) {
-  let tapTimer = null;
+  // We defer attaching until the bubble is actually in the DOM
+  // by using event delegation on the row but checking target is bubble/child
   let didScroll = false;
+  let touchStartTime = 0;
 
-  row.addEventListener('touchstart', () => { didScroll = false; }, { passive: true });
-  row.addEventListener('touchmove',  () => { didScroll = true;  }, { passive: true });
+  row.addEventListener('touchstart', (e) => {
+    didScroll = false;
+    touchStartTime = Date.now();
+  }, { passive: true });
+
+  row.addEventListener('touchmove', () => {
+    didScroll = true;
+  }, { passive: true });
 
   row.addEventListener('touchend', (e) => {
     if (didScroll) return;
-    // Small delay to distinguish scroll from tap
-    tapTimer = setTimeout(() => showMsgPopup(row, msg), 120);
-  }, { passive: true });
+    if (Date.now() - touchStartTime > 600) return; // long press — ignore
+    // Only trigger if touch target is inside a bubble (not empty row space)
+    const bubble = e.target.closest('.chat-bubble, .chat-product-bubble, .chat-cash-bubble, .chat-order-bubble, .chat-offer-bubble, .chat-voice-bubble');
+    if (!bubble) return;
+    if (e.target.closest('a, button, .chat-reply-quote')) return;
+    // Prevent backdrop from immediately closing
+    e.stopPropagation();
+    showMsgPopup(row, msg, bubble);
+  }, { passive: false });
 
   row.addEventListener('click', (e) => {
-    // Desktop: click bubble directly (not on links/buttons inside)
     if (e.target.closest('a, button, .chat-reply-quote')) return;
-    showMsgPopup(row, msg);
+    const bubble = e.target.closest('.chat-bubble, .chat-product-bubble, .chat-cash-bubble');
+    if (!bubble) return;
+    showMsgPopup(row, msg, bubble);
   });
 }
 
-function showMsgPopup(row, msg) {
-  // Remove any existing popup
+function showMsgPopup(row, msg, bubbleEl) {
   closeMsgPopup();
 
   const isSent = row.classList.contains('sent');
-  const isMine = isSent;
 
-  // Backdrop
+  // ── Backdrop — closes on tap ──
   const backdrop = document.createElement('div');
   backdrop.className = 'chat-popup-backdrop';
   backdrop.id = 'chat-popup-backdrop';
-  backdrop.addEventListener('click', closeMsgPopup);
-  backdrop.addEventListener('touchstart', closeMsgPopup, { passive: true });
   document.body.appendChild(backdrop);
 
-  // Popup container
+  // Single handler — click anywhere on backdrop closes
+  backdrop.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeMsgPopup();
+  });
+  backdrop.addEventListener('touchend', (e) => {
+    e.stopPropagation();
+    closeMsgPopup();
+  }, { passive: false });
+
+  // ── Popup container ──
   const popup = document.createElement('div');
   popup.className = 'chat-msg-popup';
   popup.id = 'chat-msg-popup';
+  // Stop taps inside popup from closing it
+  popup.addEventListener('click', e => e.stopPropagation());
+  popup.addEventListener('touchend', e => e.stopPropagation(), { passive: false });
 
-  // ── Emoji reactions row ──
+  // ── Emoji reactions row — all 6 + more fit in one pill ──
   const emojis = ['❤️', '😂', '😮', '😢', '👏', '🔥'];
   const emojiRow = document.createElement('div');
   emojiRow.className = 'chat-popup-emojis';
+
   emojis.forEach(em => {
     const btn = document.createElement('button');
     btn.className = 'chat-popup-emoji-btn';
     btn.textContent = em;
-    btn.addEventListener('click', () => {
-      showToast(`Reacted ${em}`);
-      closeMsgPopup();
-    });
+    btn.addEventListener('click', () => { showToast(`Reacted ${em}`); closeMsgPopup(); });
     emojiRow.appendChild(btn);
   });
-  // More emojis button
+
   const moreBtn = document.createElement('button');
   moreBtn.className = 'chat-popup-emoji-more';
-  moreBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg>`;
-  moreBtn.addEventListener('click', () => { showToast('More emojis — coming soon'); closeMsgPopup(); });
+  moreBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/><circle cx="5" cy="12" r="1.5" fill="currentColor"/></svg>`;
+  moreBtn.addEventListener('click', () => { showToast('More reactions — coming soon'); closeMsgPopup(); });
   emojiRow.appendChild(moreBtn);
   popup.appendChild(emojiRow);
 
-  // ── Action buttons ──
+  // ── Action list ──
   const actions = document.createElement('div');
   actions.className = 'chat-popup-actions';
 
-  const makeAction = (icon, label, cls, fn) => {
+  const addAction = (icon, label, cls, fn) => {
     const btn = document.createElement('button');
+    btn.type = 'button';
     btn.className = `chat-popup-action${cls ? ' ' + cls : ''}`;
-    btn.innerHTML = `${icon}<span>${label}</span>`;
-    btn.addEventListener('click', () => { fn(); closeMsgPopup(); });
-    return btn;
+    btn.innerHTML = `<span class="chat-popup-action-icon">${icon}</span><span class="chat-popup-action-label">${label}</span>`;
+    btn.addEventListener('click', () => { closeMsgPopup(); fn(); });
+    actions.appendChild(btn);
   };
 
-  // Reply
-  actions.appendChild(makeAction(
-    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17l-4-4 4-4M5 13h8a6 6 0 016 6"/></svg>`,
-    'Reply', '', () => chatSetReply(msg.id)
-  ));
+  addAction(`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17l-4-4 4-4M5 13h8a6 6 0 016 6"/></svg>`, 'Reply', '', () => chatSetReply(msg.id));
 
-  // Copy (only for text messages)
   if (msg.type !== 'image' && msg.content) {
-    actions.appendChild(makeAction(
-      `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`,
-      'Copy', '', () => {
-        navigator.clipboard?.writeText(msg.content).then(() => showToast('Copied'))
-          .catch(() => showToast('Could not copy'));
-      }
-    ));
+    addAction(`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`, 'Copy', '', () => {
+      navigator.clipboard?.writeText(msg.content).then(() => showToast('Copied')).catch(() => showToast('Could not copy'));
+    });
   }
 
-  // Forward (stub)
-  actions.appendChild(makeAction(
-    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 004 4h12"/></svg>`,
-    'Forward', '', () => showToast('Forward — coming soon')
-  ));
+  addAction(`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 004 4h12"/></svg>`, 'Forward', '', () => showToast('Forward — coming soon'));
 
-  // Delete (only for own messages)
-  if (isMine) {
-    actions.appendChild(makeAction(
-      `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg>`,
-      'Delete', 'danger', async () => {
-        const { error } = await supabase.from('messages')
-          .update({ deleted_at: new Date().toISOString() })
-          .eq('id', msg.id);
-        if (!error) row.remove();
-        else showToast('Could not delete');
-      }
-    ));
+  if (isSent) {
+    addAction(`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg>`, 'Delete', 'danger', async () => {
+      const { error } = await supabase.from('messages').update({ deleted_at: new Date().toISOString() }).eq('id', msg.id);
+      if (!error) row.remove(); else showToast('Could not delete');
+    });
   }
 
   popup.appendChild(actions);
   document.body.appendChild(popup);
 
-  // ── Position popup near the bubble ──
-  const bubble = row.querySelector('.chat-bubble') || row.querySelector('.chat-product-bubble') || row.querySelector('.chat-cash-bubble');
-  const rect = bubble ? bubble.getBoundingClientRect() : row.getBoundingClientRect();
-  const popupWidth = 220;
-  const margin = 10;
+  // ── Position: anchored to bubble, prefer above ──
+  const rect = bubbleEl.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const popW = Math.min(220, vw - 24);
 
-  // Position horizontally
-  let left = isSent
-    ? rect.right - popupWidth
-    : rect.left;
-  left = Math.max(margin, Math.min(left, window.innerWidth - popupWidth - margin));
+  // After append, measure real height
+  popup.style.visibility = 'hidden';
+  popup.style.left = '0px';
+  popup.style.top  = '0px';
 
-  // Position vertically — prefer above the bubble
-  const popupEstimatedHeight = 180; // emojis ~52 + actions ~130
-  let top = rect.top - popupEstimatedHeight - 8;
-  if (top < 60) top = rect.bottom + 8; // flip below if no room
+  requestAnimationFrame(() => {
+    const popH = popup.offsetHeight;
 
-  popup.style.left = left + 'px';
-  popup.style.top  = top  + 'px';
-  popup.style.width = popupWidth + 'px';
+    // Horizontal: align to sent=right edge of bubble, recv=left edge
+    let left = isSent ? rect.right - popW : rect.left;
+    left = Math.max(12, Math.min(left, vw - popW - 12));
 
-  // Transform origin for animation
-  popup.style.transformOrigin = isSent ? 'right top' : 'left top';
-  if (top > rect.bottom) popup.style.transformOrigin = isSent ? 'right top' : 'left top';
+    // Vertical: prefer above bubble, fall back below
+    let top = rect.top - popH - 10;
+    if (top < 60) top = rect.bottom + 10;
+    top = Math.max(60, Math.min(top, vh - popH - 12));
+
+    popup.style.left = left + 'px';
+    popup.style.top  = top  + 'px';
+    popup.style.width = popW + 'px';
+    popup.style.transformOrigin = isSent ? 'right top' : 'left top';
+    popup.style.visibility = 'visible';
+  });
 }
 
 function closeMsgPopup() {
@@ -7517,12 +7527,12 @@ async function chatSend() {
       msgsEl.scrollTop = msgsEl.scrollHeight;
     }
 
-    // Upload to Supabase Storage
-    const ext  = imageSnapshot.file.name.split('.').pop() || 'jpg';
-    const path = `chat/${activeChatId}/${currentUser.id}-${Date.now()}.${ext}`;
+    // Upload to Supabase Storage — compress first to fix landscape/HEIC issues
+    const compressed = await compressChatImage(imageSnapshot.file);
+    const path = `chat/${activeChatId}/${currentUser.id}-${Date.now()}.jpg`;
     const { data: uploadData, error: uploadErr } = await supabase.storage
       .from('media')
-      .upload(path, imageSnapshot.file, { contentType: imageSnapshot.file.type, upsert: false });
+      .upload(path, compressed, { contentType: 'image/jpeg', upsert: false });
 
     if (uploadErr) {
       showToast('Image upload failed');
@@ -7834,6 +7844,31 @@ function chatCancelImage() {
   chatPendingImage = null;
   const bar = document.getElementById('chat-img-preview-bar');
   if (bar) bar.style.display = 'none';
+}
+
+// ── Compress image via canvas (handles landscape, HEIC, EXIF rotation) ──
+function compressChatImage(file) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX = 1280;
+      let { width, height } = img;
+      if (width > MAX || height > MAX) {
+        if (width > height) { height = Math.round(height * MAX / width); width = MAX; }
+        else                { width = Math.round(width * MAX / height);  height = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width  = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', 0.82);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
 }
 function chatOpenProfile() {
   if (activeChatUserId) openDM(activeChatUserId);
