@@ -6916,36 +6916,58 @@ function buildReplyQuoteHtml(senderName, previewText, mediaUrl) {
 
 // ── Tap-to-popup: attach to bubble element only ──
 function attachTapPopup(row, msg) {
-  // We defer attaching until the bubble is actually in the DOM
-  // by using event delegation on the row but checking target is bubble/child
+  let longPressTimer = null;
   let didScroll = false;
-  let touchStartTime = 0;
+  let touchStartX = 0;
+  let touchStartY = 0;
+
+  const LONG_PRESS_MS = 420;
 
   row.addEventListener('touchstart', (e) => {
     didScroll = false;
-    touchStartTime = Date.now();
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+
+    const bubble = e.target.closest('.chat-bubble, .chat-product-bubble, .chat-cash-bubble, .chat-order-bubble, .chat-offer-bubble, .chat-voice-bubble, .chat-bubble.img-bubble');
+    if (!bubble) return;
+    if (e.target.closest('a, button, .chat-reply-quote')) return;
+
+    longPressTimer = setTimeout(() => {
+      if (didScroll) return;
+      if (navigator.vibrate) navigator.vibrate(32);
+      showMsgPopup(row, msg, bubble);
+    }, LONG_PRESS_MS);
   }, { passive: true });
 
-  row.addEventListener('touchmove', () => {
-    didScroll = true;
+  row.addEventListener('touchmove', (e) => {
+    const dx = Math.abs(e.touches[0].clientX - touchStartX);
+    const dy = Math.abs(e.touches[0].clientY - touchStartY);
+    if (dx > 6 || dy > 6) {
+      didScroll = true;
+      clearTimeout(longPressTimer);
+    }
   }, { passive: true });
 
   row.addEventListener('touchend', (e) => {
+    clearTimeout(longPressTimer);
     if (didScroll) return;
-    if (Date.now() - touchStartTime > 600) return; // long press — ignore
-    // Only trigger if touch target is inside a bubble (not empty row space)
-    const bubble = e.target.closest('.chat-bubble, .chat-product-bubble, .chat-cash-bubble, .chat-order-bubble, .chat-offer-bubble, .chat-voice-bubble');
-    if (!bubble) return;
-    if (e.target.closest('a, button, .chat-reply-quote')) return;
-    // Prevent backdrop from immediately closing
-    e.stopPropagation();
-    showMsgPopup(row, msg, bubble);
+
+    // Single tap on image → fullscreen viewer (not popup)
+    if (msg.type === 'image') {
+      const imgEl = e.target.closest('.chat-bubble-img');
+      if (imgEl) {
+        e.preventDefault();
+        chatViewImage(msg.media_url || imgEl.src);
+        return;
+      }
+    }
   }, { passive: false });
 
-  row.addEventListener('click', (e) => {
-    if (e.target.closest('a, button, .chat-reply-quote')) return;
-    const bubble = e.target.closest('.chat-bubble, .chat-product-bubble, .chat-cash-bubble');
+  // Desktop fallback: right-click or long mousedown
+  row.addEventListener('contextmenu', (e) => {
+    const bubble = e.target.closest('.chat-bubble, .chat-product-bubble, .chat-cash-bubble, .chat-order-bubble, .chat-offer-bubble, .chat-voice-bubble');
     if (!bubble) return;
+    e.preventDefault();
     showMsgPopup(row, msg, bubble);
   });
 }
@@ -6955,35 +6977,52 @@ function showMsgPopup(row, msg, bubbleEl) {
 
   const isSent = row.classList.contains('sent');
 
-  // ── Backdrop — closes on tap ──
+  // ── 1. Backdrop (blur layer) ──
   const backdrop = document.createElement('div');
   backdrop.className = 'chat-popup-backdrop';
   backdrop.id = 'chat-popup-backdrop';
   document.body.appendChild(backdrop);
+  // Trigger CSS transition to blur state
+  requestAnimationFrame(() => backdrop.classList.add('visible'));
 
-  // Single handler — click anywhere on backdrop closes
-  backdrop.addEventListener('click', (e) => {
-    e.stopPropagation();
+  const closeAll = (e) => {
+    if (e) { e.stopPropagation(); e.preventDefault(); }
     closeMsgPopup();
-  });
-  backdrop.addEventListener('touchend', (e) => {
-    e.stopPropagation();
-    closeMsgPopup();
-  }, { passive: false });
+  };
+  backdrop.addEventListener('click', closeAll);
+  backdrop.addEventListener('touchend', closeAll, { passive: false });
 
-  // ── Popup container ──
+  // ── 2. Float clone — snapshot the bubble position and clone it above blur ──
+  const rect = bubbleEl.getBoundingClientRect();
+  const vw   = window.innerWidth;
+  const vh   = window.innerHeight;
+
+  const floatEl = document.createElement('div');
+  floatEl.className = 'chat-popup-float-msg';
+  floatEl.id = 'chat-popup-float-msg';
+  // Clone bubble's visual
+  const cloneNode = bubbleEl.cloneNode(true);
+  // Disable any inner interaction on clone
+  cloneNode.style.pointerEvents = 'none';
+  floatEl.appendChild(cloneNode);
+
+  // Match exact position and size
+  floatEl.style.left   = rect.left + 'px';
+  floatEl.style.top    = rect.top  + 'px';
+  floatEl.style.width  = rect.width  + 'px';
+  document.body.appendChild(floatEl);
+
+  // ── 3. Popup container (emoji row + actions) ──
   const popup = document.createElement('div');
   popup.className = 'chat-msg-popup';
   popup.id = 'chat-msg-popup';
-  // Stop taps inside popup from closing it
   popup.addEventListener('click', e => e.stopPropagation());
   popup.addEventListener('touchend', e => e.stopPropagation(), { passive: false });
 
-  // ── Emoji reactions row — all 6 + more fit in one pill ──
+  // Emoji row
   const emojis = ['❤️', '😂', '😮', '😢', '👏', '🔥'];
   const emojiRow = document.createElement('div');
   emojiRow.className = 'chat-popup-emojis';
-
   emojis.forEach(em => {
     const btn = document.createElement('button');
     btn.className = 'chat-popup-emoji-btn';
@@ -6991,7 +7030,6 @@ function showMsgPopup(row, msg, bubbleEl) {
     btn.addEventListener('click', () => { showToast(`Reacted ${em}`); closeMsgPopup(); });
     emojiRow.appendChild(btn);
   });
-
   const moreBtn = document.createElement('button');
   moreBtn.className = 'chat-popup-emoji-more';
   moreBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/><circle cx="5" cy="12" r="1.5" fill="currentColor"/></svg>`;
@@ -6999,85 +7037,149 @@ function showMsgPopup(row, msg, bubbleEl) {
   emojiRow.appendChild(moreBtn);
   popup.appendChild(emojiRow);
 
-  // ── Action list ──
+  // Action rows
   const actions = document.createElement('div');
   actions.className = 'chat-popup-actions';
 
-  const addAction = (icon, label, cls, fn) => {
+  const chevronSvg = `<svg class="chat-popup-action-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>`;
+
+  const addAction = (iconSvg, label, cls, fn) => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = `chat-popup-action${cls ? ' ' + cls : ''}`;
-    btn.innerHTML = `<span class="chat-popup-action-icon">${icon}</span><span class="chat-popup-action-label">${label}</span>`;
+    btn.innerHTML = `
+      <div class="chat-popup-action-left">
+        <span class="chat-popup-action-icon">${iconSvg}</span>
+        <span class="chat-popup-action-label">${label}</span>
+      </div>
+      ${chevronSvg}`;
     btn.addEventListener('click', () => { closeMsgPopup(); fn(); });
     actions.appendChild(btn);
   };
 
-  addAction(`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17l-4-4 4-4M5 13h8a6 6 0 016 6"/></svg>`, 'Reply', '', () => chatSetReply(msg.id));
+  addAction(
+    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17l-4-4 4-4M5 13h8a6 6 0 016 6"/></svg>`,
+    'Reply', '', () => chatSetReply(msg.id)
+  );
 
   if (msg.type !== 'image' && msg.content) {
-    addAction(`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`, 'Copy', '', () => {
-      navigator.clipboard?.writeText(msg.content).then(() => showToast('Copied')).catch(() => showToast('Could not copy'));
-    });
+    addAction(
+      `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`,
+      'Copy', '', () => {
+        navigator.clipboard?.writeText(msg.content).then(() => showToast('Copied')).catch(() => showToast('Could not copy'));
+      }
+    );
   }
 
-  addAction(`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 004 4h12"/></svg>`, 'Forward', '', () => showToast('Forward — coming soon'));
+  if (msg.type === 'image' && msg.media_url) {
+    addAction(
+      `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`,
+      'View Photo', '', () => chatViewImage(msg.media_url)
+    );
+  }
+
+  addAction(
+    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 004 4h12"/></svg>`,
+    'Forward', '', () => showToast('Forward — coming soon')
+  );
 
   if (isSent) {
-    addAction(`<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg>`, 'Delete', 'danger', async () => {
-      const { error } = await supabase.from('messages').update({ deleted_at: new Date().toISOString() }).eq('id', msg.id);
-      if (!error) row.remove(); else showToast('Could not delete');
-    });
+    addAction(
+      `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg>`,
+      'Delete', 'danger', async () => {
+        const { error } = await supabase.from('messages').update({ deleted_at: new Date().toISOString() }).eq('id', msg.id);
+        if (!error) row.remove(); else showToast('Could not delete');
+      }
+    );
   }
 
   popup.appendChild(actions);
   document.body.appendChild(popup);
 
-  // ── Position: anchored to bubble, prefer above ──
-  const rect = bubbleEl.getBoundingClientRect();
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const popW = Math.min(220, vw - 24);
-
-  // After append, measure real height
+  // ── 4. Position popup above or below the floated bubble ──
+  const popW = Math.min(240, vw - 24);
   popup.style.visibility = 'hidden';
+  popup.style.width = popW + 'px';
   popup.style.left = '0px';
   popup.style.top  = '0px';
 
   requestAnimationFrame(() => {
     const popH = popup.offsetHeight;
+    const MARGIN = 12;
+    const GAP = 10;
 
-    // Horizontal: align to sent=right edge of bubble, recv=left edge
+    // Horizontal: align with bubble edge
     let left = isSent ? rect.right - popW : rect.left;
-    left = Math.max(12, Math.min(left, vw - popW - 12));
+    left = Math.max(MARGIN, Math.min(left, vw - popW - MARGIN));
 
-    // Vertical: prefer above bubble, fall back below
-    let top = rect.top - popH - 10;
-    if (top < 60) top = rect.bottom + 10;
-    top = Math.max(60, Math.min(top, vh - popH - 12));
+    // Vertical: prefer above the bubble, fall back below
+    let top = rect.top - popH - GAP;
+    if (top < 60) top = rect.bottom + GAP;
+    top = Math.max(60, Math.min(top, vh - popH - MARGIN));
 
     popup.style.left = left + 'px';
     popup.style.top  = top  + 'px';
-    popup.style.width = popW + 'px';
     popup.style.transformOrigin = isSent ? 'right top' : 'left top';
     popup.style.visibility = 'visible';
   });
 }
 
 function closeMsgPopup() {
-  document.getElementById('chat-popup-backdrop')?.remove();
+  const backdrop = document.getElementById('chat-popup-backdrop');
+  if (backdrop) {
+    backdrop.classList.remove('visible');
+    setTimeout(() => backdrop.remove(), 280);
+  }
+  document.getElementById('chat-popup-float-msg')?.remove();
   document.getElementById('chat-msg-popup')?.remove();
 }
 
 // ── View full-screen image ──
 function chatViewImage(src) {
   const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.95);display:flex;align-items:center;justify-content:center;cursor:zoom-out';
-  overlay.onclick = () => overlay.remove();
+  overlay.className = 'chat-img-viewer';
+  overlay.id = 'chat-img-viewer';
+
   const img = document.createElement('img');
+  img.className = 'chat-img-viewer-img';
   img.src = src;
-  img.style.cssText = 'max-width:95vw;max-height:90vh;object-fit:contain;border-radius:12px';
+  img.alt = 'Photo';
+  img.onclick = (e) => e.stopPropagation();
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'chat-img-viewer-close';
+  closeBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>`;
+  closeBtn.onclick = closeViewer;
+
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'chat-img-viewer-save';
+  saveBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg> Save`;
+  saveBtn.onclick = () => {
+    const a = document.createElement('a');
+    a.href = src; a.download = 'photo.jpg'; a.target = '_blank';
+    a.click();
+  };
+
+  overlay.appendChild(closeBtn);
   overlay.appendChild(img);
+  overlay.appendChild(saveBtn);
+  overlay.onclick = closeViewer;
   document.body.appendChild(overlay);
+
+  // Trigger animation
+  requestAnimationFrame(() => overlay.classList.add('visible'));
+
+  function closeViewer() {
+    overlay.classList.remove('visible');
+    setTimeout(() => overlay.remove(), 240);
+  }
+
+  // Swipe down to close
+  let startY = 0;
+  overlay.addEventListener('touchstart', e => { startY = e.touches[0].clientY; }, { passive: true });
+  overlay.addEventListener('touchend', e => {
+    if (e.changedTouches[0].clientY - startY > 80) closeViewer();
+  }, { passive: true });
 }
 
 // ── Extract first URL from text ──
