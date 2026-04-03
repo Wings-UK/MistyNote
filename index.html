@@ -107,7 +107,7 @@
           Continue with Email
         </button>
 
-        <p class="auth-terms">By continuing you agree to our <a href="#" onclick="showToast('Coming soon')">Terms</a> and <a href="#" onclick="showToast('Coming soon')">Privacy Policy</a></p>
+        <p class="auth-terms">By continuing you agree to our <a href="#" onclick="openLegalPage('terms');return false">Terms</a> and <a href="#" onclick="openLegalPage('privacy');return false">Privacy Policy</a></p>
       </div>
 
     </div>
@@ -1299,6 +1299,20 @@
             <span>Sign Out</span>
           </div>
         </div>
+        <div class="settings-section">
+          <p class="section-label">Legal</p>
+          <div class="settings-item" onclick="openLegalPage('terms')">
+            <div class="settings-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="14 2 14 8 20 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="16" y1="13" x2="8" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="16" y1="17" x2="8" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <span>Terms of Service</span>
+            <svg class="settings-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <div class="settings-item" onclick="openLegalPage('privacy')">
+            <div class="settings-item-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <span>Privacy Policy</span>
+            <svg class="settings-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+        </div>
+        <p class="settings-version">© 2026 Uwana Limited · MistyNote</p>
       </div>
     </section>
 
@@ -1554,6 +1568,321 @@
 
       <div style="height: calc(16px + var(--safe-bottom));"></div>
     </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       LEGAL — TERMS OF SERVICE (slide page)
+  ══════════════════════════════════════════ -->
+  <section class="page slide-page" id="page-legal-terms">
+    <div class="legal-page">
+      <header class="legal-header">
+        <button class="back-btn" onclick="closeLegalPage()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M12 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <span class="legal-header-title">Terms of Service</span>
+        <div style="width:36px"></div>
+      </header>
+      <div class="legal-scroll" id="legal-terms-scroll">
+        <div class="legal-hero">
+          <div class="legal-hero-badge">📄 Legal Document</div>
+          <div class="legal-hero-title">Terms of<br>Service</div>
+          <div class="legal-hero-meta">Uwana Limited <span>·</span> Last updated April 2, 2026</div>
+        </div>
+        <div class="legal-body">
+          <div class="legal-notice">Welcome to MistyNote. Please read these Terms carefully. By using MistyNote you agree to be bound by them. Certain terms that limit our liability or restrict your rights are highlighted.</div>
+          <div class="legal-warning">⚠️ You must be 18 or older to use MistyNote. If you do not agree to these Terms, please stop using the platform immediately.</div>
+
+          <div class="legal-toc">
+            <div class="legal-toc-header">Contents</div>
+            <div class="legal-toc-item" onclick="legalScrollTo('terms-s1','terms')"><span class="legal-toc-num">1</span><span class="legal-toc-label">Definitions &amp; Scope</span><svg class="legal-toc-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <div class="legal-toc-item" onclick="legalScrollTo('terms-s2','terms')"><span class="legal-toc-num">2</span><span class="legal-toc-label">Account Management</span><svg class="legal-toc-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <div class="legal-toc-item" onclick="legalScrollTo('terms-s3','terms')"><span class="legal-toc-num">3</span><span class="legal-toc-label">Platform Services</span><svg class="legal-toc-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <div class="legal-toc-item" onclick="legalScrollTo('terms-s4','terms')"><span class="legal-toc-num">4</span><span class="legal-toc-label">MistyNote Wallet</span><svg class="legal-toc-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <div class="legal-toc-item" onclick="legalScrollTo('terms-s5','terms')"><span class="legal-toc-num">5</span><span class="legal-toc-label">Rights &amp; Licences</span><svg class="legal-toc-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <div class="legal-toc-item" onclick="legalScrollTo('terms-s6','terms')"><span class="legal-toc-num">6</span><span class="legal-toc-label">Commercial Conduct</span><svg class="legal-toc-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <div class="legal-toc-item" onclick="legalScrollTo('terms-s7','terms')"><span class="legal-toc-num">7</span><span class="legal-toc-label">Liabilities &amp; Enforcement</span><svg class="legal-toc-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <div class="legal-toc-item" onclick="legalScrollTo('terms-s8','terms')"><span class="legal-toc-num">8</span><span class="legal-toc-label">Limitations of Liability</span><svg class="legal-toc-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <div class="legal-toc-item" onclick="legalScrollTo('terms-s9','terms')"><span class="legal-toc-num">9</span><span class="legal-toc-label">Verification &amp; Disputes</span><svg class="legal-toc-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <div class="legal-toc-item" onclick="legalScrollTo('terms-s12','terms')"><span class="legal-toc-num">12</span><span class="legal-toc-label">Governing Law</span><svg class="legal-toc-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+          </div>
+
+          <div class="legal-section" id="terms-s1">
+            <div class="legal-section-title"><span class="legal-section-num">1</span>Definitions &amp; Scope</div>
+            <div class="legal-subsection">
+              <div class="legal-subsection-title">1.1 Key Definitions</div>
+              <p class="legal-p"><strong>"MistyNote" / "we" / "us"</strong> means Uwana Limited and its affiliates. <strong>"Platform"</strong> means the MistyNote website, mobile app, and all related services. <strong>"User" / "you"</strong> means any person who uses the Platform.</p>
+              <p class="legal-p"><strong>"Seller"</strong> — User with a storefront. <strong>"Buyer"</strong> — User who purchases through the Platform. <strong>"Verified Seller"</strong> — completed identity and business verification. <strong>"Pro Seller"</strong> — Verified Seller maintaining 4.5+ stars for 30 consecutive days.</p>
+              <p class="legal-p"><strong>"MistyNote Wallet"</strong> — in-platform digital wallet for deposits, purchases, transfers, and withdrawals. <strong>"Escrow"</strong> — mechanism holding purchase funds securely between payment and confirmed delivery.</p>
+            </div>
+            <div class="legal-subsection">
+              <div class="legal-subsection-title">1.2 Scope</div>
+              <p class="legal-p">These Terms govern your use of the Platform and incorporate all supplemental policies including the Privacy Policy, Community Guidelines, Seller Terms, Live Shopping Rules, and Wallet Terms.</p>
+            </div>
+          </div>
+
+          <div class="legal-section" id="terms-s2">
+            <div class="legal-section-title"><span class="legal-section-num">2</span>Account Management</div>
+            <div class="legal-subsection">
+              <div class="legal-subsection-title">2.1 Registration</div>
+              <p class="legal-p">You must provide accurate, current information and be at least 18 years old. Bulk, automated, or impersonation registrations are strictly prohibited. Each account is for personal use only and may not be transferred.</p>
+            </div>
+            <div class="legal-subsection">
+              <div class="legal-subsection-title">2.2 Security</div>
+              <p class="legal-p">You are solely responsible for your login credentials. Report suspected unauthorised access immediately to <strong>legal@mistynote.com</strong>. We are not liable for losses from unauthorised use due to your failure to secure your account.</p>
+            </div>
+            <div class="legal-subsection">
+              <div class="legal-subsection-title">2.3 Suspension &amp; Closure</div>
+              <p class="legal-p">You may close your account through Settings. Content, credits, and saved data will be permanently deleted and cannot be recovered. We may suspend or close accounts that breach these Terms without notice. Inactive accounts with no pending balances or orders may be revoked after extended inactivity.</p>
+            </div>
+          </div>
+
+          <div class="legal-section" id="terms-s3">
+            <div class="legal-section-title"><span class="legal-section-num">3</span>Platform Services</div>
+            <div class="legal-subsection">
+              <div class="legal-subsection-title">3.1–3.4 Social Features</div>
+              <p class="legal-p">You may browse, post, comment, repost, and message. You are solely responsible for content you publish. AI-generated content must be clearly labelled. Direct messaging must not be used to harass, spam, or transmit prohibited content. Our system may detect and restrict external bank account details or payment credentials in messages to protect against fraud.</p>
+            </div>
+            <div class="legal-subsection">
+              <div class="legal-subsection-title">3.5 MistyNote Market</div>
+              <p class="legal-p">MistyNote is not a party to Buyer-Seller transactions and does not guarantee product quality, safety, or legality. Review all product details carefully before purchasing. Fraudulent purchasing activity is strictly prohibited.</p>
+            </div>
+            <div class="legal-subsection">
+              <div class="legal-subsection-title">3.6 Seller Subscription Tiers</div>
+              <table class="legal-tier-table">
+                <tr><th>Tier</th><th>Fee</th><th>Transaction Rate</th><th>Listings</th></tr>
+                <tr><td><span class="legal-tier-badge free">Free</span></td><td>—</td><td>5% per order</td><td>Up to 10</td></tr>
+                <tr><td><span class="legal-tier-badge verified">✓ Verified</span></td><td>₦5,000/mo</td><td>3% per order</td><td>Unlimited</td></tr>
+                <tr><td><span class="legal-tier-badge pro">★ Pro</span></td><td>₦5,000/mo</td><td>1.5% per order</td><td>Unlimited</td></tr>
+              </table>
+              <p class="legal-p">Pro Seller status is earned automatically by maintaining a 4.5+ star rating, 20+ completed orders, 95% fulfilment rate, and sub-12-hour response time for 30 consecutive days. Pro status is revoked if performance drops below threshold, with a 7-day grace period to recover.</p>
+            </div>
+            <div class="legal-subsection">
+              <div class="legal-subsection-title">3.8 Escrow &amp; Transactions</div>
+              <p class="legal-p">All purchases are processed through the MistyNote Wallet and escrow. Funds are held until the Buyer confirms delivery or the automatic confirmation period elapses. Disputed funds are held pending resolution. The escrow fee is included in the platform transaction fee — no separate charge to Buyers.</p>
+            </div>
+          </div>
+
+          <div class="legal-section" id="terms-s4">
+            <div class="legal-section-title"><span class="legal-section-num">4</span>MistyNote Wallet</div>
+            <p class="legal-p">The Wallet is a closed-loop digital wallet operated in partnership with CBN-licensed payment providers. Funds deposited are used exclusively within the MistyNote ecosystem.</p>
+            <ul class="legal-list">
+              <li>Deposits via debit card, bank transfer, USSD, or other available methods. Processing fees disclosed at time of deposit.</li>
+              <li>Peer-to-peer transfers are instant. Verify recipient identity before sending — MistyNote is not liable for transfers sent to the wrong recipient.</li>
+              <li>Withdrawals to a verified Nigerian bank account. Transfer fees transparently disclosed; MistyNote adds no markup.</li>
+              <li>Suspect unauthorised Wallet access? Contact <strong>security@mistynote.com</strong> immediately.</li>
+              <li>Withdraw all Wallet funds before closing your account.</li>
+            </ul>
+          </div>
+
+          <div class="legal-section" id="terms-s5">
+            <div class="legal-section-title"><span class="legal-section-num">5</span>Rights &amp; Licences</div>
+            <div class="legal-subsection">
+              <div class="legal-subsection-title">5.1 Platform IP</div>
+              <p class="legal-p">All MistyNote content, design, software, and branding is owned by or licensed to Uwana Limited. You may not reproduce, reverse engineer, or create derivative works without our written permission.</p>
+            </div>
+            <div class="legal-subsection">
+              <div class="legal-subsection-title">5.2 Your Content</div>
+              <p class="legal-p">You retain ownership of content you publish. By publishing, you grant Uwana Limited a free, irrevocable, worldwide licence to use, reproduce, adapt, and distribute your content for the purpose of operating and improving the Platform.</p>
+            </div>
+            <div class="legal-subsection">
+              <div class="legal-subsection-title">5.3 Prohibited Conduct</div>
+              <ul class="legal-list">
+                <li>Reverse engineer, decompile, or access Platform source code.</li>
+                <li>Use bots, scrapers, or automated tools to extract Platform data.</li>
+                <li>Introduce malware, viruses, or malicious code.</li>
+                <li>Circumvent any security or access control mechanisms.</li>
+                <li>Obtain Platform benefits through fraudulent or unauthorised means.</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="legal-section" id="terms-s6">
+            <div class="legal-section-title"><span class="legal-section-num">6</span>Commercial Conduct &amp; Fraud Prevention</div>
+            <p class="legal-p">Sellers must not list counterfeit, prohibited, or misleading products, and must not conduct transactions outside the MistyNote Platform to circumvent fees. Buyers must not make fraudulent purchases or file false dispute claims.</p>
+            <p class="legal-p">MistyNote is not responsible for losses from transactions conducted outside the Platform. Report suspected fraud to <strong>support@mistynote.com</strong> immediately. MistyNote may investigate suspicious activity, freeze accounts, reverse transactions, and report fraud to Nigerian authorities.</p>
+          </div>
+
+          <div class="legal-section" id="terms-s7">
+            <div class="legal-section-title"><span class="legal-section-num">7</span>Liabilities &amp; Enforcement</div>
+            <p class="legal-p">If you violate these Terms, MistyNote may restrict your account, remove content, suspend or close your account, freeze Wallet balances, cancel transactions, or report your conduct to Nigerian regulatory or law enforcement authorities.</p>
+            <div class="legal-warning">You are solely responsible for all losses and consequences arising from your breach of these Terms, including any content deleted, features disabled, or account privileges revoked.</div>
+          </div>
+
+          <div class="legal-section" id="terms-s8">
+            <div class="legal-section-title"><span class="legal-section-num">8</span>Limitations of Liability</div>
+            <p class="legal-p caps">THE MISTYNOTE PLATFORM IS PROVIDED "AS IS" WITHOUT WARRANTIES OF ANY KIND. WE DO NOT WARRANT THE PLATFORM WILL BE UNINTERRUPTED OR ERROR-FREE.</p>
+            <p class="legal-p caps">TO THE MAXIMUM EXTENT PERMITTED BY LAW, UWANA LIMITED SHALL NOT BE LIABLE FOR INDIRECT, INCIDENTAL, OR CONSEQUENTIAL DAMAGES. OUR TOTAL LIABILITY SHALL NOT EXCEED FEES PAID BY YOU IN THE SIX MONTHS PRECEDING THE CLAIM.</p>
+            <p class="legal-p">You agree to indemnify Uwana Limited from claims, liabilities, and expenses arising from your use of the Platform, your published content, or your breach of these Terms.</p>
+          </div>
+
+          <div class="legal-section" id="terms-s9">
+            <div class="legal-section-title"><span class="legal-section-num">9</span>Seller Verification &amp; Disputes</div>
+            <p class="legal-p">Verified Seller status requires accurate identity and business information plus an active subscription. Providing false information is a serious breach and may result in immediate suspension and referral to authorities.</p>
+            <p class="legal-p">Disputes should first be resolved directly between Buyer and Seller. If unresolved, either party may raise a formal dispute through the Platform. MistyNote's decisions are final subject to your rights under Nigerian consumer protection law. We do not intervene in disputes from transactions outside the Platform.</p>
+          </div>
+
+          <div class="legal-section" id="terms-s12">
+            <div class="legal-section-title"><span class="legal-section-num">12</span>Governing Law</div>
+            <p class="legal-p">These Terms are governed by the laws of the Federal Republic of Nigeria. Disputes are subject to good-faith negotiation first — contact <strong>legal@mistynote.com</strong>. If unresolved within 60 days, disputes are submitted to the exclusive jurisdiction of Nigerian courts. Place of execution: Lagos State, Nigeria.</p>
+            <p class="legal-p">If you access MistyNote from outside Nigeria, you do so at your own initiative and are responsible for compliance with local laws. Nigerian law governs these Terms regardless of where you access the Platform.</p>
+          </div>
+
+          <div class="legal-section">
+            <div class="legal-section-title"><span class="legal-section-num" style="background:var(--green)">✉</span>Contact</div>
+            <div class="legal-contacts">
+              <a class="legal-contact-card" href="mailto:legal@mistynote.com"><div class="legal-contact-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 7l10 7 10-7"/></svg></div><div><div class="legal-contact-label">Legal</div><div class="legal-contact-value">legal@mistynote.com</div></div></a>
+              <a class="legal-contact-card" href="mailto:support@mistynote.com"><div class="legal-contact-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div><div><div class="legal-contact-label">Support</div><div class="legal-contact-value">support@mistynote.com</div></div></a>
+            </div>
+          </div>
+          <div class="legal-footer"><strong>© 2026 Uwana Limited. All rights reserved.</strong><br>MistyNote is a registered trademark of Uwana Limited.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════
+       LEGAL — PRIVACY POLICY (slide page)
+  ══════════════════════════════════════════ -->
+  <section class="page slide-page" id="page-legal-privacy">
+    <div class="legal-page">
+      <header class="legal-header">
+        <button class="back-btn" onclick="closeLegalPage()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M12 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <span class="legal-header-title">Privacy Policy</span>
+        <div style="width:36px"></div>
+      </header>
+      <div class="legal-scroll" id="legal-privacy-scroll">
+        <div class="legal-hero" style="background:linear-gradient(135deg,#0a1a12 0%,#003d1a 60%,#00b87a18 100%)">
+          <div class="legal-hero-badge">🛡️ Your Privacy</div>
+          <div class="legal-hero-title">User Privacy<br>Policy</div>
+          <div class="legal-hero-meta">Uwana Limited <span>·</span> Last updated April 2, 2026</div>
+        </div>
+        <div class="legal-body">
+          <div class="legal-notice">This Policy explains how MistyNote collects, uses, shares, stores, and protects your personal information in accordance with Nigerian law and international best practices. By using MistyNote, you agree to this Policy.</div>
+          <div class="legal-warning">⚠️ MistyNote is not intended for use by persons under 18. If you are a parent and believe your child has registered, contact privacy@mistynote.com immediately.</div>
+
+          <div class="legal-toc">
+            <div class="legal-toc-header">Contents</div>
+            <div class="legal-toc-item" onclick="legalScrollTo('priv-s1','privacy')"><span class="legal-toc-num">I</span><span class="legal-toc-label">How We Collect &amp; Use Your Information</span><svg class="legal-toc-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <div class="legal-toc-item" onclick="legalScrollTo('priv-s2','privacy')"><span class="legal-toc-num">II</span><span class="legal-toc-label">How We Share Your Information</span><svg class="legal-toc-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <div class="legal-toc-item" onclick="legalScrollTo('priv-s3','privacy')"><span class="legal-toc-num">III</span><span class="legal-toc-label">Storage &amp; Security</span><svg class="legal-toc-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <div class="legal-toc-item" onclick="legalScrollTo('priv-s4','privacy')"><span class="legal-toc-num">IV</span><span class="legal-toc-label">Managing Your Information</span><svg class="legal-toc-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <div class="legal-toc-item" onclick="legalScrollTo('priv-s5','privacy')"><span class="legal-toc-num">V</span><span class="legal-toc-label">Account Closure &amp; Data Deletion</span><svg class="legal-toc-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <div class="legal-toc-item" onclick="legalScrollTo('priv-s6','privacy')"><span class="legal-toc-num">VI</span><span class="legal-toc-label">Third-Party Services</span><svg class="legal-toc-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <div class="legal-toc-item" onclick="legalScrollTo('priv-s7','privacy')"><span class="legal-toc-num">VII</span><span class="legal-toc-label">Cookies</span><svg class="legal-toc-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+            <div class="legal-toc-item" onclick="legalScrollTo('priv-s10','privacy')"><span class="legal-toc-num">X</span><span class="legal-toc-label">Contact Us</span><svg class="legal-toc-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+          </div>
+
+          <div class="legal-section" id="priv-s1">
+            <div class="legal-section-title"><span class="legal-section-num" style="font-size:11px">I</span>How We Collect &amp; Use Your Information</div>
+            <div class="legal-subsection">
+              <div class="legal-subsection-title">Account &amp; Profile</div>
+              <p class="legal-p">We collect your email or phone, username, and password to create your account. Optional at registration: gender, interests, date of birth. Via Google Sign-In, we receive your name, email, and profile photo. Your profile photo, bio, and location are publicly displayed and editable at any time. Verified Sellers must provide BVN or government-issued ID — used solely for verification, never publicly displayed.</p>
+            </div>
+            <div class="legal-subsection">
+              <div class="legal-subsection-title">Content &amp; Social Interactions</div>
+              <p class="legal-p">We collect your posts, likes, reposts, comments, searches, and interaction patterns to power content recommendations. Adjust personalisation at <strong>Me → Settings → Privacy → Personalisation Options</strong>. Saved content is private by default.</p>
+            </div>
+            <div class="legal-subsection">
+              <div class="legal-subsection-title">Location</div>
+              <p class="legal-p">With your consent, we collect GPS location to display your city on your profile, recommend nearby sellers, pre-fill delivery addresses, and show relevant live sessions. Your exact coordinates are never publicly shown — only city and state level. Revoke location permission through your device settings at any time.</p>
+            </div>
+            <div class="legal-subsection">
+              <div class="legal-subsection-title">Direct Messages</div>
+              <p class="legal-p">Messages are stored to enable conversation history. We do not routinely read private messages. We may review messages only where reported by a user, required by Nigerian law or court order, or where we suspect fraudulent or harmful activity. Our system may automatically detect and block messages containing external bank details to protect users from fraud.</p>
+            </div>
+            <div class="legal-subsection">
+              <div class="legal-subsection-title">Transactions &amp; Wallet</div>
+              <p class="legal-p">We collect order details, payment amounts, delivery addresses, and all Wallet activity (deposits, withdrawals, transfers, escrow movements) for transaction processing, fraud detection, and CBN regulatory compliance. We do not store full bank card details.</p>
+            </div>
+            <div class="legal-subsection">
+              <div class="legal-subsection-title">Device &amp; Security Information</div>
+              <p class="legal-p">We automatically collect device model, OS, IP address, network type, app version, session duration, and crash reports — used exclusively for security monitoring and improving Platform performance. Never used for advertising targeting.</p>
+            </div>
+            <div class="legal-subsection">
+              <div class="legal-subsection-title">Advertising</div>
+              <p class="legal-p"><strong>MistyNote does not run third-party advertising and does not share your data with external ad networks.</strong> Promoted listings in the Market are from Sellers who paid for featured placement and are clearly labelled as such.</p>
+            </div>
+          </div>
+
+          <div class="legal-section" id="priv-s2">
+            <div class="legal-section-title"><span class="legal-section-num" style="font-size:11px">II</span>How We Share Your Information</div>
+            <p class="legal-p"><strong>We do not sell your personal information to any third party.</strong> We share your data only in these limited circumstances:</p>
+            <ul class="legal-list">
+              <li><strong>Other Users:</strong> Public profile, posts, likes, and follows visible per your privacy settings.</li>
+              <li><strong>Payment Providers:</strong> Necessary payment data shared with CBN-licensed processors (Paystack, Flutterwave, or similar) solely for payment processing.</li>
+              <li><strong>Logistics Providers:</strong> Your delivery name, address, and phone shared only to complete delivery.</li>
+              <li><strong>Identity Verification:</strong> Identity data shared with authorised verification services under strict confidentiality obligations.</li>
+              <li><strong>Legal Compliance:</strong> We may disclose data to Nigerian law enforcement, CBN, NFIU, or courts where legally required or to prevent fraud or threats to safety.</li>
+              <li><strong>Business Transfer:</strong> In a merger or acquisition, your data may transfer to the successor entity. We will notify you before any transfer takes effect.</li>
+            </ul>
+          </div>
+
+          <div class="legal-section" id="priv-s3">
+            <div class="legal-section-title"><span class="legal-section-num" style="font-size:11px">III</span>Storage &amp; Security</div>
+            <p class="legal-p">Your data is stored on secure servers in Nigeria or jurisdictions with equivalent data protection standards. We retain data while your account is active, plus additional periods required by Nigerian law.</p>
+            <ul class="legal-list">
+              <li>Encryption in transit (TLS/HTTPS) and at rest for sensitive data including passwords and identity documents.</li>
+              <li>Access controls limiting which employees can access personal data.</li>
+              <li>Regular security audits and vulnerability assessments.</li>
+              <li>Automatic session timeouts and suspicious login detection.</li>
+              <li>Continuous Wallet monitoring with automatic freeze on suspicious activity.</li>
+            </ul>
+            <p class="legal-p">If a security breach occurs that is likely to affect your rights, we will notify you and relevant Nigerian authorities as required by law.</p>
+          </div>
+
+          <div class="legal-section" id="priv-s4">
+            <div class="legal-section-title"><span class="legal-section-num" style="font-size:11px">IV</span>Managing Your Information</div>
+            <p class="legal-p">Update most personal information directly through your profile and account settings. For a full export of your personal data, contact <strong>privacy@mistynote.com</strong>.</p>
+            <p class="legal-p">Privacy controls at <strong>Me → Settings → Privacy</strong>: who can see your posts and Moments; personalised content on/off; location shown on profile; notification preferences; read receipts in DMs; discoverability by contacts.</p>
+            <p class="legal-p">For automated decisions significantly affecting your rights (account suspension, seller tier demotion), you may request a human review at <strong>privacy@mistynote.com</strong>.</p>
+          </div>
+
+          <div class="legal-section" id="priv-s5">
+            <div class="legal-section-title"><span class="legal-section-num" style="font-size:11px">V</span>Account Closure &amp; Data Deletion</div>
+            <p class="legal-p">Close your account at any time via <strong>Me → Settings → Account → Close Account</strong>. Before closing: withdraw any Wallet balance; ensure all orders are fulfilled or cancelled; resolve any pending disputes.</p>
+            <p class="legal-p">Upon closure, your public profile and posts are removed. Private data (messages, order history, Wallet records) is retained for the period required by Nigerian law — typically 5–7 years for financial records — then permanently deleted. Closed accounts cannot be recovered.</p>
+          </div>
+
+          <div class="legal-section" id="priv-s6">
+            <div class="legal-section-title"><span class="legal-section-num" style="font-size:11px">VI</span>Third-Party Services</div>
+            <p class="legal-p">Key integrations:</p>
+            <ul class="legal-list">
+              <li><strong>Paystack / Flutterwave:</strong> CBN-licensed payment processing.</li>
+              <li><strong>BigDataCloud:</strong> Reverse geocoding of GPS coordinates to city/state.</li>
+              <li><strong>Google Sign-In:</strong> Optional authentication method.</li>
+              <li><strong>Supabase Storage:</strong> Encrypted cloud storage for user-uploaded media.</li>
+              <li><strong>Supabase Realtime:</strong> Live messaging and notifications infrastructure.</li>
+            </ul>
+            <p class="legal-p">All providers sign data processing agreements limiting their use of your data to the specific service they provide.</p>
+          </div>
+
+          <div class="legal-section" id="priv-s7">
+            <div class="legal-section-title"><span class="legal-section-num" style="font-size:11px">VII</span>Cookies &amp; Similar Technologies</div>
+            <p class="legal-p">We use essential cookies (login sessions, security tokens), preference cookies (your settings), and anonymised analytics cookies to understand Platform usage. We do not use cookies for third-party advertising. Disabling cookies through your browser may prevent login or access to some features.</p>
+          </div>
+
+          <div class="legal-section" id="priv-s10">
+            <div class="legal-section-title"><span class="legal-section-num" style="background:var(--green);font-size:11px">✉</span>Contact Us</div>
+            <p class="legal-p">We respond to privacy requests within 30 days (up to 60 for complex requests, with notification within the initial 30-day window).</p>
+            <div class="legal-contacts">
+              <a class="legal-contact-card" href="mailto:privacy@mistynote.com"><div class="legal-contact-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><div><div class="legal-contact-label">Privacy Team</div><div class="legal-contact-value">privacy@mistynote.com</div></div></a>
+              <a class="legal-contact-card" href="mailto:support@mistynote.com"><div class="legal-contact-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div><div><div class="legal-contact-label">Support</div><div class="legal-contact-value">support@mistynote.com</div></div></a>
+              <a class="legal-contact-card" href="mailto:legal@mistynote.com"><div class="legal-contact-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 7l10 7 10-7"/></svg></div><div><div class="legal-contact-label">Legal</div><div class="legal-contact-value">legal@mistynote.com</div></div></a>
+            </div>
+          </div>
+          <div class="legal-footer"><strong>© 2026 Uwana Limited. All rights reserved.</strong><br>MistyNote is a registered trademark of Uwana Limited.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════
+       LEGAL OVERLAY — auth screen (pre-login)
+  ══════════════════════════════════════════ -->
+  <div id="legal-overlay" class="legal-overlay hidden">
+    <div class="legal-overlay-inner" id="legal-overlay-inner"></div>
   </div>
 
   <!-- Scripts -->
