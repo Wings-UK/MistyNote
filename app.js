@@ -1465,7 +1465,7 @@ function slideTo(pageId, setupFn) {
   });
 
   // Deactivate any currently active slide page so they don't stack visually
-  const slidePages = ['detail','user-profile','settings','wallet','storefront','messages','chat'];
+  const slidePages = ['detail','user-profile','settings','wallet','storefront','messages','chat','legal-terms','legal-privacy'];
   slidePages.forEach(id => {
     if (id !== pageId) document.getElementById('page-' + id)?.classList.remove('active');
   });
@@ -9151,6 +9151,89 @@ async function saveProfile() {
 
 function showSettings() {
   slideTo('settings');
+}
+
+// ══════════════════════════════════════════
+// LEGAL PAGES
+// ══════════════════════════════════════════
+
+// Called from settings OR from auth screen (before app loads)
+function openLegalPage(which) {
+  const pageId = 'legal-' + (which === 'privacy' ? 'privacy' : 'terms');
+
+  // If the app is loaded (user is logged in) — use the slide system
+  const appEl = document.getElementById('app');
+  if (appEl && !appEl.classList.contains('hidden')) {
+    // Register in slideTo so back button works
+    slideTo(pageId);
+    return;
+  }
+
+  // Pre-login: inject a temporary overlay so the auth screen Terms/Privacy links work
+  // without needing the full slide infrastructure
+  const overlay = document.getElementById('legal-overlay');
+  const inner   = document.getElementById('legal-overlay-inner');
+  if (!overlay || !inner) return;
+
+  // Clone the content from the real slide page into the overlay
+  const sourcePage = document.getElementById('page-' + pageId);
+  if (!sourcePage) return;
+
+  // Build a simple header + scrollable clone
+  const title = which === 'privacy' ? 'Privacy Policy' : 'Terms of Service';
+  inner.innerHTML = `
+    <div class="legal-overlay-header">
+      <button class="back-btn" onclick="closeLegalOverlay()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M12 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <span class="legal-overlay-title">${title}</span>
+      <div style="width:36px"></div>
+    </div>
+    <div style="padding-bottom:40px">
+      ${sourcePage.querySelector('.legal-scroll')?.innerHTML || ''}
+    </div>`;
+
+  // Fix TOC scroll targets to work inside overlay
+  inner.querySelectorAll('.legal-toc-item').forEach(item => {
+    const onclick = item.getAttribute('onclick') || '';
+    const match = onclick.match(/legalScrollTo\('([^']+)'/);
+    if (match) {
+      item.setAttribute('onclick', `document.getElementById('${match[1]}')?.scrollIntoView({behavior:'smooth',block:'start'})`);
+    }
+  });
+
+  overlay.classList.remove('hidden');
+  overlay.scrollTop = 0;
+}
+
+function closeLegalOverlay() {
+  const overlay = document.getElementById('legal-overlay');
+  if (overlay) overlay.classList.add('hidden');
+}
+
+function closeLegalPage() {
+  // Check if we used the overlay (pre-login path)
+  const overlay = document.getElementById('legal-overlay');
+  if (overlay && !overlay.classList.contains('hidden')) {
+    closeLegalOverlay();
+    return;
+  }
+  // Normal slide-back path
+  slideBack();
+}
+
+function legalScrollTo(sectionId, which) {
+  // Determine which scroll container to use
+  const scrollEl = document.getElementById('legal-' + which + '-scroll');
+  const target   = document.getElementById(sectionId);
+  if (!scrollEl || !target) return;
+
+  // Get offset of target relative to scroll container
+  const containerTop = scrollEl.getBoundingClientRect().top;
+  const targetTop    = target.getBoundingClientRect().top;
+  const offset       = targetTop - containerTop + scrollEl.scrollTop - 70;
+
+  scrollEl.scrollTo({ top: offset, behavior: 'smooth' });
 }
 
 function toggleDarkMode(isDark) {
