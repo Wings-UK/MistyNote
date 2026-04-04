@@ -1898,7 +1898,7 @@ async function renderMyProfile() {
     <div class="prf-wrap">
 
       <!-- COVER -->
-      <div class="prf-cover">
+      <div class="prf-cover" onclick="viewProfilePhoto('${escHtml(profile.cover||'')}','cover','${escHtml(profile.username||'')}')" style="cursor:${profile.cover ? 'pointer' : 'default'}">
         ${profile.cover
           ? `<img src="${escHtml(profile.cover)}" alt="" class="prf-cover-img">`
           : `<div class="prf-cover-gradient"></div>`}
@@ -1910,7 +1910,7 @@ async function renderMyProfile() {
 
       <!-- AVATAR ROW -->
       <div class="prf-avatar-row">
-        <div class="prf-avatar-wrap" title="Edit Profile">
+        <div class="prf-avatar-wrap" title="View profile photo" onclick="viewProfilePhoto('${escHtml(profile.avatar||`https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(profile.id)}`)}','avatar','${escHtml(profile.username||'')}')" style="cursor:pointer">
           <div class="prf-avatar-ring"></div>
           <img class="prf-avatar" src="${escHtml(profile.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(profile.id)}`)}" onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(profile.id)}'" alt="">
         </div>
@@ -2317,7 +2317,7 @@ async function showUserProfile(userId, tapEl) {
 
     body.innerHTML = `
       <div class="prf-wrap">
-        <div class="prf-cover">
+        <div class="prf-cover" onclick="viewProfilePhoto('${escHtml(profile.cover||'')}','cover','${escHtml(profile.username||'')}')" style="cursor:${profile.cover ? 'pointer' : 'default'}">
           ${profile.cover
             ? `<img src="${escHtml(profile.cover)}" alt="" class="prf-cover-img">`
             : `<div class="prf-cover-gradient"></div>`}
@@ -2329,7 +2329,7 @@ async function showUserProfile(userId, tapEl) {
 
         <!-- AVATAR ROW -->
         <div class="prf-avatar-row">
-          <div class="prf-avatar-wrap">
+          <div class="prf-avatar-wrap" onclick="viewProfilePhoto('${escHtml(profile.avatar||`https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(profile.id)}`)}','avatar','${escHtml(profile.username||'')}')" style="cursor:pointer">
             <div class="prf-avatar-ring"></div>
             <img class="prf-avatar" src="${escHtml(profile.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(profile.id)}`)}" onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(profile.id)}'" alt="">
           </div>
@@ -8843,37 +8843,176 @@ async function deletePost(postId, el) {
 
 
 // ── Full-screen photo viewer ──
-function viewProfilePhoto(url, type) {
+function viewProfilePhoto(url, type, username) {
   if (!url) return;
+
+  // ── Overlay shell ──
   const overlay = document.createElement('div');
-  overlay.style.cssText = `
-    position:fixed;inset:0;z-index:9999;
-    background:rgba(0,0,0,0.95);
-    display:flex;flex-direction:column;
-    align-items:center;justify-content:center;
-    cursor:pointer;
-  `;
-  const img = document.createElement('img');
-  img.src = url;
-  img.style.cssText = `
-    max-width:100%;max-height:85vh;
-    object-fit:contain;
-    border-radius:${type === 'avatar' ? '50%' : '12px'};
-  `;
+  overlay.id = 'photo-viewer-overlay';
+  overlay.style.cssText = [
+    'position:fixed;inset:0;z-index:9999',
+    'background:rgba(0,0,0,0)',
+    'display:flex;flex-direction:column',
+    'align-items:center;justify-content:center',
+    'transition:background 0.28s ease',
+    '-webkit-backdrop-filter:blur(0px);backdrop-filter:blur(0px)',
+    'transition:background 0.28s ease, backdrop-filter 0.28s ease, -webkit-backdrop-filter 0.28s ease',
+  ].join(';');
+
+  // ── Close button ──
   const closeBtn = document.createElement('button');
-  closeBtn.innerHTML = '✕';
-  closeBtn.style.cssText = `
-    position:absolute;top:16px;right:16px;
-    width:36px;height:36px;border-radius:50%;
-    background:rgba(255,255,255,0.15);
-    color:white;font-size:18px;
-    display:flex;align-items:center;justify-content:center;
-    border:none;cursor:pointer;
-  `;
-  overlay.appendChild(img);
+  closeBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>`;
+  closeBtn.style.cssText = [
+    'position:absolute',
+    'top:calc(env(safe-area-inset-top,0px) + 14px)',
+    'right:16px',
+    'width:38px;height:38px;border-radius:50%',
+    'background:rgba(255,255,255,0.12)',
+    'border:1px solid rgba(255,255,255,0.18)',
+    'display:flex;align-items:center;justify-content:center',
+    'cursor:pointer;z-index:2',
+    'backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)',
+    'transition:background 0.15s',
+  ].join(';');
+  closeBtn.onmouseover = () => closeBtn.style.background = 'rgba(255,255,255,0.22)';
+  closeBtn.onmouseout  = () => closeBtn.style.background = 'rgba(255,255,255,0.12)';
+
+  // ── Type label ──
+  const labelEl = document.createElement('div');
+  labelEl.textContent = type === 'avatar'
+    ? (username ? `@${username}` : 'Profile Photo')
+    : (username ? `@${username}'s cover` : 'Cover Photo');
+  labelEl.style.cssText = [
+    'position:absolute',
+    'top:calc(env(safe-area-inset-top,0px) + 20px)',
+    'left:50%;transform:translateX(-50%)',
+    'color:white;font-size:14px;font-weight:700',
+    'font-family:-apple-system,sans-serif',
+    'text-shadow:0 1px 6px rgba(0,0,0,0.5)',
+    'white-space:nowrap;pointer-events:none;z-index:2',
+  ].join(';');
+
+  // ── Loading spinner ──
+  const spinner = document.createElement('div');
+  spinner.style.cssText = [
+    'width:36px;height:36px;border-radius:50%',
+    'border:3px solid rgba(255,255,255,0.15)',
+    'border-top-color:white',
+    'animation:photoViewerSpin 0.7s linear infinite',
+    'position:absolute',
+  ].join(';');
+
+  // ── Image container (for pinch-zoom feel) ──
+  const imgWrap = document.createElement('div');
+  imgWrap.style.cssText = [
+    'display:flex;align-items:center;justify-content:center',
+    'width:100%;height:100%',
+    'padding:80px 20px calc(env(safe-area-inset-bottom,0px) + 80px)',
+    'box-sizing:border-box',
+  ].join(';');
+
+  // ── Image ──
+  const img = document.createElement('img');
+  img.style.cssText = [
+    'max-width:100%;max-height:100%',
+    'object-fit:contain',
+    'opacity:0',
+    'transform:scale(0.88)',
+    'transition:opacity 0.3s ease, transform 0.3s cubic-bezier(0.34,1.56,0.64,1)',
+    type === 'avatar'
+      ? 'border-radius:50%;box-shadow:0 0 0 3px rgba(255,255,255,0.25),0 12px 48px rgba(0,0,0,0.6)'
+      : 'border-radius:16px;box-shadow:0 12px 48px rgba(0,0,0,0.6)',
+    'will-change:transform,opacity',
+    'user-select:none;-webkit-user-drag:none',
+  ].join(';');
+
+  // ── Bottom user bar ──
+  const bottomBar = document.createElement('div');
+  bottomBar.style.cssText = [
+    'position:absolute;bottom:0;left:0;right:0',
+    'padding:16px 20px calc(env(safe-area-inset-bottom,0px) + 16px)',
+    'display:flex;align-items:center;gap:12px',
+    'background:linear-gradient(transparent, rgba(0,0,0,0.7))',
+    'opacity:0;transition:opacity 0.3s ease',
+  ].join(';');
+
+  if (username) {
+    const dotEl = document.createElement('div');
+    dotEl.style.cssText = 'width:8px;height:8px;border-radius:50%;background:#6C47FF;flex-shrink:0';
+    const nameEl = document.createElement('span');
+    nameEl.textContent = type === 'avatar' ? `@${username}` : `@${username}'s cover photo`;
+    nameEl.style.cssText = 'color:white;font-size:14px;font-weight:600;font-family:-apple-system,sans-serif';
+    bottomBar.appendChild(dotEl);
+    bottomBar.appendChild(nameEl);
+  }
+
+  // ── Assemble ──
+  imgWrap.appendChild(img);
+  overlay.appendChild(imgWrap);
   overlay.appendChild(closeBtn);
-  overlay.onclick = () => document.body.removeChild(overlay);
+  overlay.appendChild(labelEl);
+  overlay.appendChild(spinner);
+  overlay.appendChild(bottomBar);
+
+  // ── Inject spin keyframe once ──
+  if (!document.getElementById('photo-viewer-style')) {
+    const s = document.createElement('style');
+    s.id = 'photo-viewer-style';
+    s.textContent = '@keyframes photoViewerSpin{to{transform:rotate(360deg)}}';
+    document.head.appendChild(s);
+  }
+
   document.body.appendChild(overlay);
+
+  // ── Animate in ──
+  requestAnimationFrame(() => {
+    overlay.style.background = 'rgba(0,0,0,0.93)';
+    overlay.style.webkitBackdropFilter = 'blur(20px)';
+    overlay.style.backdropFilter = 'blur(20px)';
+  });
+
+  // ── Load image ──
+  img.onload = () => {
+    spinner.remove();
+    img.style.opacity = '1';
+    img.style.transform = 'scale(1)';
+    bottomBar.style.opacity = '1';
+  };
+  img.onerror = () => {
+    spinner.remove();
+    const err = document.createElement('p');
+    err.textContent = 'Could not load photo';
+    err.style.cssText = 'color:rgba(255,255,255,0.5);font-size:14px;font-family:-apple-system,sans-serif';
+    imgWrap.appendChild(err);
+  };
+  img.src = url;
+
+  // ── Close logic ──
+  const closeViewer = () => {
+    overlay.style.background = 'rgba(0,0,0,0)';
+    overlay.style.webkitBackdropFilter = 'blur(0px)';
+    overlay.style.backdropFilter = 'blur(0px)';
+    img.style.opacity = '0';
+    img.style.transform = 'scale(0.88)';
+    setTimeout(() => { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 300);
+  };
+
+  closeBtn.onclick = (e) => { e.stopPropagation(); closeViewer(); };
+
+  // Tap background to close (not the image itself)
+  overlay.onclick = (e) => { if (e.target === overlay || e.target === imgWrap) closeViewer(); };
+
+  // Swipe down to close
+  let touchStartY = 0;
+  overlay.addEventListener('touchstart', e => { touchStartY = e.touches[0].clientY; }, { passive: true });
+  overlay.addEventListener('touchend', e => {
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    if (dy > 80) closeViewer();
+  }, { passive: true });
+
+  // Escape key
+  const escHandler = (e) => { if (e.key === 'Escape') { closeViewer(); document.removeEventListener('keydown', escHandler); } };
+  document.addEventListener('keydown', escHandler);
 }
 
 function openEditProfile() {
