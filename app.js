@@ -4227,22 +4227,35 @@ function insertEmojiOrSticker(value, type, stickerData) {
 }
 
 // ── Feed prepend ──
+// FIXED VERSION — removes empty state when first post arrives
 function prependPostToFeed(newPost) {
   if (!newPost) return;
+
   const adapted = { ...newPost, comments: [{ count: 0 }] };
   const el = createFeedPost(adapted);
   const list = document.getElementById('feed-list');
-  if (list && el) {
-    list.prepend(el);
-    loadedPostIds.add(newPost.id);
-    el.classList.add('fade-up');
-    observePost(el);
+  if (!list || !el) return;
+
+  // ←←← THIS IS THE FIX
+  // Remove any existing empty-state message
+  const emptyState = list.querySelector('.empty-state');
+  if (emptyState) {
+    emptyState.remove();
   }
+
+  // Reset exhausted flag now that we have content
+  feedExhausted = false;
+
+  // Prepend the new post
+  list.prepend(el);
+  loadedPostIds.add(newPost.id);
+  el.classList.add('fade-up');
+  observePost(el);
+
+  // Rest of your original code (notifications, repost handling, etc.)
   if (newPost.reposted_post_id) {
     repostedPosts.set(newPost.reposted_post_id, newPost.id);
     setRepostUI(newPost.reposted_post_id, true);
-    // DB trigger handles repost_count increment automatically
-    // Just sync the count after trigger has time to fire
     setTimeout(() => syncRepostCount(newPost.reposted_post_id), 1200);
     supabase.from('posts').select('user_id').eq('id', newPost.reposted_post_id).single().then(({ data: orig }) => {
       if (orig && orig.user_id !== currentUser.id) {
@@ -4250,12 +4263,13 @@ function prependPostToFeed(newPost) {
       }
     });
   }
+
   if (document.getElementById('page-profile')?.classList.contains('active')) {
     renderMyProfile();
   }
 
-  // Mention notifications from post content
-  if (newPost && newPost.content) {
+  // Mention notifications
+  if (newPost.content) {
     const mentionMatches = newPost.content.match(/@([a-zA-Z0-9_]+)/g);
     if (mentionMatches) {
       const mentioned = [...new Set(mentionMatches.map(m => m.slice(1).toLowerCase()))];
