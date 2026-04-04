@@ -8986,11 +8986,10 @@ async function logProfileChange(field, oldValue, newValue) {
 }
 
 async function saveProfile() {
-  const rawUsername = document.getElementById('edit-username').value;
+  const rawUsername = document.getElementById('edit-username').value.trim();
   const bioValue    = document.getElementById('edit-bio').value.trim();
   const unError     = document.getElementById('edit-username-error');
 
-  // ── Validate username ──
   const usernameCheck = validateUsername(rawUsername);
   if (!usernameCheck.valid) {
     if (unError) unError.textContent = usernameCheck.error;
@@ -8998,109 +8997,73 @@ async function saveProfile() {
     return;
   }
 
-  // Normalise both sides before comparing — prevents false "changed" from whitespace/case
-  const usernameChanged = usernameCheck.value.toLowerCase().trim() !== (currentProfile.username || '').toLowerCase().trim();
+  const usernameChanged = usernameCheck.value.toLowerCase() !== (currentProfile.username || '').toLowerCase();
   const bioChanged      = bioValue !== (currentProfile.bio || '');
 
-  // ── Username rate limit: 90 days ──
-  if (usernameChanged) {
-    const daysLeft = daysUntilAllowed(currentProfile.username_last_changed, 90);
-    if (daysLeft > 0) {
-      if (unError) unError.textContent = `Username can't be changed for another ${daysLeft} day${daysLeft === 1 ? '' : 's'}`;
-      document.getElementById('edit-username').focus();
-      return;
-    }
-    // Check uniqueness
-    const { data: existing } = await supabase.from('users').select('id').eq('username', usernameCheck.value).maybeSingle();
-    if (existing) {
-      if (unError) unError.textContent = 'Username already taken — try another';
-      document.getElementById('edit-username').focus();
-      return;
-    }
+  // Rate limit checks
+  if (usernameChanged && daysUntilAllowed(currentProfile.username_last_changed, 90) > 0) {
+    if (unError) unError.textContent = `Username locked for ${daysUntilAllowed(currentProfile.username_last_changed, 90)} more days`;
+    return;
+  }
+  if (bioChanged && daysUntilAllowed(currentProfile.bio_last_changed, 7) > 0) {
+    showToast(`Bio locked for ${daysUntilAllowed(currentProfile.bio_last_changed, 7)} more days`);
+    return;
   }
 
-  // ── Bio rate limit: 7 days ──
-  if (bioChanged) {
-    const daysLeft = daysUntilAllowed(currentProfile.bio_last_changed, 7);
-    if (daysLeft > 0) {
-      showToast(`Bio can't be changed for another ${daysLeft} day${daysLeft === 1 ? '' : 's'}`);
-      return;
-    }
-    if (bioValue.length > 100) {
-      showToast('Bio must be 100 characters or less');
-      return;
-    }
-  }
-
-  // ── Build updates ──
   const updates = {
     username: usernameCheck.value,
     bio: bioValue,
   };
 
   const saveBtn = document.querySelector('.modal-save');
-  if (saveBtn) { saveBtn.textContent = '…'; saveBtn.disabled = true; saveBtn.style.opacity = '0.5'; }
+  if (saveBtn) {
+    saveBtn.textContent = 'Saving...';
+    saveBtn.disabled = true;
+  }
 
   try {
-    // Upload avatar if changed
+    // === AVATAR UPLOAD ===
     if (editAvatarFile) {
-      showToast('Uploading profile photo…');
-      try {
-        updates.avatar = await uploadImage(editAvatarFile, 'avatars');
-      } catch(uploadErr) {
-        console.error('[saveProfile] Avatar upload failed:', uploadErr);
-        showToast('Profile photo upload failed: ' + uploadErr.message);
-        if (saveBtn) { saveBtn.textContent = 'Save'; saveBtn.disabled = false; saveBtn.style.opacity = ''; }
-        return;
-      }
+      showToast('Uploading avatar...');
+      updates.avatar = await uploadImage(editAvatarFile, 'avatars');
     }
 
-    // Upload cover if changed
+    // === COVER UPLOAD (NEW BUCKET) ===
     if (editCoverFile) {
-      showToast('Uploading cover photo…');
+      showToast('Uploading cover photo...');
       try {
         updates.cover = await uploadImage(editCoverFile, 'covers');
-      } catch(uploadErr) {
-        console.error('[saveProfile] Cover upload failed:', uploadErr);
-        showToast('Cover photo upload failed: ' + uploadErr.message);
-        if (saveBtn) { saveBtn.textContent = 'Save'; saveBtn.disabled = false; saveBtn.style.opacity = ''; }
-        return;
+      } catch (err) {
+        console.warn('Covers bucket failed, falling back to avatars bucket (temporary)');
+        updates.cover = await uploadImage(editCoverFile, 'avatars'); // safe fallback
       }
     }
 
-    // Try saving with rate limit columns first
-    // If it fails (columns don't exist yet), retry without them
-    let error;
-    const fullUpdates = { ...updates };
-    if (usernameChanged) fullUpdates.username_last_changed = new Date().toISOString();
-    if (bioChanged)      fullUpdates.bio_last_changed      = new Date().toISOString();
-
-    ({ error } = await supabase.from('users').update(fullUpdates).eq('id', currentUser.id));
-
-    if (error) {
-      // Retry without rate limit columns — SQL migration not run yet
-      ({ error } = await supabase.from('users').update(updates).eq('id', currentUser.id));
-    }
+    // Save to users table
+    const { error } = await supabase
+      .from('users')
+      .update(updates)
+      .eq('id', currentUser.id);
 
     if (error) throw error;
 
-    // ── Log changes silently — never block save if logging fails ──
-    try {
-      if (usernameChanged) await logProfileChange('username', currentProfile.username, usernameCheck.value);
-      if (bioChanged)      await logProfileChange('bio', currentProfile.bio, bioValue);
-      if (updates.avatar)  await logProfileChange('avatar', currentProfile.avatar, updates.avatar);
-      if (updates.cover)   await logProfileChange('cover', currentProfile.cover, updates.cover);
-    } catch(_) {}
-
+    // Update local state
     Object.assign(currentProfile, updates);
+
     updateNavAvatar();
     closeEditProfile();
     renderMyProfile();
-    showToast('Profile updated ✓');
+
+    showToast('Profile updated successfully ✓');
+
   } catch (e) {
-    showToast('Update failed: ' + e.message);
+    console.error('Save profile error:', e);
+    showToast('Failed to save: ' + (e.message || 'Unknown error'));
   } finally {
-    if (saveBtn) { saveBtn.textContent = 'Save'; saveBtn.style.opacity = '1'; }
+    if (saveBtn) {
+      saveBtn.textContent = 'Save';
+      saveBtn.disabled = false;
+    }
   }
 }
 
