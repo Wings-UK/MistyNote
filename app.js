@@ -6458,14 +6458,21 @@ async function loadMessages() {
     const row = document.createElement('div');
     row.className = 'msg-conv-row';
     row.dataset.convId = conv.id;
+
+    // Active indicator: green dot if last message within 5 minutes
+    const lastMsgMs = conv.last_message_at ? Date.now() - new Date(conv.last_message_at).getTime() : Infinity;
+    const isActive  = lastMsgMs < 5 * 60 * 1000;   // 5 min
+    const isRecent  = lastMsgMs < 60 * 60 * 1000;   // 1 hour
+
     row.innerHTML = `
       <div class="msg-conv-av-wrap">
         <img class="msg-conv-av" src="${otherUser.avatar||''}" onerror="this.style.background='var(--bg3)';this.removeAttribute('src')" alt="">
+        ${isActive ? '<span class="msg-conv-online-dot"></span>' : ''}
       </div>
       <div class="msg-conv-body">
         <div class="msg-conv-name-row">
           <span class="msg-conv-name">${escHtml(otherUser.username||'')}</span>
-          <span class="msg-conv-time">${timeStr}</span>
+          <span class="msg-conv-time"${isActive ? ' style="color:var(--accent);font-weight:700"' : ''}>${isActive ? 'Active now' : timeStr}</span>
         </div>
         <div class="msg-conv-preview-row">
           <span class="msg-conv-preview${unread ? ' unread' : ''}">${escHtml(preview)}</span>
@@ -6729,7 +6736,7 @@ async function loadChatMessages(convId) {
     .eq('conversation_id', convId)
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
-    .limit(100);
+    .limit(500);
 
   if (error) {
     msgsEl.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3)">Could not load messages</div>';
@@ -7652,7 +7659,14 @@ async function chatSend() {
       return;
     }
 
-    const { data: { publicUrl } } = supabase.storage.from('media').getPublicUrl(path);
+    const { data: urlData } = supabase.storage.from('media').getPublicUrl(path);
+    const publicUrl = urlData.publicUrl;
+
+    if (!publicUrl) {
+      showToast('Could not get image URL');
+      imgEl?.remove();
+      return;
+    }
 
     // Replace optimistic thumb with real URL
     const thumbEl = imgEl?.querySelector('.chat-bubble-img');
@@ -8140,26 +8154,45 @@ function groupNotifications(items) {
 
   items.forEach(item => {
     if (usedIds.has(item.id)) return;
+
+    // Only group: same type + same post_id + DIFFERENT actors within time window
+    // One actor liking 3 different posts = 3 separate notifications (never group same actor)
     const canGroup = item.post_id && ['like','repost','comment'].includes(item.type);
 
     if (canGroup) {
       const siblings = items.filter(s =>
-        s.id !== item.id && !usedIds.has(s.id) &&
-        s.type === item.type && s.post_id === item.post_id &&
+        s.id !== item.id &&
+        !usedIds.has(s.id) &&
+        s.type === item.type &&
+        s.post_id === item.post_id &&
+        // CRITICAL: only group DIFFERENT actors on the SAME post
+        s.actor_id !== item.actor_id &&
         Math.abs(new Date(s.created_at) - new Date(item.created_at)) < NOTIF_CONFIG.GROUPING_WINDOW_MS
       );
+
       if (siblings.length >= NOTIF_CONFIG.GROUPING_THRESHOLD - 1) {
         const all = [item, ...siblings];
+        // Deduplicate actors by id — never show same username twice
+        const seenActorIds = new Set();
+        const uniqueActors = all
+          .map(s => s.actor)
+          .filter(a => {
+            if (!a?.id || seenActorIds.has(a.id)) return false;
+            seenActorIds.add(a.id);
+            return true;
+          });
         all.forEach(s => usedIds.add(s.id));
         groups.push({
           grouped: true, type: item.type, post: item.post, post_id: item.post_id,
-          actors: all.map(s => s.actor).filter(Boolean),
-          count: all.length, read: all.every(s => s.read),
+          actors: uniqueActors,
+          actor_id: item.actor_id,
+          count: uniqueActors.length, read: all.every(s => s.read),
           latestAt: item.created_at, ids: all.map(s => s.id),
         });
         return;
       }
     }
+
     usedIds.add(item.id);
     groups.push({ grouped: false, ...item, actors: [item.actor], latestAt: item.created_at, ids: [item.id] });
   });
@@ -8296,8 +8329,16 @@ async function notifItemClick(postId, actorId, idsStr) {
     updateNotifBadge();
     updateNotifTabCounts();
   }
-  if (postId) await openDetail(postId);
-  else if (actorId) await showUserProfile(actorId, null);
+
+  // CRITICAL: tell slideTo we're coming from notifications
+  // so the back button returns here correctly
+  lastMainPage = 'notifications';
+
+  if (postId && postId !== 'null' && postId !== 'undefined') {
+    await openDetail(postId);
+  } else if (actorId && actorId !== 'null' && actorId !== 'undefined') {
+    await showUserProfile(actorId, null);
+  }
 }
 
 async function loadNotifFollowState(actorId) {
