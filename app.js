@@ -8863,6 +8863,26 @@ function viewProfilePhoto(url, type) {
 }
 
 function openEditProfile() {
+  // ── FIX 1: Force gallery (no camera) + wire listeners ──
+  const avatarInput = document.getElementById('edit-avatar-file');
+  const coverInput  = document.getElementById('edit-cover-file');
+
+  if (avatarInput) {
+    avatarInput.removeAttribute('capture');   // ← removes camera
+    avatarInput.accept = 'image/*';
+    avatarInput.onchange = previewAvatar;     // ensure wired
+  }
+  if (coverInput) {
+    coverInput.accept = 'image/*';
+    coverInput.onchange = previewCover;       // ← this was missing → cover now works
+  }
+
+  // Reset files so same photo can be re-selected
+  editAvatarFile = null;
+  editCoverFile  = null;
+  if (avatarInput) avatarInput.value = '';
+  if (coverInput)  coverInput.value  = '';
+
   // Wire up live username sanitization
   setTimeout(() => {
     const unInput = document.getElementById('edit-username');
@@ -8880,96 +8900,35 @@ function openEditProfile() {
     }
 
     if (bioInput && bioCount) {
-      // Block newlines — bio must be single line
-      bioInput.addEventListener('keydown', e => {
-        if (e.key === 'Enter') e.preventDefault();
-      });
-      // Also strip any pasted newlines
+      bioInput.addEventListener('keydown', e => { if (e.key === 'Enter') e.preventDefault(); });
       bioInput.addEventListener('input', () => {
-        if (bioInput.value.includes('\n')) {
-          bioInput.value = bioInput.value.replace(/\n/g, ' ').trim();
-        }
-      });
-      const updateCount = () => {
+        if (bioInput.value.includes('\n')) bioInput.value = bioInput.value.replace(/\n/g, ' ').trim();
         const len = bioInput.value.length;
         bioCount.textContent = len + '/100';
         bioCount.style.color = len >= 90 ? 'var(--red, #ff3b5c)' : 'var(--text3)';
-      };
-      bioInput.addEventListener('input', updateCount);
-      updateCount();
+      });
     }
   }, 50);
+
   if (!currentProfile) return;
+
   const overlay = document.getElementById('edit-profile-overlay');
   overlay.classList.remove('hidden');
 
   document.getElementById('edit-username').value = currentProfile.username || '';
   const bioEl = document.getElementById('edit-bio');
-  if (bioEl) {
-    bioEl.value = currentProfile.bio || '';
-    const bioDaysLeft = daysUntilAllowed(currentProfile.bio_last_changed, 90);
-    if (bioDaysLeft > 0) {
-      bioEl.disabled = true;
-      bioEl.style.opacity = '0.5';
-      const bioHint = document.getElementById('edit-bio-hint');
-      if (bioHint) bioHint.textContent = `🔒 Bio locked for ${bioDaysLeft} more day${bioDaysLeft === 1 ? '' : 's'}`;
-    }
-  }
+  if (bioEl) bioEl.value = currentProfile.bio || '';
 
-
-
-  // ── Show rate limit status ──
-  const unError  = document.getElementById('edit-username-error');
-  const bioCount = document.getElementById('edit-bio-count');
-
-  const unDaysLeft  = daysUntilAllowed(currentProfile.username_last_changed, 90);
-  const bioDaysLeft = daysUntilAllowed(currentProfile.bio_last_changed, 7);
-
-  if (unDaysLeft > 0 && unError) {
-    unError.textContent = `Locked — can change in ${unDaysLeft} day${unDaysLeft === 1 ? '' : 's'}`;
-    unError.style.color = 'var(--text3)';
-    document.getElementById('edit-username').disabled = true;
-    document.getElementById('edit-username').style.opacity = '0.5';
-  } else {
-    if (unError) { unError.textContent = ''; unError.style.color = ''; }
-    document.getElementById('edit-username').disabled = false;
-    document.getElementById('edit-username').style.opacity = '';
-  }
-
-  if (bioDaysLeft > 0) {
-    const bioInput = document.getElementById('edit-bio');
-    bioInput.disabled = true;
-    bioInput.style.opacity = '0.5';
-    if (bioCount) {
-      bioCount.textContent = `Locked — ${bioDaysLeft} day${bioDaysLeft === 1 ? '' : 's'} remaining`;
-      bioCount.style.color = 'var(--text3)';
-    }
-  } else {
-    document.getElementById('edit-bio').disabled = false;
-    document.getElementById('edit-bio').style.opacity = '';
-  }
-  const _locEl = document.getElementById('edit-location-display');
-  if (_locEl) _locEl.textContent = currentProfile.location || 'Auto-detecting…';
   const coverImg = document.getElementById('edit-cover-img');
   const avatarImg = document.getElementById('edit-avatar-img');
   if (coverImg) {
-    if (coverImg._objUrl) { URL.revokeObjectURL(coverImg._objUrl); coverImg._objUrl = null; }
+    if (coverImg._objUrl) URL.revokeObjectURL(coverImg._objUrl);
     coverImg.src = currentProfile.cover || '';
-    coverImg.onerror = () => { coverImg.src = ''; };
   }
   if (avatarImg) {
-    if (avatarImg._objUrl) { URL.revokeObjectURL(avatarImg._objUrl); avatarImg._objUrl = null; }
+    if (avatarImg._objUrl) URL.revokeObjectURL(avatarImg._objUrl);
     avatarImg.src = currentProfile.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${currentProfile.id}`;
-    avatarImg.onerror = () => { avatarImg.src = `https://api.dicebear.com/7.x/adventurer/svg?seed=${currentProfile.id}`; };
   }
-
-  // Reset file selections and clear inputs so same file can be picked again
-  editAvatarFile = null;
-  editCoverFile = null;
-  const af = document.getElementById('edit-avatar-file');
-  const cf = document.getElementById('edit-cover-file');
-  if (af) af.value = '';
-  if (cf) cf.value = '';
 }
 
 function closeEditProfile() {
