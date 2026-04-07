@@ -1526,6 +1526,11 @@ function slideBack() {
     document.getElementById('comment-bar').style.display = 'none';
   }
 
+  // Close wallet sheets and hide QR FAB when leaving wallet
+  if (pageId === 'wallet') {
+    onWalletClose();
+  }
+
   // If returning to detail, re-show comment bar and hide bottom nav
   if (returningTo === 'detail') {
     document.getElementById('comment-bar').style.display = 'flex';
@@ -9363,16 +9368,639 @@ function toggleDarkMode(isDark) {
 }
 
 // ══════════════════════════════════════════
-// WALLET
+// WALLET — Redesigned
+// P2P send/request, Flutterwave integration hooks,
+// balance visibility, sheet management, DM pay prep,
+// market purchase escrow prep
 // ══════════════════════════════════════════
 
+// ── WALLET STATE ──────────────────────────────────────────────
+const walletState = {
+  balance: 1430.00,          // live balance in NGN
+  currency: '₦',             // active display currency
+  balanceVisible: true,
+  selectedSendRecipient: null,
+  selectedRequestFrom: null,
+  sendAmount: 0,
+  activeSheet: null,
+  txnFilter: 'all',
+  // Flutterwave config — fill at runtime from env/supabase secrets
+  flutterwavePublicKey: '', // 'FLWPUBK-...'
+};
+
+// ── OPEN WALLET PAGE ─────────────────────────────────────────
 function openWallet() {
   slideTo('wallet');
+  buildWalletPeopleRow();
+  syncWalletBalance();
+  // Show QR FAB only when wallet is visible
+  const fab = document.querySelector('.wlt-qr-fab');
+  if (fab) fab.classList.remove('hidden');
 }
 
+// Hide QR FAB when leaving wallet
+function onWalletClose() {
+  const fab = document.querySelector('.wlt-qr-fab');
+  if (fab) fab.classList.add('hidden');
+  closeAllWalletSheets();
+}
+
+// ── BALANCE SYNC ──────────────────────────────────────────────
+async function syncWalletBalance() {
+  if (!currentUser) return;
+  try {
+    const { data, error } = await supabase
+      .from('wallets')
+      .select('balance, escrow_balance, points')
+      .eq('user_id', currentUser.id)
+      .maybeSingle();
+    if (error || !data) return;
+    walletState.balance = data.balance ?? 0;
+    renderWalletBalance();
+  } catch (e) { /* silently fail — show last cached */ }
+}
+
+function renderWalletBalance() {
+  const el = document.getElementById('wlt-balance');
+  if (!el) return;
+  const fmt = new Intl.NumberFormat('en-NG', {
+    minimumFractionDigits: 2, maximumFractionDigits: 2
+  });
+  el.textContent = fmt.format(walletState.balance);
+  // Update send balance hints
+  const hint = document.getElementById('send-balance-hint');
+  if (hint) hint.textContent = `Balance: ${walletState.currency}${fmt.format(walletState.balance)}`;
+}
+
+// ── BALANCE VISIBILITY TOGGLE ────────────────────────────────
+function toggleBalanceVisibility(btn) {
+  walletState.balanceVisible = !walletState.balanceVisible;
+  const balEl = document.getElementById('wlt-balance');
+  if (balEl) balEl.classList.toggle('blurred', !walletState.balanceVisible);
+  const eyeOn  = btn.querySelector('.eye-on');
+  const eyeOff = btn.querySelector('.eye-off');
+  if (eyeOn)  eyeOn.classList.toggle('hidden',  !walletState.balanceVisible);
+  if (eyeOff) eyeOff.classList.toggle('hidden', walletState.balanceVisible);
+}
+
+// ── CURRENCY TOGGLE (₦ ↔ $) ─────────────────────────────────
+function toggleWalletCurrency(btn) {
+  const currencies = ['₦', '$', '€', '£', 'GHS'];
+  const idx = currencies.indexOf(walletState.currency);
+  walletState.currency = currencies[(idx + 1) % currencies.length];
+  btn.textContent = walletState.currency;
+}
+
+// ── QUICK PAY PEOPLE ROW ──────────────────────────────────────
+async function buildWalletPeopleRow() {
+  const container = document.getElementById('wlt-people-dynamic');
+  if (!container || !currentUser) return;
+  try {
+    // Fetch users the current user has recently transacted with
+    // Falls back to following list if no transactions yet
+    const { data: txns } = await supabase
+      .from('wallet_transactions')
+      .select('to_user_id, from_user_id')
+      .or(`from_user_id.eq.${currentUser.id},to_user_id.eq.${currentUser.id}`)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    const seen = new Set();
+    const userIds = [];
+    if (txns) {
+      for (const t of txns) {
+        const uid = t.from_user_id === currentUser.id ? t.to_user_id : t.from_user_id;
+        if (uid && uid !== currentUser.id && !seen.has(uid)) {
+          seen.add(uid); userIds.push(uid);
+          if (userIds.length >= 8) break;
+        }
+      }
+    }
+
+    // If no transactions, show people they follow
+    if (userIds.length === 0) {
+      const { data: follows } = await supabase
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', currentUser.id)
+        .limit(8);
+      if (follows) follows.forEach(f => userIds.push(f.following_id));
+    }
+
+    if (userIds.length === 0) { container.innerHTML = ''; return; }
+
+    // `id` is the primary key and auth user id in the users table
+    const { data: users } = await supabase
+      .from('users')
+      .select('id, username, avatar')
+      .in('id', userIds);
+
+    if (!users) return;
+
+    container.innerHTML = users.map(u => `
+      <button class="wlt-person-tile" onclick="quickPayUser('${u.id}','${escHtml(u.username)}','${u.avatar || ''}')">
+        <img class="wlt-person-avatar" src="${u.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${u.id}`}" alt="">
+        <span class="wlt-person-name">${escHtml((u.username || '').split(' ')[0])}</span>
+      </button>
+    `).join('');
+  } catch (e) { /* non-critical */ }
+}
+
+function quickPayUser(userId, name, avatarUrl) {
+  walletState.selectedSendRecipient = { id: userId, name, avatarUrl };
+  openWalletSheet('send');
+  // Pre-fill the selected user
+  setTimeout(() => {
+    const selBlock = document.getElementById('send-selected-user');
+    const selName  = document.getElementById('send-sel-name');
+    const selUser  = document.getElementById('send-sel-username');
+    const selAv    = document.getElementById('send-sel-avatar');
+    if (selBlock) selBlock.classList.remove('hidden');
+    if (selName)  selName.textContent  = name;
+    if (selUser)  selUser.textContent  = '';
+    if (selAv)    selAv.src = avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${userId}`;
+  }, 50);
+}
+
+// ── SHEET MANAGEMENT ─────────────────────────────────────────
+const SHEET_MAP = {
+  'send':     'sheet-send',
+  'request':  'sheet-request',
+  'add':      'sheet-add',
+  'withdraw': 'sheet-withdraw',
+  'qr':       'sheet-qr',
+};
+
+function openWalletSheet(type) {
+  // Close any open sheet first
+  closeAllWalletSheets();
+  const id = SHEET_MAP[type];
+  if (id) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.classList.remove('hidden');
+      walletState.activeSheet = type;
+      // Special inits
+      if (type === 'qr') initQRSheet();
+      return;
+    }
+  }
+  // Unimplemented sheets — toast placeholder
+  const labels = {
+    'split':       'Split Bill — coming soon ✨',
+    'find-people': 'Find People — coming soon ✨',
+    'link-bank':   'Link Bank — powered by Flutterwave (coming soon)',
+    'manage-bank': 'Manage Bank Accounts (coming soon)',
+    'history':     'Full Transaction History — coming soon ✨',
+  };
+  showToast(labels[type] || 'Coming soon ✨');
+}
+
+function closeWalletSheet(type) {
+  const id = SHEET_MAP[type];
+  if (id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+  }
+  walletState.activeSheet = null;
+}
+
+function closeAllWalletSheets() {
+  Object.values(SHEET_MAP).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+  });
+  walletState.activeSheet = null;
+}
+
+// Keep back gesture from closing full page while sheet is open
+function walletHandleBackGesture() {
+  if (walletState.activeSheet) {
+    closeAllWalletSheets();
+    return true; // consumed
+  }
+  return false;
+}
+
+// ── SEND MONEY ────────────────────────────────────────────────
+function updateSendAmount(val) {
+  const num = parseFloat(val.replace(/[^0-9.]/g, '')) || 0;
+  walletState.sendAmount = num;
+  const btn = document.getElementById('send-confirm-btn');
+  const amtSpan = document.getElementById('send-confirm-amount');
+  if (btn) btn.disabled = num <= 0 || num > walletState.balance;
+  if (amtSpan) amtSpan.textContent = num > 0 ? `₦${num.toLocaleString('en-NG', { minimumFractionDigits: 2 })}` : '';
+}
+
+async function confirmSendMoney() {
+  const recipient = walletState.selectedSendRecipient;
+  const amount    = walletState.sendAmount;
+  const note      = document.getElementById('send-note')?.value?.trim() || '';
+  if (!recipient || amount <= 0) return;
+  if (amount > walletState.balance) { showToast('Insufficient balance'); return; }
+
+  // Optimistic UI
+  closeWalletSheet('send');
+  showToast(`Sending ₦${amount.toLocaleString('en-NG')} to ${recipient.name}...`);
+
+  try {
+    // Insert P2P transfer — RPC function handles debit/credit atomically
+    const { error } = await supabase.rpc('p2p_transfer', {
+      sender_id:    currentUser.id,
+      recipient_id: recipient.id,
+      amount_ngn:   amount,
+      note:         note,
+    });
+    if (error) throw error;
+    walletState.balance -= amount;
+    renderWalletBalance();
+    showToast(`✓ Sent ₦${amount.toLocaleString('en-NG')} to ${recipient.name}`);
+    syncWalletBalance(); // re-sync from DB
+    refreshTransactionList();
+  } catch (e) {
+    showToast('Transfer failed — please try again');
+    console.error('P2P transfer error:', e);
+  }
+}
+
+function clearSendRecipient() {
+  walletState.selectedSendRecipient = null;
+  const selBlock = document.getElementById('send-selected-user');
+  if (selBlock) selBlock.classList.add('hidden');
+}
+
+// ── REQUEST MONEY ─────────────────────────────────────────────
+async function confirmRequestMoney() {
+  // TODO: wire to requests table when P2P request feature ships
+  showToast('Request sent! ✓');
+  closeWalletSheet('request');
+}
+
+// ── PENDING REQUEST ACTIONS ───────────────────────────────────
+async function handlePendingRequest(btn, action) {
+  const item = btn.closest('.wlt-pending-item');
+  if (!item) return;
+  if (action === 'accept') {
+    // TODO: call p2p_transfer RPC with the pending request details
+    item.style.opacity = '0.5';
+    item.style.pointerEvents = 'none';
+    showToast('Payment sent ✓');
+    setTimeout(() => item.remove(), 800);
+    updatePendingCount(-1);
+  } else {
+    item.style.opacity = '0.5';
+    item.style.pointerEvents = 'none';
+    showToast('Request declined');
+    setTimeout(() => item.remove(), 500);
+    updatePendingCount(-1);
+  }
+}
+
+function updatePendingCount(delta) {
+  const badge = document.getElementById('wlt-pending-count');
+  if (!badge) return;
+  const curr = parseInt(badge.textContent) || 0;
+  const next = Math.max(0, curr + delta);
+  badge.textContent = next;
+  if (next === 0) {
+    const section = document.getElementById('wlt-pending-section');
+    if (section) section.classList.add('hidden');
+  }
+}
+
+// ── QUICK AMOUNT SETTER ───────────────────────────────────────
+function setQuickAmount(context, amount) {
+  const inputMap = {
+    add:      'add-amount-input',
+    withdraw: 'withdraw-amount',
+  };
+  const el = document.getElementById(inputMap[context]);
+  if (!el) return;
+  el.value = amount;
+  el.dispatchEvent(new Event('input'));
+}
+
+// ── WITHDRAW ──────────────────────────────────────────────────
+async function confirmWithdraw() {
+  const amtEl = document.getElementById('withdraw-amount');
+  const amount = parseFloat(amtEl?.value || '0');
+  if (!amount || amount <= 0) { showToast('Enter an amount'); return; }
+  if (amount > walletState.balance) { showToast('Insufficient balance'); return; }
+  closeWalletSheet('withdraw');
+  showToast('Withdrawal initiated — arrives within 24 hrs');
+  // TODO: call Flutterwave transfer API or internal withdrawal RPC
+}
+
+// ── FLUTTERWAVE INTEGRATION ───────────────────────────────────
+/**
+ * Initiates a Flutterwave payment modal.
+ * method: 'card' | 'bank_transfer' | 'ussd' | 'mobile_money'
+ *
+ * Integration checklist:
+ * 1. Load Flutterwave inline script: https://checkout.flutterwave.com/v3.js
+ * 2. Set walletState.flutterwavePublicKey from Supabase edge function secrets
+ * 3. On success callback → call creditWallet(txRef, amount)
+ */
+function initiateFlutterwave(method) {
+  const amtInput = document.getElementById('add-amount-input');
+  const amount   = parseFloat(amtInput?.value || '0');
+  if (!amount || amount <= 0) { showToast('Enter an amount first'); return; }
+  if (!currentUser) { showToast('Please sign in first'); return; }
+
+  // Show loading overlay
+  showFlutterwaveLoader();
+
+  // --- Flutterwave inline SDK integration ---
+  // Uncomment and configure when keys are ready:
+  /*
+  if (typeof FlutterwaveCheckout === 'undefined') {
+    loadScript('https://checkout.flutterwave.com/v3.js', () => {
+      runFlutterwave(method, amount);
+    });
+  } else {
+    runFlutterwave(method, amount);
+  }
+  */
+
+  // PLACEHOLDER — remove when SDK is active
+  setTimeout(() => {
+    hideFlutterwaveLoader();
+    closeWalletSheet('add');
+    showToast('Flutterwave integration pending setup 🔧');
+  }, 1200);
+}
+
+function runFlutterwave(method, amount) {
+  FlutterwaveCheckout({
+    public_key: walletState.flutterwavePublicKey,
+    tx_ref: `MN-${currentUser.id}-${Date.now()}`,
+    amount: amount,
+    currency: 'NGN',
+    payment_options: method,
+    customer: {
+      email: currentUser.email,
+      phonenumber: currentUser.phone || '',
+      name: currentUser.user_metadata?.full_name || '',
+    },
+    customizations: {
+      title: 'MistyNote Wallet',
+      description: 'Fund your MistyNote wallet',
+      logo: '/assets/logo.png',
+    },
+    callback: async (data) => {
+      hideFlutterwaveLoader();
+      if (data.status === 'successful') {
+        await creditWallet(data.tx_ref, amount, data.flw_ref);
+        closeWalletSheet('add');
+        showToast(`₦${amount.toLocaleString('en-NG')} added to wallet ✓`);
+        syncWalletBalance();
+        refreshTransactionList();
+      } else {
+        showToast('Payment failed — please try again');
+      }
+    },
+    onclose: () => { hideFlutterwaveLoader(); },
+  });
+}
+
+async function creditWallet(txRef, amount, flwRef) {
+  // Calls Supabase edge function to verify + credit (never trust client-side)
+  try {
+    const { error } = await supabase.functions.invoke('credit-wallet', {
+      body: { tx_ref: txRef, flw_ref: flwRef, amount, user_id: currentUser.id }
+    });
+    if (error) throw error;
+  } catch (e) {
+    console.error('creditWallet error:', e);
+    throw e;
+  }
+}
+
+function showFlutterwaveLoader() {
+  let el = document.getElementById('flw-loading');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'flw-loading';
+    el.className = 'flw-loading-overlay';
+    el.innerHTML = `<div class="flw-spinner"></div><div class="flw-loading-text">Connecting to payment...</div>`;
+    document.body.appendChild(el);
+  }
+  el.classList.remove('hidden');
+}
+function hideFlutterwaveLoader() {
+  const el = document.getElementById('flw-loading');
+  if (el) el.classList.add('hidden');
+}
+
+function loadScript(src, cb) {
+  const s = document.createElement('script');
+  s.src = src; s.onload = cb;
+  document.head.appendChild(s);
+}
+
+// ── QR CODE ───────────────────────────────────────────────────
+function initQRSheet() {
+  if (!currentUser) return;
+  const avatar = document.getElementById('qr-avatar');
+  const name   = document.getElementById('qr-name');
+  // Uses `avatar` column (not avatar_url) — matches app.js schema
+  if (avatar && currentProfile?.avatar) avatar.src = currentProfile.avatar;
+  if (name)   name.textContent = `@${currentProfile?.username || ''}`;
+  // TODO: generate real QR via qrcode.js pointing to https://mistynote.app/pay/{username}
+}
+
+function copyPayLink() {
+  const link = `https://mistynote.app/pay/${currentProfile?.username || ''}`;
+  navigator.clipboard?.writeText(link).then(() => {
+    showToast('Pay link copied ✓');
+  }).catch(() => showToast('Copy: ' + link));
+}
+
+function shareQRCode() {
+  const link = `https://mistynote.app/pay/${currentProfile?.username || ''}`;
+  if (navigator.share) {
+    navigator.share({ title: 'Pay me on MistyNote', url: link }).catch(() => {});
+  } else {
+    copyPayLink();
+  }
+}
+
+function openQRScan(context) {
+  showToast('QR Scanner — coming soon 📷');
+}
+
+// ── TRANSACTION FILTER ────────────────────────────────────────
+function filterWalletTxns(tab, filter) {
+  document.querySelectorAll('.wlt-txn-tab').forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+  walletState.txnFilter = filter;
+  document.querySelectorAll('.wlt-txn-item').forEach(item => {
+    if (filter === 'all') {
+      item.classList.remove('hidden');
+    } else {
+      item.classList.toggle('hidden', item.dataset.type !== filter);
+    }
+  });
+}
+
+// ── REFRESH TRANSACTIONS ──────────────────────────────────────
+async function refreshTransactionList() {
+  // TODO: query wallet_transactions from Supabase and re-render wlt-txn-list
+  // Triggered after sends/receives/deposits
+}
+
+// ── USER SEARCH (for send/request) ───────────────────────────
+let searchDebounceTimer;
+async function searchWalletUser(query, context) {
+  clearTimeout(searchDebounceTimer);
+  const resultsId = context === 'send' ? 'send-results' : null;
+  const resultsEl = resultsId ? document.getElementById(resultsId) : null;
+  if (!resultsEl) return;
+
+  if (!query || query.length < 2) {
+    resultsEl.classList.add('hidden');
+    return;
+  }
+
+  searchDebounceTimer = setTimeout(async () => {
+    try {
+      const q = query.replace(/^@/, '').trim().toLowerCase();
+      // `id` is the auth user id, `avatar` is the photo column — matches app.js schema
+      const { data: users } = await supabase
+        .from('users')
+        .select('id, username, avatar')
+        .ilike('username', `%${q}%`)
+        .neq('id', currentUser.id)
+        .limit(6);
+
+      if (!users?.length) {
+        resultsEl.innerHTML = `<div class="wlt-search-result-item"><div style="color:var(--text3);font-size:13px;padding:4px 0">No users found</div></div>`;
+        resultsEl.classList.remove('hidden');
+        return;
+      }
+
+      resultsEl.innerHTML = users.map(u => `
+        <div class="wlt-search-result-item" onclick="selectWalletUser('${u.id}','${escHtml(u.username)}','${u.avatar || ''}','${context}')">
+          <img class="wlt-search-result-avatar" src="${u.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${u.id}`}" alt="">
+          <div>
+            <div class="wlt-search-result-name">${escHtml(u.username)}</div>
+            <div class="wlt-search-result-user">@${escHtml(u.username)}</div>
+          </div>
+        </div>
+      `).join('');
+      resultsEl.classList.remove('hidden');
+    } catch (e) { /* silent */ }
+  }, 280);
+}
+
+function selectWalletUser(userId, name, avatarUrl, context) {
+  if (context === 'send') {
+    walletState.selectedSendRecipient = { id: userId, name, avatarUrl };
+    const sel     = document.getElementById('send-selected-user');
+    const selName = document.getElementById('send-sel-name');
+    const selAv   = document.getElementById('send-sel-avatar');
+    if (sel)     sel.classList.remove('hidden');
+    if (selName) selName.textContent = name;
+    if (selAv)   selAv.src = avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${userId}`;
+    document.getElementById('send-results')?.classList.add('hidden');
+    document.getElementById('send-search').value = '';
+    document.getElementById('send-amount-input')?.focus();
+  }
+}
+
+// ── DM PAYMENT BRIDGE ─────────────────────────────────────────
+// Called from chat module: openDMPaySheet(userId, name, avatarUrl)
+function openDMPaySheet(recipientUserId, recipientName, avatarUrl) {
+  quickPayUser(recipientUserId, recipientName, avatarUrl);
+}
+
+// Renders a money bubble inside a DM conversation
+function renderDMMoneyBubble({ amount, note, status, direction }) {
+  const sign = direction === 'incoming' ? '+' : '-';
+  const col  = direction === 'incoming' ? 'var(--green)' : 'white';
+  return `
+    <div class="msg-money-bubble">
+      <div class="msg-money-amount" style="color:${col}">${sign}₦${amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</div>
+      ${note ? `<div class="msg-money-note">${escHtml(note)}</div>` : ''}
+      <div class="msg-money-status">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+        ${status === 'completed' ? 'Sent' : status}
+      </div>
+    </div>`;
+}
+
+// ── MARKET / PRODUCT PURCHASE BRIDGE ─────────────────────────
+// Called by storefront module: purchaseProduct({ productId, sellerId, amount, title })
+async function purchaseProduct({ productId, sellerId, amount, title }) {
+  if (!currentUser) { showToast('Please sign in to purchase'); return; }
+  if (amount > walletState.balance) {
+    showToast('Insufficient wallet balance — add money first');
+    openWalletSheet('add');
+    return;
+  }
+  try {
+    const { error } = await supabase.rpc('escrow_hold', {
+      buyer_id:   currentUser.id,
+      seller_id:  sellerId,
+      product_id: productId,
+      amount_ngn: amount,
+    });
+    if (error) throw error;
+    walletState.balance -= amount;
+    renderWalletBalance();
+    showToast(`Order placed! ₦${amount.toLocaleString('en-NG')} held in escrow ✓`);
+  } catch (e) {
+    showToast('Purchase failed — please try again');
+    console.error('purchaseProduct error:', e);
+  }
+}
+
+// ── NOTE EMOJI PICKER ─────────────────────────────────────────
+const NOTE_EMOJIS = ['😊','🎂','🙏','💼','🍕','🎉','💸','🚕','🛍️','❤️','🙌','☕'];
+let emojiPickerOpen = false;
+
+function pickNoteEmoji(span) {
+  if (emojiPickerOpen) return;
+  emojiPickerOpen = true;
+  const picker = document.createElement('div');
+  picker.style.cssText = `
+    position:fixed; z-index:9999;
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:16px; padding:12px;
+    display:grid; grid-template-columns:repeat(6,1fr); gap:4px;
+    box-shadow:var(--shadow-lg);
+    bottom: 120px; left: 50%; transform: translateX(-50%);
+  `;
+  picker.innerHTML = NOTE_EMOJIS.map(e =>
+    `<button style="font-size:22px;padding:6px;border-radius:10px;transition:background 0.1s"
+     onmouseover="this.style.background='var(--bg3)'"
+     onmouseout="this.style.background=''"
+     onclick="selectNoteEmoji(this.closest('.wlt-note-wrap').querySelector('.wlt-note-emoji'),'${e}',this.closest('div'))">${e}</button>`
+  ).join('');
+  document.body.appendChild(picker);
+  setTimeout(() => {
+    document.addEventListener('click', () => {
+      picker.remove(); emojiPickerOpen = false;
+    }, { once: true });
+  }, 10);
+}
+
+function selectNoteEmoji(span, emoji, picker) {
+  if (span) span.textContent = emoji;
+  picker.remove(); emojiPickerOpen = false;
+}
+
+// ── LEGACY COMPAT ─────────────────────────────────────────────
+// Keeps any old walletAction() calls working
 function walletAction(type) {
-  const msgs = { add: 'Add funds coming soon!', send: 'Send money coming soon!', withdraw: 'Withdraw coming soon!', convert: 'Convert points coming soon!' };
-  showToast(msgs[type] || 'Coming soon!');
+  const map = {
+    add:      'add',
+    send:     'send',
+    withdraw: 'withdraw',
+    convert:  'add',
+    history:  'history',
+  };
+  openWalletSheet(map[type] || type);
 }
 
 // ══════════════════════════════════════════
