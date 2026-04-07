@@ -566,6 +566,7 @@ async function bootApp(isDeepLink = false) {
   initCommentBarInput();
   subscribeToNotifs();
   subscribeToPostUpdates();
+  initFeedScrollBehavior();
 
   if (isDeepLink) {
     // Deep link — go straight to content, load feed silently in background
@@ -586,6 +587,85 @@ async function bootApp(isDeepLink = false) {
     loadNotifications();
     loadInitialNotifCount();
   }
+}
+
+// ══════════════════════════════════════════
+// FEED SCROLL — auto-hide header + nav
+// ══════════════════════════════════════════
+
+function initFeedScrollBehavior() {
+  const feedPage = document.getElementById('page-feed');
+  const nav      = document.getElementById('bottom-nav');
+  if (!feedPage || !nav) return;
+
+  // Lazily find the header once it's rendered
+  let header = null;
+  let lastY  = 0;
+  let ticking = false;
+  let hidden  = false;
+  const SCROLL_DOWN_THRESHOLD = 10; // px delta to trigger hide
+  const SCROLL_UP_THRESHOLD   = 6;  // px delta to trigger show (snappier)
+  const TOP_GRACE             = 56; // never hide when within this many px of top
+
+  const TRANSITION = 'transform 0.28s cubic-bezier(0.4,0,0.2,1), opacity 0.28s ease';
+
+  function showChrome() {
+    if (!hidden) return;
+    hidden = false;
+    if (header) {
+      header.style.transition = TRANSITION;
+      header.style.transform  = '';
+      header.style.opacity    = '';
+    }
+    nav.style.transition    = TRANSITION;
+    nav.style.transform     = '';
+    nav.style.opacity       = '';
+    nav.style.pointerEvents = '';
+  }
+
+  function hideChrome() {
+    if (hidden) return;
+    hidden = true;
+    if (header) {
+      header.style.transition = TRANSITION;
+      header.style.transform  = 'translateY(-100%)';
+      header.style.opacity    = '0';
+    }
+    nav.style.transition    = TRANSITION;
+    nav.style.transform     = 'translateY(100%)';
+    nav.style.opacity       = '0';
+    nav.style.pointerEvents = 'none';
+  }
+
+  feedPage.addEventListener('scroll', () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      // Only act when feed page is the active main page
+      if (!feedPage.classList.contains('active')) {
+        ticking = false;
+        return;
+      }
+
+      // Lazily grab header (injected after bootApp)
+      if (!header) header = feedPage.querySelector('.feed-header') || feedPage.querySelector('.page-header');
+
+      const y  = feedPage.scrollTop;
+      const dy = y - lastY;
+      lastY = y;
+
+      if (y <= TOP_GRACE) {
+        // Always show near the top
+        showChrome();
+      } else if (dy > SCROLL_DOWN_THRESHOLD) {
+        hideChrome();
+      } else if (dy < -SCROLL_UP_THRESHOLD) {
+        showChrome();
+      }
+
+      ticking = false;
+    });
+  }, { passive: true });
 }
 
 // ══════════════════════════════════════════
@@ -1471,15 +1551,30 @@ function slideTo(pageId, setupFn) {
   });
 
   // Hide bottom nav for slide pages that need full screen
-  if (['messages','chat'].includes(pageId)) {
-    document.getElementById('bottom-nav').style.display = 'none';
+  if (['messages','chat','settings','wallet'].includes(pageId)) {
+    const nav = document.getElementById('bottom-nav');
+    if (nav) {
+      nav.style.transition = 'transform 0.32s cubic-bezier(0.4,0,0.2,1), opacity 0.32s ease';
+      nav.style.transform = 'translateY(100%)';
+      nav.style.opacity = '0';
+      nav.style.pointerEvents = 'none';
+    }
   }
 
   // If leaving detail, hide comment bar and restore bottom nav
   if (slideStack[slideStack.length - 2] === 'detail' || document.getElementById('comment-bar')?.style.display === 'flex') {
     if (pageId !== 'detail') {
       document.getElementById('comment-bar').style.display = 'none';
-      document.getElementById('bottom-nav').style.display = '';
+      // Only show nav if the new page doesn't hide it
+      if (!['messages','chat','settings','wallet'].includes(pageId)) {
+        const navR = document.getElementById('bottom-nav');
+        if (navR) {
+          navR.style.pointerEvents = '';
+          navR.style.transition = 'transform 0.32s cubic-bezier(0.4,0,0.2,1), opacity 0.32s ease';
+          navR.style.transform = '';
+          navR.style.opacity = '';
+        }
+      }
     }
   }
 
@@ -1534,7 +1629,13 @@ function slideBack() {
   // If returning to detail, re-show comment bar and hide bottom nav
   if (returningTo === 'detail') {
     document.getElementById('comment-bar').style.display = 'flex';
-    document.getElementById('bottom-nav').style.display = 'none';
+    const navD = document.getElementById('bottom-nav');
+    if (navD) {
+      navD.style.transition = '';
+      navD.style.transform = 'translateY(100%)';
+      navD.style.opacity = '0';
+      navD.style.pointerEvents = 'none';
+    }
     // Ensure user-profile floating header is hidden when returning to detail
     const fh = document.getElementById('user-profile-header');
     if (fh) fh.style.display = 'none';
@@ -1548,9 +1649,17 @@ function slideBack() {
     replaceRoute('/');
   }
 
-  // Restore bottom nav only when back to a main page
-  if (!returningTo) {
-    document.getElementById('bottom-nav').style.display = '';
+  // Restore bottom nav smoothly when fully back to a main page
+  // (but keep hidden if next slide page in stack also hides nav)
+  const nextHidesNav = returningTo && ['messages','chat','settings','wallet'].includes(returningTo);
+  if (!nextHidesNav) {
+    const nav = document.getElementById('bottom-nav');
+    if (nav) {
+      nav.style.pointerEvents = '';
+      nav.style.transition = 'transform 0.32s cubic-bezier(0.4,0,0.2,1), opacity 0.32s ease';
+      nav.style.transform = '';
+      nav.style.opacity = '';
+    }
   }
 
   // Floating user-profile header
@@ -6701,8 +6810,14 @@ function closeChat() {
   if (returningTo === 'messages') {
     document.getElementById('page-messages')?.classList.add('active');
   } else {
-    // Returning all the way back — restore nav
-    document.getElementById('bottom-nav').style.display = '';
+    // Returning all the way back — restore nav smoothly
+    const navCb = document.getElementById('bottom-nav');
+    if (navCb) {
+      navCb.style.pointerEvents = '';
+      navCb.style.transition = 'transform 0.32s cubic-bezier(0.4,0,0.2,1), opacity 0.32s ease';
+      navCb.style.transform = '';
+      navCb.style.opacity = '';
+    }
     const backTo = lastMainPage || 'feed';
     document.getElementById('page-' + backTo)?.classList.add('active');
     document.querySelectorAll('.nav-btn[data-page]').forEach(btn => {
@@ -6718,15 +6833,14 @@ function closeMessagesInbox() {
   if (el) el.classList.remove('active');
   slideStack.pop();
   // Restore nav and main page
-  document.getElementById('bottom-nav').style.display = '';
+  const navMi = document.getElementById('bottom-nav');
+  if (navMi) {
+    navMi.style.pointerEvents = '';
+    navMi.style.transition = 'transform 0.32s cubic-bezier(0.4,0,0.2,1), opacity 0.32s ease';
+    navMi.style.transform = '';
+    navMi.style.opacity = '';
+  }
   const backTo = lastMainPage || 'feed';
-  document.getElementById('page-' + backTo)?.classList.add('active');
-  document.querySelectorAll('.nav-btn[data-page]').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.page === backTo);
-  });
-}
-
-// ── Load messages for a conversation ──
 async function loadChatMessages(convId) {
   const msgsEl = document.getElementById('chat-messages');
   if (!msgsEl) return;
