@@ -566,7 +566,6 @@ async function bootApp(isDeepLink = false) {
   initCommentBarInput();
   subscribeToNotifs();
   subscribeToPostUpdates();
-  initFeedScrollBehavior();
 
   if (isDeepLink) {
     // Deep link — go straight to content, load feed silently in background
@@ -587,85 +586,6 @@ async function bootApp(isDeepLink = false) {
     loadNotifications();
     loadInitialNotifCount();
   }
-}
-
-// ══════════════════════════════════════════
-// FEED SCROLL — auto-hide header + nav
-// ══════════════════════════════════════════
-
-function initFeedScrollBehavior() {
-  const feedPage = document.getElementById('page-feed');
-  const nav      = document.getElementById('bottom-nav');
-  if (!feedPage || !nav) return;
-
-  // Lazily find the header once it's rendered
-  let header = null;
-  let lastY  = 0;
-  let ticking = false;
-  let hidden  = false;
-  const SCROLL_DOWN_THRESHOLD = 10; // px delta to trigger hide
-  const SCROLL_UP_THRESHOLD   = 6;  // px delta to trigger show (snappier)
-  const TOP_GRACE             = 56; // never hide when within this many px of top
-
-  const TRANSITION = 'transform 0.28s cubic-bezier(0.4,0,0.2,1), opacity 0.28s ease';
-
-  function showChrome() {
-    if (!hidden) return;
-    hidden = false;
-    if (header) {
-      header.style.transition = TRANSITION;
-      header.style.transform  = '';
-      header.style.opacity    = '';
-    }
-    nav.style.transition    = TRANSITION;
-    nav.style.transform     = '';
-    nav.style.opacity       = '';
-    nav.style.pointerEvents = '';
-  }
-
-  function hideChrome() {
-    if (hidden) return;
-    hidden = true;
-    if (header) {
-      header.style.transition = TRANSITION;
-      header.style.transform  = 'translateY(-100%)';
-      header.style.opacity    = '0';
-    }
-    nav.style.transition    = TRANSITION;
-    nav.style.transform     = 'translateY(100%)';
-    nav.style.opacity       = '0';
-    nav.style.pointerEvents = 'none';
-  }
-
-  feedPage.addEventListener('scroll', () => {
-    if (ticking) return;
-    ticking = true;
-    requestAnimationFrame(() => {
-      // Only act when feed page is the active main page
-      if (!feedPage.classList.contains('active')) {
-        ticking = false;
-        return;
-      }
-
-      // Lazily grab header (injected after bootApp)
-      if (!header) header = feedPage.querySelector('.feed-header') || feedPage.querySelector('.page-header');
-
-      const y  = feedPage.scrollTop;
-      const dy = y - lastY;
-      lastY = y;
-
-      if (y <= TOP_GRACE) {
-        // Always show near the top
-        showChrome();
-      } else if (dy > SCROLL_DOWN_THRESHOLD) {
-        hideChrome();
-      } else if (dy < -SCROLL_UP_THRESHOLD) {
-        showChrome();
-      }
-
-      ticking = false;
-    });
-  }, { passive: true });
 }
 
 // ══════════════════════════════════════════
@@ -1551,30 +1471,15 @@ function slideTo(pageId, setupFn) {
   });
 
   // Hide bottom nav for slide pages that need full screen
-  if (['messages','chat','settings','wallet'].includes(pageId)) {
-    const nav = document.getElementById('bottom-nav');
-    if (nav) {
-      nav.style.transition = 'transform 0.32s cubic-bezier(0.4,0,0.2,1), opacity 0.32s ease';
-      nav.style.transform = 'translateY(100%)';
-      nav.style.opacity = '0';
-      nav.style.pointerEvents = 'none';
-    }
+  if (['messages','chat'].includes(pageId)) {
+    document.getElementById('bottom-nav').style.display = 'none';
   }
 
   // If leaving detail, hide comment bar and restore bottom nav
   if (slideStack[slideStack.length - 2] === 'detail' || document.getElementById('comment-bar')?.style.display === 'flex') {
     if (pageId !== 'detail') {
       document.getElementById('comment-bar').style.display = 'none';
-      // Only show nav if the new page doesn't hide it
-      if (!['messages','chat','settings','wallet'].includes(pageId)) {
-        const navR = document.getElementById('bottom-nav');
-        if (navR) {
-          navR.style.pointerEvents = '';
-          navR.style.transition = 'transform 0.32s cubic-bezier(0.4,0,0.2,1), opacity 0.32s ease';
-          navR.style.transform = '';
-          navR.style.opacity = '';
-        }
-      }
+      document.getElementById('bottom-nav').style.display = '';
     }
   }
 
@@ -1621,7 +1526,7 @@ function slideBack() {
     document.getElementById('comment-bar').style.display = 'none';
   }
 
-  // Close wallet sheets and hide QR FAB when leaving wallet
+  // Clean up wallet when navigating away
   if (pageId === 'wallet') {
     onWalletClose();
   }
@@ -1629,13 +1534,7 @@ function slideBack() {
   // If returning to detail, re-show comment bar and hide bottom nav
   if (returningTo === 'detail') {
     document.getElementById('comment-bar').style.display = 'flex';
-    const navD = document.getElementById('bottom-nav');
-    if (navD) {
-      navD.style.transition = '';
-      navD.style.transform = 'translateY(100%)';
-      navD.style.opacity = '0';
-      navD.style.pointerEvents = 'none';
-    }
+    document.getElementById('bottom-nav').style.display = 'none';
     // Ensure user-profile floating header is hidden when returning to detail
     const fh = document.getElementById('user-profile-header');
     if (fh) fh.style.display = 'none';
@@ -1649,17 +1548,9 @@ function slideBack() {
     replaceRoute('/');
   }
 
-  // Restore bottom nav smoothly when fully back to a main page
-  // (but keep hidden if next slide page in stack also hides nav)
-  const nextHidesNav = returningTo && ['messages','chat','settings','wallet'].includes(returningTo);
-  if (!nextHidesNav) {
-    const nav = document.getElementById('bottom-nav');
-    if (nav) {
-      nav.style.pointerEvents = '';
-      nav.style.transition = 'transform 0.32s cubic-bezier(0.4,0,0.2,1), opacity 0.32s ease';
-      nav.style.transform = '';
-      nav.style.opacity = '';
-    }
+  // Restore bottom nav only when back to a main page
+  if (!returningTo) {
+    document.getElementById('bottom-nav').style.display = '';
   }
 
   // Floating user-profile header
@@ -6810,14 +6701,8 @@ function closeChat() {
   if (returningTo === 'messages') {
     document.getElementById('page-messages')?.classList.add('active');
   } else {
-    // Returning all the way back — restore nav smoothly
-    const navCb = document.getElementById('bottom-nav');
-    if (navCb) {
-      navCb.style.pointerEvents = '';
-      navCb.style.transition = 'transform 0.32s cubic-bezier(0.4,0,0.2,1), opacity 0.32s ease';
-      navCb.style.transform = '';
-      navCb.style.opacity = '';
-    }
+    // Returning all the way back — restore nav
+    document.getElementById('bottom-nav').style.display = '';
     const backTo = lastMainPage || 'feed';
     document.getElementById('page-' + backTo)?.classList.add('active');
     document.querySelectorAll('.nav-btn[data-page]').forEach(btn => {
@@ -6833,13 +6718,7 @@ function closeMessagesInbox() {
   if (el) el.classList.remove('active');
   slideStack.pop();
   // Restore nav and main page
-  const navMi = document.getElementById('bottom-nav');
-  if (navMi) {
-    navMi.style.pointerEvents = '';
-    navMi.style.transition = 'transform 0.32s cubic-bezier(0.4,0,0.2,1), opacity 0.32s ease';
-    navMi.style.transform = '';
-    navMi.style.opacity = '';
-  }
+  document.getElementById('bottom-nav').style.display = '';
   const backTo = lastMainPage || 'feed';
   document.getElementById('page-' + backTo)?.classList.add('active');
   document.querySelectorAll('.nav-btn[data-page]').forEach(btn => {
@@ -9489,37 +9368,50 @@ function toggleDarkMode(isDark) {
 }
 
 // ══════════════════════════════════════════
-// WALLET — Redesigned
-// P2P send/request, Flutterwave integration hooks,
-// balance visibility, sheet management, DM pay prep,
-// market purchase escrow prep
+// MISTY POINTS WALLET
+// 1 Misty Point = ₦5,000 (internal rate, never shown to users)
+// All user-facing values are in Misty Points only.
+// Flutterwave is used solely to purchase points.
+// No withdrawals. No currency symbols ever exposed.
 // ══════════════════════════════════════════
+
+const POINTS_RATE = 5000; // ₦ per 1 Misty Point — internal, never rendered
 
 // ── WALLET STATE ──────────────────────────────────────────────
 const walletState = {
-  balance: 1430.00,          // live balance in NGN
-  currency: '₦',             // active display currency
+  points: 0,               // user's Misty Points balance (live from DB)
   balanceVisible: true,
   selectedSendRecipient: null,
-  selectedRequestFrom: null,
-  sendAmount: 0,
+  sendAmount: 0,           // in points
   activeSheet: null,
   txnFilter: 'all',
-  // Flutterwave config — fill at runtime from env/supabase secrets
-  flutterwavePublicKey: '', // 'FLWPUBK-...'
+  flutterwavePublicKey: '', // set at runtime from Supabase secrets
 };
+
+// ── FORMAT HELPERS ────────────────────────────────────────────
+// All user-facing amounts rendered as: ✦12 or ✦1,500
+function fmtPts(pts) {
+  if (pts === null || pts === undefined) return '✦0';
+  const n = Number(pts);
+  const str = Number.isInteger(n)
+    ? n.toLocaleString('en-NG')
+    : n.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return '\u2736' + str;
+}
+// Internal-only conversion helpers — results never shown to users
+function pointsToNgn(pts) { return pts * POINTS_RATE; }
+function ngnToPoints(ngn) { return ngn / POINTS_RATE; }
 
 // ── OPEN WALLET PAGE ─────────────────────────────────────────
 function openWallet() {
   slideTo('wallet');
   buildWalletPeopleRow();
   syncWalletBalance();
-  // Show QR FAB only when wallet is visible
   const fab = document.querySelector('.wlt-qr-fab');
   if (fab) fab.classList.remove('hidden');
 }
 
-// Hide QR FAB when leaving wallet
+// Called by slideBack when leaving wallet page
 function onWalletClose() {
   const fab = document.querySelector('.wlt-qr-fab');
   if (fab) fab.classList.add('hidden');
@@ -9532,28 +9424,24 @@ async function syncWalletBalance() {
   try {
     const { data, error } = await supabase
       .from('wallets')
-      .select('balance, escrow_balance, points')
+      .select('points')
       .eq('user_id', currentUser.id)
       .maybeSingle();
     if (error || !data) return;
-    walletState.balance = data.balance ?? 0;
+    walletState.points = data.points ?? 0;
     renderWalletBalance();
-  } catch (e) { /* silently fail — show last cached */ }
+  } catch (e) { /* silently fail — show cached value */ }
 }
 
 function renderWalletBalance() {
   const el = document.getElementById('wlt-balance');
   if (!el) return;
-  const fmt = new Intl.NumberFormat('en-NG', {
-    minimumFractionDigits: 2, maximumFractionDigits: 2
-  });
-  el.textContent = fmt.format(walletState.balance);
-  // Update send balance hints
+  el.textContent = fmtPts(walletState.points);
   const hint = document.getElementById('send-balance-hint');
-  if (hint) hint.textContent = `Balance: ${walletState.currency}${fmt.format(walletState.balance)}`;
+  if (hint) hint.textContent = 'Balance: ' + fmtPts(walletState.points);
 }
 
-// ── BALANCE VISIBILITY TOGGLE ────────────────────────────────
+// ── BALANCE VISIBILITY TOGGLE ─────────────────────────────────
 function toggleBalanceVisibility(btn) {
   walletState.balanceVisible = !walletState.balanceVisible;
   const balEl = document.getElementById('wlt-balance');
@@ -9564,25 +9452,15 @@ function toggleBalanceVisibility(btn) {
   if (eyeOff) eyeOff.classList.toggle('hidden', walletState.balanceVisible);
 }
 
-// ── CURRENCY TOGGLE (₦ ↔ $) ─────────────────────────────────
-function toggleWalletCurrency(btn) {
-  const currencies = ['₦', '$', '€', '£', 'GHS'];
-  const idx = currencies.indexOf(walletState.currency);
-  walletState.currency = currencies[(idx + 1) % currencies.length];
-  btn.textContent = walletState.currency;
-}
-
 // ── QUICK PAY PEOPLE ROW ──────────────────────────────────────
 async function buildWalletPeopleRow() {
   const container = document.getElementById('wlt-people-dynamic');
   if (!container || !currentUser) return;
   try {
-    // Fetch users the current user has recently transacted with
-    // Falls back to following list if no transactions yet
     const { data: txns } = await supabase
       .from('wallet_transactions')
       .select('to_user_id, from_user_id')
-      .or(`from_user_id.eq.${currentUser.id},to_user_id.eq.${currentUser.id}`)
+      .or('from_user_id.eq.' + currentUser.id + ',to_user_id.eq.' + currentUser.id)
       .order('created_at', { ascending: false })
       .limit(10);
 
@@ -9597,324 +9475,277 @@ async function buildWalletPeopleRow() {
         }
       }
     }
-
-    // If no transactions, show people they follow
     if (userIds.length === 0) {
       const { data: follows } = await supabase
-        .from('follows')
-        .select('following_id')
-        .eq('follower_id', currentUser.id)
-        .limit(8);
+        .from('follows').select('following_id')
+        .eq('follower_id', currentUser.id).limit(8);
       if (follows) follows.forEach(f => userIds.push(f.following_id));
     }
-
     if (userIds.length === 0) { container.innerHTML = ''; return; }
 
-    // `id` is the primary key and auth user id in the users table
     const { data: users } = await supabase
-      .from('users')
-      .select('id, username, avatar')
-      .in('id', userIds);
-
+      .from('users').select('id, username, avatar').in('id', userIds);
     if (!users) return;
 
-    container.innerHTML = users.map(u => `
-      <button class="wlt-person-tile" onclick="quickPayUser('${u.id}','${escHtml(u.username)}','${u.avatar || ''}')">
-        <img class="wlt-person-avatar" src="${u.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${u.id}`}" alt="">
-        <span class="wlt-person-name">${escHtml((u.username || '').split(' ')[0])}</span>
-      </button>
-    `).join('');
+    container.innerHTML = users.map(u =>
+      '<button class="wlt-person-tile" onclick="quickPayUser(\'' + u.id + '\',\'' + escHtml(u.username) + '\',\'' + (u.avatar || '') + '\')">' +
+        '<img class="wlt-person-avatar" src="' + (u.avatar || 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + u.id) + '" alt="">' +
+        '<span class="wlt-person-name">' + escHtml((u.username || '').split(' ')[0]) + '</span>' +
+      '</button>'
+    ).join('');
   } catch (e) { /* non-critical */ }
 }
 
 function quickPayUser(userId, name, avatarUrl) {
   walletState.selectedSendRecipient = { id: userId, name, avatarUrl };
   openWalletSheet('send');
-  // Pre-fill the selected user
-  setTimeout(() => {
-    const selBlock = document.getElementById('send-selected-user');
-    const selName  = document.getElementById('send-sel-name');
-    const selUser  = document.getElementById('send-sel-username');
-    const selAv    = document.getElementById('send-sel-avatar');
+  setTimeout(function() {
+    var selBlock = document.getElementById('send-selected-user');
+    var selName  = document.getElementById('send-sel-name');
+    var selUser  = document.getElementById('send-sel-username');
+    var selAv    = document.getElementById('send-sel-avatar');
     if (selBlock) selBlock.classList.remove('hidden');
-    if (selName)  selName.textContent  = name;
-    if (selUser)  selUser.textContent  = '';
-    if (selAv)    selAv.src = avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${userId}`;
+    if (selName)  selName.textContent = name;
+    if (selUser)  selUser.textContent = '';
+    if (selAv)    selAv.src = avatarUrl || ('https://api.dicebear.com/7.x/adventurer/svg?seed=' + userId);
   }, 50);
 }
 
 // ── SHEET MANAGEMENT ─────────────────────────────────────────
+// No 'withdraw' sheet — Misty Points cannot be withdrawn
 const SHEET_MAP = {
-  'send':     'sheet-send',
-  'request':  'sheet-request',
-  'add':      'sheet-add',
-  'withdraw': 'sheet-withdraw',
-  'qr':       'sheet-qr',
+  'send':    'sheet-send',
+  'request': 'sheet-request',
+  'add':     'sheet-add',
+  'qr':      'sheet-qr',
 };
 
 function openWalletSheet(type) {
-  // Close any open sheet first
   closeAllWalletSheets();
-  const id = SHEET_MAP[type];
+  var id = SHEET_MAP[type];
   if (id) {
-    const el = document.getElementById(id);
+    var el = document.getElementById(id);
     if (el) {
       el.classList.remove('hidden');
       walletState.activeSheet = type;
-      // Special inits
       if (type === 'qr') initQRSheet();
       return;
     }
   }
-  // Unimplemented sheets — toast placeholder
-  const labels = {
-    'split':       'Split Bill — coming soon ✨',
-    'find-people': 'Find People — coming soon ✨',
-    'link-bank':   'Link Bank — powered by Flutterwave (coming soon)',
-    'manage-bank': 'Manage Bank Accounts (coming soon)',
-    'history':     'Full Transaction History — coming soon ✨',
+  var labels = {
+    'split':       'Split Bill \u2014 coming soon \u2728',
+    'find-people': 'Find People \u2014 coming soon \u2728',
+    'history':     'Full Activity History \u2014 coming soon \u2728',
   };
-  showToast(labels[type] || 'Coming soon ✨');
+  showToast(labels[type] || 'Coming soon \u2728');
 }
 
 function closeWalletSheet(type) {
-  const id = SHEET_MAP[type];
+  var id = SHEET_MAP[type];
   if (id) {
-    const el = document.getElementById(id);
+    var el = document.getElementById(id);
     if (el) el.classList.add('hidden');
   }
   walletState.activeSheet = null;
 }
 
 function closeAllWalletSheets() {
-  Object.values(SHEET_MAP).forEach(id => {
-    const el = document.getElementById(id);
+  Object.values(SHEET_MAP).forEach(function(id) {
+    var el = document.getElementById(id);
     if (el) el.classList.add('hidden');
   });
   walletState.activeSheet = null;
 }
 
-// Keep back gesture from closing full page while sheet is open
 function walletHandleBackGesture() {
-  if (walletState.activeSheet) {
-    closeAllWalletSheets();
-    return true; // consumed
-  }
+  if (walletState.activeSheet) { closeAllWalletSheets(); return true; }
   return false;
 }
 
-// ── SEND MONEY ────────────────────────────────────────────────
+// ── SEND POINTS ───────────────────────────────────────────────
 function updateSendAmount(val) {
-  const num = parseFloat(val.replace(/[^0-9.]/g, '')) || 0;
+  var num = parseFloat(val.replace(/[^0-9.]/g, '')) || 0;
   walletState.sendAmount = num;
-  const btn = document.getElementById('send-confirm-btn');
-  const amtSpan = document.getElementById('send-confirm-amount');
-  if (btn) btn.disabled = num <= 0 || num > walletState.balance;
-  if (amtSpan) amtSpan.textContent = num > 0 ? `₦${num.toLocaleString('en-NG', { minimumFractionDigits: 2 })}` : '';
+  var btn     = document.getElementById('send-confirm-btn');
+  var amtSpan = document.getElementById('send-confirm-amount');
+  if (btn) btn.disabled = num <= 0 || num > walletState.points;
+  if (amtSpan) amtSpan.textContent = num > 0 ? fmtPts(num) : '';
 }
 
 async function confirmSendMoney() {
-  const recipient = walletState.selectedSendRecipient;
-  const amount    = walletState.sendAmount;
-  const note      = document.getElementById('send-note')?.value?.trim() || '';
+  var recipient = walletState.selectedSendRecipient;
+  var amount    = walletState.sendAmount;
+  var noteEl    = document.getElementById('send-note');
+  var note      = noteEl ? noteEl.value.trim() : '';
   if (!recipient || amount <= 0) return;
-  if (amount > walletState.balance) { showToast('Insufficient balance'); return; }
+  if (amount > walletState.points) { showToast('Not enough Misty Points'); return; }
 
-  // Optimistic UI
   closeWalletSheet('send');
-  showToast(`Sending ₦${amount.toLocaleString('en-NG')} to ${recipient.name}...`);
+  showToast('Sending ' + fmtPts(amount) + ' to ' + recipient.name + '...');
 
   try {
-    // Insert P2P transfer — RPC function handles debit/credit atomically
-    const { error } = await supabase.rpc('p2p_transfer', {
+    var res = await supabase.rpc('p2p_transfer_points', {
       sender_id:    currentUser.id,
       recipient_id: recipient.id,
-      amount_ngn:   amount,
+      points:       amount,
       note:         note,
     });
-    if (error) throw error;
-    walletState.balance -= amount;
+    if (res.error) throw res.error;
+    walletState.points -= amount;
     renderWalletBalance();
-    showToast(`✓ Sent ₦${amount.toLocaleString('en-NG')} to ${recipient.name}`);
-    syncWalletBalance(); // re-sync from DB
+    showToast('\u2713 Sent ' + fmtPts(amount) + ' to ' + recipient.name);
+    syncWalletBalance();
     refreshTransactionList();
   } catch (e) {
-    showToast('Transfer failed — please try again');
-    console.error('P2P transfer error:', e);
+    showToast('Transfer failed \u2014 please try again');
+    console.error('Points transfer error:', e);
   }
 }
 
 function clearSendRecipient() {
   walletState.selectedSendRecipient = null;
-  const selBlock = document.getElementById('send-selected-user');
+  var selBlock = document.getElementById('send-selected-user');
   if (selBlock) selBlock.classList.add('hidden');
 }
 
-// ── REQUEST MONEY ─────────────────────────────────────────────
+// ── REQUEST POINTS ────────────────────────────────────────────
 async function confirmRequestMoney() {
-  // TODO: wire to requests table when P2P request feature ships
-  showToast('Request sent! ✓');
+  showToast('Request sent! \u2713');
   closeWalletSheet('request');
 }
 
 // ── PENDING REQUEST ACTIONS ───────────────────────────────────
 async function handlePendingRequest(btn, action) {
-  const item = btn.closest('.wlt-pending-item');
+  var item = btn.closest('.wlt-pending-item');
   if (!item) return;
   if (action === 'accept') {
-    // TODO: call p2p_transfer RPC with the pending request details
     item.style.opacity = '0.5';
     item.style.pointerEvents = 'none';
-    showToast('Payment sent ✓');
-    setTimeout(() => item.remove(), 800);
+    showToast('Points sent \u2713');
+    setTimeout(function() { item.remove(); }, 800);
     updatePendingCount(-1);
   } else {
     item.style.opacity = '0.5';
     item.style.pointerEvents = 'none';
     showToast('Request declined');
-    setTimeout(() => item.remove(), 500);
+    setTimeout(function() { item.remove(); }, 500);
     updatePendingCount(-1);
   }
 }
 
 function updatePendingCount(delta) {
-  const badge = document.getElementById('wlt-pending-count');
+  var badge = document.getElementById('wlt-pending-count');
   if (!badge) return;
-  const curr = parseInt(badge.textContent) || 0;
-  const next = Math.max(0, curr + delta);
+  var curr = parseInt(badge.textContent) || 0;
+  var next = Math.max(0, curr + delta);
   badge.textContent = next;
   if (next === 0) {
-    const section = document.getElementById('wlt-pending-section');
+    var section = document.getElementById('wlt-pending-section');
     if (section) section.classList.add('hidden');
   }
 }
 
-// ── QUICK AMOUNT SETTER ───────────────────────────────────────
-function setQuickAmount(context, amount) {
-  const inputMap = {
-    add:      'add-amount-input',
-    withdraw: 'withdraw-amount',
-  };
-  const el = document.getElementById(inputMap[context]);
+// ── QUICK AMOUNT SETTER (in points) ──────────────────────────
+function setQuickAmount(context, points) {
+  var inputMap = { add: 'add-amount-input' };
+  var el = document.getElementById(inputMap[context]);
   if (!el) return;
-  el.value = amount;
+  el.value = points;
   el.dispatchEvent(new Event('input'));
 }
 
-// ── WITHDRAW ──────────────────────────────────────────────────
-async function confirmWithdraw() {
-  const amtEl = document.getElementById('withdraw-amount');
-  const amount = parseFloat(amtEl?.value || '0');
-  if (!amount || amount <= 0) { showToast('Enter an amount'); return; }
-  if (amount > walletState.balance) { showToast('Insufficient balance'); return; }
-  closeWalletSheet('withdraw');
-  showToast('Withdrawal initiated — arrives within 24 hrs');
-  // TODO: call Flutterwave transfer API or internal withdrawal RPC
-}
-
-// ── FLUTTERWAVE INTEGRATION ───────────────────────────────────
-/**
- * Initiates a Flutterwave payment modal.
- * method: 'card' | 'bank_transfer' | 'ussd' | 'mobile_money'
- *
- * Integration checklist:
- * 1. Load Flutterwave inline script: https://checkout.flutterwave.com/v3.js
- * 2. Set walletState.flutterwavePublicKey from Supabase edge function secrets
- * 3. On success callback → call creditWallet(txRef, amount)
- */
-function initiateFlutterwave(method) {
-  const amtInput = document.getElementById('add-amount-input');
-  const amount   = parseFloat(amtInput?.value || '0');
-  if (!amount || amount <= 0) { showToast('Enter an amount first'); return; }
+// ── BUY POINTS VIA FLUTTERWAVE ────────────────────────────────
+// User picks how many Misty Points to buy.
+// NGN amount is computed internally (pts x 5000) — never shown.
+function initiateBuyPoints() {
+  var ptInput = document.getElementById('add-amount-input');
+  var points  = parseFloat((ptInput ? ptInput.value : '') || '0');
+  if (!points || points <= 0) { showToast('Enter how many points to buy'); return; }
   if (!currentUser) { showToast('Please sign in first'); return; }
 
-  // Show loading overlay
   showFlutterwaveLoader();
 
-  // --- Flutterwave inline SDK integration ---
-  // Uncomment and configure when keys are ready:
+  // Uncomment when Flutterwave keys are configured:
   /*
+  var ngnAmount = pointsToNgn(points);
   if (typeof FlutterwaveCheckout === 'undefined') {
-    loadScript('https://checkout.flutterwave.com/v3.js', () => {
-      runFlutterwave(method, amount);
-    });
+    loadScript('https://checkout.flutterwave.com/v3.js', function() { runFlutterwave(points, ngnAmount); });
   } else {
-    runFlutterwave(method, amount);
+    runFlutterwave(points, ngnAmount);
   }
   */
 
-  // PLACEHOLDER — remove when SDK is active
-  setTimeout(() => {
+  // PLACEHOLDER — remove when live
+  setTimeout(function() {
     hideFlutterwaveLoader();
     closeWalletSheet('add');
-    showToast('Flutterwave integration pending setup 🔧');
+    showToast('Flutterwave integration pending setup \uD83D\uDD27');
   }, 1200);
 }
 
-function runFlutterwave(method, amount) {
+function runFlutterwave(points, ngnAmount) {
   FlutterwaveCheckout({
     public_key: walletState.flutterwavePublicKey,
-    tx_ref: `MN-${currentUser.id}-${Date.now()}`,
-    amount: amount,
-    currency: 'NGN',
-    payment_options: method,
+    tx_ref:    'MN-' + currentUser.id + '-' + Date.now(),
+    amount:    ngnAmount,   // real NGN internally for Flutterwave
+    currency:  'NGN',
+    payment_options: 'card,bank_transfer,ussd,mobile_money',
     customer: {
-      email: currentUser.email,
+      email:       currentUser.email,
       phonenumber: currentUser.phone || '',
-      name: currentUser.user_metadata?.full_name || '',
+      name:        (currentUser.user_metadata && currentUser.user_metadata.full_name) || '',
     },
     customizations: {
-      title: 'MistyNote Wallet',
-      description: 'Fund your MistyNote wallet',
-      logo: '/assets/logo.png',
+      title:       'MistyNote \u2014 Buy Misty Points',
+      description: 'Purchase ' + fmtPts(points),
+      logo:        '/assets/logo.png',
     },
-    callback: async (data) => {
+    callback: async function(data) {
       hideFlutterwaveLoader();
       if (data.status === 'successful') {
-        await creditWallet(data.tx_ref, amount, data.flw_ref);
+        await creditPoints(data.tx_ref, points, data.flw_ref);
         closeWalletSheet('add');
-        showToast(`₦${amount.toLocaleString('en-NG')} added to wallet ✓`);
+        showToast(fmtPts(points) + ' added to your wallet \u2713');
         syncWalletBalance();
         refreshTransactionList();
       } else {
-        showToast('Payment failed — please try again');
+        showToast('Payment failed \u2014 please try again');
       }
     },
-    onclose: () => { hideFlutterwaveLoader(); },
+    onclose: function() { hideFlutterwaveLoader(); },
   });
 }
 
-async function creditWallet(txRef, amount, flwRef) {
-  // Calls Supabase edge function to verify + credit (never trust client-side)
+async function creditPoints(txRef, points, flwRef) {
+  // Edge function verifies Flutterwave server-side then credits points
   try {
-    const { error } = await supabase.functions.invoke('credit-wallet', {
-      body: { tx_ref: txRef, flw_ref: flwRef, amount, user_id: currentUser.id }
+    var res = await supabase.functions.invoke('credit-points', {
+      body: { tx_ref: txRef, flw_ref: flwRef, points: points, user_id: currentUser.id }
     });
-    if (error) throw error;
+    if (res.error) throw res.error;
   } catch (e) {
-    console.error('creditWallet error:', e);
+    console.error('creditPoints error:', e);
     throw e;
   }
 }
 
 function showFlutterwaveLoader() {
-  let el = document.getElementById('flw-loading');
+  var el = document.getElementById('flw-loading');
   if (!el) {
     el = document.createElement('div');
     el.id = 'flw-loading';
     el.className = 'flw-loading-overlay';
-    el.innerHTML = `<div class="flw-spinner"></div><div class="flw-loading-text">Connecting to payment...</div>`;
+    el.innerHTML = '<div class="flw-spinner"></div><div class="flw-loading-text">Connecting to payment...</div>';
     document.body.appendChild(el);
   }
   el.classList.remove('hidden');
 }
 function hideFlutterwaveLoader() {
-  const el = document.getElementById('flw-loading');
+  var el = document.getElementById('flw-loading');
   if (el) el.classList.add('hidden');
 }
-
 function loadScript(src, cb) {
-  const s = document.createElement('script');
+  var s = document.createElement('script');
   s.src = src; s.onload = cb;
   document.head.appendChild(s);
 }
@@ -9922,40 +9753,42 @@ function loadScript(src, cb) {
 // ── QR CODE ───────────────────────────────────────────────────
 function initQRSheet() {
   if (!currentUser) return;
-  const avatar = document.getElementById('qr-avatar');
-  const name   = document.getElementById('qr-name');
-  // Uses `avatar` column (not avatar_url) — matches app.js schema
-  if (avatar && currentProfile?.avatar) avatar.src = currentProfile.avatar;
-  if (name)   name.textContent = `@${currentProfile?.username || ''}`;
-  // TODO: generate real QR via qrcode.js pointing to https://mistynote.app/pay/{username}
+  var avatar = document.getElementById('qr-avatar');
+  var name   = document.getElementById('qr-name');
+  if (avatar && currentProfile && currentProfile.avatar) avatar.src = currentProfile.avatar;
+  if (name) name.textContent = '@' + ((currentProfile && currentProfile.username) || '');
 }
 
 function copyPayLink() {
-  const link = `https://mistynote.app/pay/${currentProfile?.username || ''}`;
-  navigator.clipboard?.writeText(link).then(() => {
-    showToast('Pay link copied ✓');
-  }).catch(() => showToast('Copy: ' + link));
+  var link = 'https://mistynote.app/pay/' + ((currentProfile && currentProfile.username) || '');
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(link)
+      .then(function() { showToast('Pay link copied \u2713'); })
+      .catch(function() { showToast('Copy: ' + link); });
+  } else {
+    showToast('Copy: ' + link);
+  }
 }
 
 function shareQRCode() {
-  const link = `https://mistynote.app/pay/${currentProfile?.username || ''}`;
+  var link = 'https://mistynote.app/pay/' + ((currentProfile && currentProfile.username) || '');
   if (navigator.share) {
-    navigator.share({ title: 'Pay me on MistyNote', url: link }).catch(() => {});
+    navigator.share({ title: 'Send me Misty Points', url: link }).catch(function() {});
   } else {
     copyPayLink();
   }
 }
 
 function openQRScan(context) {
-  showToast('QR Scanner — coming soon 📷');
+  showToast('QR Scanner \u2014 coming soon \uD83D\uDCF7');
 }
 
 // ── TRANSACTION FILTER ────────────────────────────────────────
 function filterWalletTxns(tab, filter) {
-  document.querySelectorAll('.wlt-txn-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.wlt-txn-tab').forEach(function(t) { t.classList.remove('active'); });
   tab.classList.add('active');
   walletState.txnFilter = filter;
-  document.querySelectorAll('.wlt-txn-item').forEach(item => {
+  document.querySelectorAll('.wlt-txn-item').forEach(function(item) {
     if (filter === 'all') {
       item.classList.remove('hidden');
     } else {
@@ -9964,51 +9797,41 @@ function filterWalletTxns(tab, filter) {
   });
 }
 
-// ── REFRESH TRANSACTIONS ──────────────────────────────────────
 async function refreshTransactionList() {
   // TODO: query wallet_transactions from Supabase and re-render wlt-txn-list
-  // Triggered after sends/receives/deposits
 }
 
-// ── USER SEARCH (for send/request) ───────────────────────────
-let searchDebounceTimer;
+// ── USER SEARCH (send / request) ─────────────────────────────
+var searchDebounceTimer;
 async function searchWalletUser(query, context) {
   clearTimeout(searchDebounceTimer);
-  const resultsId = context === 'send' ? 'send-results' : null;
-  const resultsEl = resultsId ? document.getElementById(resultsId) : null;
+  var resultsEl = context === 'send' ? document.getElementById('send-results') : null;
   if (!resultsEl) return;
+  if (!query || query.length < 2) { resultsEl.classList.add('hidden'); return; }
 
-  if (!query || query.length < 2) {
-    resultsEl.classList.add('hidden');
-    return;
-  }
-
-  searchDebounceTimer = setTimeout(async () => {
+  searchDebounceTimer = setTimeout(async function() {
     try {
-      const q = query.replace(/^@/, '').trim().toLowerCase();
-      // `id` is the auth user id, `avatar` is the photo column — matches app.js schema
-      const { data: users } = await supabase
+      var q = query.replace(/^@/, '').trim().toLowerCase();
+      var res = await supabase
         .from('users')
         .select('id, username, avatar')
-        .ilike('username', `%${q}%`)
+        .ilike('username', '%' + q + '%')
         .neq('id', currentUser.id)
         .limit(6);
+      var users = res.data;
 
-      if (!users?.length) {
-        resultsEl.innerHTML = `<div class="wlt-search-result-item"><div style="color:var(--text3);font-size:13px;padding:4px 0">No users found</div></div>`;
+      if (!users || !users.length) {
+        resultsEl.innerHTML = '<div class="wlt-search-result-item"><div style="color:var(--text3);font-size:13px;padding:4px 0">No users found</div></div>';
         resultsEl.classList.remove('hidden');
         return;
       }
-
-      resultsEl.innerHTML = users.map(u => `
-        <div class="wlt-search-result-item" onclick="selectWalletUser('${u.id}','${escHtml(u.username)}','${u.avatar || ''}','${context}')">
-          <img class="wlt-search-result-avatar" src="${u.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${u.id}`}" alt="">
-          <div>
-            <div class="wlt-search-result-name">${escHtml(u.username)}</div>
-            <div class="wlt-search-result-user">@${escHtml(u.username)}</div>
-          </div>
-        </div>
-      `).join('');
+      resultsEl.innerHTML = users.map(function(u) {
+        return '<div class="wlt-search-result-item" onclick="selectWalletUser(\'' + u.id + '\',\'' + escHtml(u.username) + '\',\'' + (u.avatar || '') + '\',\'' + context + '\')">' +
+          '<img class="wlt-search-result-avatar" src="' + (u.avatar || 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + u.id) + '" alt="">' +
+          '<div><div class="wlt-search-result-name">' + escHtml(u.username) + '</div>' +
+          '<div class="wlt-search-result-user">@' + escHtml(u.username) + '</div></div>' +
+          '</div>';
+      }).join('');
       resultsEl.classList.remove('hidden');
     } catch (e) { /* silent */ }
   }, 280);
@@ -10016,91 +9839,88 @@ async function searchWalletUser(query, context) {
 
 function selectWalletUser(userId, name, avatarUrl, context) {
   if (context === 'send') {
-    walletState.selectedSendRecipient = { id: userId, name, avatarUrl };
-    const sel     = document.getElementById('send-selected-user');
-    const selName = document.getElementById('send-sel-name');
-    const selAv   = document.getElementById('send-sel-avatar');
+    walletState.selectedSendRecipient = { id: userId, name: name, avatarUrl: avatarUrl };
+    var sel     = document.getElementById('send-selected-user');
+    var selName = document.getElementById('send-sel-name');
+    var selAv   = document.getElementById('send-sel-avatar');
     if (sel)     sel.classList.remove('hidden');
     if (selName) selName.textContent = name;
-    if (selAv)   selAv.src = avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${userId}`;
-    document.getElementById('send-results')?.classList.add('hidden');
-    document.getElementById('send-search').value = '';
-    document.getElementById('send-amount-input')?.focus();
+    if (selAv)   selAv.src = avatarUrl || ('https://api.dicebear.com/7.x/adventurer/svg?seed=' + userId);
+    var resultsEl = document.getElementById('send-results');
+    if (resultsEl) resultsEl.classList.add('hidden');
+    var searchEl = document.getElementById('send-search');
+    if (searchEl) searchEl.value = '';
+    var amtEl = document.getElementById('send-amount-input');
+    if (amtEl) amtEl.focus();
   }
 }
 
 // ── DM PAYMENT BRIDGE ─────────────────────────────────────────
-// Called from chat module: openDMPaySheet(userId, name, avatarUrl)
 function openDMPaySheet(recipientUserId, recipientName, avatarUrl) {
   quickPayUser(recipientUserId, recipientName, avatarUrl);
 }
 
-// Renders a money bubble inside a DM conversation
-function renderDMMoneyBubble({ amount, note, status, direction }) {
-  const sign = direction === 'incoming' ? '+' : '-';
-  const col  = direction === 'incoming' ? 'var(--green)' : 'white';
-  return `
-    <div class="msg-money-bubble">
-      <div class="msg-money-amount" style="color:${col}">${sign}₦${amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</div>
-      ${note ? `<div class="msg-money-note">${escHtml(note)}</div>` : ''}
-      <div class="msg-money-status">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
-        ${status === 'completed' ? 'Sent' : status}
-      </div>
-    </div>`;
+function renderDMMoneyBubble(opts) {
+  var amount    = opts.amount;
+  var note      = opts.note;
+  var status    = opts.status;
+  var direction = opts.direction;
+  var sign = direction === 'incoming' ? '+' : '-';
+  var col  = direction === 'incoming' ? 'var(--green)' : 'white';
+  return '<div class="msg-money-bubble">' +
+    '<div class="msg-money-amount" style="color:' + col + '">' + sign + fmtPts(amount) + '</div>' +
+    (note ? '<div class="msg-money-note">' + escHtml(note) + '</div>' : '') +
+    '<div class="msg-money-status">' +
+      '<svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>' +
+      (status === 'completed' ? 'Sent' : status) +
+    '</div></div>';
 }
 
-// ── MARKET / PRODUCT PURCHASE BRIDGE ─────────────────────────
-// Called by storefront module: purchaseProduct({ productId, sellerId, amount, title })
-async function purchaseProduct({ productId, sellerId, amount, title }) {
+// ── MARKET PURCHASE BRIDGE ────────────────────────────────────
+// Products are priced in Misty Points
+async function purchaseProduct(opts) {
+  var productId = opts.productId;
+  var sellerId  = opts.sellerId;
+  var points    = opts.points;
+  var title     = opts.title;
   if (!currentUser) { showToast('Please sign in to purchase'); return; }
-  if (amount > walletState.balance) {
-    showToast('Insufficient wallet balance — add money first');
+  if (points > walletState.points) {
+    showToast('Not enough Misty Points \u2014 buy more first');
     openWalletSheet('add');
     return;
   }
   try {
-    const { error } = await supabase.rpc('escrow_hold', {
+    var res = await supabase.rpc('escrow_hold_points', {
       buyer_id:   currentUser.id,
       seller_id:  sellerId,
       product_id: productId,
-      amount_ngn: amount,
+      points:     points,
     });
-    if (error) throw error;
-    walletState.balance -= amount;
+    if (res.error) throw res.error;
+    walletState.points -= points;
     renderWalletBalance();
-    showToast(`Order placed! ₦${amount.toLocaleString('en-NG')} held in escrow ✓`);
+    showToast('Order placed! ' + fmtPts(points) + ' held in escrow \u2713');
   } catch (e) {
-    showToast('Purchase failed — please try again');
+    showToast('Purchase failed \u2014 please try again');
     console.error('purchaseProduct error:', e);
   }
 }
 
 // ── NOTE EMOJI PICKER ─────────────────────────────────────────
-const NOTE_EMOJIS = ['😊','🎂','🙏','💼','🍕','🎉','💸','🚕','🛍️','❤️','🙌','☕'];
-let emojiPickerOpen = false;
+var NOTE_EMOJIS = ['\uD83D\uDE0A','\uD83C\uDF82','\uD83D\uDE4F','\uD83D\uDCBC','\uD83C\uDF55','\uD83C\uDF89','\u2736','\uD83D\uDE95','\uD83D\uDED9','\u2764\uFE0F','\uD83D\uDE4C','\u2615'];
+var emojiPickerOpen = false;
 
 function pickNoteEmoji(span) {
   if (emojiPickerOpen) return;
   emojiPickerOpen = true;
-  const picker = document.createElement('div');
-  picker.style.cssText = `
-    position:fixed; z-index:9999;
-    background:var(--surface); border:1px solid var(--border);
-    border-radius:16px; padding:12px;
-    display:grid; grid-template-columns:repeat(6,1fr); gap:4px;
-    box-shadow:var(--shadow-lg);
-    bottom: 120px; left: 50%; transform: translateX(-50%);
-  `;
-  picker.innerHTML = NOTE_EMOJIS.map(e =>
-    `<button style="font-size:22px;padding:6px;border-radius:10px;transition:background 0.1s"
-     onmouseover="this.style.background='var(--bg3)'"
-     onmouseout="this.style.background=''"
-     onclick="selectNoteEmoji(this.closest('.wlt-note-wrap').querySelector('.wlt-note-emoji'),'${e}',this.closest('div'))">${e}</button>`
-  ).join('');
+  var picker = document.createElement('div');
+  picker.style.cssText = 'position:fixed;z-index:9999;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:12px;display:grid;grid-template-columns:repeat(6,1fr);gap:4px;box-shadow:var(--shadow-lg);bottom:120px;left:50%;transform:translateX(-50%);';
+  picker.innerHTML = NOTE_EMOJIS.map(function(e) {
+    return '<button style="font-size:22px;padding:6px;border-radius:10px;transition:background 0.1s" onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\'\'" onclick="selectNoteEmoji(this.closest(\'.wlt-note-wrap\').querySelector(\'.wlt-note-emoji\'),\'' + e + '\',this.closest(\'div\'))">' + e + '</button>';
+  }).join('');
   document.body.appendChild(picker);
-  setTimeout(() => {
-    document.addEventListener('click', () => {
+  setTimeout(function() {
+    document.addEventListener('click', function() {
       picker.remove(); emojiPickerOpen = false;
     }, { once: true });
   }, 10);
@@ -10112,15 +9932,8 @@ function selectNoteEmoji(span, emoji, picker) {
 }
 
 // ── LEGACY COMPAT ─────────────────────────────────────────────
-// Keeps any old walletAction() calls working
 function walletAction(type) {
-  const map = {
-    add:      'add',
-    send:     'send',
-    withdraw: 'withdraw',
-    convert:  'add',
-    history:  'history',
-  };
+  var map = { add: 'add', send: 'send', history: 'history' };
   openWalletSheet(map[type] || type);
 }
 
