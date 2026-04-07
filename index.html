@@ -1197,65 +1197,503 @@
       <div id="detail-body"></div>
     </section>
 
+
     <!-- ══════════════════════════════════════════
-         PAGE: WALLET
+         PAGE: WALLET — Redesigned
     ══════════════════════════════════════════ -->
-    <section class="page slide-page" id="page-wallet">
-      <header class="page-header">
-        <button class="back-btn" onclick="slideBack()">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M12 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <section class="page slide-page no-header-page" id="page-wallet">
+
+  <!-- WALLET SCROLL CONTAINER -->
+  <div class="wlt-scroll" id="wlt-scroll">
+
+    <!-- ── HERO HEADER ── -->
+    <div class="wlt-hero">
+      <div class="wlt-hero-bg"></div>
+      <div class="wlt-hero-noise"></div>
+
+      <!-- Top bar -->
+      <div class="wlt-topbar">
+        <button class="wlt-back-btn" onclick="slideBack()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M19 12H5M12 5l-7 7 7 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
         </button>
-        <h1 class="page-title">Wallet</h1>
-      </header>
-      <div class="wallet-page">
-        <div class="wallet-card-hero">
-          <div class="wallet-card-shine"></div>
-          <div class="wallet-card-chip"></div>
-          <div class="wallet-balance-label">Total Balance</div>
-          <div class="wallet-balance-amount">$1.43</div>
-          <div class="wallet-points-row">
-            <span class="wallet-points-badge">2,000 pts</span>
-            <span class="wallet-card-number">•••• •••• •••• 4291</span>
-          </div>
-        </div>
-        <div class="wallet-actions-row">
-          <button class="wallet-action-btn" onclick="walletAction('add')">
-            <div class="wallet-action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></div>
-            <span>Add</span>
-          </button>
-          <button class="wallet-action-btn" onclick="walletAction('send')">
-            <div class="wallet-action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
-            <span>Send</span>
-          </button>
-          <button class="wallet-action-btn" onclick="walletAction('withdraw')">
-            <div class="wallet-action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 19V5M5 12l7-7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
-            <span>Withdraw</span>
-          </button>
-          <button class="wallet-action-btn" onclick="walletAction('convert')">
-            <div class="wallet-action-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><polyline points="23 4 23 10 17 10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
-            <span>Convert</span>
+        <span class="wlt-topbar-title">MistyNote Pay</span>
+        <button class="wlt-notif-btn" onclick="walletAction('history')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" fill="currentColor"/>
+          </svg>
+          <span class="wlt-notif-dot"></span>
+        </button>
+      </div>
+
+      <!-- Balance display -->
+      <div class="wlt-balance-block">
+        <div class="wlt-balance-label">Available Balance</div>
+        <div class="wlt-balance-row">
+          <button class="wlt-currency-toggle" onclick="toggleWalletCurrency(this)">₦</button>
+          <div class="wlt-balance-amount" id="wlt-balance">1,430.00</div>
+          <button class="wlt-eye-btn" onclick="toggleBalanceVisibility(this)" aria-label="Toggle balance">
+            <svg class="eye-on" width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg>
+            <svg class="eye-off hidden" width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="1" y1="1" x2="23" y2="23" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
           </button>
         </div>
-        <div class="wallet-txns">
-          <p class="section-label">Recent Transactions</p>
-          <div class="txn-item">
-            <div class="txn-icon txn-in"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 19V5M5 12l7 7 7-7" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg></div>
-            <div class="txn-info"><p class="txn-title">Points converted</p><p class="txn-date">Today, 2:14 PM</p></div>
-            <span class="txn-amount txn-positive">+$50.00</span>
+        <div class="wlt-subbalance-row">
+          <span class="wlt-sub-item">
+            <span class="wlt-sub-dot" style="background:var(--accent)"></span>
+            Escrow <strong>₦0.00</strong>
+          </span>
+          <span class="wlt-sub-divider"></span>
+          <span class="wlt-sub-item">
+            <span class="wlt-sub-dot" style="background:var(--gold)"></span>
+            Points <strong>2,000 pts</strong>
+          </span>
+        </div>
+      </div>
+
+      <!-- Primary action buttons -->
+      <div class="wlt-primary-actions">
+        <button class="wlt-act wlt-act-add" onclick="openWalletSheet('add')">
+          <div class="wlt-act-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
           </div>
-          <div class="txn-item">
-            <div class="txn-icon txn-out"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12l7-7 7 7" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg></div>
-            <div class="txn-info"><p class="txn-title">Withdrawal</p><p class="txn-date">Yesterday, 10:30 AM</p></div>
-            <span class="txn-amount txn-negative">-$20.00</span>
+          <span>Add Money</span>
+        </button>
+        <button class="wlt-act wlt-act-send" onclick="openWalletSheet('send')">
+          <div class="wlt-act-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </div>
-          <div class="txn-item">
-            <div class="txn-icon txn-in"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 19V5M5 12l7 7 7-7" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg></div>
-            <div class="txn-info"><p class="txn-title">Gift received</p><p class="txn-date">Jan 30, 3:45 PM</p></div>
-            <span class="txn-amount txn-positive">+$10.00</span>
+          <span>Send</span>
+        </button>
+        <button class="wlt-act wlt-act-request" onclick="openWalletSheet('request')">
+          <div class="wlt-act-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 19V5M5 12l7 7 7-7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+          </div>
+          <span>Request</span>
+        </button>
+        <button class="wlt-act wlt-act-withdraw" onclick="openWalletSheet('withdraw')">
+          <div class="wlt-act-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" stroke-width="2"/><path d="M2 10h20" stroke="currentColor" stroke-width="2"/></svg>
+          </div>
+          <span>Withdraw</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ── PEOPLE TO PAY (P2P) ── -->
+    <div class="wlt-section">
+      <div class="wlt-section-header">
+        <span class="wlt-section-title">Quick Pay</span>
+        <button class="wlt-section-more" onclick="openWalletSheet('find-people')">See all</button>
+      </div>
+      <div class="wlt-people-scroll" id="wlt-people-scroll">
+        <button class="wlt-person-tile wlt-add-person" onclick="openWalletSheet('find-people')">
+          <div class="wlt-person-avatar wlt-add-avatar">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+          </div>
+          <span class="wlt-person-name">Find</span>
+        </button>
+        <div id="wlt-people-dynamic"></div>
+      </div>
+    </div>
+
+    <!-- ── SPLIT BILL QUICK ACTION ── -->
+    <div class="wlt-split-card" onclick="openWalletSheet('split')">
+      <div class="wlt-split-left">
+        <div class="wlt-split-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div>
+          <div class="wlt-split-title">Split a Bill</div>
+          <div class="wlt-split-sub">Divide expenses with friends</div>
+        </div>
+      </div>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </div>
+
+    <!-- ── PENDING REQUESTS ── -->
+    <div class="wlt-section" id="wlt-pending-section">
+      <div class="wlt-section-header">
+        <span class="wlt-section-title">Pending</span>
+        <span class="wlt-pending-badge" id="wlt-pending-count">2</span>
+      </div>
+      <div class="wlt-pending-item">
+        <img class="wlt-pending-avatar" src="https://api.dicebear.com/7.x/adventurer/svg?seed=ada123" alt="">
+        <div class="wlt-pending-info">
+          <div class="wlt-pending-name">Ada O. <span class="wlt-pending-type wlt-req">requested</span></div>
+          <div class="wlt-pending-note">🍕 "Pizza night split"</div>
+          <div class="wlt-pending-time">2h ago</div>
+        </div>
+        <div class="wlt-pending-amount">₦2,500</div>
+        <div class="wlt-pending-btns">
+          <button class="wlt-pend-decline" onclick="handlePendingRequest(this,'decline')">✕</button>
+          <button class="wlt-pend-accept" onclick="handlePendingRequest(this,'accept')">Pay</button>
+        </div>
+      </div>
+      <div class="wlt-pending-item">
+        <img class="wlt-pending-avatar" src="https://api.dicebear.com/7.x/adventurer/svg?seed=chidi44" alt="">
+        <div class="wlt-pending-info">
+          <div class="wlt-pending-name">Chidi M. <span class="wlt-pending-type wlt-req">requested</span></div>
+          <div class="wlt-pending-note">🚕 "Ride home"</div>
+          <div class="wlt-pending-time">Yesterday</div>
+        </div>
+        <div class="wlt-pending-amount">₦800</div>
+        <div class="wlt-pending-btns">
+          <button class="wlt-pend-decline" onclick="handlePendingRequest(this,'decline')">✕</button>
+          <button class="wlt-pend-accept" onclick="handlePendingRequest(this,'accept')">Pay</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── RECENT ACTIVITY FEED ── -->
+    <div class="wlt-section">
+      <div class="wlt-section-header">
+        <span class="wlt-section-title">Activity</span>
+        <button class="wlt-section-more" onclick="walletAction('history')">All</button>
+      </div>
+      <div class="wlt-txn-tabs">
+        <button class="wlt-txn-tab active" onclick="filterWalletTxns(this,'all')">All</button>
+        <button class="wlt-txn-tab" onclick="filterWalletTxns(this,'send')">Sent</button>
+        <button class="wlt-txn-tab" onclick="filterWalletTxns(this,'receive')">Received</button>
+        <button class="wlt-txn-tab" onclick="filterWalletTxns(this,'purchase')">Purchases</button>
+      </div>
+      <div class="wlt-txn-list" id="wlt-txn-list">
+        <div class="wlt-txn-item" data-type="send">
+          <div class="wlt-txn-left">
+            <div class="wlt-txn-avatar-wrap">
+              <img class="wlt-txn-avatar" src="https://api.dicebear.com/7.x/adventurer/svg?seed=kemi99" alt="">
+              <div class="wlt-txn-badge wlt-badge-out">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>
+              </div>
+            </div>
+            <div class="wlt-txn-details">
+              <div class="wlt-txn-name">Kemi Adeyemi</div>
+              <div class="wlt-txn-note">🎂 "Happy Birthday!"</div>
+              <div class="wlt-txn-time">Today · 2:14 PM</div>
+            </div>
+          </div>
+          <div class="wlt-txn-right">
+            <div class="wlt-txn-amount wlt-amount-neg">-₦5,000</div>
+            <div class="wlt-txn-status completed">Completed</div>
+          </div>
+        </div>
+        <div class="wlt-txn-item" data-type="receive">
+          <div class="wlt-txn-left">
+            <div class="wlt-txn-avatar-wrap">
+              <img class="wlt-txn-avatar" src="https://api.dicebear.com/7.x/adventurer/svg?seed=tunde55" alt="">
+              <div class="wlt-txn-badge wlt-badge-in">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none"><path d="M12 19V5M5 12l7 7 7-7" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>
+              </div>
+            </div>
+            <div class="wlt-txn-details">
+              <div class="wlt-txn-name">Tunde Bello</div>
+              <div class="wlt-txn-note">💼 "Freelance payment"</div>
+              <div class="wlt-txn-time">Yesterday · 10:30 AM</div>
+            </div>
+          </div>
+          <div class="wlt-txn-right">
+            <div class="wlt-txn-amount wlt-amount-pos">+₦15,000</div>
+            <div class="wlt-txn-status completed">Completed</div>
+          </div>
+        </div>
+        <div class="wlt-txn-item" data-type="purchase">
+          <div class="wlt-txn-left">
+            <div class="wlt-txn-avatar-wrap">
+              <div class="wlt-txn-avatar wlt-txn-store-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 10a4 4 0 01-8 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <div class="wlt-txn-badge wlt-badge-store">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" stroke="white" stroke-width="2.5"/></svg>
+              </div>
+            </div>
+            <div class="wlt-txn-details">
+              <div class="wlt-txn-name">MistyNote Market</div>
+              <div class="wlt-txn-note">🛒 Ankara fabric — Ada's Store</div>
+              <div class="wlt-txn-time">Jan 30 · 3:45 PM</div>
+            </div>
+          </div>
+          <div class="wlt-txn-right">
+            <div class="wlt-txn-amount wlt-amount-neg">-₦8,200</div>
+            <div class="wlt-txn-status escrow">In Escrow</div>
+          </div>
+        </div>
+        <div class="wlt-txn-item" data-type="receive">
+          <div class="wlt-txn-left">
+            <div class="wlt-txn-avatar-wrap">
+              <div class="wlt-txn-avatar wlt-txn-bank-icon">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11M8 14v3M12 14v3M16 14v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              </div>
+              <div class="wlt-txn-badge wlt-badge-in">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none"><path d="M12 19V5M5 12l7 7 7-7" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>
+              </div>
+            </div>
+            <div class="wlt-txn-details">
+              <div class="wlt-txn-name">Bank Deposit</div>
+              <div class="wlt-txn-note">💳 Via Flutterwave · GTBank</div>
+              <div class="wlt-txn-time">Jan 28 · 9:00 AM</div>
+            </div>
+          </div>
+          <div class="wlt-txn-right">
+            <div class="wlt-txn-amount wlt-amount-pos">+₦20,000</div>
+            <div class="wlt-txn-status completed">Completed</div>
           </div>
         </div>
       </div>
-    </section>
+    </div>
+
+    <!-- ── LINKED ACCOUNTS ── -->
+    <div class="wlt-section">
+      <div class="wlt-section-header">
+        <span class="wlt-section-title">Linked Accounts</span>
+        <button class="wlt-section-more" onclick="openWalletSheet('link-bank')">+ Add</button>
+      </div>
+      <div class="wlt-bank-card" onclick="openWalletSheet('manage-bank')">
+        <div class="wlt-bank-logo">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
+        <div class="wlt-bank-info">
+          <div class="wlt-bank-name">GTBank</div>
+          <div class="wlt-bank-num">•••• 4291</div>
+        </div>
+        <div class="wlt-bank-verified">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="var(--green)" stroke-width="2.5" stroke-linecap="round"/></svg>
+          Verified
+        </div>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+      <button class="wlt-add-card-btn hidden" id="wlt-add-card" onclick="openFlutterwaveCard()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" stroke-width="2"/><path d="M2 10h20" stroke="currentColor" stroke-width="2"/></svg>
+        Add Debit / Credit Card
+      </button>
+    </div>
+
+    <div style="height:32px"></div>
+  </div><!-- /wlt-scroll -->
+
+
+  <!-- ══════════════════════════════════
+       ACTION SHEETS
+  ══════════════════════════════════ -->
+
+  <!-- SHEET: SEND MONEY -->
+  <div class="wlt-sheet hidden" id="sheet-send" role="dialog" aria-label="Send money">
+    <div class="wlt-sheet-backdrop" onclick="closeWalletSheet('send')"></div>
+    <div class="wlt-sheet-body">
+      <div class="wlt-sheet-handle"></div>
+      <div class="wlt-sheet-header">
+        <button class="wlt-sheet-close" onclick="closeWalletSheet('send')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        </button>
+        <h2 class="wlt-sheet-title">Send Money</h2>
+        <div style="width:36px"></div>
+      </div>
+      <div class="wlt-send-search-wrap">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <input class="wlt-send-search" id="send-search" type="text" placeholder="Search name, @username or phone" oninput="searchWalletUser(this.value,'send')" autocomplete="off" autocorrect="off" spellcheck="false">
+        <button class="wlt-send-scan" onclick="openQRScan('send')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/><path d="M14 14h.01M18 14h3M14 18v3M18 18h3v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <p class="wlt-sheet-sublabel">Recent</p>
+      <div class="wlt-recipients-scroll" id="send-recipients">
+        <div class="wlt-recipient-chip"><img src="https://api.dicebear.com/7.x/adventurer/svg?seed=ada123" alt=""><span>Ada O.</span></div>
+        <div class="wlt-recipient-chip"><img src="https://api.dicebear.com/7.x/adventurer/svg?seed=tunde55" alt=""><span>Tunde</span></div>
+        <div class="wlt-recipient-chip"><img src="https://api.dicebear.com/7.x/adventurer/svg?seed=kemi99" alt=""><span>Kemi</span></div>
+        <div class="wlt-recipient-chip"><img src="https://api.dicebear.com/7.x/adventurer/svg?seed=emeka7" alt=""><span>Emeka</span></div>
+      </div>
+      <div class="wlt-search-results hidden" id="send-results"></div>
+      <div class="wlt-amount-entry" id="send-amount-section">
+        <div class="wlt-selected-user hidden" id="send-selected-user">
+          <img class="wlt-sel-avatar" id="send-sel-avatar" src="" alt="">
+          <div>
+            <div class="wlt-sel-name" id="send-sel-name"></div>
+            <div class="wlt-sel-username" id="send-sel-username"></div>
+          </div>
+          <button class="wlt-sel-remove" onclick="clearSendRecipient()">✕</button>
+        </div>
+        <div class="wlt-amount-display">
+          <span class="wlt-amount-currency">₦</span>
+          <input class="wlt-amount-input" id="send-amount-input" type="tel" placeholder="0" inputmode="decimal" oninput="updateSendAmount(this.value)">
+        </div>
+        <div class="wlt-balance-hint" id="send-balance-hint">Balance: ₦1,430.00</div>
+        <div class="wlt-note-wrap">
+          <span class="wlt-note-emoji" onclick="pickNoteEmoji(this)">😊</span>
+          <input class="wlt-note-input" id="send-note" type="text" placeholder="What's it for?" maxlength="100">
+        </div>
+        <button class="wlt-confirm-btn" id="send-confirm-btn" onclick="confirmSendMoney()" disabled>
+          <span>Send</span>
+          <span class="wlt-confirm-amount" id="send-confirm-amount"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SHEET: REQUEST MONEY -->
+  <div class="wlt-sheet hidden" id="sheet-request" role="dialog" aria-label="Request money">
+    <div class="wlt-sheet-backdrop" onclick="closeWalletSheet('request')"></div>
+    <div class="wlt-sheet-body">
+      <div class="wlt-sheet-handle"></div>
+      <div class="wlt-sheet-header">
+        <button class="wlt-sheet-close" onclick="closeWalletSheet('request')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        </button>
+        <h2 class="wlt-sheet-title">Request Money</h2>
+        <div style="width:36px"></div>
+      </div>
+      <div class="wlt-send-search-wrap">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <input class="wlt-send-search" type="text" placeholder="Who do you want to charge?" oninput="searchWalletUser(this.value,'request')" autocomplete="off">
+      </div>
+      <p class="wlt-sheet-sublabel">Recent</p>
+      <div class="wlt-recipients-scroll">
+        <div class="wlt-recipient-chip"><img src="https://api.dicebear.com/7.x/adventurer/svg?seed=chidi44" alt=""><span>Chidi</span></div>
+        <div class="wlt-recipient-chip"><img src="https://api.dicebear.com/7.x/adventurer/svg?seed=ada123" alt=""><span>Ada O.</span></div>
+      </div>
+      <div class="wlt-amount-entry">
+        <div class="wlt-amount-display">
+          <span class="wlt-amount-currency">₦</span>
+          <input class="wlt-amount-input" type="tel" placeholder="0" inputmode="decimal">
+        </div>
+        <div class="wlt-note-wrap">
+          <span class="wlt-note-emoji">📝</span>
+          <input class="wlt-note-input" type="text" placeholder="Add a note (optional)" maxlength="100">
+        </div>
+        <button class="wlt-confirm-btn wlt-request-btn" onclick="confirmRequestMoney()">Request</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SHEET: ADD MONEY -->
+  <div class="wlt-sheet hidden" id="sheet-add" role="dialog" aria-label="Add money">
+    <div class="wlt-sheet-backdrop" onclick="closeWalletSheet('add')"></div>
+    <div class="wlt-sheet-body">
+      <div class="wlt-sheet-handle"></div>
+      <div class="wlt-sheet-header">
+        <button class="wlt-sheet-close" onclick="closeWalletSheet('add')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        </button>
+        <h2 class="wlt-sheet-title">Add Money</h2>
+        <div style="width:36px"></div>
+      </div>
+      <div class="wlt-amount-entry">
+        <div class="wlt-amount-display">
+          <span class="wlt-amount-currency">₦</span>
+          <input class="wlt-amount-input" id="add-amount-input" type="tel" placeholder="0" inputmode="decimal">
+        </div>
+        <div class="wlt-quick-amounts">
+          <button class="wlt-qa" onclick="setQuickAmount('add',500)">₦500</button>
+          <button class="wlt-qa" onclick="setQuickAmount('add',1000)">₦1,000</button>
+          <button class="wlt-qa" onclick="setQuickAmount('add',2500)">₦2,500</button>
+          <button class="wlt-qa" onclick="setQuickAmount('add',5000)">₦5,000</button>
+          <button class="wlt-qa" onclick="setQuickAmount('add',10000)">₦10,000</button>
+        </div>
+      </div>
+      <p class="wlt-sheet-sublabel">Choose payment method</p>
+      <div class="wlt-pay-methods">
+        <button class="wlt-pay-method" onclick="initiateFlutterwave('card')">
+          <div class="wlt-pay-method-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" stroke-width="2"/><path d="M2 10h20" stroke="currentColor" stroke-width="2"/></svg></div>
+          <div class="wlt-pay-method-info"><div class="wlt-pay-method-name">Debit / Credit Card</div><div class="wlt-pay-method-sub">Visa, Mastercard, Verve</div></div>
+          <div class="wlt-pay-method-badge">Instant</div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+        <button class="wlt-pay-method" onclick="initiateFlutterwave('bank_transfer')">
+          <div class="wlt-pay-method-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+          <div class="wlt-pay-method-info"><div class="wlt-pay-method-name">Bank Transfer</div><div class="wlt-pay-method-sub">Use your bank app to transfer</div></div>
+          <div class="wlt-pay-method-badge">Auto-confirm</div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+        <button class="wlt-pay-method" onclick="initiateFlutterwave('ussd')">
+          <div class="wlt-pay-method-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="5" y="2" width="14" height="20" rx="2" stroke="currentColor" stroke-width="2"/><path d="M12 18h.01" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></div>
+          <div class="wlt-pay-method-info"><div class="wlt-pay-method-name">USSD</div><div class="wlt-pay-method-sub">*737#, *901#, *966# and more</div></div>
+          <div class="wlt-pay-method-badge">No internet</div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+        <button class="wlt-pay-method" onclick="initiateFlutterwave('mobile_money')">
+          <div class="wlt-pay-method-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="wlt-pay-method-info"><div class="wlt-pay-method-name">Mobile Money</div><div class="wlt-pay-method-sub">MTN MoMo, Airtel, Opay</div></div>
+          <div class="wlt-pay-method-badge">Popular</div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="wlt-security-note">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="2"/></svg>
+        Secured by Flutterwave · CBN Licensed
+      </div>
+    </div>
+  </div>
+
+  <!-- SHEET: WITHDRAW -->
+  <div class="wlt-sheet hidden" id="sheet-withdraw" role="dialog" aria-label="Withdraw money">
+    <div class="wlt-sheet-backdrop" onclick="closeWalletSheet('withdraw')"></div>
+    <div class="wlt-sheet-body">
+      <div class="wlt-sheet-handle"></div>
+      <div class="wlt-sheet-header">
+        <button class="wlt-sheet-close" onclick="closeWalletSheet('withdraw')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        </button>
+        <h2 class="wlt-sheet-title">Withdraw</h2>
+        <div style="width:36px"></div>
+      </div>
+      <div class="wlt-withdraw-dest">
+        <div class="wlt-bank-card" style="margin:0 0 4px">
+          <div class="wlt-bank-logo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
+          <div class="wlt-bank-info"><div class="wlt-bank-name">GTBank</div><div class="wlt-bank-num">•••• 4291</div></div>
+          <button class="wlt-section-more" onclick="openWalletSheet('link-bank')">Change</button>
+        </div>
+      </div>
+      <div class="wlt-amount-entry">
+        <div class="wlt-amount-display">
+          <span class="wlt-amount-currency">₦</span>
+          <input class="wlt-amount-input" id="withdraw-amount" type="tel" placeholder="0" inputmode="decimal">
+        </div>
+        <div class="wlt-balance-hint">Available: ₦1,430.00 · Fee: ₦50</div>
+        <div class="wlt-quick-amounts">
+          <button class="wlt-qa" onclick="setQuickAmount('withdraw',500)">₦500</button>
+          <button class="wlt-qa" onclick="setQuickAmount('withdraw',1000)">₦1,000</button>
+          <button class="wlt-qa" onclick="setQuickAmount('withdraw',1430)">All</button>
+        </div>
+        <button class="wlt-confirm-btn wlt-withdraw-btn" onclick="confirmWithdraw()">Withdraw to Bank</button>
+        <div class="wlt-withdraw-eta">Typically arrives within 24 hours</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SHEET: QR PAY/RECEIVE -->
+  <div class="wlt-sheet hidden" id="sheet-qr" role="dialog" aria-label="QR Code">
+    <div class="wlt-sheet-backdrop" onclick="closeWalletSheet('qr')"></div>
+    <div class="wlt-sheet-body wlt-sheet-body-qr">
+      <div class="wlt-sheet-handle"></div>
+      <div class="wlt-sheet-header">
+        <button class="wlt-sheet-close" onclick="closeWalletSheet('qr')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        </button>
+        <h2 class="wlt-sheet-title">My QR Code</h2>
+        <button class="wlt-qr-share" onclick="shareQRCode()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="18" cy="5" r="3" stroke="currentColor" stroke-width="2"/><circle cx="6" cy="12" r="3" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="19" r="3" stroke="currentColor" stroke-width="2"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="wlt-qr-body">
+        <div class="wlt-qr-avatar-wrap"><img class="wlt-qr-avatar" id="qr-avatar" src="" alt=""></div>
+        <div class="wlt-qr-name" id="qr-name">@username</div>
+        <div class="wlt-qr-placeholder" id="qr-code-display">
+          <div class="wlt-qr-mock"><div class="wlt-qr-inner"></div></div>
+        </div>
+        <p class="wlt-qr-hint">Scan to pay or share your link</p>
+        <button class="wlt-copy-link" onclick="copyPayLink()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="13" height="13" rx="2" stroke="currentColor" stroke-width="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" stroke="currentColor" stroke-width="2"/></svg>
+          Copy pay link
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── FLOATING QR BUTTON ── -->
+  <button class="wlt-qr-fab hidden" onclick="openWalletSheet('qr')" aria-label="QR code">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/><path d="M14 14h.01M18 14h3M14 18v3M18 18h3v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>
+
+</section>
+    <!-- /WALLET PAGE -->
 
     <!-- ══════════════════════════════════════════
          PAGE: SETTINGS
