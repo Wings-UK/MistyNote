@@ -6841,6 +6841,13 @@ function closeMessagesInbox() {
     navMi.style.opacity = '';
   }
   const backTo = lastMainPage || 'feed';
+  document.getElementById('page-' + backTo)?.classList.add('active');
+  document.querySelectorAll('.nav-btn[data-page]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.page === backTo);
+  });
+}
+
+// ── Load messages for a conversation ──
 async function loadChatMessages(convId) {
   const msgsEl = document.getElementById('chat-messages');
   if (!msgsEl) return;
