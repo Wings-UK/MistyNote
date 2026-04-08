@@ -5725,3 +5725,392 @@
 
 
 
+
+
+/* ══════════════════════════════════════════════════════════════
+   WALLET — Cash App UI overrides for MistyNote
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Cash App color tokens ── */
+:root {
+  --ca-green:      #00d632;
+  --ca-green-dark: #00a826;
+  --ca-green-soft: rgba(0,214,50,0.12);
+  --ca-black:      #000000;
+  --ca-dark:       #0d0d0d;
+  --ca-card:       #111111;
+  --ca-card2:      #1a1a1a;
+  --ca-border:     rgba(255,255,255,0.07);
+  --ca-text:       #ffffff;
+  --ca-text2:      rgba(255,255,255,0.55);
+  --ca-text3:      rgba(255,255,255,0.3);
+}
+
+/* ── Wallet scroll container ── */
+#page-wallet .wlt-scroll {
+  padding-bottom: 40px;
+  background: var(--ca-dark);
+}
+
+/* ══════════════════════
+   HERO — Cash App black
+══════════════════════ */
+.ca-hero {
+  background: var(--ca-black) !important;
+  padding: calc(var(--safe-top) + 10px) 20px 32px !important;
+  position: relative;
+  overflow: hidden;
+}
+.ca-hero-glow {
+  position: absolute;
+  width: 340px; height: 340px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0,214,50,0.12) 0%, transparent 70%);
+  top: -80px; left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.ca-hero .wlt-hero-bg,
+.ca-hero .wlt-hero-noise { display: none; }
+
+/* ── Topbar ── */
+.ca-topbar { margin-bottom: 32px !important; }
+.ca-back-btn {
+  background: rgba(255,255,255,0.08) !important;
+  border-color: rgba(255,255,255,0.1) !important;
+  color: rgba(255,255,255,0.7) !important;
+}
+.ca-topbar-center { display: flex; align-items: center; gap: 7px; }
+.ca-topbar-logo {
+  width: 28px; height: 28px;
+  background: var(--ca-green);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+}
+.ca-topbar-title {
+  font-size: 15px; font-weight: 800;
+  color: #ffffff; letter-spacing: -0.2px;
+}
+.ca-notif-btn {
+  background: rgba(255,255,255,0.08) !important;
+  border-color: rgba(255,255,255,0.1) !important;
+  color: rgba(255,255,255,0.7) !important;
+}
+
+/* ── Balance ── */
+.ca-balance-block {
+  text-align: center;
+  margin-bottom: 36px !important;
+}
+.ca-balance-label {
+  font-size: 11px !important;
+  font-weight: 600;
+  color: rgba(255,255,255,0.35) !important;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+.ca-balance-row {
+  justify-content: center;
+  gap: 0 !important;
+  margin-bottom: 14px !important;
+  position: relative;
+}
+.ca-eye-btn {
+  position: absolute;
+  left: -4px;
+  color: rgba(255,255,255,0.35) !important;
+  padding: 4px;
+}
+.ca-balance-amount-wrap {
+  display: flex; align-items: flex-start;
+  gap: 8px;
+  justify-content: center;
+}
+.ca-mp-diamond {
+  font-size: 28px; font-weight: 900;
+  color: var(--ca-green);
+  line-height: 1.1; margin-top: 8px;
+}
+.ca-balance-amount {
+  font-size: 56px !important;
+  font-weight: 900 !important;
+  color: #ffffff !important;
+  letter-spacing: -2px !important;
+  line-height: 1 !important;
+  font-family: -apple-system, 'SF Pro Display', sans-serif;
+}
+.ca-subbrow {
+  background: rgba(255,255,255,0.06) !important;
+  border-color: rgba(255,255,255,0.08) !important;
+  margin: 0 auto;
+}
+.ca-subbrow .wlt-sub-item {
+  color: rgba(255,255,255,0.45) !important;
+  font-size: 11px !important;
+}
+.ca-subbrow .wlt-sub-item strong { color: rgba(255,255,255,0.75) !important; }
+
+/* ── 4 Action buttons ── */
+.ca-actions { gap: 8px !important; }
+.ca-act span {
+  font-size: 11px !important;
+  font-weight: 700;
+  color: rgba(255,255,255,0.7) !important;
+}
+.ca-act-icon {
+  width: 54px !important; height: 54px !important;
+  border-radius: 50% !important;
+  color: white;
+  transition: transform 0.14s, opacity 0.14s;
+}
+.ca-act:active .ca-act-icon { transform: scale(0.9); opacity: 0.8; }
+.ca-act-add {
+  background: var(--ca-green) !important;
+  box-shadow: 0 4px 20px rgba(0,214,50,0.4) !important;
+  color: #000 !important;
+}
+.ca-act-add svg { stroke: #000 !important; }
+.ca-act-send {
+  background: linear-gradient(135deg, #0ea5e9, #38bdf8) !important;
+  box-shadow: 0 4px 16px rgba(14,165,233,0.35) !important;
+}
+.ca-act-request {
+  background: rgba(255,255,255,0.12) !important;
+  border: 1.5px solid rgba(255,255,255,0.18) !important;
+}
+.ca-act-cashout {
+  background: rgba(0,214,50,0.15) !important;
+  border: 1.5px solid rgba(0,214,50,0.3) !important;
+  color: var(--ca-green) !important;
+}
+.ca-act-cashout svg { stroke: var(--ca-green) !important; }
+
+/* ══════════════════════
+   BODY SECTIONS
+══════════════════════ */
+.ca-section { padding: 20px 16px 4px !important; }
+.ca-section-title {
+  font-size: 16px !important; font-weight: 800 !important;
+  color: #ffffff !important;
+}
+.ca-section-more {
+  color: var(--ca-green) !important;
+  font-size: 13px; font-weight: 600;
+}
+.ca-add-avatar {
+  background: rgba(0,214,50,0.12) !important;
+  border: 2px dashed rgba(0,214,50,0.4) !important;
+  color: var(--ca-green) !important;
+}
+
+/* ── Bills grid ── */
+.ca-bills-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.ca-bill-tile {
+  display: flex; flex-direction: column;
+  align-items: center; gap: 8px;
+  background: var(--ca-card);
+  border: 1px solid var(--ca-border);
+  border-radius: 16px;
+  padding: 14px 8px;
+  transition: background 0.12s;
+}
+.ca-bill-tile:active { background: var(--ca-card2); }
+.ca-bill-tile span {
+  font-size: 11.5px; font-weight: 700;
+  color: rgba(255,255,255,0.7); text-align: center;
+}
+.ca-bill-icon {
+  width: 48px !important; height: 48px !important;
+  border-radius: 14px !important;
+}
+
+/* ── Split card ── */
+.ca-split-card {
+  margin: 4px 16px 0 !important;
+  background: var(--ca-card) !important;
+  border: 1px solid var(--ca-border) !important;
+}
+.ca-split-icon {
+  background: var(--ca-green) !important;
+  color: #000 !important;
+}
+.ca-split-icon svg { stroke: #000 !important; }
+.ca-split-title { color: #ffffff !important; }
+
+/* ── Pending items ── */
+.ca-pending-item {
+  background: var(--ca-card) !important;
+  border: none !important;
+  border-bottom: 1px solid var(--ca-border) !important;
+  border-radius: 0 !important;
+  padding: 14px 0 !important;
+  margin-bottom: 0 !important;
+}
+.ca-pending-item:first-of-type { border-top: 1px solid var(--ca-border) !important; }
+.ca-pending-amount {
+  font-size: 15px !important; font-weight: 800 !important;
+  color: #fff !important;
+}
+.ca-pend-decline {
+  background: rgba(255,255,255,0.08) !important;
+  color: rgba(255,255,255,0.6) !important;
+}
+.ca-pend-accept {
+  background: var(--ca-green) !important;
+  color: #000 !important;
+  font-weight: 800 !important;
+}
+
+/* ── Transaction tabs ── */
+.ca-txn-tabs { gap: 6px !important; margin-bottom: 10px !important; }
+.ca-txn-tab {
+  background: var(--ca-card) !important;
+  border: 1px solid var(--ca-border) !important;
+  color: rgba(255,255,255,0.5) !important;
+  font-size: 12px !important; font-weight: 700 !important;
+}
+.ca-txn-tab.active {
+  background: var(--ca-green) !important;
+  border-color: transparent !important;
+  color: #000 !important;
+}
+
+/* ── Transaction list ── */
+.ca-txn-list {
+  display: flex; flex-direction: column;
+  gap: 0 !important;
+  background: var(--ca-card);
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--ca-border);
+}
+.ca-txn-item {
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 1px solid var(--ca-border) !important;
+  border-radius: 0 !important;
+  margin-bottom: 0 !important;
+  padding: 14px 16px !important;
+  transition: background 0.1s;
+}
+.ca-txn-item:last-child { border-bottom: none !important; }
+.ca-txn-item:active { background: rgba(255,255,255,0.04) !important; }
+.ca-txn-item.hidden { display: none !important; }
+.ca-txn-avatar {
+  width: 42px !important; height: 42px !important;
+  border-radius: 50% !important;
+}
+.ca-txn-store-icon,
+.ca-txn-bank-icon,
+.ca-txn-bill-icon {
+  width: 42px !important; height: 42px !important;
+  background: var(--ca-card2) !important;
+  border: 1px solid var(--ca-border) !important;
+  border-radius: 12px !important;
+  color: rgba(255,255,255,0.5) !important;
+  display: flex; align-items: center; justify-content: center;
+}
+.ca-txn-badge-out { background: #0ea5e9 !important; }
+.ca-txn-badge-in  { background: var(--ca-green) !important; }
+.ca-txn-badge-store { background: var(--gold) !important; }
+.ca-txn-name {
+  font-size: 14px !important; font-weight: 700 !important;
+  color: #ffffff !important;
+}
+.ca-txn-note {
+  font-size: 12px !important;
+  color: rgba(255,255,255,0.45) !important;
+}
+.ca-txn-time {
+  font-size: 11px !important;
+  color: rgba(255,255,255,0.3) !important;
+}
+.ca-txn-amount {
+  font-size: 15px !important; font-weight: 800 !important;
+  color: #ffffff !important;
+}
+.ca-amount-pos { color: var(--ca-green) !important; }
+.ca-txn-status {
+  font-size: 10.5px !important; font-weight: 700 !important;
+  border-radius: 6px; padding: 2px 7px;
+  margin-top: 4px; display: inline-block;
+}
+.ca-txn-status.completed { background: rgba(0,214,50,0.12) !important; color: var(--ca-green) !important; }
+.ca-txn-status.pending   { background: rgba(245,166,35,0.14) !important; color: var(--gold) !important; }
+.ca-txn-status.escrow    { background: rgba(108,71,255,0.16) !important; color: #a78bfa !important; }
+.ca-txn-status.failed    { background: rgba(240,56,90,0.14) !important; color: #f0385a !important; }
+
+/* ══════════════════════
+   SELL / WITHDRAW SHEET
+══════════════════════ */
+.ca-sheet-body { background: var(--ca-dark) !important; }
+.ca-cashout-banner {
+  display: flex; align-items: flex-start; gap: 10px;
+  background: rgba(0,214,50,0.08);
+  border: 1px solid rgba(0,214,50,0.2);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin: 0 0 16px;
+  font-size: 12.5px;
+  color: rgba(255,255,255,0.55);
+  line-height: 1.6;
+}
+.ca-cashout-banner svg { flex-shrink: 0; margin-top: 2px; }
+.ca-cashout-options {
+  display: flex; flex-direction: column; gap: 8px;
+  margin-bottom: 16px;
+}
+.ca-cashout-opt {
+  background: var(--ca-card) !important;
+  border: 1px solid var(--ca-border) !important;
+}
+.ca-cashout-opt:active { background: var(--ca-card2) !important; }
+.ca-cashout-opt-icon { border-radius: 12px !important; color: white; }
+.ca-cashout-opt .wlt-pay-method-name { color: #fff !important; }
+.ca-cashout-opt .wlt-pay-method-sub  { color: rgba(255,255,255,0.45) !important; }
+
+/* ══════════════════════
+   BOTTOM NAV — hide when wallet active
+══════════════════════ */
+#bottom-nav.ca-nav-hidden,
+.bottom-nav.ca-nav-hidden,
+nav.ca-nav-hidden { display: none !important; }
+
+/* ══════════════════════
+   DARK THEME
+══════════════════════ */
+[data-theme="dark"] #page-wallet .wlt-scroll { background: #000; }
+[data-theme="dark"] .ca-hero { background: #000 !important; }
+[data-theme="dark"] .ca-txn-list { background: #111; }
+[data-theme="dark"] .ca-bill-tile { background: #111; }
+[data-theme="dark"] .ca-pending-item { background: transparent !important; }
+
+/* ══════════════════════
+   LIGHT THEME adjustments
+══════════════════════ */
+[data-theme="light"] .ca-balance-label { color: rgba(255,255,255,0.4) !important; }
+[data-theme="light"] .ca-txn-list {
+  background: #f4f3f0;
+  border-color: rgba(0,0,0,0.07);
+}
+[data-theme="light"] .ca-txn-item { border-bottom-color: rgba(0,0,0,0.06) !important; }
+[data-theme="light"] .ca-txn-name { color: #111 !important; }
+[data-theme="light"] .ca-txn-note { color: #5a5754 !important; }
+[data-theme="light"] .ca-txn-time { color: #9e9b97 !important; }
+[data-theme="light"] .ca-txn-amount { color: #111 !important; }
+[data-theme="light"] .ca-bill-tile { background: #fff; border-color: rgba(0,0,0,0.07); }
+[data-theme="light"] .ca-bill-tile span { color: #5a5754; }
+[data-theme="light"] .ca-section-title { color: #111 !important; }
+[data-theme="light"] .ca-pending-amount { color: #111 !important; }
+[data-theme="light"] .ca-pending-item {
+  background: #fff !important;
+  border-color: rgba(0,0,0,0.06) !important;
+}
+[data-theme="light"] .ca-split-title { color: #111 !important; }
+[data-theme="light"] .ca-split-card { background: rgba(0,214,50,0.05) !important; }
+[data-theme="light"] #page-wallet .wlt-scroll { background: #fafaf8; }
