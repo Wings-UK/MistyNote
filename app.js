@@ -9514,11 +9514,12 @@ function quickPayUser(userId, name, avatarUrl) {
 // ── SHEET MANAGEMENT ─────────────────────────────────────────
 // No 'withdraw' sheet — Misty Points cannot be withdrawn
 const SHEET_MAP = {
-  'send':    'sheet-send',
-  'request': 'sheet-request',
-  'add':     'sheet-add',
-  'bills':   'sheet-bills',
-  'qr':      'sheet-qr',
+  'send':           'sheet-send',
+  'request':        'sheet-request',
+  'add':            'sheet-add',
+  'bills':          'sheet-bills',
+  'qr':             'sheet-qr',
+  'sell-withdraw':  'sheet-sell-withdraw',
 };
 
 function openWalletSheet(type) {
@@ -9534,9 +9535,12 @@ function openWalletSheet(type) {
     }
   }
   var labels = {
-    'split':       'Split Bill — coming soon ✨',
-    'find-people': 'Find People — coming soon ✨',
-    'history':     'Full Activity History — coming soon ✨',
+    'split':         'Split Bill — coming soon ✨',
+    'find-people':   'Find People — coming soon ✨',
+    'history':       'Full Activity History — coming soon ✨',
+    'sell-points':   'Sell MistyPoints — coming soon ✦',
+    'withdraw-bank': 'Withdraw to Bank — coming soon ✦',
+    'gift-points':   'Gift MistyPoints — coming soon ✦',
   };
   showToast(labels[type] || 'Coming soon ✨');
 }
@@ -9980,11 +9984,15 @@ function openBillSheet(type) {
 // ── LEGACY COMPAT ─────────────────────────────────────────────
 function walletAction(type) {
   var map = {
-    add:      'add',
-    send:     'send',
-    request:  'request',
-    bills:    'bills',
-    history:  'history',
+    add:             'add',
+    send:            'send',
+    request:         'request',
+    bills:           'bills',
+    history:         'history',
+    'sell-withdraw': 'sell-withdraw',
+    'sell-points':   'sell-points',
+    'withdraw-bank': 'withdraw-bank',
+    'gift-points':   'gift-points',
   };
   openWalletSheet(map[type] || type);
 }
