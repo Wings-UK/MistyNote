@@ -9517,6 +9517,7 @@ const SHEET_MAP = {
   'send':    'sheet-send',
   'request': 'sheet-request',
   'add':     'sheet-add',
+  'bills':   'sheet-bills',
   'qr':      'sheet-qr',
 };
 
@@ -9533,11 +9534,11 @@ function openWalletSheet(type) {
     }
   }
   var labels = {
-    'split':       'Split Bill \u2014 coming soon \u2728',
-    'find-people': 'Find People \u2014 coming soon \u2728',
-    'history':     'Full Activity History \u2014 coming soon \u2728',
+    'split':       'Split Bill — coming soon ✨',
+    'find-people': 'Find People — coming soon ✨',
+    'history':     'Full Activity History — coming soon ✨',
   };
-  showToast(labels[type] || 'Coming soon \u2728');
+  showToast(labels[type] || 'Coming soon ✨');
 }
 
 function closeWalletSheet(type) {
@@ -9652,6 +9653,20 @@ function setQuickAmount(context, points) {
   if (!el) return;
   el.value = points;
   el.dispatchEvent(new Event('input'));
+  updateBuyPointsPreview(points);
+}
+
+// ── BUY POINTS PREVIEW ────────────────────────────────────────
+// Shows user what they're paying for — no NGN amount ever exposed
+function updateBuyPointsPreview(val) {
+  var pts = parseFloat(val) || 0;
+  var hint = document.getElementById('buy-pts-preview');
+  if (!hint) return;
+  if (pts <= 0) {
+    hint.textContent = 'Enter how many MistyPoints to buy';
+    return;
+  }
+  hint.textContent = 'You will receive ✦' + pts.toLocaleString('en-NG') + ' · Payment via Flutterwave';
 }
 
 // ── BUY POINTS VIA FLUTTERWAVE ────────────────────────────────
@@ -9931,9 +9946,46 @@ function selectNoteEmoji(span, emoji, picker) {
   picker.remove(); emojiPickerOpen = false;
 }
 
+// ── VTPASS BILL PAYMENT ───────────────────────────────────────
+// Opens a targeted bill sheet. VTpass API integration wired here
+// when keys are ready. Each type maps to a VTpass serviceID.
+function openBillSheet(type) {
+  // Close the bills list sheet first
+  closeAllWalletSheets();
+
+  const billLabels = {
+    airtime:     'Airtime Top-up',
+    data:        'Data Bundle',
+    tv:          'TV / Cable',
+    electricity: 'Electricity',
+    betting:     'Betting / Gaming',
+    internet:    'Internet / Broadband',
+  };
+
+  const label = billLabels[type] || type;
+
+  // TODO: When VTpass keys are ready, dynamically build a form sheet
+  // for each bill type and deduct from walletState.points via RPC.
+  // VTpass serviceID map:
+  //   airtime     → mtn, airtel, glo, etisalat
+  //   data        → mtn-data, airtel-data, glo-data
+  //   tv          → dstv, gotv, startimes
+  //   electricity → ikeja-electric, eko-electric, ibadan-disco, etc.
+  //   betting     → bet9ja, sportybet, 1xbet
+  //   internet    → spectranet, smile-bundle
+
+  showToast(label + ' — coming soon ✨');
+}
+
 // ── LEGACY COMPAT ─────────────────────────────────────────────
 function walletAction(type) {
-  var map = { add: 'add', send: 'send', history: 'history' };
+  var map = {
+    add:      'add',
+    send:     'send',
+    request:  'request',
+    bills:    'bills',
+    history:  'history',
+  };
   openWalletSheet(map[type] || type);
 }
 
