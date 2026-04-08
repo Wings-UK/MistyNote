@@ -3716,65 +3716,6 @@
   .edit-textarea { resize: none; }
   
   /* ══════════════════════════════════════════
-     WALLET
-  ══════════════════════════════════════════ */
-  .wallet-page { padding: 16px; }
-  .wallet-card-hero {
-    position: relative; border-radius: 20px; overflow: hidden;
-    background: linear-gradient(135deg, #1a0a3d 0%, #2d1060 50%, #1a0a3d 100%);
-    padding: 28px 24px; min-height: 180px; color: white;
-    box-shadow: 0 12px 40px rgba(108,71,255,0.4);
-    margin-bottom: 20px;
-  }
-  .wallet-card-shine {
-    position: absolute; top: -40px; right: -40px;
-    width: 180px; height: 180px; border-radius: 50%;
-    background: rgba(255,255,255,0.06); pointer-events: none;
-  }
-  .wallet-card-chip {
-    width: 40px; height: 30px; background: linear-gradient(135deg, var(--gold), #ffd54f);
-    border-radius: 6px; margin-bottom: 20px;
-    display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding: 4px;
-  }
-  .wallet-balance-label { font-size: 13px; opacity: 0.7; margin-bottom: 6px; }
-  .wallet-balance-amount { font-family: var(--font-display); font-size: 42px; font-weight: 800; letter-spacing: -1px; margin-bottom: 20px; }
-  .wallet-points-row { display: flex; align-items: center; justify-content: space-between; }
-  .wallet-points-badge { background: rgba(255,255,255,0.15); padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
-  .wallet-card-number { font-size: 13px; opacity: 0.6; letter-spacing: 2px; }
-  
-  .wallet-actions-row { display: flex; gap: 10px; margin-bottom: 24px; }
-  .wallet-action-btn {
-    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px;
-    padding: 14px 8px; background: var(--bg2); border-radius: var(--radius);
-    font-size: 12px; font-weight: 700; color: var(--text2);
-    transition: background 0.2s, transform 0.15s;
-  }
-  .wallet-action-btn:active { transform: scale(0.95); background: var(--bg3); }
-  .wallet-action-icon {
-    width: 40px; height: 40px; border-radius: 50%;
-    background: var(--accent-soft); color: var(--accent);
-    display: flex; align-items: center; justify-content: center;
-  }
-  
-  .wallet-txns 
-  .txn-item {
-    display: flex; align-items: center; gap: 12px;
-    padding: 14px 0; border-bottom: 1px solid var(--border2);
-  }
-  .txn-icon {
-    width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .txn-in { background: var(--green); }
-  .txn-out { background: var(--red); }
-  .txn-info { flex: 1; }
-  .txn-title { font-size: 14px; font-weight: 600; color: var(--text); }
-  .txn-date { font-size: 12px; color: var(--text3); margin-top: 2px; }
-  .txn-amount { font-size: 15px; font-weight: 800; }
-  .txn-positive { color: var(--green); }
-  .txn-negative { color: var(--red); }
-  
-  /* ══════════════════════════════════════════
      SETTINGS
   ══════════════════════════════════════════ */
   .settings-body { padding: 0 16px 40px; }
@@ -4817,16 +4758,11 @@
   justify-content: center; gap: 10px;
   margin-bottom: 10px;
 }
-.wlt-currency-toggle {
-  font-size: 20px; font-weight: 800;
-  color: rgba(255,255,255,0.6);
-  background: rgba(255,255,255,0.1);
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 8px;
-  padding: 2px 8px;
-  transition: background 0.15s;
+.wlt-mp-symbol {
+  font-size: 28px; font-weight: 900;
+  color: rgba(255,255,255,0.7);
+  line-height: 1; margin-top: 4px; flex-shrink: 0;
 }
-.wlt-currency-toggle:active { background: rgba(255,255,255,0.2); }
 .wlt-balance-amount {
   font-size: 42px; font-weight: 900;
   color: #ffffff;
@@ -5499,22 +5435,71 @@
   opacity: 0.85;
 }
 .wlt-request-btn { background: var(--green); }
-.wlt-withdraw-btn {
-  background: linear-gradient(135deg, #1e1e2e, #2d1a6e);
-  border: 1.5px solid rgba(108,71,255,0.3);
-  margin-bottom: 8px;
+
+/* Bills action button */
+.wlt-act-bills .wlt-act-icon {
+  background: linear-gradient(135deg, #f97316, #fb923c);
+  color: white;
+  box-shadow: 0 4px 16px rgba(249,115,22,0.4);
 }
 
-.wlt-withdraw-eta {
-  text-align: center; font-size: 12px;
-  color: var(--text3);
+/* ── INFO BANNER ── */
+.wlt-info-banner {
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(108,71,255,0.12);
+  border: 1px solid rgba(108,71,255,0.22);
+  border-radius: 12px;
+  margin: 12px 16px 0;
+  padding: 10px 14px;
+  font-size: 12px; color: rgba(255,255,255,0.75);
+  line-height: 1.5;
 }
-.wlt-withdraw-dest { margin-bottom: 16px; }
+.wlt-info-banner svg { color: rgba(255,255,255,0.6); flex-shrink: 0; }
 
-/* Withdraw dest override */
-.wlt-withdraw-dest .wlt-bank-card { margin-bottom: 0; }
+/* ── BILLS GRID ── */
+.wlt-bills-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 10px; padding: 2px 0;
+}
+.wlt-bill-tile {
+  display: flex; flex-direction: column;
+  align-items: center; gap: 7px;
+  transition: transform 0.15s;
+}
+.wlt-bill-tile:active { transform: scale(0.92); }
+.wlt-bill-icon {
+  width: 52px; height: 52px; border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+}
+.wlt-bill-tile span {
+  font-size: 11.5px; font-weight: 700;
+  color: var(--text2); text-align: center;
+}
 
-/* ── PAYMENT METHODS (Add Money) ── */
+/* ── BILLS LIST (sheet) ── */
+.wlt-bills-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px; }
+.wlt-bill-row {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px;
+  transition: background 0.12s; text-align: left; width: 100%;
+}
+.wlt-bill-row:active { background: var(--bg3); }
+.wlt-bill-row-icon { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.wlt-bill-row-info { flex: 1; min-width: 0; }
+.wlt-bill-row-name { font-size: 14px; font-weight: 700; color: var(--text); }
+.wlt-bill-row-sub  { font-size: 12px; color: var(--text3); margin-top: 2px; }
+.wlt-vtpass-note { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 11.5px; color: var(--text3); padding: 10px; }
+
+/* Bill transaction avatar */
+.wlt-txn-avatar.wlt-txn-bill-icon {
+  background: var(--accent-soft);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--accent); border-radius: 14px;
+  border: 1px solid var(--border);
+}
+
+/* ── PAYMENT METHODS ── */
 .wlt-pay-methods {
   display: flex; flex-direction: column; gap: 8px;
   margin-bottom: 16px;
