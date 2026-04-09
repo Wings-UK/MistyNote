@@ -9409,6 +9409,11 @@ function openWallet() {
   syncWalletBalance();
   const fab = document.querySelector('.wlt-qr-fab');
   if (fab) fab.classList.remove('hidden');
+  // Hide bottom nav while on wallet page
+  const nav = document.getElementById('bottom-nav');
+  if (nav) nav.style.display = 'none';
+  const app = document.getElementById('app');
+  if (app) app.classList.add('wallet-active');
 }
 
 // Called by slideBack when leaving wallet page
@@ -9416,6 +9421,11 @@ function onWalletClose() {
   const fab = document.querySelector('.wlt-qr-fab');
   if (fab) fab.classList.add('hidden');
   closeAllWalletSheets();
+  // Restore bottom nav
+  const nav = document.getElementById('bottom-nav');
+  if (nav) nav.style.display = '';
+  const app = document.getElementById('app');
+  if (app) app.classList.remove('wallet-active');
 }
 
 // ── BALANCE SYNC ──────────────────────────────────────────────
