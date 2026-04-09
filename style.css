@@ -5728,180 +5728,204 @@
 
 
 /* ══════════════════════════════════════════════════════════════
-   WALLET — Cash App UI overrides for MistyNote
-   ══════════════════════════════════════════════════════════════ */
+   WALLET — Light theme overrides (matches app design language)
+   Uses app's own --accent, --green, --bg, --surface, --text etc.
+   No black backgrounds. No foreign color palette.
+══════════════════════════════════════════════════════════════ */
 
-/* ── Cash App color tokens ── */
-:root {
-  --ca-green:      #00d632;
-  --ca-green-dark: #00a826;
-  --ca-green-soft: rgba(0,214,50,0.12);
-  --ca-black:      #000000;
-  --ca-dark:       #0d0d0d;
-  --ca-card:       #111111;
-  --ca-card2:      #1a1a1a;
-  --ca-border:     rgba(255,255,255,0.07);
-  --ca-text:       #ffffff;
-  --ca-text2:      rgba(255,255,255,0.55);
-  --ca-text3:      rgba(255,255,255,0.3);
-}
-
-/* ── Wallet scroll container ── */
+/* ── Scroll container: use app background, no nav padding (nav hidden) ── */
 #page-wallet .wlt-scroll {
-  padding-bottom: 40px;
-  background: var(--ca-dark);
+  background: var(--bg) !important;
+  padding-bottom: 40px !important;
 }
 
 /* ══════════════════════
-   HERO — Cash App black
+   HERO — app accent purple, matches app gradient style
 ══════════════════════ */
 .ca-hero {
-  background: var(--ca-black) !important;
-  padding: calc(var(--safe-top) + 10px) 20px 32px !important;
+  background: linear-gradient(160deg, #0e0818 0%, #1a0840 55%, #2d1a6e 100%) !important;
+  padding: calc(var(--safe-top) + 12px) 20px 28px !important;
   position: relative;
   overflow: hidden;
 }
-.ca-hero-glow {
-  position: absolute;
-  width: 340px; height: 340px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(0,214,50,0.12) 0%, transparent 70%);
-  top: -80px; left: 50%;
-  transform: translateX(-50%);
+/* Keep the dot-grid and glow from original hero */
+.ca-hero::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image: radial-gradient(circle at 1px 1px, rgba(108,71,255,0.15) 1px, transparent 0);
+  background-size: 28px 28px;
   pointer-events: none;
 }
+.ca-hero::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse 120% 80% at 80% -10%, rgba(108,71,255,0.4) 0%, transparent 60%),
+              radial-gradient(ellipse 60% 50% at -10% 110%, rgba(167,139,250,0.15) 0%, transparent 60%);
+  pointer-events: none;
+}
+.ca-hero-glow { display: none; }
+/* Hide old bg/noise divs if present */
 .ca-hero .wlt-hero-bg,
 .ca-hero .wlt-hero-noise { display: none; }
 
-/* ── Topbar ── */
-.ca-topbar { margin-bottom: 32px !important; }
+/* ── Topbar stays same as original (white-on-dark) ── */
+.ca-topbar { margin-bottom: 28px !important; }
 .ca-back-btn {
-  background: rgba(255,255,255,0.08) !important;
-  border-color: rgba(255,255,255,0.1) !important;
-  color: rgba(255,255,255,0.7) !important;
+  background: rgba(255,255,255,0.1) !important;
+  border-color: rgba(255,255,255,0.14) !important;
+  color: rgba(255,255,255,0.85) !important;
+}
+.ca-notif-btn {
+  background: rgba(255,255,255,0.1) !important;
+  border-color: rgba(255,255,255,0.14) !important;
+  color: rgba(255,255,255,0.85) !important;
 }
 .ca-topbar-center { display: flex; align-items: center; gap: 7px; }
 .ca-topbar-logo {
   width: 28px; height: 28px;
-  background: var(--ca-green);
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.2);
   border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
 }
 .ca-topbar-title {
-  font-size: 15px; font-weight: 800;
-  color: #ffffff; letter-spacing: -0.2px;
-}
-.ca-notif-btn {
-  background: rgba(255,255,255,0.08) !important;
-  border-color: rgba(255,255,255,0.1) !important;
-  color: rgba(255,255,255,0.7) !important;
+  font-size: 16px; font-weight: 800;
+  color: rgba(255,255,255,0.95); letter-spacing: -0.3px;
 }
 
-/* ── Balance ── */
+/* ── Balance — same white-on-dark as original hero ── */
 .ca-balance-block {
   text-align: center;
-  margin-bottom: 36px !important;
+  margin-bottom: 28px !important;
+  position: relative; z-index: 1;
 }
 .ca-balance-label {
-  font-size: 11px !important;
-  font-weight: 600;
-  color: rgba(255,255,255,0.35) !important;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  margin-bottom: 12px;
+  font-size: 12px !important; font-weight: 600;
+  color: rgba(255,255,255,0.45) !important;
+  letter-spacing: 0.8px; text-transform: uppercase;
+  margin-bottom: 8px;
 }
 .ca-balance-row {
   justify-content: center;
-  gap: 0 !important;
-  margin-bottom: 14px !important;
+  gap: 10px !important;
+  margin-bottom: 10px !important;
   position: relative;
 }
 .ca-eye-btn {
-  position: absolute;
-  left: -4px;
-  color: rgba(255,255,255,0.35) !important;
+  color: rgba(255,255,255,0.5) !important;
   padding: 4px;
+  position: static;
 }
 .ca-balance-amount-wrap {
-  display: flex; align-items: flex-start;
-  gap: 8px;
-  justify-content: center;
+  display: flex; align-items: center;
+  gap: 6px; justify-content: center;
 }
 .ca-mp-diamond {
   font-size: 28px; font-weight: 900;
-  color: var(--ca-green);
-  line-height: 1.1; margin-top: 8px;
+  color: rgba(255,255,255,0.7);
+  line-height: 1; margin-top: 4px;
 }
 .ca-balance-amount {
-  font-size: 56px !important;
+  font-size: 48px !important;
   font-weight: 900 !important;
   color: #ffffff !important;
-  letter-spacing: -2px !important;
+  letter-spacing: -1.5px !important;
   line-height: 1 !important;
-  font-family: -apple-system, 'SF Pro Display', sans-serif;
 }
 .ca-subbrow {
-  background: rgba(255,255,255,0.06) !important;
-  border-color: rgba(255,255,255,0.08) !important;
+  background: rgba(255,255,255,0.08) !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
   margin: 0 auto;
 }
 .ca-subbrow .wlt-sub-item {
-  color: rgba(255,255,255,0.45) !important;
-  font-size: 11px !important;
+  color: rgba(255,255,255,0.55) !important;
+  font-size: 11.5px !important;
 }
-.ca-subbrow .wlt-sub-item strong { color: rgba(255,255,255,0.75) !important; }
+.ca-subbrow .wlt-sub-item strong { color: rgba(255,255,255,0.85) !important; }
 
-/* ── 4 Action buttons ── */
-.ca-actions { gap: 8px !important; }
+/* ── 4 Action buttons — use app's own icon colors ── */
+.ca-actions {
+  position: relative; z-index: 1;
+  gap: 10px !important;
+}
 .ca-act span {
-  font-size: 11px !important;
-  font-weight: 700;
-  color: rgba(255,255,255,0.7) !important;
+  font-size: 11.5px !important; font-weight: 700;
+  color: rgba(255,255,255,0.75) !important;
 }
 .ca-act-icon {
-  width: 54px !important; height: 54px !important;
-  border-radius: 50% !important;
+  width: 52px !important; height: 52px !important;
+  border-radius: 16px !important;
   color: white;
-  transition: transform 0.14s, opacity 0.14s;
+  transition: transform 0.15s, opacity 0.15s;
 }
-.ca-act:active .ca-act-icon { transform: scale(0.9); opacity: 0.8; }
+.ca-act:active .ca-act-icon { transform: scale(0.92); opacity: 0.85; }
+
+/* Add — app accent purple */
 .ca-act-add {
-  background: var(--ca-green) !important;
-  box-shadow: 0 4px 20px rgba(0,214,50,0.4) !important;
-  color: #000 !important;
+  background: none !important;
+  box-shadow: none !important;
 }
-.ca-act-add svg { stroke: #000 !important; }
+.ca-act-add .ca-act-icon {
+  background: linear-gradient(135deg, #6c47ff, #a78bfa) !important;
+  box-shadow: 0 4px 16px rgba(108,71,255,0.45) !important;
+  color: white !important;
+}
+.ca-act-add svg { stroke: white !important; }
+
+/* Send — sky blue (same as original) */
 .ca-act-send {
-  background: linear-gradient(135deg, #0ea5e9, #38bdf8) !important;
-  box-shadow: 0 4px 16px rgba(14,165,233,0.35) !important;
+  background: none !important;
+  box-shadow: none !important;
 }
+.ca-act-send .ca-act-icon {
+  background: linear-gradient(135deg, #0ea5e9, #38bdf8) !important;
+  box-shadow: 0 4px 16px rgba(14,165,233,0.4) !important;
+}
+
+/* Request — app green */
 .ca-act-request {
-  background: rgba(255,255,255,0.12) !important;
-  border: 1.5px solid rgba(255,255,255,0.18) !important;
+  background: none !important;
+  border: none !important;
+}
+.ca-act-request .ca-act-icon {
+  background: linear-gradient(135deg, #00b87a, #34d399) !important;
+  box-shadow: 0 4px 16px rgba(0,184,122,0.4) !important;
+}
+
+/* Sell/Out — ghost like original withdraw */
+.ca-act-cashout {
+  background: none !important;
+  border: none !important;
 }
 .ca-act-cashout {
-  background: rgba(0,214,50,0.15) !important;
-  border: 1.5px solid rgba(0,214,50,0.3) !important;
-  color: var(--ca-green) !important;
+  background: none !important;
 }
-.ca-act-cashout svg { stroke: var(--ca-green) !important; }
+.ca-act-cashout .ca-act-icon {
+  background: rgba(255,255,255,0.12) !important;
+  border: 1.5px solid rgba(255,255,255,0.2) !important;
+  color: rgba(255,255,255,0.85) !important;
+}
+.ca-act-cashout svg { stroke: rgba(255,255,255,0.85) !important; }
+
 
 /* ══════════════════════
-   BODY SECTIONS
+   BODY SECTIONS — use app's own surface/bg/text vars
 ══════════════════════ */
 .ca-section { padding: 20px 16px 4px !important; }
 .ca-section-title {
-  font-size: 16px !important; font-weight: 800 !important;
-  color: #ffffff !important;
+  font-size: 15px !important; font-weight: 800 !important;
+  color: var(--text) !important;
 }
 .ca-section-more {
-  color: var(--ca-green) !important;
+  color: var(--accent) !important;
   font-size: 13px; font-weight: 600;
 }
+
+/* Quick Send add avatar */
 .ca-add-avatar {
-  background: rgba(0,214,50,0.12) !important;
-  border: 2px dashed rgba(0,214,50,0.4) !important;
-  color: var(--ca-green) !important;
+  background: var(--accent-soft) !important;
+  border: 2px dashed rgba(108,71,255,0.35) !important;
+  color: var(--accent) !important;
 }
 
 /* ── Bills grid ── */
@@ -5913,16 +5937,17 @@
 .ca-bill-tile {
   display: flex; flex-direction: column;
   align-items: center; gap: 8px;
-  background: var(--ca-card);
-  border: 1px solid var(--ca-border);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 14px 8px;
+  box-shadow: var(--shadow);
   transition: background 0.12s;
 }
-.ca-bill-tile:active { background: var(--ca-card2); }
+.ca-bill-tile:active { background: var(--bg2); }
 .ca-bill-tile span {
   font-size: 11.5px; font-weight: 700;
-  color: rgba(255,255,255,0.7); text-align: center;
+  color: var(--text2); text-align: center;
 }
 .ca-bill-icon {
   width: 48px !important; height: 48px !important;
@@ -5932,75 +5957,80 @@
 /* ── Split card ── */
 .ca-split-card {
   margin: 4px 16px 0 !important;
-  background: var(--ca-card) !important;
-  border: 1px solid var(--ca-border) !important;
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow);
 }
 .ca-split-icon {
-  background: var(--ca-green) !important;
-  color: #000 !important;
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
 }
-.ca-split-icon svg { stroke: #000 !important; }
-.ca-split-title { color: #ffffff !important; }
+.ca-split-icon svg { stroke: var(--accent) !important; }
+.ca-split-title { color: var(--text) !important; }
 
 /* ── Pending items ── */
 .ca-pending-item {
-  background: var(--ca-card) !important;
+  background: var(--surface) !important;
   border: none !important;
-  border-bottom: 1px solid var(--ca-border) !important;
+  border-bottom: 1px solid var(--border) !important;
   border-radius: 0 !important;
-  padding: 14px 0 !important;
+  padding: 14px 4px !important;
   margin-bottom: 0 !important;
 }
-.ca-pending-item:first-of-type { border-top: 1px solid var(--ca-border) !important; }
+.ca-pending-item:first-of-type { border-top: 1px solid var(--border) !important; }
 .ca-pending-amount {
   font-size: 15px !important; font-weight: 800 !important;
-  color: #fff !important;
+  color: var(--text) !important;
 }
 .ca-pend-decline {
-  background: rgba(255,255,255,0.08) !important;
-  color: rgba(255,255,255,0.6) !important;
+  background: var(--bg2) !important;
+  color: var(--text2) !important;
 }
 .ca-pend-accept {
-  background: var(--ca-green) !important;
-  color: #000 !important;
+  background: var(--accent) !important;
+  color: #fff !important;
   font-weight: 800 !important;
 }
 
 /* ── Transaction tabs ── */
 .ca-txn-tabs { gap: 6px !important; margin-bottom: 10px !important; }
 .ca-txn-tab {
-  background: var(--ca-card) !important;
-  border: 1px solid var(--ca-border) !important;
-  color: rgba(255,255,255,0.5) !important;
+  background: var(--bg2) !important;
+  border: 1px solid var(--border) !important;
+  color: var(--text2) !important;
   font-size: 12px !important; font-weight: 700 !important;
+  border-radius: 100px;
+  padding: 5px 12px;
 }
 .ca-txn-tab.active {
-  background: var(--ca-green) !important;
+  background: var(--accent) !important;
   border-color: transparent !important;
-  color: #000 !important;
+  color: #fff !important;
 }
 
 /* ── Transaction list ── */
 .ca-txn-list {
   display: flex; flex-direction: column;
   gap: 0 !important;
-  background: var(--ca-card);
-  border-radius: 18px;
+  background: var(--surface);
+  border-radius: var(--radius);
   overflow: hidden;
-  border: 1px solid var(--ca-border);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
 }
 .ca-txn-item {
   background: transparent !important;
   border: none !important;
-  border-bottom: 1px solid var(--ca-border) !important;
+  border-bottom: 1px solid var(--border) !important;
   border-radius: 0 !important;
   margin-bottom: 0 !important;
   padding: 14px 16px !important;
   transition: background 0.1s;
 }
 .ca-txn-item:last-child { border-bottom: none !important; }
-.ca-txn-item:active { background: rgba(255,255,255,0.04) !important; }
+.ca-txn-item:active { background: var(--bg2) !important; }
 .ca-txn-item.hidden { display: none !important; }
+
 .ca-txn-avatar {
   width: 42px !important; height: 42px !important;
   border-radius: 50% !important;
@@ -6009,108 +6039,96 @@
 .ca-txn-bank-icon,
 .ca-txn-bill-icon {
   width: 42px !important; height: 42px !important;
-  background: var(--ca-card2) !important;
-  border: 1px solid var(--ca-border) !important;
+  background: var(--bg2) !important;
+  border: 1px solid var(--border) !important;
   border-radius: 12px !important;
-  color: rgba(255,255,255,0.5) !important;
+  color: var(--text3) !important;
   display: flex; align-items: center; justify-content: center;
 }
 .ca-txn-badge-out { background: #0ea5e9 !important; }
-.ca-txn-badge-in  { background: var(--ca-green) !important; }
+.ca-txn-badge-in  { background: var(--green) !important; }
 .ca-txn-badge-store { background: var(--gold) !important; }
+
 .ca-txn-name {
   font-size: 14px !important; font-weight: 700 !important;
-  color: #ffffff !important;
+  color: var(--text) !important;
 }
 .ca-txn-note {
   font-size: 12px !important;
-  color: rgba(255,255,255,0.45) !important;
+  color: var(--text2) !important;
 }
 .ca-txn-time {
   font-size: 11px !important;
-  color: rgba(255,255,255,0.3) !important;
+  color: var(--text3) !important;
 }
 .ca-txn-amount {
   font-size: 15px !important; font-weight: 800 !important;
-  color: #ffffff !important;
+  color: var(--text) !important;
 }
-.ca-amount-pos { color: var(--ca-green) !important; }
+.ca-amount-pos { color: var(--green) !important; }
+
 .ca-txn-status {
   font-size: 10.5px !important; font-weight: 700 !important;
   border-radius: 6px; padding: 2px 7px;
   margin-top: 4px; display: inline-block;
 }
-.ca-txn-status.completed { background: rgba(0,214,50,0.12) !important; color: var(--ca-green) !important; }
-.ca-txn-status.pending   { background: rgba(245,166,35,0.14) !important; color: var(--gold) !important; }
-.ca-txn-status.escrow    { background: rgba(108,71,255,0.16) !important; color: #a78bfa !important; }
-.ca-txn-status.failed    { background: rgba(240,56,90,0.14) !important; color: #f0385a !important; }
+.ca-txn-status.completed { background: var(--green-soft) !important; color: var(--green) !important; }
+.ca-txn-status.pending   { background: rgba(245,166,35,0.12) !important; color: var(--gold) !important; }
+.ca-txn-status.escrow    { background: var(--accent-soft) !important; color: var(--accent) !important; }
+.ca-txn-status.failed    { background: var(--red-soft) !important; color: var(--red) !important; }
 
 /* ══════════════════════
-   SELL / WITHDRAW SHEET
+   SELL / WITHDRAW SHEET — app themed
 ══════════════════════ */
-.ca-sheet-body { background: var(--ca-dark) !important; }
+.ca-sheet-body { background: var(--surface) !important; }
 .ca-cashout-banner {
   display: flex; align-items: flex-start; gap: 10px;
-  background: rgba(0,214,50,0.08);
-  border: 1px solid rgba(0,214,50,0.2);
+  background: var(--accent-soft);
+  border: 1px solid rgba(108,71,255,0.2);
   border-radius: 14px;
   padding: 12px 14px;
   margin: 0 0 16px;
   font-size: 12.5px;
-  color: rgba(255,255,255,0.55);
+  color: var(--text2);
   line-height: 1.6;
 }
-.ca-cashout-banner svg { flex-shrink: 0; margin-top: 2px; }
+.ca-cashout-banner svg { flex-shrink: 0; margin-top: 2px; stroke: var(--accent); }
+.ca-cashout-banner circle { stroke: var(--accent); }
+.ca-cashout-banner path  { stroke: var(--accent); }
+
 .ca-cashout-options {
   display: flex; flex-direction: column; gap: 8px;
   margin-bottom: 16px;
 }
 .ca-cashout-opt {
-  background: var(--ca-card) !important;
-  border: 1px solid var(--ca-border) !important;
+  background: var(--bg) !important;
+  border: 1px solid var(--border) !important;
 }
-.ca-cashout-opt:active { background: var(--ca-card2) !important; }
+.ca-cashout-opt:active { background: var(--bg2) !important; }
 .ca-cashout-opt-icon { border-radius: 12px !important; color: white; }
-.ca-cashout-opt .wlt-pay-method-name { color: #fff !important; }
-.ca-cashout-opt .wlt-pay-method-sub  { color: rgba(255,255,255,0.45) !important; }
+.ca-cashout-opt .wlt-pay-method-name { color: var(--text) !important; }
+.ca-cashout-opt .wlt-pay-method-sub  { color: var(--text2) !important; }
 
 /* ══════════════════════
-   BOTTOM NAV — hide when wallet active
+   DARK THEME — honour app's dark vars, keep hero as-is
 ══════════════════════ */
-#bottom-nav.ca-nav-hidden,
-.bottom-nav.ca-nav-hidden,
-nav.ca-nav-hidden { display: none !important; }
+[data-theme="dark"] #page-wallet .wlt-scroll  { background: var(--bg) !important; }
+[data-theme="dark"] .ca-txn-list  { background: var(--surface); }
+[data-theme="dark"] .ca-bill-tile { background: var(--surface); border-color: var(--border); }
+[data-theme="dark"] .ca-bill-tile span { color: var(--text2); }
+[data-theme="dark"] .ca-split-card { background: var(--surface) !important; }
+[data-theme="dark"] .ca-pending-item { background: var(--surface) !important; }
+[data-theme="dark"] .ca-txn-store-icon,
+[data-theme="dark"] .ca-txn-bank-icon,
+[data-theme="dark"] .ca-txn-bill-icon { background: var(--bg2) !important; }
 
 /* ══════════════════════
-   DARK THEME
+   BOTTOM NAV — hide on wallet page
+   JS adds/removes .wallet-active on #app
+   OR we use the :has() selector directly
 ══════════════════════ */
-[data-theme="dark"] #page-wallet .wlt-scroll { background: #000; }
-[data-theme="dark"] .ca-hero { background: #000 !important; }
-[data-theme="dark"] .ca-txn-list { background: #111; }
-[data-theme="dark"] .ca-bill-tile { background: #111; }
-[data-theme="dark"] .ca-pending-item { background: transparent !important; }
+/* Method 1: class-based (JS toggles .wallet-active on #app) */
+#app.wallet-active #bottom-nav { display: none !important; }
 
-/* ══════════════════════
-   LIGHT THEME adjustments
-══════════════════════ */
-[data-theme="light"] .ca-balance-label { color: rgba(255,255,255,0.4) !important; }
-[data-theme="light"] .ca-txn-list {
-  background: #f4f3f0;
-  border-color: rgba(0,0,0,0.07);
-}
-[data-theme="light"] .ca-txn-item { border-bottom-color: rgba(0,0,0,0.06) !important; }
-[data-theme="light"] .ca-txn-name { color: #111 !important; }
-[data-theme="light"] .ca-txn-note { color: #5a5754 !important; }
-[data-theme="light"] .ca-txn-time { color: #9e9b97 !important; }
-[data-theme="light"] .ca-txn-amount { color: #111 !important; }
-[data-theme="light"] .ca-bill-tile { background: #fff; border-color: rgba(0,0,0,0.07); }
-[data-theme="light"] .ca-bill-tile span { color: #5a5754; }
-[data-theme="light"] .ca-section-title { color: #111 !important; }
-[data-theme="light"] .ca-pending-amount { color: #111 !important; }
-[data-theme="light"] .ca-pending-item {
-  background: #fff !important;
-  border-color: rgba(0,0,0,0.06) !important;
-}
-[data-theme="light"] .ca-split-title { color: #111 !important; }
-[data-theme="light"] .ca-split-card { background: rgba(0,214,50,0.05) !important; }
-[data-theme="light"] #page-wallet .wlt-scroll { background: #fafaf8; }
+/* Method 2: :has() selector — no JS needed, hides nav when wallet page is active */
+#app:has(#page-wallet.active) #bottom-nav { display: none !important; }
