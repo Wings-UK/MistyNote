@@ -4805,7 +4805,7 @@
 .wlt-primary-actions {
   position: relative; z-index: 1;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
 }
 .wlt-act {
@@ -4829,20 +4829,15 @@
   color: white;
   box-shadow: 0 4px 16px rgba(108,71,255,0.45);
 }
-.wlt-act-send .wlt-act-icon {
+.wlt-act-gift .wlt-act-icon {
+  background: linear-gradient(135deg, #f97316, #fb923c);
+  color: white;
+  box-shadow: 0 4px 16px rgba(249,115,22,0.45);
+}
+.wlt-act-withdraw .wlt-act-icon {
   background: linear-gradient(135deg, #0ea5e9, #38bdf8);
   color: white;
   box-shadow: 0 4px 16px rgba(14,165,233,0.4);
-}
-.wlt-act-request .wlt-act-icon {
-  background: linear-gradient(135deg, #00b87a, #34d399);
-  color: white;
-  box-shadow: 0 4px 16px rgba(0,184,122,0.4);
-}
-.wlt-act-withdraw .wlt-act-icon {
-  background: rgba(255,255,255,0.12);
-  border: 1.5px solid rgba(255,255,255,0.2);
-  color: rgba(255,255,255,0.85);
 }
 
 
@@ -5846,6 +5841,7 @@
 /* ── 4 Action buttons — use app's own icon colors ── */
 .ca-actions {
   position: relative; z-index: 1;
+  grid-template-columns: repeat(3, 1fr) !important;
   gap: 10px !important;
 }
 .ca-act span {
@@ -5860,7 +5856,7 @@
 }
 .ca-act:active .ca-act-icon { transform: scale(0.92); opacity: 0.85; }
 
-/* Add — app accent purple */
+/* Add — accent purple */
 .ca-act-add {
   background: none !important;
   box-shadow: none !important;
@@ -5872,40 +5868,29 @@
 }
 .ca-act-add svg { stroke: white !important; }
 
-/* Send — sky blue (same as original) */
-.ca-act-send {
+/* Gift — warm orange */
+.ca-act-gift {
   background: none !important;
   box-shadow: none !important;
 }
-.ca-act-send .ca-act-icon {
+.ca-act-gift .ca-act-icon {
+  background: linear-gradient(135deg, #f97316, #fb923c) !important;
+  box-shadow: 0 4px 16px rgba(249,115,22,0.45) !important;
+  color: white !important;
+}
+.ca-act-gift svg { stroke: white !important; }
+
+/* Withdraw — sky blue */
+.ca-act-withdraw {
+  background: none !important;
+  border: none !important;
+}
+.ca-act-withdraw .ca-act-icon {
   background: linear-gradient(135deg, #0ea5e9, #38bdf8) !important;
   box-shadow: 0 4px 16px rgba(14,165,233,0.4) !important;
+  color: white !important;
 }
-
-/* Request — app green */
-.ca-act-request {
-  background: none !important;
-  border: none !important;
-}
-.ca-act-request .ca-act-icon {
-  background: linear-gradient(135deg, #00b87a, #34d399) !important;
-  box-shadow: 0 4px 16px rgba(0,184,122,0.4) !important;
-}
-
-/* Sell/Out — ghost like original withdraw */
-.ca-act-cashout {
-  background: none !important;
-  border: none !important;
-}
-.ca-act-cashout {
-  background: none !important;
-}
-.ca-act-cashout .ca-act-icon {
-  background: rgba(255,255,255,0.12) !important;
-  border: 1.5px solid rgba(255,255,255,0.2) !important;
-  color: rgba(255,255,255,0.85) !important;
-}
-.ca-act-cashout svg { stroke: rgba(255,255,255,0.85) !important; }
+.ca-act-withdraw svg { stroke: white !important; }
 
 
 /* ══════════════════════
