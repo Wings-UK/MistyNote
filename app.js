@@ -9426,6 +9426,7 @@ function openWallet() {
   syncPointsRate();          // silently refresh KWD→NGN rate in the background
   buildWalletPeopleRow();
   syncWalletBalance();
+  loadBankAccount();
   const fab = document.querySelector('.wlt-qr-fab');
   if (fab) fab.classList.remove('hidden');
   const nav = document.getElementById('bottom-nav');
@@ -9466,6 +9467,16 @@ function renderWalletBalance() {
   el.textContent = fmtPts(walletState.points);
   const hint = document.getElementById('gift-balance-hint');
   if (hint) hint.textContent = 'Balance: ' + fmtPts(walletState.points);
+  // Update payout subrow
+  const payoutAmt = document.getElementById('wlt-payout-amount');
+  if (payoutAmt) {
+    var net = walletState.points >= 1
+      ? fmtPts(Math.floor(walletState.points * 0.99 * 100) / 100)
+      : null;
+    payoutAmt.textContent = net
+      ? 'Friday payout · ' + net + ' (after 1% fee)'
+      : 'Min ✶1 for Friday payout';
+  }
 }
 
 // ── BALANCE VISIBILITY TOGGLE ─────────────────────────────────────────────────
@@ -9547,7 +9558,7 @@ const SHEET_MAP = {
   'add':      'sheet-add',
   'bills':    'sheet-bills',
   'qr':       'sheet-qr',
-  'withdraw': 'sheet-withdraw', // was 'sell-withdraw'
+  'earnings': 'sheet-earnings', // auto-payout info — no manual withdraw
 };
 
 function openWalletSheet(type) {
@@ -9559,6 +9570,7 @@ function openWalletSheet(type) {
       el.classList.remove('hidden');
       walletState.activeSheet = type;
       if (type === 'qr') initQRSheet();
+      if (type === 'earnings') renderEarningsSheet();
       return;
     }
   }
@@ -9664,7 +9676,7 @@ function updateBuyPointsPreview(val) {
     hint.textContent = 'Enter how many MistyPoints to buy';
     return;
   }
-  hint.textContent = 'You will receive \u2736' + pts.toLocaleString('en-NG') + ' \u00b7 Secure payment via Squad';
+  hint.textContent = 'You will receive \u2736' + pts.toLocaleString('en-NG');
 }
 
 // ── BUY POINTS VIA SQUAD BY GTC ───────────────────────────────────────────────
@@ -9675,14 +9687,12 @@ function initiateBuyPoints() {
   if (!points || points <= 0) { showToast('Enter how many points to buy'); return; }
   if (!currentUser) { showToast('Please sign in first'); return; }
 
-  showSquadLoader();
+  var ngnAmount = pointsToNgn(points); // internal only — never shown to user
 
-  var ngnAmount = pointsToNgn(points);
-
-  // ── Squad by GTC inline payment ──────────────────────────────────────────
-  // Docs: https://squadco.com/documentation/
-  // Load Squad's payment script dynamically
-  if (typeof SquadSDK === 'undefined') {
+  // Squad JS SDK: https://checkout.squadco.com/widget/squad.min.js
+  // Constructor is `new squad({...})` (lowercase). onSuccess fires with no args —
+  // verification is done server-side via webhook or explicit verify call using txRef.
+  if (typeof squad === 'undefined') {
     loadScript('https://checkout.squadco.com/widget/squad.min.js', function() {
       runSquadPayment(points, ngnAmount);
     });
@@ -9692,69 +9702,54 @@ function initiateBuyPoints() {
 }
 
 function runSquadPayment(points, ngnAmount) {
-  // Squad by GTC checkout — NGN internally, never exposed to user
   var txRef = 'MN-' + currentUser.id + '-' + Date.now();
 
-  var squadInstance = new SquadSDK({
-    onLoad: function() { /* ready */ },
-    onClose: function() { hideSquadLoader(); },
-    onSuccess: async function(data) {
-      hideSquadLoader();
-      if (data && data.transaction_ref) {
-        await creditPointsSquad(txRef, points, data.transaction_ref);
-        closeWalletSheet('add');
+  var squadInstance = new squad({
+    onLoad:    function() { /* widget ready */ },
+    onClose:   function() { /* user dismissed — no action needed */ },
+    onSuccess: async function() {
+      // onSuccess fires when Squad confirms payment on their side.
+      // We verify server-side via our edge function using txRef.
+      // txRef was generated above and sent to Squad as transaction_ref.
+      closeWalletSheet('add');
+      showToast('Verifying payment\u2026');
+      try {
+        await creditPointsSquad(txRef, points);
         showToast(fmtPts(points) + ' added to your wallet \u2713');
         syncWalletBalance();
         refreshTransactionList();
-      } else {
-        showToast('Payment failed \u2014 please try again');
+      } catch (e) {
+        showToast('Payment received \u2014 points will reflect shortly');
       }
     },
-    key: walletState.squadPublicKey,
-    email: currentUser.email,
-    amount: ngnAmount * 100, // Squad expects kobo (amount x 100)
-    currency_code: 'NGN',
-    transaction_ref: txRef,
-    customer_name: (currentUser.user_metadata && currentUser.user_metadata.full_name) || '',
-    payment_channels: ['card', 'bank', 'ussd', 'transfer'],
+    key:              walletState.squadPublicKey,  // set from Supabase secrets at runtime
+    email:            currentUser.email,
+    amount:           ngnAmount * 100,             // Squad expects kobo
+    currency_code:    'NGN',
+    transaction_ref:  txRef,
+    customer_name:    (currentUser.user_metadata && currentUser.user_metadata.full_name) || '',
+    // Squad modal shows card, bank transfer, and USSD tabs natively.
+    // Omitting payment_channels lets Squad show all available options.
   });
 
   squadInstance.setup();
   squadInstance.open();
 }
 
-async function creditPointsSquad(txRef, points, squadRef) {
-  // Edge function verifies Squad transaction server-side then credits points
-  try {
-    var res = await supabase.functions.invoke('credit-points', {
-      body: { tx_ref: txRef, squad_ref: squadRef, points: points, user_id: currentUser.id }
-    });
-    if (res.error) throw res.error;
-  } catch (e) {
-    console.error('creditPointsSquad error:', e);
-    throw e;
-  }
+async function creditPointsSquad(txRef, points) {
+  // Supabase edge function calls Squad's verify endpoint server-side:
+  // GET https://api-d.squadco.com/transaction/verify/{txRef}
+  // Authorization: Bearer <squad_secret_key>
+  // On success it credits walletState.points via RPC.
+  var res = await supabase.functions.invoke('credit-points', {
+    body: { tx_ref: txRef, points: points, user_id: currentUser.id, gateway: 'squad' }
+  });
+  if (res.error) throw res.error;
 }
 
-function showSquadLoader() {
-  var el = document.getElementById('squad-loading');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'squad-loading';
-    el.className = 'flw-loading-overlay'; // reuse existing loader styles
-    el.innerHTML = '<div class="flw-spinner"></div><div class="flw-loading-text">Connecting to payment...</div>';
-    document.body.appendChild(el);
-  }
-  el.classList.remove('hidden');
-}
-function hideSquadLoader() {
-  var el = document.getElementById('squad-loading');
-  if (el) el.classList.add('hidden');
-}
-
-// Legacy aliases (if referenced elsewhere in codebase)
-function showFlutterwaveLoader() { showSquadLoader(); }
-function hideFlutterwaveLoader() { hideSquadLoader(); }
+// Legacy no-ops — Squad's own modal handles its loading UI
+function showFlutterwaveLoader() {}
+function hideFlutterwaveLoader() {}
 
 // ── CHEAPDATA BILL PAYMENT ────────────────────────────────────────────────────
 // CheapData API: https://www.cheapdata.com.ng/developer
@@ -10044,11 +10039,120 @@ function walletAction(type) {
     gift:            'gift',
     bills:           'bills',
     history:         'history',
-    'sell-withdraw': 'withdraw',  // sell-withdraw → withdraw
-    'withdraw-bank': 'withdraw',
+    'sell-withdraw': 'earnings',
+    'withdraw-bank': 'earnings',
     'gift-points':   'gift',
   };
   openWalletSheet(map[type] || type);
+}
+
+
+// ── EARNINGS SHEET ────────────────────────────────────────────────────────────
+// No manual withdrawal. Every Friday 3pm the system automatically pays out
+// the full balance (if >= 1 MP) minus 1% settlement fee to registered bank.
+
+function openEarningsSheet() {
+  openWalletSheet('earnings');
+  renderEarningsSheet();
+}
+
+function renderEarningsSheet() {
+  // Next Friday at 15:00 WAT (UTC+1)
+  var now    = new Date();
+  var day    = now.getDay(); // 0=Sun, 5=Fri
+  var daysToFriday = (5 - day + 7) % 7 || 7; // if today is Friday, show next Friday
+  var nextFriday = new Date(now);
+  nextFriday.setDate(now.getDate() + daysToFriday);
+  nextFriday.setHours(15, 0, 0, 0);
+
+  var dateStr = nextFriday.toLocaleDateString('en-NG', { weekday:'long', day:'numeric', month:'long' });
+
+  var balEl    = document.getElementById('earnings-balance');
+  var netEl    = document.getElementById('earnings-net');
+  var dateEl   = document.getElementById('earnings-date');
+  var statusEl = document.getElementById('earnings-status');
+
+  var pts      = walletState.points;
+  var fee      = Math.floor(pts * 0.01 * 100) / 100;
+  var net      = Math.floor(pts * 0.99 * 100) / 100;
+  var eligible = pts >= 1;
+
+  if (balEl)    balEl.textContent    = fmtPts(pts);
+  if (dateEl)   dateEl.textContent   = dateStr + ' · 3:00 PM';
+  if (netEl)    netEl.textContent    = eligible
+    ? fmtPts(net) + ' (1% fee: ' + fmtPts(fee) + ')'
+    : '—';
+  if (statusEl) statusEl.textContent = eligible
+    ? 'Your full balance will be settled automatically'
+    : 'Minimum ✶1 required for payout. Current balance rolls over.';
+
+  // Bank account display
+  renderEarningsBankInfo();
+}
+
+function renderEarningsBankInfo() {
+  var bankEl = document.getElementById('earnings-bank-info');
+  if (!bankEl) return;
+  var bank = walletState.bankAccount;
+  if (bank && bank.account_number) {
+    bankEl.innerHTML =
+      '<div class="earn-bank-row">' +
+        '<div class="earn-bank-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>' +
+        '<div class="earn-bank-details">' +
+          '<div class="earn-bank-name">' + escHtml(bank.bank_name) + '</div>' +
+          '<div class="earn-bank-num">' + bank.account_number.replace(/(.{3})(.+)(.{4})/, '$1 •••• $3') + '</div>' +
+        '</div>' +
+        '<button class="earn-bank-change" onclick="openBankSetup()">Change</button>' +
+      '</div>';
+  } else {
+    bankEl.innerHTML =
+      '<button class="earn-add-bank-btn" onclick="openBankSetup()">' +
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>' +
+        'Add bank account for payouts' +
+      '</button>';
+  }
+}
+
+function openBankSetup() {
+  // Show inline bank account form inside earnings sheet
+  var formEl = document.getElementById('earnings-bank-form');
+  if (formEl) formEl.classList.toggle('hidden');
+}
+
+async function saveBankAccount() {
+  var bankName  = document.getElementById('bank-name-input')  ? document.getElementById('bank-name-input').value.trim()  : '';
+  var acctNum   = document.getElementById('bank-acct-input')  ? document.getElementById('bank-acct-input').value.trim()  : '';
+  var acctName  = document.getElementById('bank-acct-name')   ? document.getElementById('bank-acct-name').value.trim()   : '';
+  if (!bankName || !acctNum || acctNum.length !== 10) {
+    showToast('Enter a valid 10-digit account number');
+    return;
+  }
+  try {
+    var res = await supabase
+      .from('user_bank_accounts')
+      .upsert({ user_id: currentUser.id, bank_name: bankName, account_number: acctNum, account_name: acctName })
+      .select().single();
+    if (res.error) throw res.error;
+    walletState.bankAccount = res.data;
+    showToast('Bank account saved ✓');
+    var formEl = document.getElementById('earnings-bank-form');
+    if (formEl) formEl.classList.add('hidden');
+    renderEarningsBankInfo();
+  } catch (e) {
+    showToast('Could not save bank account — try again');
+  }
+}
+
+async function loadBankAccount() {
+  if (!currentUser) return;
+  try {
+    var res = await supabase
+      .from('user_bank_accounts')
+      .select('*')
+      .eq('user_id', currentUser.id)
+      .maybeSingle();
+    if (res.data) walletState.bankAccount = res.data;
+  } catch (e) { /* silent */ }
 }
 
 function loadScript(src, cb) {
