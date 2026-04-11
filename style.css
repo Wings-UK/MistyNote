@@ -4834,10 +4834,10 @@
   color: white;
   box-shadow: 0 4px 16px rgba(249,115,22,0.45);
 }
-.wlt-act-withdraw .wlt-act-icon {
-  background: linear-gradient(135deg, #0ea5e9, #38bdf8);
+.wlt-act-earnings .wlt-act-icon {
+  background: linear-gradient(135deg, #00b87a, #34d399);
   color: white;
-  box-shadow: 0 4px 16px rgba(14,165,233,0.4);
+  box-shadow: 0 4px 16px rgba(0,184,122,0.4);
 }
 
 
@@ -5880,17 +5880,17 @@
 }
 .ca-act-gift svg { stroke: white !important; }
 
-/* Withdraw — sky blue */
-.ca-act-withdraw {
+/* Earnings — platform green */
+.ca-act-earnings {
   background: none !important;
   border: none !important;
 }
-.ca-act-withdraw .ca-act-icon {
-  background: linear-gradient(135deg, #0ea5e9, #38bdf8) !important;
-  box-shadow: 0 4px 16px rgba(14,165,233,0.4) !important;
+.ca-act-earnings .ca-act-icon {
+  background: linear-gradient(135deg, #00b87a, #34d399) !important;
+  box-shadow: 0 4px 16px rgba(0,184,122,0.4) !important;
   color: white !important;
 }
-.ca-act-withdraw svg { stroke: white !important; }
+.ca-act-earnings svg { stroke: white !important; }
 
 
 /* ══════════════════════
@@ -6117,3 +6117,177 @@
 
 /* Method 2: :has() selector — no JS needed, hides nav when wallet page is active */
 #app:has(#page-wallet.active) #bottom-nav { display: none !important; }
+
+
+/* ══════════════════════════════════════════
+   EARNINGS SHEET — Auto Friday Payout
+══════════════════════════════════════════ */
+
+/* Summary card */
+.earn-summary-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 18px 16px;
+  margin: 4px 0 16px;
+}
+.earn-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+}
+.earn-label {
+  font-size: 13px;
+  color: var(--text3);
+  font-weight: 500;
+}
+.earn-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+.earn-date {
+  font-size: 13px;
+  color: var(--text2);
+  font-weight: 600;
+}
+.earn-net {
+  color: #00b87a;
+}
+.earn-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 0;
+}
+.earn-status-note {
+  font-size: 12px;
+  color: var(--text3);
+  margin-top: 10px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+/* How it works info block */
+.earn-info-block {
+  background: var(--bg2);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.earn-info-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--text2);
+  line-height: 1.5;
+}
+.earn-info-row svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  stroke: var(--text3);
+}
+
+/* Bank account display */
+.earn-bank-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.earn-bank-icon {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #6c47ff, #a78bfa);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.earn-bank-icon svg { stroke: white; }
+.earn-bank-details { flex: 1; }
+.earn-bank-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+.earn-bank-num {
+  font-size: 12px;
+  color: var(--text3);
+  margin-top: 2px;
+  letter-spacing: 0.5px;
+}
+.earn-bank-change {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6c47ff;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+.earn-bank-change:active { background: var(--bg3); }
+
+/* Add bank button */
+.earn-add-bank-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--bg2);
+  border: 1.5px dashed var(--border);
+  border-radius: 14px;
+  padding: 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #6c47ff;
+  cursor: pointer;
+  margin-bottom: 12px;
+  transition: background 0.15s;
+}
+.earn-add-bank-btn:active { background: var(--bg3); }
+.earn-add-bank-btn svg { stroke: #6c47ff; }
+
+/* Bank setup form */
+.earn-bank-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.earn-input {
+  width: 100%;
+  background: var(--bg2);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 13px 14px;
+  font-size: 14px;
+  color: var(--text);
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.earn-input:focus {
+  border-color: #6c47ff;
+}
+.earn-save-btn {
+  margin-top: 4px;
+}
+
+/* Payout subrow on hero */
+#wlt-payout-amount {
+  font-size: 12px !important;
+  color: rgba(255,255,255,0.65) !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.1px;
+}
