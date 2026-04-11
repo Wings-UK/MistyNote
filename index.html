@@ -1207,7 +1207,7 @@
 
   <div class="wlt-scroll" id="wlt-scroll">
 
-    <!-- ── CASH APP HERO ── -->
+    <!-- ── HERO ── -->
     <div class="wlt-hero ca-hero">
       <div class="ca-hero-glow"></div>
 
@@ -1236,7 +1236,7 @@
         </button>
       </div>
 
-      <!-- Balance — Cash App large centered style -->
+      <!-- Balance -->
       <div class="wlt-balance-block ca-balance-block">
         <div class="ca-balance-label">MistyPoints Balance</div>
         <div class="wlt-balance-row ca-balance-row">
@@ -1255,21 +1255,17 @@
             <span class="wlt-balance-amount ca-balance-amount" id="wlt-balance">0</span>
           </div>
         </div>
+        <!-- Subrow: escrow only — rate intentionally hidden -->
         <div class="wlt-subbalance-row ca-subbrow">
           <span class="wlt-sub-item">
             <span class="wlt-sub-dot" style="background:#00d632"></span>
             In Escrow <strong id="wlt-escrow-pts">✦ 0</strong>
           </span>
-          <span class="wlt-sub-divider"></span>
-          <span class="wlt-sub-item">
-            <span class="wlt-sub-dot" style="background:var(--gold)"></span>
-            1 MP = ₦5,000
-          </span>
         </div>
       </div>
 
-      <!-- Cash App-style 4-button action row -->
-      <div class="wlt-primary-actions ca-actions">
+      <!-- 3-button action row: Add · Gift · Withdraw -->
+      <div class="wlt-primary-actions ca-actions ca-actions-3">
         <button class="wlt-act wlt-act-add ca-act" onclick="openWalletSheet('add')">
           <div class="wlt-act-icon ca-act-icon ca-act-add">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -1278,40 +1274,35 @@
           </div>
           <span>Add</span>
         </button>
-        <button class="wlt-act wlt-act-send ca-act" onclick="openWalletSheet('send')">
-          <div class="wlt-act-icon ca-act-icon ca-act-send">
+        <button class="wlt-act wlt-act-gift ca-act" onclick="openWalletSheet('gift')">
+          <div class="wlt-act-icon ca-act-icon ca-act-gift">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+              <polyline points="20 12 20 22 4 22 4 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+              <rect x="2" y="7" width="20" height="5" rx="1" stroke="currentColor" stroke-width="2.2"/>
+              <line x1="12" y1="22" x2="12" y2="7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+              <path d="M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </div>
-          <span>Send</span>
+          <span>Gift</span>
         </button>
-        <button class="wlt-act wlt-act-request ca-act" onclick="openWalletSheet('request')">
-          <div class="wlt-act-icon ca-act-icon ca-act-request">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <path d="M12 19V5M5 12l7 7 7-7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-            </svg>
-          </div>
-          <span>Request</span>
-        </button>
-        <!-- Sell or Withdraw replaces Bills action button -->
-        <button class="wlt-act ca-act" onclick="openWalletSheet('sell-withdraw')">
-          <div class="wlt-act-icon ca-act-icon ca-act-cashout">
+        <button class="wlt-act wlt-act-withdraw ca-act" onclick="openWalletSheet('withdraw')">
+          <div class="wlt-act-icon ca-act-icon ca-act-withdraw">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
               <path d="M12 16V8M9 11l3-3 3 3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </div>
-          <span>Sell / Out</span>
+          <span>Withdraw</span>
         </button>
       </div>
     </div><!-- /ca-hero -->
 
 
-    <!-- ── QUICK SEND SCROLL ── -->
+    <!-- ── QUICK GIFT SCROLL ── -->
     <div class="wlt-section ca-section">
       <div class="wlt-section-header">
-        <span class="wlt-section-title ca-section-title">Quick Send</span>
+        <span class="wlt-section-title ca-section-title">Quick Gift</span>
         <button class="wlt-section-more ca-section-more" onclick="openWalletSheet('find-people')">See all</button>
       </div>
       <div class="wlt-people-scroll" id="wlt-people-scroll">
@@ -1429,7 +1420,7 @@
     </div>
 
 
-    <!-- ── ACTIVITY — Cash App card-list style ── -->
+    <!-- ── ACTIVITY ── -->
     <div class="wlt-section ca-section">
       <div class="wlt-section-header">
         <span class="wlt-section-title ca-section-title">Activity</span>
@@ -1437,19 +1428,19 @@
       </div>
       <div class="wlt-txn-tabs ca-txn-tabs">
         <button class="wlt-txn-tab ca-txn-tab active" onclick="filterWalletTxns(this,'all')">All</button>
-        <button class="wlt-txn-tab ca-txn-tab" onclick="filterWalletTxns(this,'send')">Sent</button>
+        <button class="wlt-txn-tab ca-txn-tab" onclick="filterWalletTxns(this,'gift')">Gifted</button>
         <button class="wlt-txn-tab ca-txn-tab" onclick="filterWalletTxns(this,'receive')">Received</button>
         <button class="wlt-txn-tab ca-txn-tab" onclick="filterWalletTxns(this,'purchase')">Purchases</button>
         <button class="wlt-txn-tab ca-txn-tab" onclick="filterWalletTxns(this,'bills')">Bills</button>
       </div>
       <div class="wlt-txn-list ca-txn-list" id="wlt-txn-list">
-        <!-- Sent -->
-        <div class="wlt-txn-item ca-txn-item" data-type="send">
+        <!-- Gifted -->
+        <div class="wlt-txn-item ca-txn-item" data-type="gift">
           <div class="wlt-txn-left">
             <div class="wlt-txn-avatar-wrap">
               <img class="wlt-txn-avatar ca-txn-avatar" src="https://api.dicebear.com/7.x/adventurer/svg?seed=kemi99" alt="">
               <div class="wlt-txn-badge wlt-badge-out ca-txn-badge-out">
-                <svg width="8" height="8" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>
+                <svg width="8" height="8" viewBox="0 0 24 24" fill="none"><polyline points="20 12 20 22 4 22 4 12" stroke="white" stroke-width="2.5"/><rect x="2" y="7" width="20" height="5" rx="1" stroke="white" stroke-width="2"/></svg>
               </div>
             </div>
             <div class="wlt-txn-details">
@@ -1460,7 +1451,7 @@
           </div>
           <div class="wlt-txn-right">
             <div class="wlt-txn-amount wlt-amount-neg ca-txn-amount">- ✦ 1</div>
-            <div class="wlt-txn-status completed ca-txn-status">Completed</div>
+            <div class="wlt-txn-status completed ca-txn-status">Gifted</div>
           </div>
         </div>
         <!-- Received -->
@@ -1480,7 +1471,7 @@
           </div>
           <div class="wlt-txn-right">
             <div class="wlt-txn-amount wlt-amount-pos ca-txn-amount ca-amount-pos">+ ✦ 3</div>
-            <div class="wlt-txn-status completed ca-txn-status">Completed</div>
+            <div class="wlt-txn-status completed ca-txn-status">Received</div>
           </div>
         </div>
         <!-- Market purchase -->
@@ -1540,7 +1531,7 @@
             </div>
             <div class="wlt-txn-details">
               <div class="wlt-txn-name ca-txn-name">Points Purchased</div>
-              <div class="wlt-txn-note ca-txn-note">✦ via Flutterwave</div>
+              <div class="wlt-txn-note ca-txn-note">✦ via Squad</div>
               <div class="wlt-txn-time ca-txn-time">Jan 27 · 11:00 AM</div>
             </div>
           </div>
@@ -1557,88 +1548,55 @@
 
 
   <!-- ══════════════════════════════════════════
-       SHEETS (original sheets preserved)
+       SHEETS
   ══════════════════════════════════════════ -->
 
-  <!-- SHEET: SEND POINTS -->
-  <div class="wlt-sheet hidden" id="sheet-send" role="dialog" aria-label="Send MistyPoints">
-    <div class="wlt-sheet-backdrop" onclick="closeWalletSheet('send')"></div>
+  <!-- SHEET: GIFT POINTS (was: Send Points) -->
+  <div class="wlt-sheet hidden" id="sheet-gift" role="dialog" aria-label="Gift MistyPoints">
+    <div class="wlt-sheet-backdrop" onclick="closeWalletSheet('gift')"></div>
     <div class="wlt-sheet-body">
       <div class="wlt-sheet-handle"></div>
       <div class="wlt-sheet-header">
-        <button class="wlt-sheet-close" onclick="closeWalletSheet('send')"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
-        <h2 class="wlt-sheet-title">Send MistyPoints</h2>
+        <button class="wlt-sheet-close" onclick="closeWalletSheet('gift')"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+        <h2 class="wlt-sheet-title">Gift MistyPoints</h2>
         <div style="width:36px"></div>
       </div>
       <div class="wlt-send-search-wrap">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        <input class="wlt-send-search" id="send-search" type="text" placeholder="Search @username" oninput="searchWalletUser(this.value,'send')" autocomplete="off" autocorrect="off" spellcheck="false">
-        <button class="wlt-send-scan" onclick="openQRScan('send')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/><path d="M14 14h.01M18 14h3M14 18v3M18 18h3v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+        <input class="wlt-send-search" id="gift-search" type="text" placeholder="Search @username" oninput="searchWalletUser(this.value,'gift')" autocomplete="off" autocorrect="off" spellcheck="false">
+        <button class="wlt-send-scan" onclick="openQRScan('gift')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/><path d="M14 14h.01M18 14h3M14 18v3M18 18h3v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
       </div>
       <p class="wlt-sheet-sublabel">Recent</p>
-      <div class="wlt-recipients-scroll" id="send-recipients">
+      <div class="wlt-recipients-scroll" id="gift-recipients">
         <div class="wlt-recipient-chip"><img src="https://api.dicebear.com/7.x/adventurer/svg?seed=ada123" alt=""><span>Ada O.</span></div>
         <div class="wlt-recipient-chip"><img src="https://api.dicebear.com/7.x/adventurer/svg?seed=tunde55" alt=""><span>Tunde</span></div>
         <div class="wlt-recipient-chip"><img src="https://api.dicebear.com/7.x/adventurer/svg?seed=kemi99" alt=""><span>Kemi</span></div>
       </div>
-      <div class="wlt-search-results hidden" id="send-results"></div>
+      <div class="wlt-search-results hidden" id="gift-results"></div>
       <div class="wlt-amount-entry">
-        <div class="wlt-selected-user hidden" id="send-selected-user">
-          <img class="wlt-sel-avatar" id="send-sel-avatar" src="" alt="">
-          <div><div class="wlt-sel-name" id="send-sel-name"></div><div class="wlt-sel-username" id="send-sel-username"></div></div>
-          <button class="wlt-sel-remove" onclick="clearSendRecipient()">✕</button>
+        <div class="wlt-selected-user hidden" id="gift-selected-user">
+          <img class="wlt-sel-avatar" id="gift-sel-avatar" src="" alt="">
+          <div><div class="wlt-sel-name" id="gift-sel-name"></div><div class="wlt-sel-username" id="gift-sel-username"></div></div>
+          <button class="wlt-sel-remove" onclick="clearGiftRecipient()">✕</button>
         </div>
         <div class="wlt-amount-display">
           <span class="wlt-amount-currency">✦</span>
-          <input class="wlt-amount-input" id="send-amount-input" type="tel" placeholder="0" inputmode="decimal" oninput="updateSendAmount(this.value)">
+          <input class="wlt-amount-input" id="gift-amount-input" type="tel" placeholder="0" inputmode="decimal" oninput="updateGiftAmount(this.value)">
         </div>
-        <div class="wlt-balance-hint" id="send-balance-hint">Balance: ✦ 0</div>
+        <div class="wlt-balance-hint" id="gift-balance-hint">Balance: ✦ 0</div>
         <div class="wlt-note-wrap">
-          <span class="wlt-note-emoji" onclick="pickNoteEmoji(this)">😊</span>
-          <input class="wlt-note-input" id="send-note" type="text" placeholder="What's it for?" maxlength="100">
+          <span class="wlt-note-emoji" onclick="pickNoteEmoji(this)">🎁</span>
+          <input class="wlt-note-input" id="gift-note" type="text" placeholder="Add a gift message" maxlength="100">
         </div>
-        <button class="wlt-confirm-btn" id="send-confirm-btn" onclick="confirmSendMoney()" disabled>
-          <span>Send Points</span>
-          <span class="wlt-confirm-amount" id="send-confirm-amount"></span>
+        <button class="wlt-confirm-btn" id="gift-confirm-btn" onclick="confirmGiftPoints()" disabled>
+          <span>Gift Points</span>
+          <span class="wlt-confirm-amount" id="gift-confirm-amount"></span>
         </button>
       </div>
     </div>
   </div>
 
-  <!-- SHEET: REQUEST POINTS -->
-  <div class="wlt-sheet hidden" id="sheet-request" role="dialog" aria-label="Request MistyPoints">
-    <div class="wlt-sheet-backdrop" onclick="closeWalletSheet('request')"></div>
-    <div class="wlt-sheet-body">
-      <div class="wlt-sheet-handle"></div>
-      <div class="wlt-sheet-header">
-        <button class="wlt-sheet-close" onclick="closeWalletSheet('request')"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
-        <h2 class="wlt-sheet-title">Request Points</h2>
-        <div style="width:36px"></div>
-      </div>
-      <div class="wlt-send-search-wrap">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        <input class="wlt-send-search" type="text" placeholder="Who do you want to charge?" oninput="searchWalletUser(this.value,'request')" autocomplete="off">
-      </div>
-      <p class="wlt-sheet-sublabel">Recent</p>
-      <div class="wlt-recipients-scroll">
-        <div class="wlt-recipient-chip"><img src="https://api.dicebear.com/7.x/adventurer/svg?seed=chidi44" alt=""><span>Chidi</span></div>
-        <div class="wlt-recipient-chip"><img src="https://api.dicebear.com/7.x/adventurer/svg?seed=ada123" alt=""><span>Ada O.</span></div>
-      </div>
-      <div class="wlt-amount-entry">
-        <div class="wlt-amount-display">
-          <span class="wlt-amount-currency">✦</span>
-          <input class="wlt-amount-input" type="tel" placeholder="0" inputmode="decimal">
-        </div>
-        <div class="wlt-note-wrap">
-          <span class="wlt-note-emoji">📝</span>
-          <input class="wlt-note-input" type="text" placeholder="Add a note (optional)" maxlength="100">
-        </div>
-        <button class="wlt-confirm-btn wlt-request-btn" onclick="confirmRequestMoney()">Request Points</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- SHEET: BUY POINTS (Flutterwave) -->
+  <!-- SHEET: BUY POINTS (Squad by GTC) -->
   <div class="wlt-sheet hidden" id="sheet-add" role="dialog" aria-label="Buy MistyPoints">
     <div class="wlt-sheet-backdrop" onclick="closeWalletSheet('add')"></div>
     <div class="wlt-sheet-body">
@@ -1672,7 +1630,7 @@
         </button>
         <button class="wlt-pay-method" onclick="initiateBuyPoints()">
           <div class="wlt-pay-method-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
-          <div class="wlt-pay-method-info"><div class="wlt-pay-method-name">Bank Transfer</div><div class="wlt-pay-method-sub">Use your bank app</div></div>
+          <div class="wlt-pay-method-info"><div class="wlt-pay-method-name">Bank Transfer</div><div class="wlt-pay-method-sub">Pay with your bank app</div></div>
           <div class="wlt-pay-method-badge">Auto-confirm</div>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         </button>
@@ -1684,19 +1642,19 @@
         </button>
         <button class="wlt-pay-method" onclick="initiateBuyPoints()">
           <div class="wlt-pay-method-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-          <div class="wlt-pay-method-info"><div class="wlt-pay-method-name">Mobile Money</div><div class="wlt-pay-method-sub">MTN MoMo, Airtel, Opay</div></div>
+          <div class="wlt-pay-method-info"><div class="wlt-pay-method-name">Mobile Money</div><div class="wlt-pay-method-sub">MTN MoMo, Airtel, OPay</div></div>
           <div class="wlt-pay-method-badge">Popular</div>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         </button>
       </div>
       <div class="wlt-security-note">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="2"/></svg>
-        Secured by Flutterwave · CBN Licensed
+        Secured by Squad · CBN Licensed
       </div>
     </div>
   </div>
 
-  <!-- SHEET: PAY BILLS -->
+  <!-- SHEET: PAY BILLS (CheapData) -->
   <div class="wlt-sheet hidden" id="sheet-bills" role="dialog" aria-label="Pay Bills">
     <div class="wlt-sheet-backdrop" onclick="closeWalletSheet('bills')"></div>
     <div class="wlt-sheet-body">
@@ -1741,7 +1699,7 @@
       </div>
       <div class="wlt-vtpass-note">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="2"/></svg>
-        Powered by VTpass · Bills deducted from MistyPoints
+        Powered by CheapData · Bills deducted from MistyPoints
       </div>
     </div>
   </div>
@@ -1762,7 +1720,7 @@
         <div class="wlt-qr-placeholder" id="qr-code-display">
           <div class="wlt-qr-mock"><div class="wlt-qr-inner"></div></div>
         </div>
-        <p class="wlt-qr-hint">Scan to send me MistyPoints</p>
+        <p class="wlt-qr-hint">Scan to gift me MistyPoints</p>
         <button class="wlt-copy-link" onclick="copyPayLink()">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="13" height="13" rx="2" stroke="currentColor" stroke-width="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" stroke="currentColor" stroke-width="2"/></svg>
           Copy MistyPoints link
@@ -1771,18 +1729,18 @@
     </div>
   </div>
 
-  <!-- SHEET: SELL OR WITHDRAW (NEW) -->
-  <div class="wlt-sheet hidden" id="sheet-sell-withdraw" role="dialog" aria-label="Sell or Withdraw MistyPoints">
-    <div class="wlt-sheet-backdrop" onclick="closeWalletSheet('sell-withdraw')"></div>
+  <!-- SHEET: WITHDRAW -->
+  <div class="wlt-sheet hidden" id="sheet-withdraw" role="dialog" aria-label="Withdraw MistyPoints">
+    <div class="wlt-sheet-backdrop" onclick="closeWalletSheet('withdraw')"></div>
     <div class="wlt-sheet-body ca-sheet-body">
       <div class="wlt-sheet-handle"></div>
       <div class="wlt-sheet-header">
-        <button class="wlt-sheet-close" onclick="closeWalletSheet('sell-withdraw')">
+        <button class="wlt-sheet-close" onclick="closeWalletSheet('withdraw')">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
             <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
           </svg>
         </button>
-        <h2 class="wlt-sheet-title">Sell or Withdraw</h2>
+        <h2 class="wlt-sheet-title">Withdraw</h2>
         <div style="width:36px"></div>
       </div>
       <div class="ca-cashout-banner">
@@ -1790,9 +1748,20 @@
           <circle cx="12" cy="12" r="10" stroke="#00d632" stroke-width="2"/>
           <path d="M12 8v4M12 16h.01" stroke="#00d632" stroke-width="2" stroke-linecap="round"/>
         </svg>
-        <span>Convert your MistyPoints or transfer value. 1 MP = ₦5,000 in-platform value.</span>
+        <span>Convert your MistyPoints to cash and transfer to your bank account.</span>
       </div>
       <div class="wlt-pay-methods ca-cashout-options">
+        <button class="wlt-pay-method ca-cashout-opt" onclick="walletAction('withdraw-bank')">
+          <div class="wlt-pay-method-icon ca-cashout-opt-icon" style="background:linear-gradient(135deg,#6c47ff,#a78bfa)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <div class="wlt-pay-method-info">
+            <div class="wlt-pay-method-name">Withdraw to Bank</div>
+            <div class="wlt-pay-method-sub">Receive value in your bank account</div>
+          </div>
+          <div class="wlt-pay-method-badge">Squad</div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
         <button class="wlt-pay-method ca-cashout-opt" onclick="walletAction('sell-points')">
           <div class="wlt-pay-method-icon ca-cashout-opt-icon" style="background:linear-gradient(135deg,#00d632,#00a826)">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -1803,41 +1772,33 @@
           </div>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         </button>
-        <button class="wlt-pay-method ca-cashout-opt" onclick="walletAction('withdraw-bank')">
-          <div class="wlt-pay-method-icon ca-cashout-opt-icon" style="background:linear-gradient(135deg,#6c47ff,#a78bfa)">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
-          </div>
-          <div class="wlt-pay-method-info">
-            <div class="wlt-pay-method-name">Withdraw to Bank</div>
-            <div class="wlt-pay-method-sub">Send value to your bank account</div>
-          </div>
-          <div class="wlt-pay-method-badge">Flutterwave</div>
-        </button>
-        <button class="wlt-pay-method ca-cashout-opt" onclick="walletAction('gift-points')">
-          <div class="wlt-pay-method-icon ca-cashout-opt-icon" style="background:linear-gradient(135deg,#f97316,#fb923c)">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><polyline points="20 12 20 22 4 22 4 12" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><rect x="2" y="7" width="20" height="5" rx="1" stroke="white" stroke-width="2"/><line x1="12" y1="22" x2="12" y2="7" stroke="white" stroke-width="2" stroke-linecap="round"/><path d="M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </div>
-          <div class="wlt-pay-method-info">
-            <div class="wlt-pay-method-name">Gift MistyPoints</div>
-            <div class="wlt-pay-method-sub">Give MP as a gift to another user</div>
-          </div>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        </button>
       </div>
       <div class="wlt-security-note">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="2"/></svg>
-        Secured by Flutterwave · Bank-grade encryption
+        Secured by Squad · Bank-grade encryption
       </div>
     </div>
   </div>
 
   <!-- FLOATING QR -->
   <button class="wlt-qr-fab hidden" onclick="openWalletSheet('qr')" aria-label="QR code">
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/><path d="M14 14h.01M18 14h3M14 18v3M18 18h3v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
+      <rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
+      <rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
+      <path d="M14 14h.01M18 14h3M14 18v3M18 18h3v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </svg>
   </button>
 
 </section>
+
+
+<!-- ── CSS ADDITIONS for 3-button layout and gift button ───────────────────
+     Add these to your existing wallet CSS (file 3):
+
+</section>
     <!-- /WALLET PAGE -->
+
 
     <!-- ══════════════════════════════════════════
          PAGE: SETTINGS
@@ -2210,7 +2171,7 @@
             </div>
             <div class="legal-subsection">
               <div class="legal-subsection-title">2.2 Security</div>
-              <p class="legal-p">You are solely responsible for your login credentials. Report suspected unauthorised access immediately to <strong>legal@mistynote.com</strong>. We are not liable for losses from unauthorised use due to your failure to secure your account.</p>
+              <p class="legal-p">You are solely responsible for your login credentials. Report suspected unauthorised access immediately to <strong><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="6b070e0c0a072b0602181f1205041f0e45080406">[email&#160;protected]</a></strong>. We are not liable for losses from unauthorised use due to your failure to secure your account.</p>
             </div>
             <div class="legal-subsection">
               <div class="legal-subsection-title">2.3 Suspension &amp; Closure</div>
@@ -2251,7 +2212,7 @@
               <li>Deposits via debit card, bank transfer, USSD, or other available methods. Processing fees disclosed at time of deposit.</li>
               <li>Peer-to-peer transfers are instant. Verify recipient identity before sending — MistyNote is not liable for transfers sent to the wrong recipient.</li>
               <li>Withdrawals to a verified Nigerian bank account. Transfer fees transparently disclosed; MistyNote adds no markup.</li>
-              <li>Suspect unauthorised Wallet access? Contact <strong>security@mistynote.com</strong> immediately.</li>
+              <li>Suspect unauthorised Wallet access? Contact <strong><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="2457414751564d505d64494d57505d4a4b50410a474b49">[email&#160;protected]</a></strong> immediately.</li>
               <li>Withdraw all Wallet funds before closing your account.</li>
             </ul>
           </div>
@@ -2281,7 +2242,7 @@
           <div class="legal-section" id="terms-s6">
             <div class="legal-section-title"><span class="legal-section-num">6</span>Commercial Conduct &amp; Fraud Prevention</div>
             <p class="legal-p">Sellers must not list counterfeit, prohibited, or misleading products, and must not conduct transactions outside the MistyNote Platform to circumvent fees. Buyers must not make fraudulent purchases or file false dispute claims.</p>
-            <p class="legal-p">MistyNote is not responsible for losses from transactions conducted outside the Platform. Report suspected fraud to <strong>support@mistynote.com</strong> immediately. MistyNote may investigate suspicious activity, freeze accounts, reverse transactions, and report fraud to Nigerian authorities.</p>
+            <p class="legal-p">MistyNote is not responsible for losses from transactions conducted outside the Platform. Report suspected fraud to <strong><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="d2a1a7a2a2bda0a692bfbba1a6abbcbda6b7fcb1bdbf">[email&#160;protected]</a></strong> immediately. MistyNote may investigate suspicious activity, freeze accounts, reverse transactions, and report fraud to Nigerian authorities.</p>
           </div>
 
           <div class="legal-section" id="terms-s7">
@@ -2305,15 +2266,15 @@
 
           <div class="legal-section" id="terms-s12">
             <div class="legal-section-title"><span class="legal-section-num">12</span>Governing Law</div>
-            <p class="legal-p">These Terms are governed by the laws of the Federal Republic of Nigeria. Disputes are subject to good-faith negotiation first — contact <strong>legal@mistynote.com</strong>. If unresolved within 60 days, disputes are submitted to the exclusive jurisdiction of Nigerian courts. Place of execution: Lagos State, Nigeria.</p>
+            <p class="legal-p">These Terms are governed by the laws of the Federal Republic of Nigeria. Disputes are subject to good-faith negotiation first — contact <strong><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="7f131a181e133f12160c0b0611100b1a511c1012">[email&#160;protected]</a></strong>. If unresolved within 60 days, disputes are submitted to the exclusive jurisdiction of Nigerian courts. Place of execution: Lagos State, Nigeria.</p>
             <p class="legal-p">If you access MistyNote from outside Nigeria, you do so at your own initiative and are responsible for compliance with local laws. Nigerian law governs these Terms regardless of where you access the Platform.</p>
           </div>
 
           <div class="legal-section">
             <div class="legal-section-title"><span class="legal-section-num" style="background:var(--green)">✉</span>Contact</div>
             <div class="legal-contacts">
-              <a class="legal-contact-card" href="mailto:legal@mistynote.com"><div class="legal-contact-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 7l10 7 10-7"/></svg></div><div><div class="legal-contact-label">Legal</div><div class="legal-contact-value">legal@mistynote.com</div></div></a>
-              <a class="legal-contact-card" href="mailto:support@mistynote.com"><div class="legal-contact-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div><div><div class="legal-contact-label">Support</div><div class="legal-contact-value">support@mistynote.com</div></div></a>
+              <a class="legal-contact-card" href="/cdn-cgi/l/email-protection#28444d4f49446845415b5c5146475c4d064b4745"><div class="legal-contact-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 7l10 7 10-7"/></svg></div><div><div class="legal-contact-label">Legal</div><div class="legal-contact-value"><span class="__cf_email__" data-cfemail="204c4547414c604d495354594e4f54450e434f4d">[email&#160;protected]</span></div></div></a>
+              <a class="legal-contact-card" href="/cdn-cgi/l/email-protection#1d6e686d6d726f695d70746e696473726978337e7270"><div class="legal-contact-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div><div><div class="legal-contact-label">Support</div><div class="legal-contact-value"><span class="__cf_email__" data-cfemail="8dfef8fdfde2fff9cde0e4fef9f4e3e2f9e8a3eee2e0">[email&#160;protected]</span></div></div></a>
             </div>
           </div>
           <div class="legal-footer"><strong>© 2026 Uwana Limited. All rights reserved.</strong><br>MistyNote is a registered trademark of Uwana Limited.</div>
@@ -2342,7 +2303,7 @@
         </div>
         <div class="legal-body">
           <div class="legal-notice">This Policy explains how MistyNote collects, uses, shares, stores, and protects your personal information in accordance with Nigerian law and international best practices. By using MistyNote, you agree to this Policy.</div>
-          <div class="legal-warning">⚠️ MistyNote is not intended for use by persons under 18. If you are a parent and believe your child has registered, contact privacy@mistynote.com immediately.</div>
+          <div class="legal-warning">⚠️ MistyNote is not intended for use by persons under 18. If you are a parent and believe your child has registered, contact <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="0e7e7c67786f6d774e63677d7a7760617a6b206d6163">[email&#160;protected]</a> immediately.</div>
 
           <div class="legal-toc">
             <div class="legal-toc-header">Contents</div>
@@ -2416,9 +2377,9 @@
 
           <div class="legal-section" id="priv-s4">
             <div class="legal-section-title"><span class="legal-section-num" style="font-size:11px">IV</span>Managing Your Information</div>
-            <p class="legal-p">Update most personal information directly through your profile and account settings. For a full export of your personal data, contact <strong>privacy@mistynote.com</strong>.</p>
+            <p class="legal-p">Update most personal information directly through your profile and account settings. For a full export of your personal data, contact <strong><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="5525273c2334362c15383c26212c3b3a21307b363a38">[email&#160;protected]</a></strong>.</p>
             <p class="legal-p">Privacy controls at <strong>Me → Settings → Privacy</strong>: who can see your posts and Moments; personalised content on/off; location shown on profile; notification preferences; read receipts in DMs; discoverability by contacts.</p>
-            <p class="legal-p">For automated decisions significantly affecting your rights (account suspension, seller tier demotion), you may request a human review at <strong>privacy@mistynote.com</strong>.</p>
+            <p class="legal-p">For automated decisions significantly affecting your rights (account suspension, seller tier demotion), you may request a human review at <strong><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="a1d1d3c8d7c0c2d8e1ccc8d2d5d8cfced5c48fc2cecc">[email&#160;protected]</a></strong>.</p>
           </div>
 
           <div class="legal-section" id="priv-s5">
@@ -2449,33 +2410,6 @@
             <div class="legal-section-title"><span class="legal-section-num" style="background:var(--green);font-size:11px">✉</span>Contact Us</div>
             <p class="legal-p">We respond to privacy requests within 30 days (up to 60 for complex requests, with notification within the initial 30-day window).</p>
             <div class="legal-contacts">
-              <a class="legal-contact-card" href="mailto:privacy@mistynote.com"><div class="legal-contact-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><div><div class="legal-contact-label">Privacy Team</div><div class="legal-contact-value">privacy@mistynote.com</div></div></a>
-              <a class="legal-contact-card" href="mailto:support@mistynote.com"><div class="legal-contact-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div><div><div class="legal-contact-label">Support</div><div class="legal-contact-value">support@mistynote.com</div></div></a>
-              <a class="legal-contact-card" href="mailto:legal@mistynote.com"><div class="legal-contact-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 7l10 7 10-7"/></svg></div><div><div class="legal-contact-label">Legal</div><div class="legal-contact-value">legal@mistynote.com</div></div></a>
-            </div>
-          </div>
-          <div class="legal-footer"><strong>© 2026 Uwana Limited. All rights reserved.</strong><br>MistyNote is a registered trademark of Uwana Limited.</div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ══════════════════════════════════════════
-       LEGAL OVERLAY — auth screen (pre-login)
-  ══════════════════════════════════════════ -->
-  <div id="legal-overlay" class="legal-overlay hidden">
-    <div class="legal-overlay-inner" id="legal-overlay-inner"></div>
-  </div>
-
-  <!-- Scripts -->
-  <script type="module">
-    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
-    const SUPABASE_URL = 'https://rhmknjlxddxkfybcfgjj.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJobWtuamx4ZGR4a2Z5YmNmZ2pqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk0MzM4OTgsImV4cCI6MjA4NTAwOTg5OH0.dNBxXmIdYAxJT-bt1WWcO62Nobt8aDLTRdnrs5g1CCI';
-    window.supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    window.dispatchEvent(new Event('supabase-ready'));
-  </script>
-  <script src="/app.js"></script>
-</body>
-
-</html>
+              <a class="legal-contact-card" href="/cdn-cgi/l/email-protection#2a5a58435c4b49536a4743595e5344455e4f04494547"><div class="legal-contact-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><div><div class="legal-contact-label">Privacy Team</div><div class="legal-contact-value"><span class="__cf_email__" data-cfemail="dfafadb6a9bebca69fb2b6acaba6b1b0abbaf1bcb0b2">[email&#160;protected]</span></div></div></a>
+              <a class="legal-contact-card" href="/cdn-cgi/l/email-protection#32414742425d4046725f5b41464b5c5d46571c515d5f"><div class="legal-contact-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div><div><div class="legal-contact-label">Support</div><div class="legal-contact-value"><span class="__cf_email__" data-cfemail="cfbcbabfbfa0bdbb8fa2a6bcbbb6a1a0bbaae1aca0a2">[email&#160;protected]</span></div></div></a>
+              <a class="legal-contact-card" href="/cdn-cgi/l/email-protection#3f535a585e537f52564c4b4651504b5a115c5052"><div class="legal-contact-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 7l10 7
