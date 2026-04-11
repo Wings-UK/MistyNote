@@ -9369,27 +9369,45 @@ function toggleDarkMode(isDark) {
 
 // ══════════════════════════════════════════
 // MISTY POINTS WALLET
-// 1 Misty Point = ₦5,000 (internal rate, never shown to users)
-// All user-facing values are in Misty Points only.
-// Flutterwave is used solely to purchase points.
-// No withdrawals. No currency symbols ever exposed.
+// Rate is KWD-pegged — fetched live from exchange API, never shown to users.
+// Squad by GTC handles all payment gateway operations.
+// CheapData handles all bill payment operations.
+// No NGN amounts, no MP rate ever rendered in the UI.
 // ══════════════════════════════════════════
 
-const POINTS_RATE = 5000; // ₦ per 1 Misty Point — internal, never rendered
+// ── INTERNAL RATE — KWD-PEGGED, NEVER SHOWN ────────────────
+// 1 Misty Point = 1 KWD worth of NGN (auto-updated)
+// Rate is fetched silently on wallet open and cached for the session.
+// The UI NEVER exposes this value.
+let POINTS_RATE = 5000; // ₦ per 1 MP — default fallback, updated from live KWD rate
 
-// ── WALLET STATE ──────────────────────────────────────────────
+async function syncPointsRate() {
+  try {
+    // Uses a free exchange rate API — swap endpoint for your preferred provider
+    const res = await fetch('https://open.er-api.com/v6/latest/KWD');
+    const data = await res.json();
+    const kwdToNgn = data && data.rates && data.rates.NGN;
+    if (kwdToNgn && kwdToNgn > 0) {
+      POINTS_RATE = Math.round(kwdToNgn); // 1 MP = 1 KWD in NGN
+    }
+  } catch (e) {
+    // Silently fall back to last known rate — never surface to user
+  }
+}
+
+// ── WALLET STATE ──────────────────────────────────────────────────────────────
 const walletState = {
   points: 0,               // user's Misty Points balance (live from DB)
   balanceVisible: true,
-  selectedSendRecipient: null,
-  sendAmount: 0,           // in points
+  selectedGiftRecipient: null, // renamed from selectedSendRecipient
+  giftAmount: 0,           // in points (renamed from sendAmount)
   activeSheet: null,
   txnFilter: 'all',
-  flutterwavePublicKey: '', // set at runtime from Supabase secrets
+  squadPublicKey: '',      // set at runtime from Supabase secrets
 };
 
-// ── FORMAT HELPERS ────────────────────────────────────────────
-// All user-facing amounts rendered as: ✦12 or ✦1,500
+// ── FORMAT HELPERS ────────────────────────────────────────────────────────────
+// All user-facing amounts: ✦12 or ✦1,500 — never NGN
 function fmtPts(pts) {
   if (pts === null || pts === undefined) return '✦0';
   const n = Number(pts);
@@ -9402,14 +9420,14 @@ function fmtPts(pts) {
 function pointsToNgn(pts) { return pts * POINTS_RATE; }
 function ngnToPoints(ngn) { return ngn / POINTS_RATE; }
 
-// ── OPEN WALLET PAGE ─────────────────────────────────────────
+// ── OPEN WALLET PAGE ──────────────────────────────────────────────────────────
 function openWallet() {
   slideTo('wallet');
+  syncPointsRate();          // silently refresh KWD→NGN rate in the background
   buildWalletPeopleRow();
   syncWalletBalance();
   const fab = document.querySelector('.wlt-qr-fab');
   if (fab) fab.classList.remove('hidden');
-  // Hide bottom nav while on wallet page
   const nav = document.getElementById('bottom-nav');
   if (nav) nav.style.display = 'none';
   const app = document.getElementById('app');
@@ -9421,14 +9439,13 @@ function onWalletClose() {
   const fab = document.querySelector('.wlt-qr-fab');
   if (fab) fab.classList.add('hidden');
   closeAllWalletSheets();
-  // Restore bottom nav
   const nav = document.getElementById('bottom-nav');
   if (nav) nav.style.display = '';
   const app = document.getElementById('app');
   if (app) app.classList.remove('wallet-active');
 }
 
-// ── BALANCE SYNC ──────────────────────────────────────────────
+// ── BALANCE SYNC ──────────────────────────────────────────────────────────────
 async function syncWalletBalance() {
   if (!currentUser) return;
   try {
@@ -9447,11 +9464,11 @@ function renderWalletBalance() {
   const el = document.getElementById('wlt-balance');
   if (!el) return;
   el.textContent = fmtPts(walletState.points);
-  const hint = document.getElementById('send-balance-hint');
+  const hint = document.getElementById('gift-balance-hint');
   if (hint) hint.textContent = 'Balance: ' + fmtPts(walletState.points);
 }
 
-// ── BALANCE VISIBILITY TOGGLE ─────────────────────────────────
+// ── BALANCE VISIBILITY TOGGLE ─────────────────────────────────────────────────
 function toggleBalanceVisibility(btn) {
   walletState.balanceVisible = !walletState.balanceVisible;
   const balEl = document.getElementById('wlt-balance');
@@ -9462,7 +9479,7 @@ function toggleBalanceVisibility(btn) {
   if (eyeOff) eyeOff.classList.toggle('hidden', walletState.balanceVisible);
 }
 
-// ── QUICK PAY PEOPLE ROW ──────────────────────────────────────
+// ── QUICK PAY PEOPLE ROW ──────────────────────────────────────────────────────
 async function buildWalletPeopleRow() {
   const container = document.getElementById('wlt-people-dynamic');
   if (!container || !currentUser) return;
@@ -9498,7 +9515,7 @@ async function buildWalletPeopleRow() {
     if (!users) return;
 
     container.innerHTML = users.map(u =>
-      '<button class="wlt-person-tile" onclick="quickPayUser(\'' + u.id + '\',\'' + escHtml(u.username) + '\',\'' + (u.avatar || '') + '\')">' +
+      '<button class="wlt-person-tile" onclick="quickGiftUser(\'' + u.id + '\',\'' + escHtml(u.username) + '\',\'' + (u.avatar || '') + '\')">' +
         '<img class="wlt-person-avatar" src="' + (u.avatar || 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + u.id) + '" alt="">' +
         '<span class="wlt-person-name">' + escHtml((u.username || '').split(' ')[0]) + '</span>' +
       '</button>'
@@ -9506,30 +9523,31 @@ async function buildWalletPeopleRow() {
   } catch (e) { /* non-critical */ }
 }
 
-function quickPayUser(userId, name, avatarUrl) {
-  walletState.selectedSendRecipient = { id: userId, name, avatarUrl };
-  openWalletSheet('send');
+// Quick-gift a user (renamed from quickPayUser)
+function quickGiftUser(userId, name, avatarUrl) {
+  walletState.selectedGiftRecipient = { id: userId, name, avatarUrl };
+  openWalletSheet('gift');
   setTimeout(function() {
-    var selBlock = document.getElementById('send-selected-user');
-    var selName  = document.getElementById('send-sel-name');
-    var selUser  = document.getElementById('send-sel-username');
-    var selAv    = document.getElementById('send-sel-avatar');
+    var selBlock = document.getElementById('gift-selected-user');
+    var selName  = document.getElementById('gift-sel-name');
+    var selUser  = document.getElementById('gift-sel-username');
+    var selAv    = document.getElementById('gift-sel-avatar');
     if (selBlock) selBlock.classList.remove('hidden');
     if (selName)  selName.textContent = name;
     if (selUser)  selUser.textContent = '';
     if (selAv)    selAv.src = avatarUrl || ('https://api.dicebear.com/7.x/adventurer/svg?seed=' + userId);
   }, 50);
 }
+// Legacy compat alias
+function quickPayUser(userId, name, avatarUrl) { quickGiftUser(userId, name, avatarUrl); }
 
-// ── SHEET MANAGEMENT ─────────────────────────────────────────
-// No 'withdraw' sheet — Misty Points cannot be withdrawn
+// ── SHEET MANAGEMENT ──────────────────────────────────────────────────────────
 const SHEET_MAP = {
-  'send':           'sheet-send',
-  'request':        'sheet-request',
-  'add':            'sheet-add',
-  'bills':          'sheet-bills',
-  'qr':             'sheet-qr',
-  'sell-withdraw':  'sheet-sell-withdraw',
+  'gift':     'sheet-gift',   // was 'send'
+  'add':      'sheet-add',
+  'bills':    'sheet-bills',
+  'qr':       'sheet-qr',
+  'withdraw': 'sheet-withdraw', // was 'sell-withdraw'
 };
 
 function openWalletSheet(type) {
@@ -9545,12 +9563,9 @@ function openWalletSheet(type) {
     }
   }
   var labels = {
-    'split':         'Split Bill — coming soon ✨',
-    'find-people':   'Find People — coming soon ✨',
-    'history':       'Full Activity History — coming soon ✨',
-    'sell-points':   'Sell MistyPoints — coming soon ✦',
-    'withdraw-bank': 'Withdraw to Bank — coming soon ✦',
-    'gift-points':   'Gift MistyPoints — coming soon ✦',
+    'split':       'Split Bill — coming soon ✨',
+    'find-people': 'Find People — coming soon ✨',
+    'history':     'Full Activity History — coming soon ✨',
   };
   showToast(labels[type] || 'Coming soon ✨');
 }
@@ -9577,26 +9592,28 @@ function walletHandleBackGesture() {
   return false;
 }
 
-// ── SEND POINTS ───────────────────────────────────────────────
-function updateSendAmount(val) {
+// ── GIFT POINTS (was: Send Points) ───────────────────────────────────────────
+function updateGiftAmount(val) {
   var num = parseFloat(val.replace(/[^0-9.]/g, '')) || 0;
-  walletState.sendAmount = num;
-  var btn     = document.getElementById('send-confirm-btn');
-  var amtSpan = document.getElementById('send-confirm-amount');
+  walletState.giftAmount = num;
+  var btn     = document.getElementById('gift-confirm-btn');
+  var amtSpan = document.getElementById('gift-confirm-amount');
   if (btn) btn.disabled = num <= 0 || num > walletState.points;
   if (amtSpan) amtSpan.textContent = num > 0 ? fmtPts(num) : '';
 }
+// Legacy alias
+function updateSendAmount(val) { updateGiftAmount(val); }
 
-async function confirmSendMoney() {
-  var recipient = walletState.selectedSendRecipient;
-  var amount    = walletState.sendAmount;
-  var noteEl    = document.getElementById('send-note');
+async function confirmGiftPoints() {
+  var recipient = walletState.selectedGiftRecipient;
+  var amount    = walletState.giftAmount;
+  var noteEl    = document.getElementById('gift-note');
   var note      = noteEl ? noteEl.value.trim() : '';
   if (!recipient || amount <= 0) return;
   if (amount > walletState.points) { showToast('Not enough Misty Points'); return; }
 
-  closeWalletSheet('send');
-  showToast('Sending ' + fmtPts(amount) + ' to ' + recipient.name + '...');
+  closeWalletSheet('gift');
+  showToast('Gifting ' + fmtPts(amount) + ' to ' + recipient.name + '...');
 
   try {
     var res = await supabase.rpc('p2p_transfer_points', {
@@ -9608,59 +9625,26 @@ async function confirmSendMoney() {
     if (res.error) throw res.error;
     walletState.points -= amount;
     renderWalletBalance();
-    showToast('\u2713 Sent ' + fmtPts(amount) + ' to ' + recipient.name);
+    showToast('\u2713 Gifted ' + fmtPts(amount) + ' to ' + recipient.name);
     syncWalletBalance();
     refreshTransactionList();
   } catch (e) {
-    showToast('Transfer failed \u2014 please try again');
-    console.error('Points transfer error:', e);
+    showToast('Gift failed \u2014 please try again');
+    console.error('Points gift error:', e);
   }
 }
+// Legacy alias
+async function confirmSendMoney() { return confirmGiftPoints(); }
 
-function clearSendRecipient() {
-  walletState.selectedSendRecipient = null;
-  var selBlock = document.getElementById('send-selected-user');
+function clearGiftRecipient() {
+  walletState.selectedGiftRecipient = null;
+  var selBlock = document.getElementById('gift-selected-user');
   if (selBlock) selBlock.classList.add('hidden');
 }
+// Legacy alias
+function clearSendRecipient() { clearGiftRecipient(); }
 
-// ── REQUEST POINTS ────────────────────────────────────────────
-async function confirmRequestMoney() {
-  showToast('Request sent! \u2713');
-  closeWalletSheet('request');
-}
-
-// ── PENDING REQUEST ACTIONS ───────────────────────────────────
-async function handlePendingRequest(btn, action) {
-  var item = btn.closest('.wlt-pending-item');
-  if (!item) return;
-  if (action === 'accept') {
-    item.style.opacity = '0.5';
-    item.style.pointerEvents = 'none';
-    showToast('Points sent \u2713');
-    setTimeout(function() { item.remove(); }, 800);
-    updatePendingCount(-1);
-  } else {
-    item.style.opacity = '0.5';
-    item.style.pointerEvents = 'none';
-    showToast('Request declined');
-    setTimeout(function() { item.remove(); }, 500);
-    updatePendingCount(-1);
-  }
-}
-
-function updatePendingCount(delta) {
-  var badge = document.getElementById('wlt-pending-count');
-  if (!badge) return;
-  var curr = parseInt(badge.textContent) || 0;
-  var next = Math.max(0, curr + delta);
-  badge.textContent = next;
-  if (next === 0) {
-    var section = document.getElementById('wlt-pending-section');
-    if (section) section.classList.add('hidden');
-  }
-}
-
-// ── QUICK AMOUNT SETTER (in points) ──────────────────────────
+// ── QUICK AMOUNT SETTER ────────────────────────────────────────────────────────
 function setQuickAmount(context, points) {
   var inputMap = { add: 'add-amount-input' };
   var el = document.getElementById(inputMap[context]);
@@ -9670,8 +9654,8 @@ function setQuickAmount(context, points) {
   updateBuyPointsPreview(points);
 }
 
-// ── BUY POINTS PREVIEW ────────────────────────────────────────
-// Shows user what they're paying for — no NGN amount ever exposed
+// ── BUY POINTS PREVIEW ────────────────────────────────────────────────────────
+// Shows user what they're getting — no NGN amount ever exposed
 function updateBuyPointsPreview(val) {
   var pts = parseFloat(val) || 0;
   var hint = document.getElementById('buy-pts-preview');
@@ -9680,59 +9664,44 @@ function updateBuyPointsPreview(val) {
     hint.textContent = 'Enter how many MistyPoints to buy';
     return;
   }
-  hint.textContent = 'You will receive ✦' + pts.toLocaleString('en-NG') + ' · Payment via Flutterwave';
+  hint.textContent = 'You will receive \u2736' + pts.toLocaleString('en-NG') + ' \u00b7 Secure payment via Squad';
 }
 
-// ── BUY POINTS VIA FLUTTERWAVE ────────────────────────────────
-// User picks how many Misty Points to buy.
-// NGN amount is computed internally (pts x 5000) — never shown.
+// ── BUY POINTS VIA SQUAD BY GTC ───────────────────────────────────────────────
+// User picks how many Misty Points. NGN amount computed internally — never shown.
 function initiateBuyPoints() {
   var ptInput = document.getElementById('add-amount-input');
   var points  = parseFloat((ptInput ? ptInput.value : '') || '0');
   if (!points || points <= 0) { showToast('Enter how many points to buy'); return; }
   if (!currentUser) { showToast('Please sign in first'); return; }
 
-  showFlutterwaveLoader();
+  showSquadLoader();
 
-  // Uncomment when Flutterwave keys are configured:
-  /*
   var ngnAmount = pointsToNgn(points);
-  if (typeof FlutterwaveCheckout === 'undefined') {
-    loadScript('https://checkout.flutterwave.com/v3.js', function() { runFlutterwave(points, ngnAmount); });
-  } else {
-    runFlutterwave(points, ngnAmount);
-  }
-  */
 
-  // PLACEHOLDER — remove when live
-  setTimeout(function() {
-    hideFlutterwaveLoader();
-    closeWalletSheet('add');
-    showToast('Flutterwave integration pending setup \uD83D\uDD27');
-  }, 1200);
+  // ── Squad by GTC inline payment ──────────────────────────────────────────
+  // Docs: https://squadco.com/documentation/
+  // Load Squad's payment script dynamically
+  if (typeof SquadSDK === 'undefined') {
+    loadScript('https://checkout.squadco.com/widget/squad.min.js', function() {
+      runSquadPayment(points, ngnAmount);
+    });
+  } else {
+    runSquadPayment(points, ngnAmount);
+  }
 }
 
-function runFlutterwave(points, ngnAmount) {
-  FlutterwaveCheckout({
-    public_key: walletState.flutterwavePublicKey,
-    tx_ref:    'MN-' + currentUser.id + '-' + Date.now(),
-    amount:    ngnAmount,   // real NGN internally for Flutterwave
-    currency:  'NGN',
-    payment_options: 'card,bank_transfer,ussd,mobile_money',
-    customer: {
-      email:       currentUser.email,
-      phonenumber: currentUser.phone || '',
-      name:        (currentUser.user_metadata && currentUser.user_metadata.full_name) || '',
-    },
-    customizations: {
-      title:       'MistyNote \u2014 Buy Misty Points',
-      description: 'Purchase ' + fmtPts(points),
-      logo:        '/assets/logo.png',
-    },
-    callback: async function(data) {
-      hideFlutterwaveLoader();
-      if (data.status === 'successful') {
-        await creditPoints(data.tx_ref, points, data.flw_ref);
+function runSquadPayment(points, ngnAmount) {
+  // Squad by GTC checkout — NGN internally, never exposed to user
+  var txRef = 'MN-' + currentUser.id + '-' + Date.now();
+
+  var squadInstance = new SquadSDK({
+    onLoad: function() { /* ready */ },
+    onClose: function() { hideSquadLoader(); },
+    onSuccess: async function(data) {
+      hideSquadLoader();
+      if (data && data.transaction_ref) {
+        await creditPointsSquad(txRef, points, data.transaction_ref);
         closeWalletSheet('add');
         showToast(fmtPts(points) + ' added to your wallet \u2713');
         syncWalletBalance();
@@ -9741,45 +9710,121 @@ function runFlutterwave(points, ngnAmount) {
         showToast('Payment failed \u2014 please try again');
       }
     },
-    onclose: function() { hideFlutterwaveLoader(); },
+    key: walletState.squadPublicKey,
+    email: currentUser.email,
+    amount: ngnAmount * 100, // Squad expects kobo (amount x 100)
+    currency_code: 'NGN',
+    transaction_ref: txRef,
+    customer_name: (currentUser.user_metadata && currentUser.user_metadata.full_name) || '',
+    payment_channels: ['card', 'bank', 'ussd', 'transfer'],
   });
+
+  squadInstance.setup();
+  squadInstance.open();
 }
 
-async function creditPoints(txRef, points, flwRef) {
-  // Edge function verifies Flutterwave server-side then credits points
+async function creditPointsSquad(txRef, points, squadRef) {
+  // Edge function verifies Squad transaction server-side then credits points
   try {
     var res = await supabase.functions.invoke('credit-points', {
-      body: { tx_ref: txRef, flw_ref: flwRef, points: points, user_id: currentUser.id }
+      body: { tx_ref: txRef, squad_ref: squadRef, points: points, user_id: currentUser.id }
     });
     if (res.error) throw res.error;
   } catch (e) {
-    console.error('creditPoints error:', e);
+    console.error('creditPointsSquad error:', e);
     throw e;
   }
 }
 
-function showFlutterwaveLoader() {
-  var el = document.getElementById('flw-loading');
+function showSquadLoader() {
+  var el = document.getElementById('squad-loading');
   if (!el) {
     el = document.createElement('div');
-    el.id = 'flw-loading';
-    el.className = 'flw-loading-overlay';
+    el.id = 'squad-loading';
+    el.className = 'flw-loading-overlay'; // reuse existing loader styles
     el.innerHTML = '<div class="flw-spinner"></div><div class="flw-loading-text">Connecting to payment...</div>';
     document.body.appendChild(el);
   }
   el.classList.remove('hidden');
 }
-function hideFlutterwaveLoader() {
-  var el = document.getElementById('flw-loading');
+function hideSquadLoader() {
+  var el = document.getElementById('squad-loading');
   if (el) el.classList.add('hidden');
 }
-function loadScript(src, cb) {
-  var s = document.createElement('script');
-  s.src = src; s.onload = cb;
-  document.head.appendChild(s);
+
+// Legacy aliases (if referenced elsewhere in codebase)
+function showFlutterwaveLoader() { showSquadLoader(); }
+function hideFlutterwaveLoader() { hideSquadLoader(); }
+
+// ── CHEAPDATA BILL PAYMENT ────────────────────────────────────────────────────
+// CheapData API: https://www.cheapdata.com.ng/developer
+// Each bill type maps to a CheapData endpoint.
+// Deducts walletState.points via RPC after successful API call.
+
+const CHEAPDATA_SERVICE_MAP = {
+  // Airtime
+  airtime: {
+    label:    'Airtime Top-up',
+    networks: ['MTN', 'Airtel', 'Glo', '9Mobile'],
+    type:     'airtime',
+  },
+  // Data bundles
+  data: {
+    label:    'Data Bundle',
+    networks: ['MTN', 'Airtel', 'Glo', '9Mobile'],
+    type:     'data',
+    // CheapData network codes: mtn=1, glo=2, airtel=4, 9mobile=3
+  },
+  // Cable TV
+  tv: {
+    label:    'TV / Cable',
+    providers: ['DSTV', 'GOtv', 'StarTimes', 'ShowMax'],
+    type:     'cabletv',
+    // CheapData service: dstv, gotv, startimes
+  },
+  // Electricity
+  electricity: {
+    label:    'Electricity',
+    providers: ['IKEDC', 'EKEDC', 'IBEDC', 'PHED', 'AEDC', 'KEDCO', 'JEDC', 'BEDC', 'EEDC'],
+    type:     'electricity',
+  },
+  // Betting
+  betting: {
+    label:    'Betting / Gaming',
+    providers: ['Bet9ja', 'SportyBet', '1xBet', 'NairaBet', 'MSport'],
+    type:     'betting',
+    // CheapData: betcode funding
+  },
+  // Internet
+  internet: {
+    label:    'Internet / Broadband',
+    providers: ['Spectranet', 'Smile', 'Swift', 'iPNX'],
+    type:     'internet',
+  },
+};
+
+function openBillSheet(type) {
+  closeAllWalletSheets();
+  const config = CHEAPDATA_SERVICE_MAP[type];
+  const label = config ? config.label : type;
+
+  // TODO: When CheapData API keys are ready (store in Supabase secrets as
+  // 'cheapdata_api_key'), build a dynamic form sheet for each bill type here.
+  // Flow: user fills form → call Supabase Edge Function 'pay-bill' →
+  //   Edge Function calls CheapData API → deducts walletState.points via RPC.
+  //
+  // CheapData endpoints (via your Supabase edge function):
+  //   POST https://www.cheapdata.com.ng/api/v1/airtime/  → { network, mobile_number, airtime_amount, Ported_number }
+  //   POST https://www.cheapdata.com.ng/api/v1/data/     → { network, mobile_number, plan, Ported_number }
+  //   POST https://www.cheapdata.com.ng/api/v1/cabletv/  → { cablename, smart_card_number, Validity }
+  //   POST https://www.cheapdata.com.ng/api/v1/electricity/ → { disco_name, meter_number, amount, meter_type }
+  //
+  // Auth header: Authorization: Token <cheapdata_api_key>
+
+  showToast(label + ' — coming soon ✨');
 }
 
-// ── QR CODE ───────────────────────────────────────────────────
+// ── QR CODE ───────────────────────────────────────────────────────────────────
 function initQRSheet() {
   if (!currentUser) return;
   var avatar = document.getElementById('qr-avatar');
@@ -9812,7 +9857,38 @@ function openQRScan(context) {
   showToast('QR Scanner \u2014 coming soon \uD83D\uDCF7');
 }
 
-// ── TRANSACTION FILTER ────────────────────────────────────────
+// ── PENDING REQUEST ACTIONS ───────────────────────────────────────────────────
+async function handlePendingRequest(btn, action) {
+  var item = btn.closest('.wlt-pending-item');
+  if (!item) return;
+  if (action === 'accept') {
+    item.style.opacity = '0.5';
+    item.style.pointerEvents = 'none';
+    showToast('Points sent \u2713');
+    setTimeout(function() { item.remove(); }, 800);
+    updatePendingCount(-1);
+  } else {
+    item.style.opacity = '0.5';
+    item.style.pointerEvents = 'none';
+    showToast('Request declined');
+    setTimeout(function() { item.remove(); }, 500);
+    updatePendingCount(-1);
+  }
+}
+
+function updatePendingCount(delta) {
+  var badge = document.getElementById('wlt-pending-count');
+  if (!badge) return;
+  var curr = parseInt(badge.textContent) || 0;
+  var next = Math.max(0, curr + delta);
+  badge.textContent = next;
+  if (next === 0) {
+    var section = document.getElementById('wlt-pending-section');
+    if (section) section.classList.add('hidden');
+  }
+}
+
+// ── TRANSACTION FILTER ────────────────────────────────────────────────────────
 function filterWalletTxns(tab, filter) {
   document.querySelectorAll('.wlt-txn-tab').forEach(function(t) { t.classList.remove('active'); });
   tab.classList.add('active');
@@ -9830,11 +9906,11 @@ async function refreshTransactionList() {
   // TODO: query wallet_transactions from Supabase and re-render wlt-txn-list
 }
 
-// ── USER SEARCH (send / request) ─────────────────────────────
+// ── USER SEARCH (gift) ────────────────────────────────────────────────────────
 var searchDebounceTimer;
 async function searchWalletUser(query, context) {
   clearTimeout(searchDebounceTimer);
-  var resultsEl = context === 'send' ? document.getElementById('send-results') : null;
+  var resultsEl = context === 'gift' ? document.getElementById('gift-results') : null;
   if (!resultsEl) return;
   if (!query || query.length < 2) { resultsEl.classList.add('hidden'); return; }
 
@@ -9867,26 +9943,26 @@ async function searchWalletUser(query, context) {
 }
 
 function selectWalletUser(userId, name, avatarUrl, context) {
-  if (context === 'send') {
-    walletState.selectedSendRecipient = { id: userId, name: name, avatarUrl: avatarUrl };
-    var sel     = document.getElementById('send-selected-user');
-    var selName = document.getElementById('send-sel-name');
-    var selAv   = document.getElementById('send-sel-avatar');
+  if (context === 'gift') {
+    walletState.selectedGiftRecipient = { id: userId, name: name, avatarUrl: avatarUrl };
+    var sel     = document.getElementById('gift-selected-user');
+    var selName = document.getElementById('gift-sel-name');
+    var selAv   = document.getElementById('gift-sel-avatar');
     if (sel)     sel.classList.remove('hidden');
     if (selName) selName.textContent = name;
     if (selAv)   selAv.src = avatarUrl || ('https://api.dicebear.com/7.x/adventurer/svg?seed=' + userId);
-    var resultsEl = document.getElementById('send-results');
+    var resultsEl = document.getElementById('gift-results');
     if (resultsEl) resultsEl.classList.add('hidden');
-    var searchEl = document.getElementById('send-search');
+    var searchEl = document.getElementById('gift-search');
     if (searchEl) searchEl.value = '';
-    var amtEl = document.getElementById('send-amount-input');
+    var amtEl = document.getElementById('gift-amount-input');
     if (amtEl) amtEl.focus();
   }
 }
 
-// ── DM PAYMENT BRIDGE ─────────────────────────────────────────
+// ── DM PAYMENT BRIDGE ─────────────────────────────────────────────────────────
 function openDMPaySheet(recipientUserId, recipientName, avatarUrl) {
-  quickPayUser(recipientUserId, recipientName, avatarUrl);
+  quickGiftUser(recipientUserId, recipientName, avatarUrl);
 }
 
 function renderDMMoneyBubble(opts) {
@@ -9901,12 +9977,11 @@ function renderDMMoneyBubble(opts) {
     (note ? '<div class="msg-money-note">' + escHtml(note) + '</div>' : '') +
     '<div class="msg-money-status">' +
       '<svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>' +
-      (status === 'completed' ? 'Sent' : status) +
+      (status === 'completed' ? 'Gifted' : status) +
     '</div></div>';
 }
 
-// ── MARKET PURCHASE BRIDGE ────────────────────────────────────
-// Products are priced in Misty Points
+// ── MARKET PURCHASE BRIDGE ────────────────────────────────────────────────────
 async function purchaseProduct(opts) {
   var productId = opts.productId;
   var sellerId  = opts.sellerId;
@@ -9935,7 +10010,7 @@ async function purchaseProduct(opts) {
   }
 }
 
-// ── NOTE EMOJI PICKER ─────────────────────────────────────────
+// ── NOTE EMOJI PICKER ─────────────────────────────────────────────────────────
 var NOTE_EMOJIS = ['\uD83D\uDE0A','\uD83C\uDF82','\uD83D\uDE4F','\uD83D\uDCBC','\uD83C\uDF55','\uD83C\uDF89','\u2736','\uD83D\uDE95','\uD83D\uDED9','\u2764\uFE0F','\uD83D\uDE4C','\u2615'];
 var emojiPickerOpen = false;
 
@@ -9960,52 +10035,28 @@ function selectNoteEmoji(span, emoji, picker) {
   picker.remove(); emojiPickerOpen = false;
 }
 
-// ── VTPASS BILL PAYMENT ───────────────────────────────────────
-// Opens a targeted bill sheet. VTpass API integration wired here
-// when keys are ready. Each type maps to a VTpass serviceID.
-function openBillSheet(type) {
-  // Close the bills list sheet first
-  closeAllWalletSheets();
-
-  const billLabels = {
-    airtime:     'Airtime Top-up',
-    data:        'Data Bundle',
-    tv:          'TV / Cable',
-    electricity: 'Electricity',
-    betting:     'Betting / Gaming',
-    internet:    'Internet / Broadband',
-  };
-
-  const label = billLabels[type] || type;
-
-  // TODO: When VTpass keys are ready, dynamically build a form sheet
-  // for each bill type and deduct from walletState.points via RPC.
-  // VTpass serviceID map:
-  //   airtime     → mtn, airtel, glo, etisalat
-  //   data        → mtn-data, airtel-data, glo-data
-  //   tv          → dstv, gotv, startimes
-  //   electricity → ikeja-electric, eko-electric, ibadan-disco, etc.
-  //   betting     → bet9ja, sportybet, 1xbet
-  //   internet    → spectranet, smile-bundle
-
-  showToast(label + ' — coming soon ✨');
-}
-
-// ── LEGACY COMPAT ─────────────────────────────────────────────
+// ── LEGACY COMPAT ─────────────────────────────────────────────────────────────
 function walletAction(type) {
+  // Map old action names to new ones
   var map = {
     add:             'add',
-    send:            'send',
-    request:         'request',
+    send:            'gift',      // send → gift
+    gift:            'gift',
     bills:           'bills',
     history:         'history',
-    'sell-withdraw': 'sell-withdraw',
-    'sell-points':   'sell-points',
-    'withdraw-bank': 'withdraw-bank',
-    'gift-points':   'gift-points',
+    'sell-withdraw': 'withdraw',  // sell-withdraw → withdraw
+    'withdraw-bank': 'withdraw',
+    'gift-points':   'gift',
   };
   openWalletSheet(map[type] || type);
 }
+
+function loadScript(src, cb) {
+  var s = document.createElement('script');
+  s.src = src; s.onload = cb;
+  document.head.appendChild(s);
+}
+
 
 // ══════════════════════════════════════════
 // VIEW TRACKING
