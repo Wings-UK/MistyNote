@@ -1254,10 +1254,11 @@
             <span class="wlt-balance-amount ca-balance-amount" id="wlt-balance">0</span>
           </div>
         </div>
-        <!-- Subrow: payout info — no rate ever shown -->
+        <!-- Subrow: live escrow balance -->
         <div class="wlt-subbalance-row ca-subbrow">
-          <span class="wlt-sub-item" id="wlt-payout-amount" style="color:rgba(255,255,255,0.7);font-size:12px;">
-            Friday payout · 1% fee applies
+          <span class="wlt-sub-dot" style="background:#f97316;width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:6px;flex-shrink:0;"></span>
+          <span class="wlt-sub-item" id="wlt-escrow-subrow" style="color:rgba(255,255,255,0.7);font-size:12px;">
+            Loading escrow…
           </span>
         </div>
       </div>
@@ -1755,7 +1756,7 @@
           <span class="earn-value earn-date" id="earnings-date">—</span>
         </div>
         <div class="earn-summary-row">
-          <span class="earn-label">You'll receive</span>
+          <span class="earn-label">Bank credit (est.)</span>
           <span class="earn-value earn-net" id="earnings-net">—</span>
         </div>
         <div class="earn-status-note" id="earnings-status">Minimum ✦1 required for payout.</div>
