@@ -241,7 +241,7 @@ function showDeepLinkSplash() {
         <path d="M8 24C8 24 16 18 24 24C32 30 40 24 40 24" stroke="#6C47FF" stroke-width="3" stroke-linecap="round"/>
         <path d="M8 24C8 24 12 40 24 40C36 40 40 24 40 24" stroke="#6C47FF" stroke-width="3" stroke-linecap="round"/>
       </svg>
-      <div style="font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;font-size:22px;color:var(--text,#111);">MistyNote</div>
+      <div style="font-family:'DM Sans',sans-serif;font-weight:700;font-size:22px;color:var(--text,#111);">MistyNote</div>
       <div style="width:32px;height:3px;background:#6C47FF;border-radius:2px;animation:splashBar 1.2s ease-in-out infinite alternate;"></div>
     </div>
     <style>
@@ -3301,7 +3301,7 @@ function injectFeedPostStyles() {
     .post-location { font-size: 11px; color: var(--text3); display:flex; align-items:center; gap:2px; }
     .post-author-link { display: flex; align-items: center; gap: 4px; text-decoration: none; cursor: pointer; width: fit-content; }
     .post-author-link:hover .jerry { text-decoration: none; }
-    .jerry { font-weight: 600; font-size: 15px; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: var(--text); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .jerry { font-weight: 600; font-size: 15px; font-family: 'DM Sans', -apple-system, sans-serif; color: var(--text); margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     /* Consistent username weight across all pages */
     .detail-name, .profile-name, .original-card-name { font-weight: 600; }
     .verif { width: 15px; flex-shrink: 0; display: block; }
@@ -3428,10 +3428,10 @@ function injectFeedPostStyles() {
     .mee { display: flex; gap: 20px; align-items: center; }
     .feeling { width: 22px; }
 
-    .comment-btn { display: flex; width: 55px; align-items: center; gap: 10px; cursor: pointer; font-size: 15px; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: #000000; }
+    .comment-btn { display: flex; width: 55px; align-items: center; gap: 10px; cursor: pointer; font-size: 15px; font-family: 'DM Sans', -apple-system, sans-serif; color: #000000; }
     .comment-btn:hover { color: var(--text); }
 
-    .repost-btn { display: flex; width: 55px; align-items: center; gap: 10px; cursor: pointer; font-size: 15px; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: #000000; }
+    .repost-btn { display: flex; width: 55px; align-items: center; gap: 10px; cursor: pointer; font-size: 15px; font-family: 'DM Sans', -apple-system, sans-serif; color: #000000; }
     .repost-btn:hover { color: var(--text); }
     .repost-icon { transition: stroke 0.2s ease; }
     .repost-btn.reposted .repost-icon { stroke: #6C47FF; stroke-width: 2.5; }
@@ -3444,7 +3444,7 @@ function injectFeedPostStyles() {
     .heart-ai[data-liked="true"] .heart-path { fill: rgb(244,7,82); stroke: rgb(244,7,82); }
     .prf-masonry-like[data-liked="true"] .heart-path { fill: rgb(244,7,82); stroke: rgb(244,7,82); }
     .cb-like-btn[data-liked="true"] .cb-heart-path { fill: rgb(244,7,82); stroke: rgb(244,7,82); }
-    .like-count { font-size: 14px; font-family: 'Noto Sans JP', -apple-system, sans-serif; color: #000000; font-weight: 400; transition: color 0.15s, font-weight 0.15s; }
+    .like-count { font-size: 14px; font-family: 'DM Sans', -apple-system, sans-serif; color: #000000; font-weight: 400; transition: color 0.15s, font-weight 0.15s; }
     .like-count.liked { color: rgb(244,7,82); font-weight: 600; }
     .like-count:empty { display: none; }
 
@@ -8933,7 +8933,7 @@ function viewProfilePhoto(url, type, username) {
     'top:calc(env(safe-area-inset-top,0px) + 20px)',
     'left:50%;transform:translateX(-50%)',
     'color:white;font-size:14px;font-weight:700',
-    'font-family:-apple-system,sans-serif',
+    'font-family:'DM Sans',-apple-system,sans-serif',
     'text-shadow:0 1px 6px rgba(0,0,0,0.5)',
     'white-space:nowrap;pointer-events:none;z-index:2',
   ].join(';');
@@ -8987,7 +8987,7 @@ function viewProfilePhoto(url, type, username) {
     dotEl.style.cssText = 'width:8px;height:8px;border-radius:50%;background:#6C47FF;flex-shrink:0';
     const nameEl = document.createElement('span');
     nameEl.textContent = type === 'avatar' ? `@${username}` : `@${username}'s cover photo`;
-    nameEl.style.cssText = 'color:white;font-size:14px;font-weight:600;font-family:-apple-system,sans-serif';
+    nameEl.style.cssText = 'color:white;font-size:14px;font-weight:600;font-family:'DM Sans',-apple-system,sans-serif';
     bottomBar.appendChild(dotEl);
     bottomBar.appendChild(nameEl);
   }
@@ -9028,7 +9028,7 @@ function viewProfilePhoto(url, type, username) {
     spinner.remove();
     const err = document.createElement('p');
     err.textContent = 'Could not load photo';
-    err.style.cssText = 'color:rgba(255,255,255,0.5);font-size:14px;font-family:-apple-system,sans-serif';
+    err.style.cssText = 'color:rgba(255,255,255,0.5);font-size:14px;font-family:'DM Sans',-apple-system,sans-serif';
     imgWrap.appendChild(err);
   };
   img.src = url;
