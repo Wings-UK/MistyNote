@@ -9375,24 +9375,36 @@ function toggleDarkMode(isDark) {
 // No NGN amounts, no MP rate ever rendered in the UI.
 // ══════════════════════════════════════════
 
-// ── INTERNAL RATE — KWD-PEGGED, NEVER SHOWN ────────────────
-// 1 Misty Point = 1 KWD worth of NGN (auto-updated)
-// Rate is fetched silently on wallet open and cached for the session.
-// The UI NEVER exposes this value.
-let POINTS_RATE = 5000; // ₦ per 1 MP — default fallback, updated from live KWD rate
+// ── RATE ENGINE — KWD-PEGGED WITH ₦200 SPREAD ──────────────
+// Base rate: live KWD → NGN fetched from open.er-api.com
+// BUY_RATE  = live KWD rate + ₦200  (user pays this per MP)
+// SELL_RATE = live KWD rate - ₦200  (user receives this per MP on payout)
+// Fallback if API is unreachable: ₦4,400 (last known rate)
+let BASE_RATE = 4400; // live KWD→NGN, refreshed on wallet open
+let BUY_RATE  = 4600; // BASE_RATE + 200 — what user spends per MP
+let SELL_RATE = 4200; // BASE_RATE - 200 — what user receives per MP
+let POINTS_RATE = BUY_RATE; // legacy alias used by Squad payment calc
 
 async function syncPointsRate() {
   try {
-    // Uses a free exchange rate API — swap endpoint for your preferred provider
-    const res = await fetch('https://open.er-api.com/v6/latest/KWD');
+    const res  = await fetch('https://open.er-api.com/v6/latest/KWD');
     const data = await res.json();
-    const kwdToNgn = data && data.rates && data.rates.NGN;
-    if (kwdToNgn && kwdToNgn > 0) {
-      POINTS_RATE = Math.round(kwdToNgn); // 1 MP = 1 KWD in NGN
+    const live = data && data.rates && data.rates.NGN;
+    if (live && live > 0) {
+      BASE_RATE   = Math.round(live);
+      BUY_RATE    = BASE_RATE + 200;
+      SELL_RATE   = BASE_RATE - 200;
+      POINTS_RATE = BUY_RATE; // keep legacy alias in sync
     }
   } catch (e) {
-    // Silently fall back to last known rate — never surface to user
+    // Silently fall back to last known rates
   }
+}
+
+// Format naira — ₦4,400 or ₦10,200.50
+function fmtNgn(amount) {
+  var n = Number(amount);
+  return '₦' + n.toLocaleString('en-NG', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
 // ── WALLET STATE ──────────────────────────────────────────────────────────────
@@ -9467,15 +9479,31 @@ function renderWalletBalance() {
   el.textContent = fmtPts(walletState.points);
   const hint = document.getElementById('gift-balance-hint');
   if (hint) hint.textContent = 'Balance: ' + fmtPts(walletState.points);
-  // Update payout subrow
-  const payoutAmt = document.getElementById('wlt-payout-amount');
-  if (payoutAmt) {
-    var net = walletState.points >= 1
-      ? fmtPts(Math.floor(walletState.points * 0.99 * 100) / 100)
-      : null;
-    payoutAmt.textContent = net
-      ? 'Friday payout · ' + net + ' (after 1% fee)'
-      : 'Min ✶1 for Friday payout';
+  // Subrow: show live escrow balance
+  renderEscrowSubrow();
+}
+
+async function renderEscrowSubrow() {
+  var subEl = document.getElementById('wlt-escrow-subrow');
+  if (!subEl) return;
+  if (!currentUser) return;
+  try {
+    var res = await supabase
+      .from('wallets')
+      .select('escrow_points')
+      .eq('user_id', currentUser.id)
+      .maybeSingle();
+    var escrow = (res.data && res.data.escrow_points) ? res.data.escrow_points : 0;
+    if (escrow > 0) {
+      subEl.textContent = 'Pending: ' + fmtPts(escrow) + ' · releases on delivery';
+      subEl.style.color = 'rgba(255,255,255,0.75)';
+    } else {
+      subEl.textContent = 'No pending escrow balance';
+      subEl.style.color = 'rgba(255,255,255,0.45)';
+    }
+  } catch (e) {
+    subEl.textContent = 'Escrow unavailable';
+    subEl.style.color = 'rgba(255,255,255,0.35)';
   }
 }
 
@@ -9667,16 +9695,17 @@ function setQuickAmount(context, points) {
 }
 
 // ── BUY POINTS PREVIEW ────────────────────────────────────────────────────────
-// Shows user what they're getting — no NGN amount ever exposed
+// Shows the naira cost using live BUY_RATE (KWD + ₦200 markup)
 function updateBuyPointsPreview(val) {
-  var pts = parseFloat(val) || 0;
+  var pts  = parseFloat(val) || 0;
   var hint = document.getElementById('buy-pts-preview');
   if (!hint) return;
   if (pts <= 0) {
     hint.textContent = 'Enter how many MistyPoints to buy';
     return;
   }
-  hint.textContent = 'You will receive \u2736' + pts.toLocaleString('en-NG');
+  var cost = Math.round(pts * BUY_RATE);
+  hint.textContent = 'You will spend ' + fmtNgn(cost);
 }
 
 // ── BUY POINTS VIA SQUAD BY GTC ───────────────────────────────────────────────
@@ -10072,19 +10101,28 @@ function renderEarningsSheet() {
   var dateEl   = document.getElementById('earnings-date');
   var statusEl = document.getElementById('earnings-status');
 
-  var pts      = walletState.points;
-  var fee      = Math.floor(pts * 0.01 * 100) / 100;
-  var net      = Math.floor(pts * 0.99 * 100) / 100;
-  var eligible = pts >= 1;
+  var pts        = walletState.points;
+  var netPts     = Math.floor(pts * 0.99 * 100) / 100;  // after 1% fee
+  var payoutNgn  = Math.round(netPts * SELL_RATE);       // at sell rate
+  var feePts     = Math.floor(pts * 0.01 * 100) / 100;
+  var eligible   = pts >= 1;
 
-  if (balEl)    balEl.textContent    = fmtPts(pts);
-  if (dateEl)   dateEl.textContent   = dateStr + ' · 3:00 PM';
-  if (netEl)    netEl.textContent    = eligible
-    ? fmtPts(net) + ' (1% fee: ' + fmtPts(fee) + ')'
-    : '—';
+  if (balEl)    balEl.textContent = fmtPts(pts);
+  if (dateEl)   dateEl.textContent = dateStr + ' · 3:00 PM';
+  if (netEl) {
+    if (eligible) {
+      netEl.innerHTML =
+        fmtNgn(payoutNgn) +
+        '<span style="font-size:11px;font-weight:400;color:var(--text3);margin-left:6px;">' +
+        '(' + fmtPts(netPts) + ' after 1% fee)' +
+        '</span>';
+    } else {
+      netEl.textContent = '—';
+    }
+  }
   if (statusEl) statusEl.textContent = eligible
-    ? 'Your full balance will be settled automatically'
-    : 'Minimum ✶1 required for payout. Current balance rolls over.';
+    ? 'Estimated bank credit based on live KWD rate'
+    : 'Minimum ✶1 required for payout. Balance rolls over.';
 
   // Bank account display
   renderEarningsBankInfo();
