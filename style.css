@@ -4780,12 +4780,13 @@
 .wlt-eye-btn:active { color: rgba(255,255,255,0.9); }
 
 .wlt-subbalance-row {
-  display: inline-flex; align-items: center; gap: 12px;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 100px;
-  padding: 5px 14px;
-  backdrop-filter: blur(8px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
 }
 .wlt-sub-item {
   display: flex; align-items: center; gap: 5px;
@@ -5828,11 +5829,14 @@
   line-height: 1 !important;
 }
 .ca-subbrow {
+  display: inline-flex !important;
+  align-items: center !important;
   background: rgba(255,255,255,0.08) !important;
   border: 1px solid rgba(255,255,255,0.1) !important;
+  border-radius: 100px !important;
+  padding: 5px 14px !important;
   margin: 0 auto;
-  display: flex !important;
-  align-items: center !important;
+  max-width: fit-content;
 }
 .ca-subbrow .wlt-sub-item {
   color: rgba(255,255,255,0.7) !important;
