@@ -571,6 +571,10 @@ async function bootApp(isDeepLink = false) {
     // Deep link — go straight to content, load feed silently in background
     const route = getRoute();
     hideDeepLinkSplash();
+    // Ensure feed has the active class before slideTo runs — slideTo strips active
+    // from all main pages, so if none were active (fresh load), the slide page
+    // has no backing and renders over a blank screen on page refresh.
+    if (feedEl) feedEl.classList.add('active');
     await handleRoute(route);
     // Restore feed visibility and load in background
     if (feedEl) feedEl.style.visibility = '';
