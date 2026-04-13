@@ -8933,7 +8933,7 @@ function viewProfilePhoto(url, type, username) {
     'top:calc(env(safe-area-inset-top,0px) + 20px)',
     'left:50%;transform:translateX(-50%)',
     'color:white;font-size:14px;font-weight:700',
-    'font-family:'DM Sans',-apple-system,sans-serif',
+    'font-family:DM Sans,-apple-system,sans-serif',
     'text-shadow:0 1px 6px rgba(0,0,0,0.5)',
     'white-space:nowrap;pointer-events:none;z-index:2',
   ].join(';');
@@ -8987,7 +8987,7 @@ function viewProfilePhoto(url, type, username) {
     dotEl.style.cssText = 'width:8px;height:8px;border-radius:50%;background:#6C47FF;flex-shrink:0';
     const nameEl = document.createElement('span');
     nameEl.textContent = type === 'avatar' ? `@${username}` : `@${username}'s cover photo`;
-    nameEl.style.cssText = 'color:white;font-size:14px;font-weight:600;font-family:'DM Sans',-apple-system,sans-serif';
+    nameEl.style.cssText = 'color:white;font-size:14px;font-weight:600;font-family:DM Sans,-apple-system,sans-serif';
     bottomBar.appendChild(dotEl);
     bottomBar.appendChild(nameEl);
   }
@@ -9028,7 +9028,7 @@ function viewProfilePhoto(url, type, username) {
     spinner.remove();
     const err = document.createElement('p');
     err.textContent = 'Could not load photo';
-    err.style.cssText = 'color:rgba(255,255,255,0.5);font-size:14px;font-family:'DM Sans',-apple-system,sans-serif';
+    err.style.cssText = 'color:rgba(255,255,255,0.5);font-size:14px;font-family:DM Sans,-apple-system,sans-serif';
     imgWrap.appendChild(err);
   };
   img.src = url;
