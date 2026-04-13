@@ -9375,15 +9375,16 @@ function toggleDarkMode(isDark) {
 // No NGN amounts, no MP rate ever rendered in the UI.
 // ══════════════════════════════════════════
 
-// ── RATE ENGINE — KWD-PEGGED WITH ₦200 SPREAD ──────────────
-// Base rate: live KWD → NGN fetched from open.er-api.com
-// BUY_RATE  = live KWD rate + ₦200  (user pays this per MP)
-// SELL_RATE = live KWD rate - ₦200  (user receives this per MP on payout)
-// Fallback if API is unreachable: ₦4,400 (last known rate)
-let BASE_RATE = 4400; // live KWD→NGN, refreshed on wallet open
-let BUY_RATE  = 4600; // BASE_RATE + 200 — what user spends per MP
-let SELL_RATE = 4200; // BASE_RATE - 200 — what user receives per MP
-let POINTS_RATE = BUY_RATE; // legacy alias used by Squad payment calc
+// ── RATE ENGINE — KWD-PEGGED, 1% FEE EACH SIDE ─────────────
+// BASE_RATE  = live KWD → NGN (fetched on wallet open)
+// BUY_RATE   = BASE_RATE * 1.01  (1% fee added on MP purchase)
+// Payout     = MP * 0.99 * BASE_RATE  (1% fee deducted on payout)
+// Fallback if API unreachable: 4400
+const BUY_FEE    = 0.01;
+const PAYOUT_FEE = 0.01;
+let BASE_RATE    = 4400;
+let BUY_RATE     = Math.round(BASE_RATE * (1 + BUY_FEE));
+let POINTS_RATE  = BUY_RATE;
 
 async function syncPointsRate() {
   try {
@@ -9392,9 +9393,8 @@ async function syncPointsRate() {
     const live = data && data.rates && data.rates.NGN;
     if (live && live > 0) {
       BASE_RATE   = Math.round(live);
-      BUY_RATE    = BASE_RATE + 200;
-      SELL_RATE   = BASE_RATE - 200;
-      POINTS_RATE = BUY_RATE; // keep legacy alias in sync
+      BUY_RATE    = Math.round(BASE_RATE * (1 + BUY_FEE));
+      POINTS_RATE = BUY_RATE;
     }
   } catch (e) {
     // Silently fall back to last known rates
@@ -9486,24 +9486,24 @@ function renderWalletBalance() {
 async function renderEscrowSubrow() {
   var subEl = document.getElementById('wlt-escrow-subrow');
   if (!subEl) return;
+  // Default immediately — never hang on "Loading..."
+  subEl.textContent = 'No pending balance';
+  subEl.style.color = 'rgba(255,255,255,0.45)';
   if (!currentUser) return;
   try {
     var res = await supabase
       .from('wallets')
-      .select('escrow_points')
+      .select('escrow')
       .eq('user_id', currentUser.id)
       .maybeSingle();
-    var escrow = (res.data && res.data.escrow_points) ? res.data.escrow_points : 0;
+    if (res.error || !res.data) return; // table missing or no row — keep default
+    var escrow = Number(res.data.escrow) || 0;
     if (escrow > 0) {
       subEl.textContent = 'Pending: ' + fmtPts(escrow) + ' · releases on delivery';
       subEl.style.color = 'rgba(255,255,255,0.75)';
-    } else {
-      subEl.textContent = 'No pending escrow balance';
-      subEl.style.color = 'rgba(255,255,255,0.45)';
     }
   } catch (e) {
-    subEl.textContent = 'Escrow unavailable';
-    subEl.style.color = 'rgba(255,255,255,0.35)';
+    // Table not yet created — silently show default, no error surfaced
   }
 }
 
@@ -9695,7 +9695,7 @@ function setQuickAmount(context, points) {
 }
 
 // ── BUY POINTS PREVIEW ────────────────────────────────────────────────────────
-// Shows the naira cost using live BUY_RATE (KWD + ₦200 markup)
+// Shows the naira cost: MP x BUY_RATE (live KWD x 1.01 — 1% fee)
 function updateBuyPointsPreview(val) {
   var pts  = parseFloat(val) || 0;
   var hint = document.getElementById('buy-pts-preview');
@@ -10102,9 +10102,9 @@ function renderEarningsSheet() {
   var statusEl = document.getElementById('earnings-status');
 
   var pts        = walletState.points;
-  var netPts     = Math.floor(pts * 0.99 * 100) / 100;  // after 1% fee
-  var payoutNgn  = Math.round(netPts * SELL_RATE);       // at sell rate
-  var feePts     = Math.floor(pts * 0.01 * 100) / 100;
+  var netPts    = Math.floor(pts * (1 - PAYOUT_FEE) * 100) / 100;
+  var payoutNgn = Math.round(netPts * BASE_RATE);
+  var feePts    = Math.floor(pts * PAYOUT_FEE * 100) / 100;
   var eligible   = pts >= 1;
 
   if (balEl)    balEl.textContent = fmtPts(pts);
