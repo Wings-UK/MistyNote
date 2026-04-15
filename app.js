@@ -3709,6 +3709,13 @@ async function toggleLike(postId, btn) {
   if (newLiked) likedPosts.add(postId); else likedPosts.delete(postId);
   setLikeUI(postId, newLiked, optimisticCount);
 
+  // Keep dataset.count in sync with the optimistic value so the next
+  // like/unlike in the same session reads the correct base count.
+  const _cbLikeBtn = document.getElementById('cb-like-btn');
+  if (_cbLikeBtn?.dataset.postId === postId) {
+    _cbLikeBtn.dataset.count = optimisticCount;
+  }
+
   // ── Animate feed hearts ──
   allContainers.forEach(container => {
     animateHeart(container.querySelector('svg'), newLiked);
@@ -3727,9 +3734,9 @@ async function toggleLike(postId, btn) {
     } else {
       await supabase.from('likes').delete().eq('post_id', postId).eq('user_id', currentUser.id);
     }
-    // Sync real count quietly — only update if different from optimistic
+    // Sync real count from DB — always update to keep dataset.count current
     const { data } = await supabase.from('posts').select('like_count').eq('id', postId).single();
-    if (data && data.like_count !== optimisticCount) {
+    if (data) {
       syncLikeCount(postId, data.like_count);
     }
     // Notification (fire and forget)
