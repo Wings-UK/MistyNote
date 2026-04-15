@@ -3693,6 +3693,16 @@ async function toggleLike(postId, btn) {
     const sp = c.querySelector('.like-count');
     currentCount = parseInt(sp?.textContent || '0') || 0;
   });
+
+  // If feed cards aren't in the DOM (e.g. detail page open for a repost),
+  // fall back to the count stored on the comment-bar like button.
+  if (currentCount === 0 && allContainers.length === 0) {
+    const cbLikeBtn = document.getElementById('cb-like-btn');
+    if (cbLikeBtn?.dataset.postId === postId) {
+      currentCount = parseInt(cbLikeBtn.dataset.count || '0') || 0;
+    }
+  }
+
   const optimisticCount = newLiked ? currentCount + 1 : Math.max(0, currentCount - 1);
 
   // Update UI immediately
@@ -3813,6 +3823,7 @@ function syncLikeCount(postId, count) {
   if (cbCount && cbLike?.dataset.postId === postId) {
     cbCount.textContent = count > 0 ? fmtNum(count) : '';
     cbCount.classList.toggle('liked', isLiked);
+    cbLike.dataset.count = count; // keep fallback count fresh
   }
   // Masonry
   document.querySelectorAll(`.prf-masonry-like[data-post-id="${postId}"] .prf-masonry-like-count`).forEach(el => {
@@ -4837,6 +4848,7 @@ async function openDetail(postId, scrollToComments = false) {
         cbLike.classList.remove('cb-liked');
       }
       if (cbCount) cbCount.textContent = p.like_count > 0 ? fmtNum(p.like_count) : '';
+      cbLike.dataset.count = p.like_count || 0;
       cbLike.onclick = () => toggleLike(postId, cbLike);
     }
 
