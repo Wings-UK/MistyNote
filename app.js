@@ -8333,9 +8333,11 @@ function renderNotifItem(g, animDelay = 0) {
     ? `<div class="notif-thumb-wrap"><img class="notif-thumb" src="${escHtml(g.post.image)}" alt=""></div>`
     : '';
 
+  // Pass type so notifItemClick knows exactly where to navigate
+  const clickActorId = g.actor_id || (g.actors[0]?.id) || '';
   const clickTarget = g.post_id
-    ? `notifItemClick('${g.post_id}',null,'${g.ids.join(',')}')`
-    : `notifItemClick(null,'${g.actor_id || (g.actors[0]?.id) || ''}','${g.ids.join(',')}')`;
+    ? `notifItemClick('${g.post_id}','${clickActorId}','${g.ids.join(',')}','${g.type}')`
+    : `notifItemClick(null,'${clickActorId}','${g.ids.join(',')}','${g.type}')`;
 
   return `
     <div class="notif-item${isUnread ? ' unread' : ''}${g.grouped ? ' grouped' : ''}"
@@ -8396,7 +8398,8 @@ function switchNotifFilter(filterId) {
   renderNotifList(filterId);
 }
 
-async function notifItemClick(postId, actorId, idsStr) {
+async function notifItemClick(postId, actorId, idsStr, type) {
+  // ── Mark read ──
   const ids = idsStr.split(',').filter(Boolean);
   if (ids.length) {
     supabase.from('notifications').update({ read: true }).in('id', ids).catch(() => {});
@@ -8413,10 +8416,37 @@ async function notifItemClick(postId, actorId, idsStr) {
   // so the back button returns here correctly
   lastMainPage = 'notifications';
 
-  if (postId && postId !== 'null' && postId !== 'undefined') {
-    await openDetail(postId);
-  } else if (actorId && actorId !== 'null' && actorId !== 'undefined') {
-    await showUserProfile(actorId, null);
+  const hasPost  = postId  && postId  !== 'null' && postId  !== 'undefined';
+  const hasActor = actorId && actorId !== 'null' && actorId !== 'undefined';
+
+  // ── Navigate based on notification type ──
+  if (type === 'follow') {
+    // Follow notification → open the follower's profile
+    if (hasActor) await showUserProfile(actorId, null);
+
+  } else if (type === 'comment' || type === 'mention') {
+    // Comment or mention → open post and scroll straight to the comments section
+    if (hasPost) await openDetail(postId, true);
+    else if (hasActor) await showUserProfile(actorId, null);
+
+  } else if (type === 'like' || type === 'repost' || type === 'like_comment' || type === 'quote') {
+    // Like / repost / like_comment / quote → open the post (no comment scroll)
+    if (hasPost) await openDetail(postId, false);
+    else if (hasActor) await showUserProfile(actorId, null);
+
+  } else if (type === 'order_placed' || type === 'order_shipped' || type === 'order_delivered') {
+    // Order notifications → open the product post if available
+    if (hasPost) await openDetail(postId, false);
+    else showToast('Open the Market tab to view your orders');
+
+  } else if (type === 'payment_received' || type === 'wallet_credit') {
+    // Wallet notifications → go straight to wallet page
+    slideTo('wallet');
+
+  } else {
+    // Fallback for system / unknown types
+    if (hasPost) await openDetail(postId, false);
+    else if (hasActor) await showUserProfile(actorId, null);
   }
 }
 
