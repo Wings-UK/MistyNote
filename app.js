@@ -1798,7 +1798,7 @@ function injectProfileStyles() {
     .prf-storefront-sub { font-size:12px; color:#9b87f5; margin-top:2px; }
     .prf-storefront-pill { font-size:11px; font-weight:700; color:#fff; background:#6C47FF; border-radius:20px; padding:3px 10px; white-space:nowrap; flex-shrink:0; }
 
-    /* ── ICON TAB BAR ── */
+    /* ── ICON TAB BAR (original ewe/yeb DNA, elevated) ── */
     .prf-icon-tabs {
       display:flex; width:100%; margin-top:0;
       border-top:1px solid var(--border,#e5e7eb);
@@ -1806,17 +1806,9 @@ function injectProfileStyles() {
       background:var(--bg);
       position:sticky; top:56px; z-index:10;
       backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
-      overflow:hidden;
     }
-    /* Scrollable tabs area — sits left of the fixed search button */
-    .prf-tabs-scroll {
-      display:flex; flex:1; overflow-x:auto; overflow-y:hidden;
-      scrollbar-width:none; -ms-overflow-style:none;
-      border-right:1px solid var(--border,#e5e7eb);
-    }
-    .prf-tabs-scroll::-webkit-scrollbar { display:none; }
     .prf-icon-tab {
-      flex:0 0 64px; display:flex; align-items:center; justify-content:center;
+      flex:1; display:flex; align-items:center; justify-content:center;
       height:56px; cursor:pointer; transition:all .18s;
       border-bottom:3px solid transparent; color:var(--text2); position:relative;
     }
@@ -1825,52 +1817,6 @@ function injectProfileStyles() {
     .prf-icon-tab svg { width:22px; height:22px; }
     .prf-icon-tab-dot { position:absolute; top:10px; right:calc(50% - 14px); width:6px; height:6px; border-radius:50%; background:#6C47FF; opacity:0; transition:opacity .2s; }
     .prf-icon-tab.active .prf-icon-tab-dot { opacity:1; }
-    /* Fixed search button on the right of tab bar */
-    .prf-tab-search-btn {
-      flex:0 0 52px; display:flex; align-items:center; justify-content:center;
-      height:56px; cursor:pointer; color:var(--text2);
-      background:var(--bg); transition:color .18s, background .18s;
-    }
-    .prf-tab-search-btn:active { background:var(--bg2); color:#6C47FF; }
-    .prf-tab-search-btn.active { color:#6C47FF; }
-    .prf-tab-search-btn svg { width:20px; height:20px; }
-    /* Profile search overlay */
-    .prf-search-overlay {
-      position:sticky; top:112px; z-index:9;
-      background:var(--bg);
-      border-bottom:1px solid var(--border,#e5e7eb);
-      padding:10px 14px;
-      display:none;
-    }
-    .prf-search-overlay.open { display:flex; align-items:center; gap:8px; }
-    .prf-search-wrap {
-      flex:1; display:flex; align-items:center; gap:8px;
-      background:var(--bg2); border:1.5px solid var(--border);
-      border-radius:12px; padding:8px 12px;
-      transition:border-color .18s;
-    }
-    .prf-search-wrap:focus-within { border-color:#6C47FF; }
-    .prf-search-wrap svg { flex-shrink:0; color:var(--text3); width:16px; height:16px; }
-    .prf-search-input {
-      flex:1; border:none; background:transparent; outline:none;
-      font-size:14px; color:var(--text); font-family:var(--font);
-    }
-    .prf-search-input::placeholder { color:var(--text3); }
-    .prf-search-clear {
-      flex-shrink:0; color:var(--text3); padding:2px;
-      display:none; font-size:16px; line-height:1; cursor:pointer;
-    }
-    .prf-search-clear.visible { display:block; }
-    .prf-search-cancel {
-      flex-shrink:0; font-size:14px; font-weight:600;
-      color:#6C47FF; padding:4px 2px; white-space:nowrap; cursor:pointer;
-    }
-    .prf-search-empty {
-      text-align:center; padding:40px 20px;
-      color:var(--text3); font-size:14px;
-    }
-    .prf-search-empty-icon { font-size:32px; margin-bottom:8px; }
-    .prf-post-highlight { background:rgba(108,71,255,0.1); border-radius:3px; padding:0 1px; }
 
     /* ── PANELS ── */
     .prf-panel { min-height:160px; }
@@ -2039,35 +1985,22 @@ async function renderMyProfile() {
 
       <!-- ICON TAB BAR -->
       <div class="prf-icon-tabs" id="prf-tabs">
-        <div class="prf-tabs-scroll">
-          <div class="prf-icon-tab active" data-tab="list" onclick="switchPrfTab('list',this)">
-            <div class="prf-icon-tab-dot"></div>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-          </div>
-          <div class="prf-icon-tab" data-tab="media" onclick="switchPrfTab('media',this)">
-            <div class="prf-icon-tab-dot"></div>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-          </div>
-          <div class="prf-icon-tab" data-tab="likes" onclick="switchPrfTab('likes',this)">
-            <div class="prf-icon-tab-dot"></div>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-          </div>
-          <div class="prf-icon-tab" data-tab="saved" onclick="switchPrfTab('saved',this)">
-            <div class="prf-icon-tab-dot"></div>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
-          </div>
+        <div class="prf-icon-tab active" data-tab="list" onclick="switchPrfTab('list',this)">
+          <div class="prf-icon-tab-dot"></div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
         </div>
-        <button class="prf-tab-search-btn" id="prf-search-toggle" onclick="togglePrfSearch('own')" aria-label="Search posts">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35" stroke-linecap="round"/></svg>
-        </button>
-      </div>
-      <div class="prf-search-overlay" id="prf-search-overlay">
-        <div class="prf-search-wrap">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35" stroke-linecap="round"/></svg>
-          <input class="prf-search-input" id="prf-search-input" type="search" placeholder="Search posts..." autocomplete="off" autocorrect="off" spellcheck="false" oninput="runPrfSearch('own',this.value)">
-          <span class="prf-search-clear" id="prf-search-clear" onclick="clearPrfSearch('own')">&#x2715;</span>
+        <div class="prf-icon-tab" data-tab="media" onclick="switchPrfTab('media',this)">
+          <div class="prf-icon-tab-dot"></div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
         </div>
-        <span class="prf-search-cancel" onclick="togglePrfSearch('own')">Cancel</span>
+        <div class="prf-icon-tab" data-tab="likes" onclick="switchPrfTab('likes',this)">
+          <div class="prf-icon-tab-dot"></div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+        </div>
+        <div class="prf-icon-tab" data-tab="saved" onclick="switchPrfTab('saved',this)">
+          <div class="prf-icon-tab-dot"></div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
+        </div>
       </div>
 
       <div id="prf-panel-list"   class="prf-panel prf-posts-panel"></div>
@@ -2149,14 +2082,6 @@ async function renderMyProfile() {
 }
 
 function switchPrfTab(tab, el) {
-  // Close search when switching tabs
-  const overlay = document.getElementById('prf-search-overlay');
-  if (overlay && overlay.classList.contains('open')) {
-    overlay.classList.remove('open');
-    const tb = document.getElementById('prf-search-toggle');
-    if (tb) tb.classList.remove('active');
-    clearPrfSearch('own');
-  }
   const container = document.getElementById('my-profile-content');
   document.querySelectorAll('#prf-tabs .prf-icon-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
@@ -2177,132 +2102,6 @@ function switchPrfTab(tab, el) {
 }
 
 function switchProfileTab(mode, btn) { switchPrfTab('posts', btn); }
-
-// ── PROFILE SEARCH ────────────────────────────────────────────
-// scope: 'own' = own profile, anything else = userId of other profile
-function togglePrfSearch(scope) {
-  const isOwn   = scope === 'own';
-  const overlayId = isOwn ? 'prf-search-overlay' : `uprf-search-overlay-${scope}`;
-  const toggleId  = isOwn ? 'prf-search-toggle'  : `uprf-search-toggle-${scope}`;
-  const inputId   = isOwn ? 'prf-search-input'   : `uprf-search-input-${scope}`;
-
-  const overlay = document.getElementById(overlayId);
-  const toggleBtn = document.getElementById(toggleId);
-  if (!overlay) return;
-
-  const isOpen = overlay.classList.contains('open');
-  if (isOpen) {
-    // Close — restore all posts
-    overlay.classList.remove('open');
-    if (toggleBtn) toggleBtn.classList.remove('active');
-    clearPrfSearch(scope);
-  } else {
-    overlay.classList.add('open');
-    if (toggleBtn) toggleBtn.classList.add('active');
-    // Auto-focus input
-    const input = document.getElementById(inputId);
-    if (input) setTimeout(() => input.focus(), 80);
-  }
-}
-
-function clearPrfSearch(scope) {
-  const isOwn   = scope === 'own';
-  const inputId = isOwn ? 'prf-search-input'  : `uprf-search-input-${scope}`;
-  const clearId = isOwn ? 'prf-search-clear'  : `uprf-search-clear-${scope}`;
-  const input   = document.getElementById(inputId);
-  const clearBtn = document.getElementById(clearId);
-  if (input) { input.value = ''; }
-  if (clearBtn) clearBtn.classList.remove('visible');
-  runPrfSearch(scope, '');
-}
-
-// Search only posts (public). Filters prf-panel-list / uprf-list-{userId}.
-// Does NOT touch media, likes, or saved panels.
-function runPrfSearch(scope, query) {
-  const isOwn     = scope === 'own';
-  const clearId   = isOwn ? 'prf-search-clear'  : `uprf-search-clear-${scope}`;
-  const panelId   = isOwn ? 'prf-panel-list'     : `uprf-list-${scope}`;
-  const clearBtn  = document.getElementById(clearId);
-  const panel     = document.getElementById(panelId);
-  if (!panel) return;
-
-  const q = (query || '').trim().toLowerCase();
-
-  // Show/hide clear button
-  if (clearBtn) clearBtn.classList.toggle('visible', q.length > 0);
-
-  // Remove any previous empty-state message
-  const prevEmpty = panel.querySelector('.prf-search-empty');
-  if (prevEmpty) prevEmpty.remove();
-
-  // Get all post cards in the posts panel
-  const allCards = Array.from(panel.querySelectorAll('.feed-post, .post-card, [data-post-id]'));
-
-  if (!q) {
-    // No query — show everything
-    allCards.forEach(c => { c.style.display = ''; });
-    // Remove any highlights
-    panel.querySelectorAll('.prf-post-highlight').forEach(el => {
-      const parent = el.parentNode;
-      parent.replaceChild(document.createTextNode(el.textContent), el);
-      parent.normalize();
-    });
-    return;
-  }
-
-  // Filter and highlight
-  let visibleCount = 0;
-  allCards.forEach(card => {
-    // Get text from the post content areas only
-    const textEl = card.querySelector('.post-text, .feed-post-text, .post-body, p');
-    const rawText = (card.textContent || '').toLowerCase();
-
-    if (rawText.includes(q)) {
-      card.style.display = '';
-      visibleCount++;
-      // Highlight matching text in content element
-      if (textEl && textEl.textContent.toLowerCase().includes(q)) {
-        highlightText(textEl, q);
-      }
-    } else {
-      card.style.display = 'none';
-    }
-  });
-
-  // Show empty state if nothing matched
-  if (visibleCount === 0 && allCards.length > 0) {
-    const emptyEl = document.createElement('div');
-    emptyEl.className = 'prf-search-empty';
-    emptyEl.innerHTML = `<div class="prf-search-empty-icon">🔍</div><p>No posts found for "<strong>${escHtml(query)}</strong>"</p>`;
-    panel.appendChild(emptyEl);
-  }
-}
-
-function highlightText(el, query) {
-  // Remove existing highlights first
-  el.querySelectorAll('.prf-post-highlight').forEach(h => {
-    h.replaceWith(document.createTextNode(h.textContent));
-  });
-  el.normalize();
-
-  const walk = (node) => {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const idx = node.textContent.toLowerCase().indexOf(query);
-      if (idx === -1) return;
-      const before = document.createTextNode(node.textContent.slice(0, idx));
-      const mark   = document.createElement('mark');
-      mark.className = 'prf-post-highlight';
-      mark.textContent = node.textContent.slice(idx, idx + query.length);
-      const after  = document.createTextNode(node.textContent.slice(idx + query.length));
-      node.parentNode.replaceChild(after, node);
-      node.parentNode.insertBefore(mark, after);
-      node.parentNode.insertBefore(before, mark);
-    } else if (node.nodeType === Node.ELEMENT_NODE && !['SCRIPT','STYLE'].includes(node.tagName)) {
-      Array.from(node.childNodes).forEach(walk);
-    }
-  };
-  walk(el);
-}
 
 function renderPrfPosts(posts, containerId, isOwn, isProfilePage = false, viewingUserId = null) {
   const container = document.getElementById(containerId);
@@ -2591,27 +2390,14 @@ async function showUserProfile(userId, tapEl) {
 
         <!-- ICON TABS: List · Media only on other profiles -->
         <div class="prf-icon-tabs" id="uprf-tabs-${userId}">
-          <div class="prf-tabs-scroll">
-            <div class="prf-icon-tab active" onclick="switchUPrfTab('list','${userId}',this)">
-              <div class="prf-icon-tab-dot"></div>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-            </div>
-            <div class="prf-icon-tab" onclick="switchUPrfTab('media','${userId}',this)">
-              <div class="prf-icon-tab-dot"></div>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-            </div>
+          <div class="prf-icon-tab active" onclick="switchUPrfTab('list','${userId}',this)">
+            <div class="prf-icon-tab-dot"></div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
           </div>
-          <button class="prf-tab-search-btn" id="uprf-search-toggle-${userId}" onclick="togglePrfSearch('${userId}')" aria-label="Search posts">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35" stroke-linecap="round"/></svg>
-          </button>
-        </div>
-        <div class="prf-search-overlay" id="uprf-search-overlay-${userId}">
-          <div class="prf-search-wrap">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35" stroke-linecap="round"/></svg>
-            <input class="prf-search-input" id="uprf-search-input-${userId}" type="search" placeholder="Search ${escHtml(profile.username||'this user')}'s posts..." autocomplete="off" autocorrect="off" spellcheck="false" oninput="runPrfSearch('${userId}',this.value)">
-            <span class="prf-search-clear" id="uprf-search-clear-${userId}" onclick="clearPrfSearch('${userId}')">&#x2715;</span>
+          <div class="prf-icon-tab" onclick="switchUPrfTab('media','${userId}',this)">
+            <div class="prf-icon-tab-dot"></div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
           </div>
-          <span class="prf-search-cancel" onclick="togglePrfSearch('${userId}')">Cancel</span>
         </div>
 
         <div id="uprf-list-${userId}"  class="prf-panel prf-posts-panel"></div>
@@ -2729,14 +2515,6 @@ async function showUserProfile(userId, tapEl) {
 }
 
 function switchUPrfTab(tab, userId, el) {
-  // Close search when switching tabs
-  const uoverlay = document.getElementById(`uprf-search-overlay-${userId}`);
-  if (uoverlay && uoverlay.classList.contains('open')) {
-    uoverlay.classList.remove('open');
-    const utb = document.getElementById(`uprf-search-toggle-${userId}`);
-    if (utb) utb.classList.remove('active');
-    clearPrfSearch(userId);
-  }
   const body = document.getElementById('user-profile-body');
   document.querySelectorAll(`#uprf-tabs-${userId} .prf-icon-tab`).forEach(t => t.classList.remove('active'));
   el.classList.add('active');
