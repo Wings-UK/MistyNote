@@ -6298,3 +6298,142 @@
   font-weight: 500 !important;
   letter-spacing: 0.1px;
 }
+
+
+/* ══════════════════════════════════════════════════════════════
+   PROFILE — Search in tab bar
+══════════════════════════════════════════════════════════════ */
+
+/* Tab bar: tabs scroll, search button fixed right */
+.prf-icon-tabs {
+  overflow: hidden;
+}
+.prf-tabs-scroll {
+  display: flex;
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  border-right: 1px solid var(--border);
+}
+.prf-tabs-scroll::-webkit-scrollbar { display: none; }
+
+/* Tab items no longer flex:1 — fixed width so they scroll */
+.prf-tabs-scroll .prf-icon-tab {
+  flex: 0 0 64px;
+}
+
+/* Search button pinned to right of tab bar */
+.prf-tab-search-btn {
+  flex: 0 0 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 56px;
+  cursor: pointer;
+  color: var(--text2);
+  background: var(--surface, var(--bg));
+  border: none;
+  outline: none;
+  transition: color 0.18s, background 0.18s;
+}
+.prf-tab-search-btn:active { background: var(--bg2); }
+.prf-tab-search-btn.active { color: var(--accent, #6c47ff); }
+.prf-tab-search-btn svg { width: 20px; height: 20px; }
+
+/* Search input bar — sticky below the tab bar */
+.prf-search-overlay {
+  position: sticky;
+  top: 112px;    /* 56px header + 56px tab bar */
+  z-index: 9;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 14px;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  animation: prfSearchSlide 0.2s ease;
+}
+@keyframes prfSearchSlide {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.prf-search-overlay.open { display: flex; }
+
+.prf-search-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg2);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 8px 12px;
+  transition: border-color 0.18s;
+}
+.prf-search-wrap:focus-within { border-color: var(--accent, #6c47ff); }
+.prf-search-wrap svg {
+  flex-shrink: 0;
+  color: var(--text3);
+  width: 16px; height: 16px;
+}
+.prf-search-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 14px;
+  color: var(--text);
+  font-family: var(--font);
+  min-width: 0;
+}
+.prf-search-input::placeholder { color: var(--text3); }
+
+.prf-search-clear {
+  flex-shrink: 0;
+  color: var(--text3);
+  padding: 2px 4px;
+  display: none;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 50%;
+}
+.prf-search-clear:hover { color: var(--text2); }
+.prf-search-clear.visible { display: block; }
+
+.prf-search-cancel {
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent, #6c47ff);
+  padding: 4px 2px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* Empty state when search finds nothing */
+.prf-search-empty {
+  text-align: center;
+  padding: 48px 20px 32px;
+  color: var(--text3);
+  font-size: 14px;
+}
+.prf-search-empty-icon { font-size: 34px; margin-bottom: 10px; }
+.prf-search-empty p { margin: 0; line-height: 1.5; }
+.prf-search-empty strong { color: var(--text2); }
+
+/* Highlight matched text inside post cards */
+.prf-post-highlight {
+  background: rgba(108, 71, 255, 0.12);
+  border-radius: 3px;
+  padding: 0 1px;
+  color: var(--accent, #6c47ff);
+  font-weight: 600;
+}
+
+/* Dark theme */
+[data-theme="dark"] .prf-tab-search-btn { background: var(--bg); }
+[data-theme="dark"] .prf-search-overlay { background: var(--bg); }
+[data-theme="dark"] .prf-search-wrap { background: var(--bg2); }
