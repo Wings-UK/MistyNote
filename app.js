@@ -1297,6 +1297,10 @@ async function handleAuth() {
           followers: 0, following: 0
         });
 
+        // Create wallet row — safe if trigger already created it
+        await supabase.from('wallets')
+          .upsert({ user_id: data.user.id, points: 0 }, { onConflict: 'user_id', ignoreDuplicates: true });
+
         const { error: loginErr } = await supabase.auth.signInWithPassword({ email, password });
         if (!loginErr) {
           currentUser = data.user;
@@ -9571,7 +9575,19 @@ async function syncWalletBalance() {
       .select('points')
       .eq('user_id', currentUser.id)
       .maybeSingle();
-    if (error || !data) return;
+    if (error) return;
+    if (!data) {
+      // Wallet row missing (trigger may have failed at signup) — create it now
+      await supabase.from('wallets')
+        .insert({ user_id: currentUser.id, points: 0 })
+        .select('points')
+        .single()
+        .then(({ data: newWallet }) => {
+          walletState.points = newWallet?.points ?? 0;
+          renderWalletBalance();
+        });
+      return;
+    }
     walletState.points = data.points ?? 0;
     renderWalletBalance();
   } catch (e) { /* silently fail — show cached value */ }
