@@ -296,7 +296,7 @@ function _gpsAttempt(userId, highAccuracy, attempt) {
 
         if (location && country) {
           // Save silently — update every session so it's always current
-          await supabase.from('users').update({ location }).eq('id', userId).catch(() => {});
+          try { await supabase.from('users').update({ location }).eq('id', userId); } catch(e) {}
           if (currentProfile && currentUser?.id === userId) {
             currentProfile.location = location;
             if (document.getElementById('page-profile')?.classList.contains('active')) {
@@ -4476,6 +4476,10 @@ async function openDetail(postId, scrollToComments = false) {
   if (!postId) return;
   detailPostId = postId;
   detailCommentParentId = null;
+
+  // Clear any overlays/sheets that might block navigation
+  document.querySelectorAll('.action-sheet-overlay, .echoes-overlay, #video-fs, .bottom-sheet-backdrop').forEach(el => el.remove());
+
   pushRoute('/post/' + postId);
 
   // ── Inject styles once ──
@@ -8393,7 +8397,12 @@ async function notifItemClick(postId, actorId, idsStr, type) {
   // ── Mark read ──
   const ids = idsStr.split(',').filter(Boolean);
   if (ids.length) {
-    supabase.from('notifications').update({ read: true }).in('id', ids).catch(() => {});
+    // Wrap in async IIFE — supabase queries are not Promises, can't chain .catch()
+    (async () => {
+      try {
+        await supabase.from('notifications').update({ read: true }).in('id', ids);
+      } catch (e) { /* ignore mark-read failures — navigation must still proceed */ }
+    })();
     ids.forEach(id => {
       const el = document.querySelector(`.notif-item[data-ids="${id}"], .notif-item[data-ids^="${id},"], .notif-item[data-ids*=",${id},"], .notif-item[data-ids$=",${id}"]`);
       if (el) { el.classList.remove('unread'); el.querySelector('.notif-unread-dot')?.remove(); }
@@ -8623,7 +8632,7 @@ function notifBannerClick(postId, actorId, notifId) {
   dismissNotifBanner();
   if (postId) openDetail(postId);
   else if (actorId) showUserProfile(actorId, null);
-  if (notifId) supabase.from('notifications').update({ read: true }).eq('id', notifId).catch(() => {});
+  if (notifId) (async () => { try { await supabase.from('notifications').update({ read: true }).eq('id', notifId); } catch(e){} })();
 }
 
 function attachBannerSwipe(banner) {
@@ -8657,7 +8666,7 @@ function attachSwipeDismiss(el) {
       el.classList.add('dismissed');
       setTimeout(() => el.remove(), 300);
       if (ids.length) {
-        supabase.from('notifications').delete().in('id', ids).catch(() => {});
+        (async () => { try { await supabase.from('notifications').delete().in('id', ids); } catch(e){} })();
         notifRawData = notifRawData.filter(n => !ids.includes(String(n.id)));
         updateNotifTabCounts();
       }
@@ -8676,21 +8685,32 @@ function onNotifPageOpen() {
   const notifList = document.getElementById('notif-list');
   if (notifList && !notifList._notifListenerAttached) {
     notifList._notifListenerAttached = true;
-    notifList.addEventListener('click', e => {
-      if (e.target.closest('.notif-follow-btn')) return; // follow btn handles its own click
+
+    const handleNotifTap = e => {
+      // Let follow button and badge handle their own clicks
+      if (e.target.closest('.notif-follow-btn, .notif-type-badge')) return;
       const item = e.target.closest('.notif-item');
       if (!item) return;
+      // Stop other listeners (swipe, scroll, etc.) from swallowing this tap
+      e.stopImmediatePropagation();
+      // Prevent duplicate fire if both touchend + click fire on same tap
+      if (e.type === 'click' && item._notifTapHandled) { item._notifTapHandled = false; return; }
+      if (e.type === 'touchend') item._notifTapHandled = true;
       const postId  = item.dataset.postId  || null;
       const actorId = item.dataset.actorId || null;
       const idsStr  = item.dataset.ids     || '';
       const type    = item.dataset.type    || '';
       notifItemClick(
-        postId  && postId  !== 'undefined' ? postId  : null,
-        actorId && actorId !== 'undefined' ? actorId : null,
+        postId  && postId  !== 'null' && postId  !== 'undefined'  ? postId  : null,
+        actorId && actorId !== 'null' && actorId !== 'undefined'  ? actorId : null,
         idsStr,
         type
       );
-    });
+    };
+
+    // capture:true fires before child handlers; touchend covers Android WebView edge cases
+    notifList.addEventListener('click',    handleNotifTap, true);
+    notifList.addEventListener('touchend', handleNotifTap, true);
   }
 
   loadNotifications();
