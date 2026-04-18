@@ -1443,18 +1443,6 @@ function slideTo(pageId, setupFn) {
   const el = document.getElementById('page-' + pageId);
   if (!el) return;
 
-  // Block all post taps during slide — prevents ghost clicks
-  document.querySelectorAll('[data-post-id]').forEach(post => {
-    post.dataset.blockNavigation = 'true';
-    setTimeout(() => { post.dataset.blockNavigation = 'false'; }, 600);
-  });
-
-  // Block ALL post taps during slide — prevents ghost clicks from landing on profile posts
-  document.querySelectorAll('[data-post-id]').forEach(post => {
-    post.dataset.blockNavigation = 'true';
-    setTimeout(() => { post.dataset.blockNavigation = 'false'; }, 600);
-  });
-
   // Track which main page we're leaving
   const mainPages = ['feed','discover','notifications','profile'];
   mainPages.forEach(id => {
@@ -8339,15 +8327,14 @@ function renderNotifItem(g, animDelay = 0) {
 
   // Pass type so notifItemClick knows exactly where to navigate
   const clickActorId = g.actor_id || (g.actors[0]?.id) || '';
-  const clickTarget = g.post_id
-    ? `notifItemClick('${g.post_id}','${clickActorId}','${g.ids.join(',')}','${g.type}')`
-    : `notifItemClick(null,'${clickActorId}','${g.ids.join(',')}','${g.type}')`;
 
   return `
     <div class="notif-item${isUnread ? ' unread' : ''}${g.grouped ? ' grouped' : ''}"
          data-ids="${g.ids.join(',')}"
-         style="animation-delay:${animDelay}ms"
-         onclick="${clickTarget}">
+         data-post-id="${g.post_id || ''}"
+         data-actor-id="${clickActorId}"
+         data-type="${g.type}"
+         style="animation-delay:${animDelay}ms">
       ${avatarHtml}
       <div class="notif-body">
         <p class="notif-text">${who} ${cfg.label}</p>
@@ -8597,7 +8584,10 @@ function showNotifBanner(data) {
 
   banner.style.setProperty('--notif-accent', cfg.accentColor);
   banner.innerHTML = `
-    <div class="notif-banner-inner" onclick="notifBannerClick('${data.post_id || ''}','${data.actor_id || ''}','${data.id}')">
+    <div class="notif-banner-inner"
+         data-post-id="${data.post_id || ''}"
+         data-actor-id="${data.actor_id || ''}"
+         data-notif-id="${data.id}">
       <img class="notif-banner-avatar" src="${escHtml(src)}"
         onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=fallback'" alt="">
       <div class="notif-banner-content">
@@ -8606,6 +8596,13 @@ function showNotifBanner(data) {
       </div>
       ${data.post_image ? `<img class="notif-banner-thumb" src="${escHtml(data.post_image)}" alt="">` : `<span class="notif-banner-time">now</span>`}
     </div>`;
+
+  const inner = banner.querySelector('.notif-banner-inner');
+  if (inner) {
+    inner.addEventListener('click', () => {
+      notifBannerClick(inner.dataset.postId, inner.dataset.actorId, inner.dataset.notifId);
+    }, { once: true });
+  }
 
   requestAnimationFrame(() => { banner.classList.remove('hide'); banner.classList.add('show'); });
   clearTimeout(bannerTimer);
@@ -8693,6 +8690,30 @@ function buildNotifFilterTabs() {
       ${f.label}
       <span class="tab-count" style="display:none"></span>
     </button>`).join('');
+
+  // ── Delegated tap handler for all notification items ──
+  // Attached once to the static container; works for all dynamically rendered items.
+  // Uses data attributes — no fragile inline onclick strings with commas.
+  const notifList = document.getElementById('notif-list');
+  if (notifList && !notifList._notifListenerAttached) {
+    notifList._notifListenerAttached = true;
+    notifList.addEventListener('click', e => {
+      // Don't fire if the follow button inside the notif was tapped
+      if (e.target.closest('.notif-follow-btn')) return;
+      const item = e.target.closest('.notif-item');
+      if (!item) return;
+      const postId  = item.dataset.postId  || null;
+      const actorId = item.dataset.actorId || null;
+      const idsStr  = item.dataset.ids     || '';
+      const type    = item.dataset.type    || '';
+      notifItemClick(
+        postId  && postId  !== 'undefined' ? postId  : null,
+        actorId && actorId !== 'undefined' ? actorId : null,
+        idsStr,
+        type
+      );
+    });
+  }
 }
 
 // ── DEMO HELPER (remove in production) ────
