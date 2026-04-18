@@ -8691,6 +8691,15 @@ function onNotifPageOpen() {
       if (e.target.closest('.notif-follow-btn, .notif-type-badge')) return;
       const item = e.target.closest('.notif-item');
       if (!item) return;
+
+      // If the finger moved more than 8px it's a scroll — ignore
+      if (e.type === 'touchend') {
+        const touch = e.changedTouches[0];
+        const dx = Math.abs(touch.clientX - (item._touchStartX || 0));
+        const dy = Math.abs(touch.clientY - (item._touchStartY || 0));
+        if (dx > 8 || dy > 8) return;
+      }
+
       // Stop other listeners (swipe, scroll, etc.) from swallowing this tap
       e.stopImmediatePropagation();
       // Prevent duplicate fire if both touchend + click fire on same tap
@@ -8707,6 +8716,15 @@ function onNotifPageOpen() {
         type
       );
     };
+
+    // Record touch start position so we can detect scrolls vs taps
+    notifList.addEventListener('touchstart', e => {
+      const item = e.target.closest('.notif-item');
+      if (!item) return;
+      const touch = e.touches[0];
+      item._touchStartX = touch.clientX;
+      item._touchStartY = touch.clientY;
+    }, true);
 
     // capture:true fires before child handlers; touchend covers Android WebView edge cases
     notifList.addEventListener('click',    handleNotifTap, true);
