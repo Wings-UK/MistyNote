@@ -8670,6 +8670,29 @@ function attachSwipeDismiss(el) {
 
 function onNotifPageOpen() {
   buildNotifFilterTabs();
+
+  // ── Delegated tap handler — attached once to the static #notif-list container.
+  // Survives innerHTML re-renders because it's on the parent, not the items.
+  const notifList = document.getElementById('notif-list');
+  if (notifList && !notifList._notifListenerAttached) {
+    notifList._notifListenerAttached = true;
+    notifList.addEventListener('click', e => {
+      if (e.target.closest('.notif-follow-btn')) return; // follow btn handles its own click
+      const item = e.target.closest('.notif-item');
+      if (!item) return;
+      const postId  = item.dataset.postId  || null;
+      const actorId = item.dataset.actorId || null;
+      const idsStr  = item.dataset.ids     || '';
+      const type    = item.dataset.type    || '';
+      notifItemClick(
+        postId  && postId  !== 'undefined' ? postId  : null,
+        actorId && actorId !== 'undefined' ? actorId : null,
+        idsStr,
+        type
+      );
+    });
+  }
+
   loadNotifications();
   setTimeout(async () => {
     if (unreadCount > 0) {
@@ -8690,30 +8713,6 @@ function buildNotifFilterTabs() {
       ${f.label}
       <span class="tab-count" style="display:none"></span>
     </button>`).join('');
-
-  // ── Delegated tap handler for all notification items ──
-  // Attached once to the static container; works for all dynamically rendered items.
-  // Uses data attributes — no fragile inline onclick strings with commas.
-  const notifList = document.getElementById('notif-list');
-  if (notifList && !notifList._notifListenerAttached) {
-    notifList._notifListenerAttached = true;
-    notifList.addEventListener('click', e => {
-      // Don't fire if the follow button inside the notif was tapped
-      if (e.target.closest('.notif-follow-btn')) return;
-      const item = e.target.closest('.notif-item');
-      if (!item) return;
-      const postId  = item.dataset.postId  || null;
-      const actorId = item.dataset.actorId || null;
-      const idsStr  = item.dataset.ids     || '';
-      const type    = item.dataset.type    || '';
-      notifItemClick(
-        postId  && postId  !== 'undefined' ? postId  : null,
-        actorId && actorId !== 'undefined' ? actorId : null,
-        idsStr,
-        type
-      );
-    });
-  }
 }
 
 // ── DEMO HELPER (remove in production) ────
