@@ -778,7 +778,7 @@
   
   .post-content { padding: 10px 0 0 53px; }
   .post-text {
-    font-size: 16px; line-height: 1.55; color: var(--text);
+    font-size: 16px; line-height: 1.6; color: var(--text);
     white-space: pre-wrap; word-break: break-word;
   }
   .see-more { color: var(--accent); font-weight: 600; cursor: pointer; }
@@ -3239,7 +3239,7 @@
   }
   .mini-follow-btn:active { transform: scale(0.95); }
   
-  .detail-text { font-size: 18px; line-height: 1.6; margin-bottom: 14px; white-space: pre-wrap; word-break: break-word; }
+  .detail-text { font-size: 18px; line-height: 1.65; margin-bottom: 14px; white-space: pre-wrap; word-break: break-word; }
   .detail-media { border-radius: var(--radius); overflow: hidden; margin-bottom: 14px; }
   .detail-media img { width: 100%; }
   
