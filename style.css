@@ -6301,3 +6301,210 @@
   font-weight: 500 !important;
   letter-spacing: 0.1px;
 }
+
+/* ══════════════════════════════════════════
+   MP GIFT BUBBLE IN DM
+══════════════════════════════════════════ */
+
+.chat-mp-bubble {
+  max-width: 260px;
+  border-radius: 18px;
+  overflow: hidden;
+  position: relative;
+  margin: 4px 0;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.18);
+}
+.chat-mp-bubble.sent {
+  background: linear-gradient(135deg, #6c47ff 0%, #a78bfa 100%);
+  margin-left: auto;
+  border-bottom-right-radius: 5px;
+}
+.chat-mp-bubble.recv {
+  background: linear-gradient(135deg, #1a1a2e 0%, #2d2060 100%);
+  border: 1px solid rgba(108,71,255,0.3);
+  margin-right: auto;
+  border-bottom-left-radius: 5px;
+}
+.chat-mp-glow {
+  position: absolute;
+  top: -20px; right: -20px;
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.06);
+  pointer-events: none;
+}
+.chat-mp-inner {
+  padding: 14px 16px 12px;
+  position: relative;
+  z-index: 1;
+}
+.chat-mp-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.65);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+.chat-mp-label svg { stroke: rgba(255,255,255,0.65); flex-shrink: 0; }
+.chat-mp-amount {
+  font-size: 26px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.5px;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+.chat-mp-note {
+  font-size: 13px;
+  color: rgba(255,255,255,0.8);
+  margin-bottom: 10px;
+  line-height: 1.4;
+}
+.chat-mp-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.12);
+}
+.chat-mp-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.7);
+}
+.chat-mp-status svg { stroke: #00d632; }
+.chat-mp-ref {
+  font-size: 10px;
+  color: rgba(255,255,255,0.4);
+  font-family: monospace;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.08);
+}
+.chat-mp-ref:active { background: rgba(255,255,255,0.15); }
+.chat-mp-time {
+  font-size: 10px;
+  color: rgba(255,255,255,0.35);
+  text-align: right;
+  margin-top: 6px;
+}
+
+
+/* ══════════════════════════════════════════
+   WALLET PIN SHEET
+══════════════════════════════════════════ */
+
+.pin-sheet-body {
+  padding-bottom: 40px !important;
+  text-align: center;
+}
+.pin-lock-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #6c47ff, #a78bfa);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 8px auto 16px;
+  box-shadow: 0 8px 24px rgba(108,71,255,0.35);
+}
+.pin-lock-icon svg { stroke: white; }
+.pin-sheet-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text);
+  margin: 0 0 6px;
+}
+.pin-sheet-sub {
+  font-size: 13px;
+  color: var(--text3);
+  margin: 0 0 28px;
+}
+.pin-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  margin-bottom: 32px;
+}
+.pin-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: transparent;
+  transition: background 0.15s, border-color 0.15s, transform 0.12s;
+}
+.pin-dot.filled {
+  background: #6c47ff;
+  border-color: #6c47ff;
+  transform: scale(1.15);
+}
+.pin-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  max-width: 280px;
+  margin: 0 auto 20px;
+  padding: 0 8px;
+}
+.pin-key {
+  height: 64px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 700;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  cursor: pointer;
+  transition: background 0.1s, transform 0.08s;
+  -webkit-tap-highlight-color: transparent;
+}
+.pin-key span {
+  font-size: 8px;
+  font-weight: 500;
+  color: var(--text3);
+  letter-spacing: 1px;
+}
+.pin-key:active {
+  background: var(--bg3);
+  transform: scale(0.94);
+}
+.pin-key-empty {
+  background: transparent !important;
+  border-color: transparent !important;
+  pointer-events: none;
+}
+.pin-key-back {
+  background: var(--bg2);
+}
+.pin-key-back svg { stroke: var(--text2); }
+.pin-cancel-btn {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text3);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 10px 24px;
+  border-radius: 12px;
+  margin-top: 4px;
+}
+.pin-cancel-btn:active { background: var(--bg2); }
