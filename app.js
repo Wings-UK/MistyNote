@@ -63,34 +63,36 @@ const uploadState = {
 const RING_CIRCUMFERENCE = 138.2; // 2 * PI * 22
 
 function setComposeRing(status, progress = 0) {
-  const btn  = document.getElementById('nav-compose-btn');
-  const fill = document.getElementById('compose-ring-fill');
-  const inner = document.getElementById('compose-btn-inner');
-  if (!btn || !fill || !inner) return;
+  // ── Profile FAB ring only — nav market button no longer has compose ring ──
+  const fab      = document.getElementById('profile-compose-fab');
+  const fabRing  = document.getElementById('profile-fab-ring');
+  const fabFill  = document.getElementById('profile-fab-ring-fill');
+  const fabIcon  = document.getElementById('profile-fab-icon');
 
-  // Remove all state classes
-  btn.classList.remove('uploading', 'upload-success', 'upload-failed');
+  uploadState.status = status;
 
   if (status === 'idle') {
-    fill.style.strokeDashoffset = RING_CIRCUMFERENCE;
-    inner.innerHTML = `<svg width="26" height="26" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="white" fill-opacity="0.15"/><path d="M12 5v14M5 12h14" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>`;
-    btn.style.animation = '';
+    if (fabRing) fabRing.style.display = 'none';
+    if (fabIcon) { fabIcon.style.display = ''; fabIcon.innerHTML = `<path d="M12 5v14M5 12h14" stroke="white" stroke-width="2.5" stroke-linecap="round"/>`; }
+    if (fab)    fab.classList.remove('fab-uploading','fab-success','fab-failed');
+
   } else if (status === 'uploading') {
-    btn.classList.add('uploading');
     const offset = RING_CIRCUMFERENCE - (progress / 100) * RING_CIRCUMFERENCE;
-    fill.style.strokeDashoffset = offset;
-    inner.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    if (fabRing) { fabRing.style.display = ''; if (fabFill) fabFill.style.strokeDashoffset = offset; }
+    if (fabIcon) { fabIcon.style.display = 'none'; }
+    if (fab)    { fab.classList.add('fab-uploading'); fab.classList.remove('fab-success','fab-failed'); }
+
   } else if (status === 'success') {
-    btn.classList.add('upload-success');
-    fill.style.strokeDashoffset = 0;
-    inner.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-    // Auto-reset after 2 seconds
+    if (fab)    fab.classList.add('fab-success');
+    if (fabIcon) { fabIcon.style.display = ''; fabIcon.innerHTML = `<path d="M20 6L9 17l-5-5" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`; }
+    if (fabRing) fabRing.style.display = 'none';
     setTimeout(() => setComposeRing('idle'), 2000);
+
   } else if (status === 'failed') {
-    btn.classList.add('upload-failed');
-    inner.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 9v4M12 17h.01" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    if (fab)    fab.classList.add('fab-failed');
+    if (fabIcon) { fabIcon.style.display = ''; fabIcon.innerHTML = `<path d="M12 9v4M12 17h.01" stroke="white" stroke-width="2.5" stroke-linecap="round"/><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`; }
+    if (fabRing) fabRing.style.display = 'none';
   }
-  uploadState.status = status;
 }
 
 function composeOrRetry() {
@@ -476,17 +478,14 @@ function showMarket() {
     slideStack.forEach(id => document.getElementById('page-' + id)?.classList.remove('active'));
     slideStack.length = 0;
   }
-  // Hide all fixed headers that float outside .page elements
   document.getElementById('comment-bar').style.display = 'none';
   document.getElementById('my-profile-header').style.display = 'none';
   document.getElementById('user-profile-header').style.display = 'none';
   document.getElementById('bottom-nav').style.display = 'flex';
 
-  // Switch pages
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-market')?.classList.add('active');
 
-  // Update nav active state
   document.querySelectorAll('.nav-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.page === 'market');
   });
@@ -558,7 +557,6 @@ async function bootApp(isDeepLink = false) {
 
   await loadMyProfile();
   updateNavAvatar();
-  initComposerFile();
   setTimeout(() => detectAndSaveLocation(), 2000);
   sortMomentsRow();
   initIntersectionObserver();
@@ -1025,7 +1023,6 @@ async function obFinish() {
   initIntersectionObserver();
   sortMomentsRow();
   requestAnimationFrame(initFeedTabBar);
-  initComposerFile();
   updateNavAvatar();
   setTimeout(() => detectAndSaveLocation(), 2000);
 
@@ -2014,8 +2011,13 @@ async function renderMyProfile() {
       <div id="prf-panel-saved"  class="prf-panel prf-posts-panel" style="display:none"></div>
     </div>
 
-    <div class="wing-fab" onclick="openComposer()">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>
+    <div class="wing-fab" id="profile-compose-fab" onclick="composeOrRetry()">
+      <svg id="profile-fab-icon" width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>
+      <svg id="profile-fab-ring" viewBox="0 0 48 48" style="position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg);display:none">
+        <circle cx="24" cy="24" r="22" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="3"/>
+        <circle id="profile-fab-ring-fill" cx="24" cy="24" r="22" fill="none" stroke="white" stroke-width="3"
+          stroke-dasharray="138.2" stroke-dashoffset="138.2" stroke-linecap="round"/>
+      </svg>
     </div>
   `;
 
@@ -3986,8 +3988,7 @@ async function handleRepost(postId, btn, postUserId) {
       { label: 'Undo Repost', icon: '🔄', action: () => undoRepost(postId, btn) },
     ]);
   } else {
-    // Open composer in repost mode
-    repostTargetId = postId;
+    repostTargetId  = postId;
     repostTargetBtn = btn;
 
     const { data: orig } = await supabase.from('posts')
@@ -3996,26 +3997,36 @@ async function handleRepost(postId, btn, postUserId) {
 
     openComposer();
 
+    // Wire repost preview into new composer
     if (orig) {
-      const preview = document.getElementById('composer-repost-preview');
-      preview.innerHTML = `<div class="composer-repost-card">
-        <div class="composer-repost-label">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#6C47FF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
-          Reposting from ${escHtml(orig.user?.username || '')}
-        </div>
-        ${orig.content ? `<p class="composer-repost-text">${escHtml(orig.content.slice(0,100))}${orig.content.length>100?'…':''}</p>` : ''}
-        <button class="composer-repost-remove" onclick="clearRepost()">×</button>
-      </div>`;
-      updateComposerBtn();
+      setTimeout(() => {
+        const preview = document.getElementById('cmp-repost-preview');
+        if (preview) {
+          preview.style.display = '';
+          preview.innerHTML = `
+            <div style="font-size:12px;color:var(--accent);font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:4px">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
+              Reposting @${escHtml(orig.user?.username || '')}
+            </div>
+            ${orig.content ? `<p style="font-size:13px;color:var(--text2);margin:0">${escHtml(orig.content.slice(0,120))}${orig.content.length>120?'…':''}</p>` : ''}
+            <button class="cmp-repost-remove" onclick="clearRepost()">×</button>`;
+          // Enable post button
+          const postBtn = document.getElementById('cmp-post-btn');
+          if (postBtn) postBtn.disabled = false;
+        }
+      }, 80); // after composer animates in
     }
   }
 }
 
 function clearRepost() {
-  repostTargetId = null; repostTargetBtn = null;
-  const preview = document.getElementById('composer-repost-preview');
-  if (preview) preview.innerHTML = '';
-  updateComposerBtn();
+  repostTargetId  = null;
+  repostTargetBtn = null;
+  const preview = document.getElementById('cmp-repost-preview');
+  if (preview) { preview.innerHTML = ''; preview.style.display = 'none'; }
+  const ta  = document.getElementById('cmp-textarea');
+  const btn = document.getElementById('cmp-post-btn');
+  if (btn) btn.disabled = !(ta?.value?.trim()) && !selectedFile;
 }
 
 async function undoRepost(postId, btn) {
@@ -4074,143 +4085,384 @@ async function undoRepost(postId, btn) {
 // ══════════════════════════════════════════
 
 function openComposer() {
-  const overlay  = document.getElementById('composer-overlay');
-  const sheet    = document.getElementById('composer-sheet');
-  const previews = document.getElementById('composer-previews');
+  if (!currentUser) { showToast('Sign in to post'); return; }
 
-  overlay.classList.remove('hidden');
-
-  if (currentProfile?.avatar) {
-    document.getElementById('composer-avatar').src = currentProfile.avatar;
+  // Inject composer styles once
+  if (!document.getElementById('composer-v2-style')) {
+    const s = document.createElement('style');
+    s.id = 'composer-v2-style';
+    s.textContent = `
+      #composer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:flex-end;opacity:0;transition:opacity .25s;pointer-events:none}
+      #composer-overlay.open{opacity:1;pointer-events:all}
+      #composer-sheet{background:var(--bg,#fff);border-radius:24px 24px 0 0;width:100%;max-height:92dvh;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .3s cubic-bezier(.32,.72,0,1)}
+      #composer-sheet.open{transform:translateY(0)}
+      .cmp-handle{width:36px;height:4px;background:var(--border,#e5e7eb);border-radius:2px;margin:10px auto 0;flex-shrink:0}
+      .cmp-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px 8px;flex-shrink:0}
+      .cmp-header-title{font-weight:700;font-size:16px;color:var(--text1,#111)}
+      .cmp-close{width:32px;height:32px;border-radius:50%;background:var(--bg2,#f3f4f6);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+      .cmp-tabs{display:flex;gap:0;padding:0 16px;border-bottom:1px solid var(--border,#e5e7eb);flex-shrink:0}
+      .cmp-tab{flex:1;padding:10px 0;font-size:14px;font-weight:600;color:var(--text3,#9ca3af);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:color .2s,border-color .2s}
+      .cmp-tab.active{color:var(--accent,#6C47FF);border-bottom-color:var(--accent,#6C47FF)}
+      .cmp-body{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:10px;min-height:0}
+      .cmp-author-row{display:flex;gap:10px;align-items:flex-start}
+      .cmp-avatar{width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0}
+      .cmp-textarea{flex:1;border:none;outline:none;resize:none;font-size:16px;line-height:1.5;color:var(--text1,#111);background:transparent;min-height:80px;max-height:180px;font-family:inherit}
+      .cmp-textarea::placeholder{color:var(--text3,#9ca3af)}
+      .cmp-img-zone{border:2px dashed var(--border,#e5e7eb);border-radius:16px;padding:32px 16px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:var(--bg2,#f9fafb)}
+      .cmp-img-zone:hover,.cmp-img-zone.drag{border-color:var(--accent,#6C47FF);background:rgba(108,71,255,.04)}
+      .cmp-img-zone-icon{font-size:36px;margin-bottom:8px}
+      .cmp-img-zone-label{font-size:15px;font-weight:600;color:var(--text1,#111);margin-bottom:4px}
+      .cmp-img-zone-sub{font-size:13px;color:var(--text3,#9ca3af)}
+      .cmp-preview-wrap{position:relative;border-radius:16px;overflow:hidden;background:#000}
+      .cmp-preview-wrap img,.cmp-preview-wrap video{width:100%;max-height:300px;object-fit:cover;display:block;border-radius:16px}
+      .cmp-preview-remove{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.6);border:none;color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;line-height:1}
+      .cmp-caption-row{display:flex;gap:10px;align-items:flex-start}
+      .cmp-caption{flex:1;border:none;outline:none;resize:none;font-size:15px;line-height:1.5;color:var(--text1,#111);background:transparent;min-height:50px;font-family:inherit}
+      .cmp-caption::placeholder{color:var(--text3,#9ca3af)}
+      .cmp-footer{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-top:1px solid var(--border,#e5e7eb);flex-shrink:0;gap:8px}
+      .cmp-tools{display:flex;gap:4px;align-items:center}
+      .cmp-tool{width:36px;height:36px;border-radius:10px;background:none;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--accent,#6C47FF);transition:background .15s}
+      .cmp-tool:hover{background:rgba(108,71,255,.08)}
+      .cmp-char{font-size:12px;color:var(--text3,#9ca3af);margin-left:auto}
+      .cmp-char.low{color:#f59e0b}
+      .cmp-char.critical{color:#ef4444;font-weight:700}
+      .cmp-post-btn{padding:9px 22px;border-radius:20px;background:var(--accent,#6C47FF);color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer;transition:opacity .2s,transform .1s;flex-shrink:0}
+      .cmp-post-btn:disabled{opacity:.4;cursor:default}
+      .cmp-post-btn:not(:disabled):active{transform:scale(.96)}
+      .cmp-repost-preview{border:1px solid var(--border,#e5e7eb);border-radius:12px;padding:10px 12px;font-size:13px;color:var(--text2,#374151);background:var(--bg2,#f9fafb);position:relative}
+      .cmp-repost-remove{position:absolute;top:6px;right:8px;background:none;border:none;font-size:18px;cursor:pointer;color:var(--text3)}
+      #cmp-file-input{display:none}
+      .cmp-img-tab-extra{display:flex;gap:10px;align-items:flex-start;margin-top:8px}
+    `;
+    document.head.appendChild(s);
   }
 
+  // Remove any existing composer overlay cleanly
+  document.getElementById('composer-overlay')?.remove();
+
+  const avatarSrc = currentProfile?.avatar || '';
+  const username  = currentProfile?.username || '';
+
+  const overlay = document.createElement('div');
+  overlay.id = 'composer-overlay';
+  overlay.innerHTML = `
+    <div id="composer-sheet">
+      <div class="cmp-handle"></div>
+      <div class="cmp-header">
+        <span class="cmp-header-title">New Post</span>
+        <button class="cmp-close" onclick="closeComposer()" aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="cmp-tabs">
+        <button class="cmp-tab active" data-cmp-tab="text" onclick="cmpSwitchTab('text')">✏️ Text</button>
+        <button class="cmp-tab" data-cmp-tab="image" onclick="cmpSwitchTab('image')">🖼️ Image / Video</button>
+      </div>
+
+      <div class="cmp-body" id="cmp-body">
+
+        <!-- TEXT TAB -->
+        <div id="cmp-panel-text">
+          <div class="cmp-author-row">
+            <img class="cmp-avatar" src="${avatarSrc}" onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${username}'" alt="">
+            <textarea class="cmp-textarea" id="cmp-textarea" placeholder="What's on your mind, ${username}?" maxlength="${MAX_CHARS}"></textarea>
+          </div>
+          <div id="cmp-repost-preview" style="display:none"></div>
+        </div>
+
+        <!-- IMAGE TAB -->
+        <div id="cmp-panel-image" style="display:none">
+          <div id="cmp-img-dropzone" class="cmp-img-zone" onclick="document.getElementById('cmp-file-input').click()">
+            <div class="cmp-img-zone-icon">📸</div>
+            <div class="cmp-img-zone-label">Tap to choose photo or video</div>
+            <div class="cmp-img-zone-sub">JPG, PNG, GIF, MP4 · Max 10MB image / 50MB video</div>
+          </div>
+          <div id="cmp-media-preview" style="display:none">
+            <div class="cmp-preview-wrap">
+              <img id="cmp-preview-img" src="" alt="" style="display:none">
+              <video id="cmp-preview-vid" muted playsinline controls style="display:none;width:100%;max-height:300px;border-radius:16px"></video>
+              <button class="cmp-preview-remove" onclick="cmpRemoveMedia()">×</button>
+            </div>
+            <div class="cmp-img-tab-extra">
+              <img class="cmp-avatar" src="${avatarSrc}" onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${username}'" alt="">
+              <textarea class="cmp-caption" id="cmp-caption" placeholder="Add a caption (optional)" maxlength="${MAX_CHARS}"></textarea>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="cmp-footer">
+        <div class="cmp-tools">
+          <button class="cmp-tool" onclick="document.getElementById('cmp-file-input').click()" title="Add photo/video">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+          </button>
+        </div>
+        <span class="cmp-char" id="cmp-char">${MAX_CHARS}</span>
+        <button class="cmp-post-btn" id="cmp-post-btn" disabled onclick="cmpSubmit()">Post</button>
+      </div>
+
+      <input type="file" id="cmp-file-input" accept="image/*,video/*" capture="environment">
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  // Animate in
   requestAnimationFrame(() => {
-    sheet.classList.add('open');
-    const composerTA = document.getElementById('composer-textarea');
-    composerTA.focus();
-    composerTA._mentionWired = false; // reset so it re-wires fresh
-    wireMentionInput(composerTA, null);
+    overlay.classList.add('open');
+    document.getElementById('composer-sheet').classList.add('open');
+    const ta = document.getElementById('cmp-textarea');
+    setTimeout(() => ta?.focus(), 100);
   });
 
-  // Visual Viewport: shrink sheet height when keyboard appears
-  // The sheet stays anchored at the bottom, previews area shrinks, textarea stays visible
-  function onVP() {
+  // Wire up events
+  _initCmpEvents(overlay);
+
+  // Tap backdrop to close
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeComposer(); });
+
+  // Viewport resize (keyboard)
+  const sheet = document.getElementById('composer-sheet');
+  function _onVP() {
     const vv = window.visualViewport;
-    if (!vv) return;
-    const vvHeight = vv.height;
-    // Cap sheet at viewport height so it sits just above keyboard
-    sheet.style.maxHeight = vvHeight * 0.95 + 'px';
-    // Scroll previews to bottom so latest content stays visible
-    if (previews) previews.scrollTop = previews.scrollHeight;
+    if (!vv || !sheet) return;
+    sheet.style.maxHeight = (vv.height * 0.95) + 'px';
+  }
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', _onVP);
+    overlay._vp = _onVP;
   }
 
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', onVP);
-    overlay._vp = onVP;
+  // Restore repost preview if active
+  if (repostTargetId) {
+    const rp = document.getElementById('cmp-repost-preview');
+    if (rp) {
+      rp.style.display = '';
+      rp.innerHTML = _cmpRepostPreviewHTML();
+    }
   }
+}
+
+function _initCmpEvents(overlay) {
+  // Textarea char count + post btn
+  const ta = document.getElementById('cmp-textarea');
+  const caption = document.getElementById('cmp-caption');
+  const postBtn = document.getElementById('cmp-post-btn');
+
+  function _updateBtn() {
+    const hasText  = !!(ta?.value?.trim()) || !!(caption?.value?.trim());
+    const hasMedia = !!selectedFile;
+    const hasRepost = !!repostTargetId;
+    if (postBtn) postBtn.disabled = !(hasText || hasMedia || hasRepost);
+  }
+
+  function _updateChar(val) {
+    const el = document.getElementById('cmp-char');
+    if (!el) return;
+    const rem = MAX_CHARS - (val?.length || 0);
+    el.textContent = rem;
+    el.className = 'cmp-char' + (rem < 20 ? ' critical' : rem < 60 ? ' low' : '');
+  }
+
+  if (ta) {
+    ta.addEventListener('input', () => {
+      _updateBtn(); _updateChar(ta.value);
+      ta.style.height = 'auto';
+      ta.style.height = Math.min(ta.scrollHeight, 180) + 'px';
+      wireMentionInput(ta, null);
+    });
+  }
+  if (caption) {
+    caption.addEventListener('input', () => {
+      _updateBtn(); _updateChar(caption.value);
+      caption.style.height = 'auto';
+      caption.style.height = Math.min(caption.scrollHeight, 120) + 'px';
+    });
+  }
+
+  // File input
+  const fileInput = document.getElementById('cmp-file-input');
+  if (fileInput) {
+    fileInput.addEventListener('change', e => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      _handleCmpFile(file, _updateBtn);
+    });
+  }
+
+  // Drag-and-drop on image zone
+  const zone = document.getElementById('cmp-img-dropzone');
+  if (zone) {
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault(); zone.classList.remove('drag');
+      const file = e.dataTransfer?.files?.[0];
+      if (file) _handleCmpFile(file, _updateBtn);
+    });
+  }
+
+  _updateBtn();
+}
+
+function _handleCmpFile(file, updateBtn) {
+  const isImage = file.type.startsWith('image/');
+  const isVideo = file.type.startsWith('video/');
+  if (!isImage && !isVideo) { showToast('Images and videos only'); return; }
+
+  const maxBytes = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+  if (file.size > maxBytes) { showToast(`Max ${isVideo ? '50MB for video' : '10MB for image'}`); return; }
+
+  selectedFile = file;
+  // Switch to image tab automatically
+  cmpSwitchTab('image');
+
+  const dropzone = document.getElementById('cmp-img-dropzone');
+  const preview  = document.getElementById('cmp-media-preview');
+  const prevImg  = document.getElementById('cmp-preview-img');
+  const prevVid  = document.getElementById('cmp-preview-vid');
+
+  if (dropzone) dropzone.style.display = 'none';
+  if (preview)  preview.style.display  = '';
+
+  if (isImage) {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      if (prevImg) { prevImg.src = ev.target.result; prevImg.style.display = 'block'; }
+      if (prevVid) prevVid.style.display = 'none';
+    };
+    reader.onerror = () => { if (prevImg) { prevImg.alt = file.name; prevImg.style.display = 'none'; } showToast(`📷 ${file.name} selected`); };
+    reader.readAsDataURL(file);
+  } else {
+    const url = URL.createObjectURL(file);
+    if (prevVid) { prevVid.src = url; prevVid.style.display = 'block'; }
+    if (prevImg) prevImg.style.display = 'none';
+  }
+
+  if (updateBtn) updateBtn();
+}
+
+function cmpRemoveMedia() {
+  selectedFile = null;
+  const fileInput = document.getElementById('cmp-file-input');
+  if (fileInput) fileInput.value = '';
+  document.getElementById('cmp-preview-img') && (document.getElementById('cmp-preview-img').src = '');
+  const vid = document.getElementById('cmp-preview-vid');
+  if (vid) { vid.src = ''; vid.style.display = 'none'; }
+  document.getElementById('cmp-media-preview') && (document.getElementById('cmp-media-preview').style.display = 'none');
+  document.getElementById('cmp-img-dropzone') && (document.getElementById('cmp-img-dropzone').style.display = '');
+  // Update post button
+  const ta = document.getElementById('cmp-textarea');
+  const btn = document.getElementById('cmp-post-btn');
+  if (btn) btn.disabled = !(ta?.value?.trim()) && !repostTargetId;
+}
+
+function cmpSwitchTab(tab) {
+  document.querySelectorAll('.cmp-tab').forEach(t => t.classList.toggle('active', t.dataset.cmpTab === tab));
+  document.getElementById('cmp-panel-text').style.display  = tab === 'text'  ? '' : 'none';
+  document.getElementById('cmp-panel-image').style.display = tab === 'image' ? '' : 'none';
+}
+
+function _cmpRepostPreviewHTML() {
+  return `<div style="font-size:12px;color:var(--accent);font-weight:600;margin-bottom:4px">Reposting</div>
+    <button class="cmp-repost-remove" onclick="clearRepost()">×</button>`;
+}
+
+async function cmpSubmit() {
+  const ta      = document.getElementById('cmp-textarea');
+  const caption = document.getElementById('cmp-caption');
+  // Use whichever tab has content
+  const content = (ta?.value?.trim() || caption?.value?.trim()) || '';
+  const btn     = document.getElementById('cmp-post-btn');
+
+  if (!content && !selectedFile && !repostTargetId) return;
+  if (!currentUser) { showToast('Please sign in'); return; }
+  if (btn) btn.disabled = true;
+
+  const fileToUpload = selectedFile;
+  const postContent  = content;
+  const targetId     = repostTargetId;
+
+  closeComposer(true);
+
+  // ── Text-only / repost ──
+  if (!fileToUpload) {
+    try {
+      const { data: post, error } = await supabase.from('posts').insert({
+        user_id: currentUser.id,
+        content: postContent || null,
+        image: null,
+        reposted_post_id: targetId || null
+      }).select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
+        user:users(id,username,avatar,location),
+        reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))`).single();
+      if (error) throw error;
+      prependPostToFeed(post);
+      showToast('Posted! ✓');
+    } catch(e) { showToast('Post failed — try again'); }
+    return;
+  }
+
+  // ── Media post — FAB shows upload progress ──
+  setComposeRing('uploading', 5);
+  const doUpload = async () => {
+    try {
+      const imageUrl = await uploadToStorage(fileToUpload, pct => setComposeRing('uploading', pct));
+      setComposeRing('uploading', 92);
+      const isVideo = fileToUpload.type.startsWith('video/');
+      const { data: post, error } = await supabase.from('posts').insert({
+        user_id: currentUser.id,
+        content: postContent || null,
+        image:   isVideo ? null : imageUrl,
+        video:   isVideo ? imageUrl : null,
+        reposted_post_id: targetId || null
+      }).select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
+        user:users(id,username,avatar,location),
+        reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))`).single();
+      if (error) throw error;
+      setComposeRing('success');
+      prependPostToFeed(post);
+      uploadState.retryFn = null;
+    } catch(e) {
+      setComposeRing('failed');
+      uploadState.retryFn = doUpload;
+    }
+  };
+  doUpload();
 }
 
 function closeComposer(instant = false) {
   const overlay = document.getElementById('composer-overlay');
   const sheet   = document.getElementById('composer-sheet');
+  if (!overlay) return;
 
   if (overlay._vp && window.visualViewport) {
     window.visualViewport.removeEventListener('resize', overlay._vp);
     overlay._vp = null;
   }
 
-  sheet.style.maxHeight = '';
-
-  if (instant) {
-    sheet.style.transition = 'none';
-    overlay.style.transition = 'none';
-  }
-  sheet.classList.remove('open');
+  if (sheet) sheet.style.maxHeight = '';
 
   const cleanup = () => {
-    overlay.classList.add('hidden');
-    sheet.style.transition = '';
-    overlay.style.transition = '';
-    const ta = document.getElementById('composer-textarea');
-    if (ta) { ta.value = ''; ta.style.height = ''; }
-    document.getElementById('composer-media-preview').innerHTML = '';
-    document.getElementById('composer-repost-preview').innerHTML = '';
-    selectedFile = null;
-    repostTargetId = null;
-    repostTargetBtn = null;
-    updateComposerBtn();
+    overlay.remove();
+    selectedFile     = null;
+    repostTargetId   = null;
+    repostTargetBtn  = null;
   };
 
-  instant ? cleanup() : setTimeout(cleanup, 350);
+  if (instant) {
+    cleanup();
+  } else {
+    overlay.classList.remove('open');
+    if (sheet) sheet.classList.remove('open');
+    setTimeout(cleanup, 350);
+  }
 }
 
-function initComposerFile() {
-  const fileInput = document.getElementById('composer-file');
-  if (!fileInput) return;
-
-  fileInput.addEventListener('change', e => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) { showToast('Images only'); return; }
-
-    if (file.size > 2 * 1024 * 1024) {
-      showToast('Image must be under 2MB');
-      fileInput.value = '';
-      return;
-    }
-
-    selectedFile = file;
-    updateComposerBtn();
-
-    const preview = document.getElementById('composer-media-preview');
-
-    const reader = new FileReader();
-    reader.onload = ev => {
-      preview.innerHTML = `
-        <div class="media-preview-item">
-          <img src="${ev.target.result}" alt="" style="max-height:220px;width:100%;object-fit:cover;border-radius:12px;">
-          <button class="media-preview-remove" onclick="removeMedia()">×</button>
-        </div>`;
-    };
-    reader.onerror = () => {
-      preview.innerHTML = `<div style="padding:12px;color:var(--text3);font-size:13px">📷 Image ready to post</div>`;
-    };
-    reader.readAsDataURL(file);
-  });
-
-  const ta = document.getElementById('composer-textarea');
-  ta?.addEventListener('input', () => {
-    updateComposerBtn();
-    updateCharCount(ta.value.length);
-    // Auto-grow textarea up to max-height defined in CSS
-    ta.style.height = 'auto';
-    ta.style.height = ta.scrollHeight + 'px';
-  });
-}
-
-function removeMedia() {
-  selectedFile = null;
-  document.getElementById('composer-media-preview').innerHTML = '';
-  document.getElementById('composer-file').value = '';
-  updateComposerBtn();
-}
-
-function updateComposerBtn() {
-  const ta  = document.getElementById('composer-textarea');
-  const btn = document.getElementById('composer-post-btn');
-  const hasText   = ta?.value?.trim().length > 0;
-  const hasMedia  = !!selectedFile;
-  const hasRepost = !!repostTargetId;
-  if (btn) btn.disabled = !(hasText || hasMedia || hasRepost);
-}
-
-function updateCharCount(len) {
-  const el = document.getElementById('composer-char-count');
-  if (!el) return;
-  const rem = MAX_CHARS - len;
-  el.textContent = rem;
-  el.className = 'composer-char-count' + (rem < 20 ? ' critical' : rem < 60 ? ' low' : '');
-}
+// initComposerFile, removeMedia, updateComposerBtn, updateCharCount removed —
+// replaced by openComposer() / _initCmpEvents() / cmpSubmit()
 
 function insertEmoji() { showToast('Emoji picker coming soon!'); }
 
@@ -4381,11 +4633,13 @@ function prependPostToFeed(newPost) {
 async function uploadToStorage(file, onProgress) {
   onProgress(5);
 
-  // No compression — upload raw file directly
   const blob = file;
   onProgress(25);
 
-  const path = `${currentUser.id}_${Date.now()}_${Math.random().toString(36).slice(2,7)}.jpg`;
+  // Use correct extension and content type from the actual file
+  const ext  = file.name?.split('.').pop()?.toLowerCase() || 'jpg';
+  const mime = file.type || 'image/jpeg';
+  const path = `${currentUser.id}_${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
   const bucket = 'post-images';
 
   // Retry up to 4 times with exponential backoff — built for bad networks
@@ -4393,14 +4647,10 @@ async function uploadToStorage(file, onProgress) {
     try {
       onProgress(25 + attempt * 14); // 39 / 53 / 67 / 81
 
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 45000); // 45s per attempt
-
       const { error } = await supabase.storage
         .from(bucket)
-        .upload(path, blob, { upsert: true, contentType: 'image/jpeg' });
+        .upload(path, blob, { upsert: true, contentType: mime });
 
-      clearTimeout(timer);
       if (error) throw error;
 
       onProgress(90);
@@ -4417,84 +4667,7 @@ async function uploadToStorage(file, onProgress) {
 }
 
 // ── Submit post ──
-async function submitPost() {
-  const ta      = document.getElementById('composer-textarea');
-  const content = ta?.value?.trim() || '';
-  const btn     = document.getElementById('composer-post-btn');
-
-  if (!content && !selectedFile && !repostTargetId) return;
-  if (!currentUser) { showToast('Please sign in'); return; }
-
-  if (btn) btn.disabled = true;
-
-  // Snapshot state before composer clears it
-  const fileToUpload = selectedFile;
-  const postContent  = content;
-  const targetId     = repostTargetId;
-
-  // Dismiss composer immediately
-  closeComposer(true);
-
-  // ── Text-only post (instant) ──
-  if (!fileToUpload) {
-    try {
-      const { data: post, error } = await supabase.from('posts').insert({
-        user_id: currentUser.id,
-        content: postContent || null,
-        image: null,
-        reposted_post_id: targetId || null
-      }).select(`
-        id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
-        user:users(id,username,avatar,location),
-        reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))
-      `).single();
-      if (error) throw error;
-      prependPostToFeed(post);
-
-    } catch(e) {
-      console.error('Repost error:', e);
-      showToast('Repost failed — try again');
-    }
-    return;
-  }
-
-  // ── Image post — ring shows progress ──
-  setComposeRing('uploading', 5);
-
-  const doUpload = async () => {
-    try {
-      // 1. Upload image
-      const imageUrl = await uploadToStorage(fileToUpload, pct => setComposeRing('uploading', pct));
-
-      setComposeRing('uploading', 92);
-
-      // 2. Insert post record
-      const { data: post, error } = await supabase.from('posts').insert({
-        user_id: currentUser.id,
-        content: postContent || null,
-        image: imageUrl,
-        reposted_post_id: targetId || null
-      }).select(`
-        id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
-        user:users(id,username,avatar,location),
-        reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))
-      `).single();
-
-      if (error) throw error;
-
-      // 3. Done
-      setComposeRing('success');
-      prependPostToFeed(post);
-      uploadState.retryFn = null;
-
-    } catch(e) {
-      setComposeRing('failed');
-      uploadState.retryFn = doUpload;
-    }
-  };
-
-  doUpload(); // fire and forget — ring handles state
-}
+// submitPost() removed — replaced by cmpSubmit() in new composer
 
 // ══════════════════════════════════════════
 // POST DETAIL
@@ -4995,7 +5168,8 @@ let mentionActiveInput   = null; // which textarea is being typed in
 let mentionPostId        = null; // for comment priority
 
 function insertMentionInComposer() {
-  const input = document.getElementById('composer-textarea');
+  // Try new composer textarea first, fall back to old id if somehow present
+  const input = document.getElementById('cmp-textarea') || document.getElementById('composer-textarea');
   if (!input) return;
   const pos = input.selectionStart;
   input.value = input.value.slice(0, pos) + '@' + input.value.slice(pos);
@@ -5176,7 +5350,7 @@ function hideMentionTray() {
 
 // Wire mention to composer textarea
 function wireMentionToComposer() {
-  const textarea = document.getElementById('composer-textarea');
+  const textarea = document.getElementById('cmp-textarea') || document.getElementById('composer-textarea');
   if (textarea) wireMentionInput(textarea, null);
 }
 
