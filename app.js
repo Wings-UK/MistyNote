@@ -7307,27 +7307,84 @@ function buildOgCard(og, url, isSent, timeStr, isUrlOnly) {
 }
 
 function buildCashBubble(msg, isSent, timeStr) {
-  const currency = msg.cash_currency === 'NGN' ? '₦' : '$';
-  const amount   = Number(msg.cash_amount || 0).toLocaleString();
-  const div = document.createElement('div');
-  div.className = 'chat-cash-bubble';
-  div.onclick = () => showToast('Cash transfer details — coming soon');
-  div.innerHTML = `
-    <div class="chat-cash-shimmer"></div>
-    <div class="chat-cash-inner">
-      <div class="chat-cash-label">💸 ${isSent ? 'Cash Sent' : 'Cash Received'}</div>
-      <div class="chat-cash-amount-row">
-        <span class="chat-cash-currency">${currency}</span>
-        <span class="chat-cash-amount">${amount}</span>
-      </div>
-      ${msg.cash_note ? `<div class="chat-cash-note">${escHtml(msg.cash_note)}</div>` : ''}
-      <div class="chat-cash-status">
-        <div class="chat-cash-status-dot"></div>
-        ${msg.cash_status === 'held' ? 'Held in escrow' : msg.cash_status === 'released' ? 'Released ✓' : 'Pending'}
-      </div>
-      <div style="font-size:10px;color:rgba(255,184,0,0.5);margin-top:8px;text-align:right">${timeStr}</div>
-    </div>`;
+  var isMP     = msg.cash_currency === 'MP';
+  var amount   = isMP
+    ? 'MP\u00a0' + Number(msg.cash_amount || 0).toLocaleString('en-NG', {maximumFractionDigits:4})
+    : '\u20a6' + Number(msg.cash_amount || 0).toLocaleString();
+  var ref      = msg.cash_ref || '';
+  var shortRef = ref ? ref.slice(0, 12) : '';
+  var note     = msg.cash_note || msg.content || '';
+  var status   = msg.cash_status;
+  var statusLabel = status === 'delivered' ? '\u2713 Delivered'
+    : status === 'held'     ? 'Held in escrow'
+    : status === 'released' ? 'Released \u2713'
+    : status === 'refunded' ? 'Refunded'
+    : '\u2713 Delivered';
+
+  var div = document.createElement('div');
+  div.className = 'chat-mp-bubble' + (isSent ? ' sent' : ' recv');
+
+  div.innerHTML =
+    '<div class="chat-mp-glow"></div>' +
+    '<div class="chat-mp-inner">' +
+      '<div class="chat-mp-label">' +
+        (isMP
+          ? '<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><polyline points="20 12 20 22 4 22 4 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><rect x="2" y="7" width="20" height="5" rx="1" stroke="currentColor" stroke-width="2.2"/><line x1="12" y1="22" x2="12" y2="7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7z" stroke="currentColor" stroke-width="2"/><path d="M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z" stroke="currentColor" stroke-width="2"/></svg>'
+          : '\uD83D\uDCB8') +
+        (isSent ? ' MistyPoints Sent' : ' MistyPoints Received') +
+      '</div>' +
+      '<div class="chat-mp-amount">' + amount + '</div>' +
+      (note ? '<div class="chat-mp-note">' + escHtml(note) + '</div>' : '') +
+      '<div class="chat-mp-footer">' +
+        '<div class="chat-mp-status">' +
+          '<svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>' +
+          statusLabel +
+        '</div>' +
+        (shortRef ? '<div class="chat-mp-ref" onclick="chatCopyRef(this.dataset.ref)" data-ref="' + escHtml(ref) + '" title="Tap to copy reference">' + shortRef + '</div>' : '') +
+      '</div>' +
+      '<div class="chat-mp-time">' + timeStr + '</div>' +
+    '</div>';
+
+  // Long press → share receipt
+  var pressTimer;
+  div.addEventListener('touchstart', function() {
+    pressTimer = setTimeout(function() { chatShareReceipt(msg); }, 600);
+  });
+  div.addEventListener('touchend', function() { clearTimeout(pressTimer); });
+  div.addEventListener('touchmove', function() { clearTimeout(pressTimer); });
+
   return div;
+}
+
+function chatCopyRef(ref) {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(ref).then(function() {
+      showToast('Reference copied: ' + ref);
+    });
+  } else {
+    showToast('Ref: ' + ref);
+  }
+}
+
+function chatShareReceipt(msg) {
+  var text = [
+    'MistyNote Payment Receipt',
+    '\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500',
+    'Amount: MP ' + msg.cash_amount,
+    msg.cash_note ? 'Note: ' + msg.cash_note : '',
+    'Ref: ' + (msg.cash_ref || 'N/A'),
+    'Date: ' + new Date(msg.created_at).toLocaleString('en-NG'),
+    '\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500',
+    'MistyNote · mistynote.pages.dev',
+  ].filter(Boolean).join('\n');
+
+  if (navigator.share) {
+    navigator.share({ title: 'MistyNote Receipt', text: text }).catch(function() {});
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(function() {
+      showToast('Receipt copied to clipboard');
+    });
+  }
 }
 
 function buildProductBubble(msg, isSent, timeStr) {
@@ -7894,8 +7951,33 @@ function chatInputKeydown(e) {
 // ── Quick action stubs (to be built out) ──
 
 
-function chatSendCash() {
-  showToast('Cash transfer — coming in next update 💸');
+function chatSendCash() { chatSendMP(); } // legacy alias
+
+function chatSendMP() {
+  if (!activeChatUserId || !activeChatUser) {
+    showToast('Open a conversation first');
+    return;
+  }
+  // Pre-fill gift sheet with this DM's recipient, then open it
+  walletState.selectedGiftRecipient = {
+    id:        activeChatUserId,
+    name:      activeChatUser.username || activeChatUser.name || 'User',
+    avatarUrl: activeChatUser.avatar || '',
+    fromDM:    true,                   // flag so gift confirms back into DM
+    convId:    activeChatId,
+  };
+  openWalletSheet('gift');
+  setTimeout(function() {
+    var selBlock = document.getElementById('gift-selected-user');
+    var selName  = document.getElementById('gift-sel-name');
+    var selAv    = document.getElementById('gift-sel-avatar');
+    if (selBlock) selBlock.classList.remove('hidden');
+    if (selName)  selName.textContent  = walletState.selectedGiftRecipient.name;
+    if (selAv)    selAv.src            = walletState.selectedGiftRecipient.avatarUrl ||
+      'https://api.dicebear.com/7.x/adventurer/svg?seed=' + activeChatUserId;
+    var noteEl = document.getElementById('gift-note');
+    if (noteEl)   noteEl.placeholder   = 'Add a message...';
+  }, 60);
 }
 function chatTagProduct() {
   showToast('Tag a product — coming soon 🛒');
@@ -9439,10 +9521,12 @@ function ngnToPoints(ngn) { return ngn / POINTS_RATE; }
 // ── OPEN WALLET PAGE ──────────────────────────────────────────────────────────
 function openWallet() {
   slideTo('wallet');
-  syncPointsRate();          // silently refresh KWD→NGN rate in the background
+  syncPointsRate();
   buildWalletPeopleRow();
   syncWalletBalance();
   loadBankAccount();
+  refreshTransactionList();
+  subscribeToWalletUpdates();
   const fab = document.querySelector('.wlt-qr-fab');
   if (fab) fab.classList.remove('hidden');
   const nav = document.getElementById('bottom-nav');
@@ -9591,7 +9675,8 @@ const SHEET_MAP = {
   'add':      'sheet-add',
   'bills':    'sheet-bills',
   'qr':       'sheet-qr',
-  'earnings': 'sheet-earnings', // auto-payout info — no manual withdraw
+  'earnings': 'sheet-earnings',
+  'pin':      'sheet-wallet-pin',
 };
 
 function openWalletSheet(type) {
@@ -9655,10 +9740,14 @@ async function confirmGiftPoints() {
   var noteEl    = document.getElementById('gift-note');
   var note      = noteEl ? noteEl.value.trim() : '';
   if (!recipient || amount <= 0) return;
-  if (amount > walletState.points) { showToast('Not enough Misty Points'); return; }
+  if (amount > walletState.points) { showToast('Not enough MistyPoints'); return; }
+
+  // ── Wallet PIN check ──────────────────────────────────────
+  var pinOk = await walletPinCheck();
+  if (!pinOk) return;
 
   closeWalletSheet('gift');
-  showToast('Gifting ' + fmtPts(amount) + ' to ' + recipient.name + '...');
+  showToast('Gifting MP ' + amount + ' to ' + recipient.name + '...');
 
   try {
     var res = await supabase.rpc('p2p_transfer_points', {
@@ -9668,15 +9757,87 @@ async function confirmGiftPoints() {
       note:         note,
     });
     if (res.error) throw res.error;
+
+    // Generate short reference
+    var ref = 'MN-' + Date.now().toString(36).toUpperCase();
+
     walletState.points -= amount;
     renderWalletBalance();
-    showToast('\u2713 Gifted ' + fmtPts(amount) + ' to ' + recipient.name);
+    showToast('\u2713 Gifted MP ' + amount + ' to ' + recipient.name);
     syncWalletBalance();
     refreshTransactionList();
+
+    // ── Post money bubble into DM thread ─────────────────────
+    // Whether sent from wallet or from DM, always post into their DM
+    postGiftBubbleToDM(recipient, amount, note, ref);
+
+    // ── Notify recipient via Supabase notification ────────────
+    sendGiftNotification(recipient.id, amount, note, ref);
+
   } catch (e) {
     showToast('Gift failed \u2014 please try again');
     console.error('Points gift error:', e);
   }
+}
+
+// Post MP gift bubble into the DM between sender and recipient
+async function postGiftBubbleToDM(recipient, amount, note, ref) {
+  try {
+    // Get or create conversation with this user
+    var convId = recipient.fromDM ? recipient.convId : null;
+    if (!convId) {
+      convId = await getOrCreateConversation(recipient.id);
+    }
+    if (!convId) return;
+
+    // Insert message of type 'cash' into messages table
+    var payload = {
+      conversation_id: convId,
+      sender_id:       currentUser.id,
+      type:            'cash',
+      content:         note || '',
+      cash_amount:     amount,
+      cash_currency:   'MP',
+      cash_note:       note,
+      cash_status:     'delivered',
+      cash_ref:        ref,
+    };
+    await supabase.from('messages').insert(payload);
+
+    // If we're currently in that chat, render bubble immediately
+    if (activeChatId === convId) {
+      var msgsEl = document.getElementById('chat-messages');
+      if (msgsEl) {
+        var tmpMsg = Object.assign({}, payload, {
+          id:         'tmp-gift-' + Date.now(),
+          created_at: new Date().toISOString(),
+          sender:     currentProfile,
+        });
+        var lastRow      = msgsEl.querySelector('.chat-msg-row:last-child');
+        var lastSenderId = lastRow
+          ? (lastRow.classList.contains('sent') ? currentUser.id : activeChatUserId)
+          : null;
+        var el = buildMessageEl(tmpMsg, lastSenderId);
+        if (el) { msgsEl.appendChild(el); msgsEl.scrollTop = msgsEl.scrollHeight; }
+      }
+      updateInboxRow(convId, 'MP ' + amount + ' gift', new Date().toISOString());
+    }
+  } catch (e) {
+    console.warn('postGiftBubbleToDM error:', e);
+  }
+}
+
+// Fire in-app notification for the recipient
+async function sendGiftNotification(recipientId, amount, note, ref) {
+  try {
+    await supabase.from('notifications').insert({
+      user_id:   recipientId,
+      type:      'mp_gift',
+      from_user: currentUser.id,
+      content:   JSON.stringify({ amount: amount, note: note, ref: ref }),
+      read:      false,
+    });
+  } catch (e) { /* non-critical */ }
 }
 // Legacy alias
 async function confirmSendMoney() { return confirmGiftPoints(); }
@@ -9932,7 +10093,79 @@ function filterWalletTxns(tab, filter) {
 }
 
 async function refreshTransactionList() {
-  // TODO: query wallet_transactions from Supabase and re-render wlt-txn-list
+  if (!currentUser) return;
+  var listEl = document.getElementById('wlt-txn-list');
+  if (!listEl) return;
+  try {
+    var res = await supabase
+      .from('wallet_transactions')
+      .select('id, from_user_id, to_user_id, amount, type, note, status, created_at, reference')
+      .or('from_user_id.eq.' + currentUser.id + ',to_user_id.eq.' + currentUser.id)
+      .order('created_at', { ascending: false })
+      .limit(30);
+    if (res.error || !res.data || !res.data.length) return;
+
+    // Collect unique user IDs to fetch names/avatars
+    var uids = new Set();
+    res.data.forEach(function(t) {
+      if (t.from_user_id && t.from_user_id !== currentUser.id) uids.add(t.from_user_id);
+      if (t.to_user_id   && t.to_user_id   !== currentUser.id) uids.add(t.to_user_id);
+    });
+    var userMap = {};
+    if (uids.size > 0) {
+      var uRes = await supabase.from('users').select('id,username,avatar').in('id', Array.from(uids));
+      if (uRes.data) uRes.data.forEach(function(u) { userMap[u.id] = u; });
+    }
+
+    var typeMap = { gift:'gift', buy:'receive', payout:'payout', bill_payment:'bills', purchase:'purchase', escrow_hold:'purchase', escrow_release:'receive', escrow_refund:'receive' };
+    var html = res.data.map(function(t) {
+      var isSent    = t.from_user_id === currentUser.id;
+      var otherId   = isSent ? t.to_user_id : t.from_user_id;
+      var other     = userMap[otherId] || {};
+      var avatar    = other.avatar || 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + (otherId || 'x');
+      var name      = other.username || (t.type === 'buy' ? 'MistyNote' : t.type === 'payout' ? 'Bank Payout' : 'User');
+      var sign      = isSent ? '-' : '+';
+      var amtCls    = isSent ? 'wlt-amount-neg' : 'ca-amount-pos';
+      var badgeCls  = isSent ? 'wlt-badge-out' : 'wlt-badge-in';
+      var badgeSvg  = isSent
+        ? '<svg width="8" height="8" viewBox="0 0 24 24" fill="none"><polyline points="20 12 20 22 4 22 4 12" stroke="white" stroke-width="2.5"/><rect x="2" y="7" width="20" height="5" rx="1" stroke="white" stroke-width="2"/></svg>'
+        : '<svg width="8" height="8" viewBox="0 0 24 24" fill="none"><path d="M12 19V5M5 12l7 7 7-7" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>';
+      var typeLabel = t.type === 'gift' ? (isSent ? 'Gifted' : 'Received')
+        : t.type === 'buy'      ? 'Points Bought'
+        : t.type === 'payout'   ? 'Bank Payout'
+        : t.type === 'bill_payment' ? 'Bill Payment'
+        : t.type === 'purchase' ? 'Purchase'
+        : t.type === 'escrow_hold'    ? 'In Escrow'
+        : t.type === 'escrow_release' ? 'Escrow Released'
+        : t.type === 'escrow_refund'  ? 'Refunded'
+        : t.type;
+      var timeStr   = msgTimeSince(t.created_at);
+      var note      = t.note ? escHtml(t.note.slice(0, 60)) : '';
+      var dataType  = typeMap[t.type] || 'all';
+
+      return '<div class="wlt-txn-item ca-txn-item" data-type="' + dataType + '">' +
+        '<div class="wlt-txn-left">' +
+          '<div class="wlt-txn-avatar-wrap">' +
+            '<img class="wlt-txn-avatar ca-txn-avatar" src="' + avatar + '" alt="">' +
+            '<div class="wlt-txn-badge ' + badgeCls + ' ca-txn-badge">' + badgeSvg + '</div>' +
+          '</div>' +
+          '<div class="wlt-txn-details">' +
+            '<div class="wlt-txn-name ca-txn-name">' + escHtml(name) + '</div>' +
+            (note ? '<div class="wlt-txn-note ca-txn-note">' + note + '</div>' : '') +
+            '<div class="wlt-txn-time ca-txn-time">' + timeStr + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="wlt-txn-right">' +
+          '<div class="wlt-txn-amount ' + amtCls + ' ca-txn-amount">' + sign + ' MP ' + Number(t.amount).toLocaleString('en-NG', {maximumFractionDigits:4}) + '</div>' +
+          '<div class="wlt-txn-status completed ca-txn-status">' + typeLabel + '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    listEl.innerHTML = html || '<div class="wlt-txn-empty">No transactions yet</div>';
+  } catch (e) {
+    console.warn('refreshTransactionList error:', e);
+  }
 }
 
 // ── USER SEARCH (gift) ────────────────────────────────────────────────────────
@@ -10188,6 +10421,7 @@ async function saveBankAccount() {
 
 async function loadBankAccount() {
   if (!currentUser) return;
+  loadWalletPinStatus(); // load PIN status alongside bank account
   try {
     var res = await supabase
       .from('user_bank_accounts')
@@ -10196,6 +10430,232 @@ async function loadBankAccount() {
       .maybeSingle();
     if (res.data) walletState.bankAccount = res.data;
   } catch (e) { /* silent */ }
+}
+
+
+// ── WALLET PIN ─────────────────────────────────────────────────────────────────
+// PIN protects all outgoing wallet actions (gift, bill, buy).
+// Stored hashed via Supabase. Never plain text.
+// walletPinCheck() returns a Promise<boolean> — resolves true if PIN ok or not set.
+
+var walletPinState = {
+  isSet:       false,  // loaded from DB on wallet open
+  attempts:    0,
+  lockedUntil: null,
+  resolver:    null,   // resolve function for the active PIN promise
+};
+
+async function loadWalletPinStatus() {
+  if (!currentUser) return;
+  try {
+    var res = await supabase
+      .from('wallet_pins')
+      .select('id')
+      .eq('user_id', currentUser.id)
+      .maybeSingle();
+    walletPinState.isSet = !!(res.data);
+  } catch (e) { /* table may not exist yet — treat as no PIN */ }
+}
+
+// Returns Promise<boolean>. Resolves immediately if no PIN set.
+function walletPinCheck() {
+  if (!walletPinState.isSet) return Promise.resolve(true);
+  if (walletPinState.lockedUntil && Date.now() < walletPinState.lockedUntil) {
+    var secs = Math.ceil((walletPinState.lockedUntil - Date.now()) / 1000);
+    showToast('Wallet locked. Try again in ' + secs + 's');
+    return Promise.resolve(false);
+  }
+  return new Promise(function(resolve) {
+    walletPinState.resolver = resolve;
+    openPinSheet('verify');
+  });
+}
+
+function openPinSheet(mode) {
+  var sheet = document.getElementById('sheet-wallet-pin');
+  if (!sheet) return;
+  sheet.dataset.mode = mode;
+  var title = document.getElementById('pin-sheet-title');
+  var sub   = document.getElementById('pin-sheet-sub');
+  if (mode === 'verify') {
+    if (title) title.textContent = 'Enter Wallet PIN';
+    if (sub)   sub.textContent   = 'Required to complete this action';
+  } else if (mode === 'set') {
+    if (title) title.textContent = 'Set Wallet PIN';
+    if (sub)   sub.textContent   = 'Choose a 4-digit PIN to protect outgoing payments';
+  } else if (mode === 'confirm') {
+    if (title) title.textContent = 'Confirm PIN';
+    if (sub)   sub.textContent   = 'Enter the same PIN again';
+  }
+  clearPinDots();
+  sheet.classList.remove('hidden');
+  walletState.activeSheet = 'pin';
+}
+
+function closePinSheet(cancel) {
+  var sheet = document.getElementById('sheet-wallet-pin');
+  if (sheet) sheet.classList.add('hidden');
+  walletState.activeSheet = null;
+  if (cancel && walletPinState.resolver) {
+    walletPinState.resolver(false);
+    walletPinState.resolver = null;
+  }
+  walletPinState._pinBuffer   = '';
+  walletPinState._confirmBuf  = '';
+  clearPinDots();
+}
+
+var _pinBuffer = '';
+var _confirmBuffer = '';
+
+function pinPad(digit) {
+  var sheet = document.getElementById('sheet-wallet-pin');
+  if (!sheet) return;
+  var mode = sheet.dataset.mode;
+
+  if (mode === 'set') {
+    if (_pinBuffer.length < 4) {
+      _pinBuffer += digit;
+      updatePinDots(_pinBuffer.length);
+      if (_pinBuffer.length === 4) {
+        setTimeout(function() { openPinSheet('confirm'); }, 200);
+      }
+    }
+  } else if (mode === 'confirm') {
+    if (_confirmBuffer.length < 4) {
+      _confirmBuffer += digit;
+      updatePinDots(_confirmBuffer.length);
+      if (_confirmBuffer.length === 4) {
+        if (_confirmBuffer === _pinBuffer) {
+          setTimeout(function() { saveWalletPin(_pinBuffer); }, 200);
+        } else {
+          showToast('PINs do not match — try again');
+          _pinBuffer = ''; _confirmBuffer = '';
+          clearPinDots();
+          openPinSheet('set');
+        }
+      }
+    }
+  } else {
+    // verify mode
+    if (_pinBuffer.length < 4) {
+      _pinBuffer += digit;
+      updatePinDots(_pinBuffer.length);
+      if (_pinBuffer.length === 4) {
+        setTimeout(function() { verifyWalletPin(_pinBuffer); }, 200);
+      }
+    }
+  }
+}
+
+function pinBackspace() {
+  var sheet = document.getElementById('sheet-wallet-pin');
+  if (!sheet) return;
+  var mode = sheet.dataset.mode;
+  if (mode === 'confirm') {
+    if (_confirmBuffer.length > 0) {
+      _confirmBuffer = _confirmBuffer.slice(0, -1);
+      updatePinDots(_confirmBuffer.length);
+    }
+  } else {
+    if (_pinBuffer.length > 0) {
+      _pinBuffer = _pinBuffer.slice(0, -1);
+      updatePinDots(_pinBuffer.length);
+    }
+  }
+}
+
+function updatePinDots(filled) {
+  var dots = document.querySelectorAll('.pin-dot');
+  dots.forEach(function(dot, i) {
+    dot.classList.toggle('filled', i < filled);
+  });
+}
+
+function clearPinDots() {
+  _pinBuffer = ''; _confirmBuffer = '';
+  document.querySelectorAll('.pin-dot').forEach(function(d) { d.classList.remove('filled'); });
+}
+
+async function verifyWalletPin(pin) {
+  try {
+    var res = await supabase.rpc('verify_wallet_pin', {
+      p_user_id: currentUser.id,
+      p_pin:     pin,
+    });
+    if (res.data === true) {
+      walletPinState.attempts = 0;
+      closePinSheet(false);
+      if (walletPinState.resolver) {
+        walletPinState.resolver(true);
+        walletPinState.resolver = null;
+      }
+    } else {
+      walletPinState.attempts++;
+      clearPinDots();
+      if (walletPinState.attempts >= 5) {
+        walletPinState.lockedUntil = Date.now() + 24 * 60 * 60 * 1000;
+        showToast('Too many wrong attempts. Wallet locked for 24h');
+        closePinSheet(true);
+      } else if (walletPinState.attempts >= 2) {
+        var left = 5 - walletPinState.attempts;
+        showToast('Wrong PIN · ' + left + ' attempt' + (left === 1 ? '' : 's') + ' left');
+      } else {
+        showToast('Incorrect PIN');
+      }
+    }
+  } catch (e) {
+    showToast('PIN check failed — try again');
+    clearPinDots();
+  }
+}
+
+async function saveWalletPin(pin) {
+  try {
+    await supabase.rpc('set_wallet_pin', {
+      p_user_id: currentUser.id,
+      p_pin:     pin,
+    });
+    walletPinState.isSet = true;
+    showToast('Wallet PIN set \u2713');
+    closePinSheet(false);
+  } catch (e) {
+    showToast('Could not save PIN — try again');
+    clearPinDots();
+    openPinSheet('set');
+  }
+}
+
+function openSetPin() {
+  _pinBuffer = ''; _confirmBuffer = '';
+  openPinSheet('set');
+}
+
+function openChangePin() {
+  openSetPin();
+}
+
+// ── REALTIME WALLET UPDATES ───────────────────────────────────────────────────
+var walletRealtimeSub = null;
+function subscribeToWalletUpdates() {
+  if (!currentUser) return;
+  if (walletRealtimeSub) supabase.removeChannel(walletRealtimeSub);
+  walletRealtimeSub = supabase
+    .channel('wallet-incoming-' + currentUser.id)
+    .on('postgres_changes', {
+      event:  'INSERT',
+      schema: 'public',
+      table:  'wallet_transactions',
+      filter: 'to_user_id=eq.' + currentUser.id,
+    }, function(payload) {
+      var t = payload.new;
+      if (t.type === 'gift') {
+        showToast('MP ' + t.amount + ' received \u2713');
+      }
+      syncWalletBalance();
+      refreshTransactionList();
+    })
+    .subscribe();
 }
 
 function loadScript(src, cb) {
