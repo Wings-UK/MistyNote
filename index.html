@@ -1048,7 +1048,7 @@
 
       <!-- Quick actions tray -->
       <div class="chat-extras-tray" id="chat-extras-tray">
-        <button class="chat-extra-chip highlight" onclick="chatSendCash()">💸 Send Cash</button>
+        <button class="chat-extra-chip highlight" onclick="chatSendMP()">🎁 Send MP</button>
         <button class="chat-extra-chip" onclick="chatTagProduct()">🛒 Product</button>
         <button class="chat-extra-chip" onclick="chatMakeOffer()">💬 Offer</button>
         <button class="chat-extra-chip" onclick="chatSendInvoice()">🧾 Invoice</button>
@@ -1812,6 +1812,10 @@
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="2"/></svg>
         Payouts secured by Squad · Automatic every Friday 3 PM
       </div>
+      <button class="earn-add-bank-btn" style="margin-top:10px;border-style:solid;color:var(--text2);" onclick="openSetPin()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M7 11V7a5 5 0 0110 0v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        Set / Change Wallet PIN
+      </button>
     </div>
   </div>
 
@@ -1824,6 +1828,57 @@
       <path d="M14 14h.01M18 14h3M14 18v3M18 18h3v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
     </svg>
   </button>
+
+  <!-- SHEET: WALLET PIN -->
+  <div class="wlt-sheet hidden" id="sheet-wallet-pin" role="dialog" aria-label="Wallet PIN" data-mode="verify">
+    <div class="wlt-sheet-backdrop" onclick="closePinSheet(true)"></div>
+    <div class="wlt-sheet-body pin-sheet-body">
+      <div class="wlt-sheet-handle"></div>
+
+      <!-- Lock icon -->
+      <div class="pin-lock-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+          <rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" stroke-width="2"/>
+          <path d="M7 11V7a5 5 0 0110 0v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </div>
+
+      <h2 class="pin-sheet-title" id="pin-sheet-title">Enter Wallet PIN</h2>
+      <p class="pin-sheet-sub" id="pin-sheet-sub">Required to complete this action</p>
+
+      <!-- 4 dot indicators -->
+      <div class="pin-dots">
+        <div class="pin-dot"></div>
+        <div class="pin-dot"></div>
+        <div class="pin-dot"></div>
+        <div class="pin-dot"></div>
+      </div>
+
+      <!-- Number pad -->
+      <div class="pin-pad">
+        <button class="pin-key" onclick="pinPad('1')">1</button>
+        <button class="pin-key" onclick="pinPad('2')">2<span>ABC</span></button>
+        <button class="pin-key" onclick="pinPad('3')">3<span>DEF</span></button>
+        <button class="pin-key" onclick="pinPad('4')">4<span>GHI</span></button>
+        <button class="pin-key" onclick="pinPad('5')">5<span>JKL</span></button>
+        <button class="pin-key" onclick="pinPad('6')">6<span>MNO</span></button>
+        <button class="pin-key" onclick="pinPad('7')">7<span>PQRS</span></button>
+        <button class="pin-key" onclick="pinPad('8')">8<span>TUV</span></button>
+        <button class="pin-key" onclick="pinPad('9')">9<span>WXYZ</span></button>
+        <button class="pin-key pin-key-empty"></button>
+        <button class="pin-key" onclick="pinPad('0')">0</button>
+        <button class="pin-key pin-key-back" onclick="pinBackspace()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M21 4H8l-7 8 7 8h13a2 2 0 002-2V6a2 2 0 00-2-2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="18" y1="9" x2="12" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <line x1="12" y1="9" x2="18" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+
+      <button class="pin-cancel-btn" onclick="closePinSheet(true)">Cancel</button>
+    </div>
+  </div>
 
 </section>
 
