@@ -4002,13 +4002,19 @@ async function handleRepost(postId, btn, postUserId) {
       setTimeout(() => {
         const preview = document.getElementById('cmp-repost-preview');
         if (preview) {
-          const safeUser = (orig.user?.username || '').replace(/</g,'&lt;');
-          const safeText = orig.content ? orig.content.slice(0,120).replace(/</g,'&lt;') + (orig.content.length > 120 ? '…' : '') : '';
-          preview.innerHTML = _cmpRepostPreviewHTML(safeUser, safeText);
+          preview.style.display = '';
+          preview.innerHTML = `
+            <div style="font-size:12px;color:var(--accent);font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:4px">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
+              Reposting @${escHtml(orig.user?.username || '')}
+            </div>
+            ${orig.content ? `<p style="font-size:13px;color:var(--text2);margin:0">${escHtml(orig.content.slice(0,120))}${orig.content.length>120?'…':''}</p>` : ''}
+            <button class="cmp-repost-remove" onclick="clearRepost()">×</button>`;
+          // Enable post button
           const postBtn = document.getElementById('cmp-post-btn');
           if (postBtn) postBtn.disabled = false;
         }
-      }, 80);
+      }, 80); // after composer animates in
     }
   }
 }
@@ -4081,266 +4087,220 @@ async function undoRepost(postId, btn) {
 function openComposer() {
   if (!currentUser) { showToast('Sign in to post'); return; }
 
+  // Inject composer styles once
   if (!document.getElementById('composer-v2-style')) {
     const s = document.createElement('style');
     s.id = 'composer-v2-style';
     s.textContent = `
-      #composer-overlay {
-        position:fixed;inset:0;z-index:1000;
-        display:flex;flex-direction:column;
-        background:var(--bg,#fff);
-        opacity:0;transform:translateY(24px);
-        transition:opacity .25s cubic-bezier(.4,0,.2,1),transform .25s cubic-bezier(.4,0,.2,1);
-        pointer-events:none;
-      }
-      #composer-overlay.open { opacity:1;transform:translateY(0);pointer-events:all; }
-      .cmp-bar {
-        display:flex;align-items:center;justify-content:space-between;
-        padding:14px 16px 10px;flex-shrink:0;
-        border-bottom:1px solid var(--border,#f0f0f0);
-      }
-      .cmp-cancel {
-        font-size:15px;font-weight:500;color:var(--text2,#555);
-        background:none;border:none;cursor:pointer;padding:6px 2px;
-      }
-      .cmp-cancel:active{opacity:.5}
-      .cmp-post-btn {
-        height:36px;padding:0 22px;border-radius:20px;
-        background:var(--accent,#6C47FF);color:#fff;
-        font-weight:700;font-size:14px;letter-spacing:-.01em;
-        border:none;cursor:pointer;
-        transition:opacity .15s,transform .1s,background .2s;
-      }
-      .cmp-post-btn:disabled{background:var(--border,#e5e7eb);color:var(--text3,#bbb);cursor:default}
-      .cmp-post-btn:not(:disabled):active{transform:scale(.94)}
-      .cmp-body {
-        flex:1;overflow-y:auto;padding:20px 20px 12px;
-        display:flex;flex-direction:column;
-        -webkit-overflow-scrolling:touch;
-      }
-      .cmp-author {
-        display:flex;align-items:center;gap:11px;
-        margin-bottom:18px;flex-shrink:0;
-      }
-      .cmp-avatar {
-        width:44px;height:44px;border-radius:50%;
-        object-fit:cover;flex-shrink:0;
-        box-shadow:0 0 0 2px var(--border,#ebebeb);
-      }
-      .cmp-author-name{font-size:15px;font-weight:700;color:var(--text1,#111);letter-spacing:-.02em;}
-      .cmp-author-sub{font-size:12px;color:var(--text3,#bbb);margin-top:1px;}
-      .cmp-quote-mark {
-        font-size:80px;line-height:.9;
-        color:var(--accent,#6C47FF);opacity:.07;
-        font-family:Georgia,'Times New Roman',serif;font-weight:700;
-        pointer-events:none;user-select:none;
-        margin:-8px 0 -28px -4px;flex-shrink:0;display:block;
-      }
-      .cmp-textarea {
-        border:none;outline:none;resize:none;
-        font-size:20px;line-height:1.5;
-        color:var(--text1,#111);background:transparent;
-        font-family:inherit;letter-spacing:-.025em;
-        min-height:140px;width:100%;padding:0;flex-shrink:0;
-      }
-      .cmp-textarea::placeholder{color:var(--text3,#c0c0c0);font-weight:400;}
-      .cmp-media-wrap {
-        position:relative;border-radius:18px;overflow:hidden;
-        background:var(--bg2,#f3f4f6);margin-top:14px;flex-shrink:0;
-        box-shadow:0 2px 20px rgba(0,0,0,.09);
-      }
-      .cmp-media-wrap img,.cmp-media-wrap video {
-        width:100%;max-height:320px;object-fit:cover;display:block;
-      }
-      .cmp-media-remove {
-        position:absolute;top:10px;right:10px;
-        width:32px;height:32px;border-radius:50%;
-        background:rgba(0,0,0,.5);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
-        border:none;color:#fff;font-size:18px;line-height:1;
-        display:flex;align-items:center;justify-content:center;cursor:pointer;
-      }
-      .cmp-caption {
-        margin-top:10px;border:none;outline:none;resize:none;
-        font-size:15px;line-height:1.5;
-        color:var(--text2,#555);background:transparent;
-        font-family:inherit;width:100%;padding:0;min-height:36px;flex-shrink:0;
-      }
-      .cmp-caption::placeholder{color:var(--text3,#c0c0c0);}
-      .cmp-repost-card {
-        border:1.5px solid var(--border,#ebebeb);border-radius:14px;
-        padding:12px 14px 12px;margin-top:14px;position:relative;
-        background:var(--bg2,#fafafa);flex-shrink:0;
-      }
-      .cmp-repost-label {
-        font-size:11px;font-weight:700;color:var(--accent,#6C47FF);
-        text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px;
-        display:flex;align-items:center;gap:5px;
-      }
-      .cmp-repost-text{font-size:13px;color:var(--text2,#555);margin:0;line-height:1.45;}
-      .cmp-repost-remove {
-        position:absolute;top:8px;right:10px;background:none;border:none;
-        font-size:20px;line-height:1;cursor:pointer;color:var(--text3,#bbb);
-      }
-      .cmp-divider{height:1px;background:var(--border,#f0f0f0);flex-shrink:0;}
-      .cmp-toolbar {
-        display:flex;align-items:center;gap:2px;
-        padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));
-        flex-shrink:0;
-      }
-      .cmp-tool {
-        width:42px;height:42px;border-radius:12px;
-        background:none;border:none;
-        display:flex;align-items:center;justify-content:center;
-        cursor:pointer;color:var(--accent,#6C47FF);flex-shrink:0;
-      }
-      .cmp-tool:active{background:rgba(108,71,255,.08);}
-      .cmp-char-wrap{margin-left:auto;display:flex;align-items:center;gap:10px;}
-      .cmp-char{font-size:12px;font-weight:600;color:var(--text3,#ccc);min-width:28px;text-align:right;}
-      .cmp-char.low{color:#f59e0b;}
-      .cmp-char.critical{color:#ef4444;}
-      .cmp-ring{width:24px;height:24px;flex-shrink:0;}
-      .cmp-ring-bg{fill:none;stroke:var(--border,#ebebeb);stroke-width:2.5;}
-      .cmp-ring-fill{
-        fill:none;stroke:var(--accent,#6C47FF);stroke-width:2.5;stroke-linecap:round;
-        stroke-dasharray:57;stroke-dashoffset:57;
-        transform:rotate(-90deg);transform-origin:50% 50%;
-        transition:stroke-dashoffset .18s,stroke .18s;
-      }
-      #cmp-file-input{display:none;}
+      #composer-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;display:flex;align-items:flex-end;opacity:0;transition:opacity .25s;pointer-events:none}
+      #composer-overlay.open{opacity:1;pointer-events:all}
+      #composer-sheet{background:var(--bg,#fff);border-radius:24px 24px 0 0;width:100%;max-height:92dvh;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .3s cubic-bezier(.32,.72,0,1)}
+      #composer-sheet.open{transform:translateY(0)}
+      .cmp-handle{width:36px;height:4px;background:var(--border,#e5e7eb);border-radius:2px;margin:10px auto 0;flex-shrink:0}
+      .cmp-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px 8px;flex-shrink:0}
+      .cmp-header-title{font-weight:700;font-size:16px;color:var(--text1,#111)}
+      .cmp-close{width:32px;height:32px;border-radius:50%;background:var(--bg2,#f3f4f6);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+      .cmp-tabs{display:flex;gap:0;padding:0 16px;border-bottom:1px solid var(--border,#e5e7eb);flex-shrink:0}
+      .cmp-tab{flex:1;padding:10px 0;font-size:14px;font-weight:600;color:var(--text3,#9ca3af);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:color .2s,border-color .2s}
+      .cmp-tab.active{color:var(--accent,#6C47FF);border-bottom-color:var(--accent,#6C47FF)}
+      .cmp-body{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:10px;min-height:0}
+      .cmp-author-row{display:flex;gap:10px;align-items:flex-start}
+      .cmp-avatar{width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0}
+      .cmp-textarea{flex:1;border:none;outline:none;resize:none;font-size:16px;line-height:1.5;color:var(--text1,#111);background:transparent;min-height:80px;max-height:180px;font-family:inherit}
+      .cmp-textarea::placeholder{color:var(--text3,#9ca3af)}
+      .cmp-img-zone{border:2px dashed var(--border,#e5e7eb);border-radius:16px;padding:32px 16px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:var(--bg2,#f9fafb)}
+      .cmp-img-zone:hover,.cmp-img-zone.drag{border-color:var(--accent,#6C47FF);background:rgba(108,71,255,.04)}
+      .cmp-img-zone-icon{font-size:36px;margin-bottom:8px}
+      .cmp-img-zone-label{font-size:15px;font-weight:600;color:var(--text1,#111);margin-bottom:4px}
+      .cmp-img-zone-sub{font-size:13px;color:var(--text3,#9ca3af)}
+      .cmp-preview-wrap{position:relative;border-radius:16px;overflow:hidden;background:#000}
+      .cmp-preview-wrap img,.cmp-preview-wrap video{width:100%;max-height:300px;object-fit:cover;display:block;border-radius:16px}
+      .cmp-preview-remove{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.6);border:none;color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;line-height:1}
+      .cmp-caption-row{display:flex;gap:10px;align-items:flex-start}
+      .cmp-caption{flex:1;border:none;outline:none;resize:none;font-size:15px;line-height:1.5;color:var(--text1,#111);background:transparent;min-height:50px;font-family:inherit}
+      .cmp-caption::placeholder{color:var(--text3,#9ca3af)}
+      .cmp-footer{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-top:1px solid var(--border,#e5e7eb);flex-shrink:0;gap:8px}
+      .cmp-tools{display:flex;gap:4px;align-items:center}
+      .cmp-tool{width:36px;height:36px;border-radius:10px;background:none;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--accent,#6C47FF);transition:background .15s}
+      .cmp-tool:hover{background:rgba(108,71,255,.08)}
+      .cmp-char{font-size:12px;color:var(--text3,#9ca3af);margin-left:auto}
+      .cmp-char.low{color:#f59e0b}
+      .cmp-char.critical{color:#ef4444;font-weight:700}
+      .cmp-post-btn{padding:9px 22px;border-radius:20px;background:var(--accent,#6C47FF);color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer;transition:opacity .2s,transform .1s;flex-shrink:0}
+      .cmp-post-btn:disabled{opacity:.4;cursor:default}
+      .cmp-post-btn:not(:disabled):active{transform:scale(.96)}
+      .cmp-repost-preview{border:1px solid var(--border,#e5e7eb);border-radius:12px;padding:10px 12px;font-size:13px;color:var(--text2,#374151);background:var(--bg2,#f9fafb);position:relative}
+      .cmp-repost-remove{position:absolute;top:6px;right:8px;background:none;border:none;font-size:18px;cursor:pointer;color:var(--text3)}
+      #cmp-file-input{display:none}
+      .cmp-img-tab-extra{display:flex;gap:10px;align-items:flex-start;margin-top:8px}
     `;
     document.head.appendChild(s);
   }
 
+  // Remove any existing composer overlay cleanly
   document.getElementById('composer-overlay')?.remove();
 
   const avatarSrc = currentProfile?.avatar || '';
-  const username  = currentProfile?.username || 'you';
-  const dispName  = currentProfile?.display_name || currentProfile?.username || 'you';
+  const username  = currentProfile?.username || '';
 
   const overlay = document.createElement('div');
   overlay.id = 'composer-overlay';
   overlay.innerHTML = `
-    <div class="cmp-bar">
-      <button class="cmp-cancel" onclick="closeComposer()">Cancel</button>
-      <button class="cmp-post-btn" id="cmp-post-btn" disabled onclick="cmpSubmit()">Post</button>
-    </div>
+    <div id="composer-sheet">
+      <div class="cmp-handle"></div>
+      <div class="cmp-header">
+        <span class="cmp-header-title">New Post</span>
+        <button class="cmp-close" onclick="closeComposer()" aria-label="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
 
-    <div class="cmp-body" id="cmp-body">
-      <div class="cmp-author">
-        <img class="cmp-avatar" src="${avatarSrc}"
-          onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${username}'" alt="">
-        <div>
-          <div class="cmp-author-name">${dispName.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-          <div class="cmp-author-sub">@${username.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+      <div class="cmp-tabs">
+        <button class="cmp-tab active" data-cmp-tab="text" onclick="cmpSwitchTab('text')">✏️ Text</button>
+        <button class="cmp-tab" data-cmp-tab="image" onclick="cmpSwitchTab('image')">🖼️ Image / Video</button>
+      </div>
+
+      <div class="cmp-body" id="cmp-body">
+
+        <!-- TEXT TAB -->
+        <div id="cmp-panel-text">
+          <div class="cmp-author-row">
+            <img class="cmp-avatar" src="${avatarSrc}" onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${username}'" alt="">
+            <textarea class="cmp-textarea" id="cmp-textarea" placeholder="What's on your mind, ${username}?" maxlength="${MAX_CHARS}"></textarea>
+          </div>
+          <div id="cmp-repost-preview" style="display:none"></div>
         </div>
+
+        <!-- IMAGE TAB -->
+        <div id="cmp-panel-image" style="display:none">
+          <div id="cmp-img-dropzone" class="cmp-img-zone" onclick="document.getElementById('cmp-file-input').click()">
+            <div class="cmp-img-zone-icon">📸</div>
+            <div class="cmp-img-zone-label">Tap to choose photo or video</div>
+            <div class="cmp-img-zone-sub">JPG, PNG, GIF, MP4 · Max 10MB image / 50MB video</div>
+          </div>
+          <div id="cmp-media-preview" style="display:none">
+            <div class="cmp-preview-wrap">
+              <img id="cmp-preview-img" src="" alt="" style="display:none">
+              <video id="cmp-preview-vid" muted playsinline controls style="display:none;width:100%;max-height:300px;border-radius:16px"></video>
+              <button class="cmp-preview-remove" onclick="cmpRemoveMedia()">×</button>
+            </div>
+            <div class="cmp-img-tab-extra">
+              <img class="cmp-avatar" src="${avatarSrc}" onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${username}'" alt="">
+              <textarea class="cmp-caption" id="cmp-caption" placeholder="Add a caption (optional)" maxlength="${MAX_CHARS}"></textarea>
+            </div>
+          </div>
+        </div>
+
       </div>
 
-      <span class="cmp-quote-mark">&#8220;</span>
-
-      <textarea class="cmp-textarea" id="cmp-textarea"
-        placeholder="Say something or ask a que…"
-        maxlength="${MAX_CHARS}"></textarea>
-
-      <div id="cmp-repost-preview"></div>
-      <div id="cmp-media-section"></div>
-    </div>
-
-    <div class="cmp-divider"></div>
-    <div class="cmp-toolbar">
-      <button class="cmp-tool" onclick="document.getElementById('cmp-file-input').click()" title="Photo / Video">
-        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="4"/>
-          <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/>
-          <polyline points="21,15 16,10 5,21"/>
-        </svg>
-      </button>
-      <div class="cmp-char-wrap">
-        <span class="cmp-char" id="cmp-char"></span>
-        <svg class="cmp-ring" viewBox="0 0 20 20">
-          <circle class="cmp-ring-bg" cx="10" cy="10" r="9"/>
-          <circle class="cmp-ring-fill" id="cmp-ring-fill" cx="10" cy="10" r="9"/>
-        </svg>
+      <div class="cmp-footer">
+        <div class="cmp-tools">
+          <button class="cmp-tool" onclick="document.getElementById('cmp-file-input').click()" title="Add photo/video">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+          </button>
+        </div>
+        <span class="cmp-char" id="cmp-char">${MAX_CHARS}</span>
+        <button class="cmp-post-btn" id="cmp-post-btn" disabled onclick="cmpSubmit()">Post</button>
       </div>
-    </div>
 
-    <input type="file" id="cmp-file-input" accept="image/*,video/*">
+      <input type="file" id="cmp-file-input" accept="image/*,video/*" capture="environment">
+    </div>
   `;
 
   document.body.appendChild(overlay);
 
+  // Animate in
   requestAnimationFrame(() => {
     overlay.classList.add('open');
-    setTimeout(() => document.getElementById('cmp-textarea')?.focus(), 80);
+    document.getElementById('composer-sheet').classList.add('open');
+    const ta = document.getElementById('cmp-textarea');
+    setTimeout(() => ta?.focus(), 100);
   });
 
+  // Wire up events
   _initCmpEvents(overlay);
 
-  // Keyboard / viewport handling — keeps composer above keyboard
-  const _onVP = () => {
+  // Tap backdrop to close
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeComposer(); });
+
+  // Viewport resize (keyboard)
+  const sheet = document.getElementById('composer-sheet');
+  function _onVP() {
     const vv = window.visualViewport;
-    if (!vv) return;
-    overlay.style.height = vv.height + 'px';
-    overlay.style.top    = vv.offsetTop + 'px';
-  };
+    if (!vv || !sheet) return;
+    sheet.style.maxHeight = (vv.height * 0.95) + 'px';
+  }
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', _onVP);
-    window.visualViewport.addEventListener('scroll', _onVP);
     overlay._vp = _onVP;
   }
 
-  // Restore repost if pending
+  // Restore repost preview if active
   if (repostTargetId) {
     const rp = document.getElementById('cmp-repost-preview');
-    if (rp) rp.innerHTML = _cmpRepostPreviewHTML('', '');
-    const btn = document.getElementById('cmp-post-btn');
-    if (btn) btn.disabled = false;
+    if (rp) {
+      rp.style.display = '';
+      rp.innerHTML = _cmpRepostPreviewHTML();
+    }
   }
 }
 
 function _initCmpEvents(overlay) {
-  const ta      = document.getElementById('cmp-textarea');
+  // Textarea char count + post btn
+  const ta = document.getElementById('cmp-textarea');
+  const caption = document.getElementById('cmp-caption');
   const postBtn = document.getElementById('cmp-post-btn');
 
   function _updateBtn() {
-    const hasText   = !!(ta?.value?.trim());
-    const hasMedia  = !!selectedFile;
+    const hasText  = !!(ta?.value?.trim()) || !!(caption?.value?.trim());
+    const hasMedia = !!selectedFile;
     const hasRepost = !!repostTargetId;
     if (postBtn) postBtn.disabled = !(hasText || hasMedia || hasRepost);
   }
 
   function _updateChar(val) {
-    const charEl = document.getElementById('cmp-char');
-    const ringEl = document.getElementById('cmp-ring-fill');
-    const len    = val?.length || 0;
-    const rem    = MAX_CHARS - len;
-    const pct    = len / MAX_CHARS;
-    const CIRC   = 57;
-    if (charEl) {
-      charEl.textContent = rem < 60 ? rem : '';
-      charEl.className = 'cmp-char' + (rem < 20 ? ' critical' : rem < 60 ? ' low' : '');
-    }
-    if (ringEl) {
-      ringEl.style.strokeDashoffset = CIRC - pct * CIRC;
-      ringEl.style.stroke = rem < 20 ? '#ef4444' : rem < 60 ? '#f59e0b' : 'var(--accent,#6C47FF)';
-    }
+    const el = document.getElementById('cmp-char');
+    if (!el) return;
+    const rem = MAX_CHARS - (val?.length || 0);
+    el.textContent = rem;
+    el.className = 'cmp-char' + (rem < 20 ? ' critical' : rem < 60 ? ' low' : '');
   }
 
   if (ta) {
     ta.addEventListener('input', () => {
-      _updateBtn();
-      _updateChar(ta.value);
+      _updateBtn(); _updateChar(ta.value);
       ta.style.height = 'auto';
-      ta.style.height = ta.scrollHeight + 'px';
+      ta.style.height = Math.min(ta.scrollHeight, 180) + 'px';
       wireMentionInput(ta, null);
     });
   }
+  if (caption) {
+    caption.addEventListener('input', () => {
+      _updateBtn(); _updateChar(caption.value);
+      caption.style.height = 'auto';
+      caption.style.height = Math.min(caption.scrollHeight, 120) + 'px';
+    });
+  }
 
+  // File input
   const fileInput = document.getElementById('cmp-file-input');
   if (fileInput) {
     fileInput.addEventListener('change', e => {
       const file = e.target.files?.[0];
       if (!file) return;
       _handleCmpFile(file, _updateBtn);
+    });
+  }
+
+  // Drag-and-drop on image zone
+  const zone = document.getElementById('cmp-img-dropzone');
+  if (zone) {
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault(); zone.classList.remove('drag');
+      const file = e.dataTransfer?.files?.[0];
+      if (file) _handleCmpFile(file, _updateBtn);
     });
   }
 
@@ -4353,85 +4313,68 @@ function _handleCmpFile(file, updateBtn) {
   if (!isImage && !isVideo) { showToast('Images and videos only'); return; }
 
   const maxBytes = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
-  if (file.size > maxBytes) { showToast('Max ' + (isVideo ? '50MB for video' : '10MB for image')); return; }
+  if (file.size > maxBytes) { showToast(`Max ${isVideo ? '50MB for video' : '10MB for image'}`); return; }
 
   selectedFile = file;
+  // Switch to image tab automatically
+  cmpSwitchTab('image');
 
-  const section = document.getElementById('cmp-media-section');
-  if (!section) return;
+  const dropzone = document.getElementById('cmp-img-dropzone');
+  const preview  = document.getElementById('cmp-media-preview');
+  const prevImg  = document.getElementById('cmp-preview-img');
+  const prevVid  = document.getElementById('cmp-preview-vid');
+
+  if (dropzone) dropzone.style.display = 'none';
+  if (preview)  preview.style.display  = '';
 
   if (isImage) {
     const reader = new FileReader();
     reader.onload = ev => {
-      section.innerHTML = `
-        <div class="cmp-media-wrap">
-          <img src="${ev.target.result}" alt="Preview" style="width:100%;max-height:320px;object-fit:cover;display:block;">
-          <button class="cmp-media-remove" onclick="cmpRemoveMedia()">&#x2715;</button>
-        </div>
-        <textarea class="cmp-caption" id="cmp-caption" placeholder="Add a caption…" maxlength="${MAX_CHARS}"></textarea>`;
-      // Wire caption input
-      const cap = document.getElementById('cmp-caption');
-      if (cap) cap.addEventListener('input', () => {
-        cap.style.height = 'auto';
-        cap.style.height = cap.scrollHeight + 'px';
-      });
+      if (prevImg) { prevImg.src = ev.target.result; prevImg.style.display = 'block'; }
+      if (prevVid) prevVid.style.display = 'none';
     };
-    reader.onerror = () => {
-      section.innerHTML = `<div style="padding:12px;font-size:13px;color:var(--text3)">📷 ${file.name} ready</div>`;
-    };
+    reader.onerror = () => { if (prevImg) { prevImg.alt = file.name; prevImg.style.display = 'none'; } showToast(`📷 ${file.name} selected`); };
     reader.readAsDataURL(file);
   } else {
     const url = URL.createObjectURL(file);
-    section.innerHTML = `
-      <div class="cmp-media-wrap">
-        <video src="${url}" muted playsinline controls style="width:100%;max-height:320px;display:block;"></video>
-        <button class="cmp-media-remove" onclick="cmpRemoveMedia()">&#x2715;</button>
-      </div>
-      <textarea class="cmp-caption" id="cmp-caption" placeholder="Add a caption…" maxlength="${MAX_CHARS}"></textarea>`;
-    const cap = document.getElementById('cmp-caption');
-    if (cap) cap.addEventListener('input', () => {
-      cap.style.height = 'auto';
-      cap.style.height = cap.scrollHeight + 'px';
-    });
+    if (prevVid) { prevVid.src = url; prevVid.style.display = 'block'; }
+    if (prevImg) prevImg.style.display = 'none';
   }
 
   if (updateBtn) updateBtn();
-
-  // Scroll body to show preview
-  setTimeout(() => {
-    const body = document.getElementById('cmp-body');
-    if (body) body.scrollTop = body.scrollHeight;
-  }, 100);
 }
 
 function cmpRemoveMedia() {
   selectedFile = null;
   const fileInput = document.getElementById('cmp-file-input');
   if (fileInput) fileInput.value = '';
-  const section = document.getElementById('cmp-media-section');
-  if (section) section.innerHTML = '';
-  const ta  = document.getElementById('cmp-textarea');
+  document.getElementById('cmp-preview-img') && (document.getElementById('cmp-preview-img').src = '');
+  const vid = document.getElementById('cmp-preview-vid');
+  if (vid) { vid.src = ''; vid.style.display = 'none'; }
+  document.getElementById('cmp-media-preview') && (document.getElementById('cmp-media-preview').style.display = 'none');
+  document.getElementById('cmp-img-dropzone') && (document.getElementById('cmp-img-dropzone').style.display = '');
+  // Update post button
+  const ta = document.getElementById('cmp-textarea');
   const btn = document.getElementById('cmp-post-btn');
   if (btn) btn.disabled = !(ta?.value?.trim()) && !repostTargetId;
 }
 
-function cmpSwitchTab(tab) { /* no-op — new composer has no tabs */ }
+function cmpSwitchTab(tab) {
+  document.querySelectorAll('.cmp-tab').forEach(t => t.classList.toggle('active', t.dataset.cmpTab === tab));
+  document.getElementById('cmp-panel-text').style.display  = tab === 'text'  ? '' : 'none';
+  document.getElementById('cmp-panel-image').style.display = tab === 'image' ? '' : 'none';
+}
 
-function _cmpRepostPreviewHTML(username, text) {
-  return `<div class="cmp-repost-card">
-    <div class="cmp-repost-label">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
-      Reposting${username ? ' @' + username : ''}
-    </div>
-    ${text ? '<p class="cmp-repost-text">' + text + '</p>' : ''}
-    <button class="cmp-repost-remove" onclick="clearRepost()">&#x2715;</button>
-  </div>`;
+function _cmpRepostPreviewHTML() {
+  return `<div style="font-size:12px;color:var(--accent);font-weight:600;margin-bottom:4px">Reposting</div>
+    <button class="cmp-repost-remove" onclick="clearRepost()">×</button>`;
 }
 
 async function cmpSubmit() {
   const ta      = document.getElementById('cmp-textarea');
-  const caption = document.getElementById('cmp-caption'); // only exists after media is added
-  const content = (ta?.value?.trim() || '') || (caption?.value?.trim() || '');
+  const caption = document.getElementById('cmp-caption');
+  // Use whichever tab has content
+  const content = (ta?.value?.trim() || caption?.value?.trim()) || '';
   const btn     = document.getElementById('cmp-post-btn');
 
   if (!content && !selectedFile && !repostTargetId) return;
@@ -4492,26 +4435,29 @@ async function cmpSubmit() {
 
 function closeComposer(instant = false) {
   const overlay = document.getElementById('composer-overlay');
+  const sheet   = document.getElementById('composer-sheet');
   if (!overlay) return;
 
   if (overlay._vp && window.visualViewport) {
     window.visualViewport.removeEventListener('resize', overlay._vp);
-    window.visualViewport.removeEventListener('scroll', overlay._vp);
     overlay._vp = null;
   }
 
+  if (sheet) sheet.style.maxHeight = '';
+
   const cleanup = () => {
     overlay.remove();
-    selectedFile    = null;
-    repostTargetId  = null;
-    repostTargetBtn = null;
+    selectedFile     = null;
+    repostTargetId   = null;
+    repostTargetBtn  = null;
   };
 
   if (instant) {
     cleanup();
   } else {
     overlay.classList.remove('open');
-    setTimeout(cleanup, 280);
+    if (sheet) sheet.classList.remove('open');
+    setTimeout(cleanup, 350);
   }
 }
 
