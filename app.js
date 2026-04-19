@@ -2140,6 +2140,8 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false) {
     const uname  = user.username || '';
     const liked  = likedPosts.has(post.id);
     const likes  = post.like_count || 0;
+    // Seed store so masonry taps have correct base count
+    LikeStore.seed(post.id, likes, liked);
 
     const tile = document.createElement('div');
     tile.className = 'prf-masonry-tile';
@@ -3225,13 +3227,9 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
   const saveBtn = el.querySelector('.save-btn');
   if (saveBtn && savedPosts.has(p.id)) setSaveBtnState(saveBtn, true);
 
-  // Like button — check initial state
-  const heartContainer = el.querySelector('.heart-ai');
-  if (heartContainer && likedPosts.has(p.id)) {
-    heartContainer.setAttribute('data-liked', 'true');
-    heartContainer.querySelector('.heart-icon')?.classList.add('liked');
-    heartContainer.querySelector('.like-count')?.classList.add('liked');
-  }
+  // Like button — seed LikeStore with DB values, then paint
+  LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id));
+  LikeStore._paint(p.id);
 
   // Long-press for post menu
   let lpTimer;
@@ -3622,14 +3620,195 @@ async function syncViewCount(postId) {
 // LIKES
 // ══════════════════════════════════════════
 
+// ══════════════════════════════════════════
+// LIKE STORE — single source of truth
+// Never reads count or state from the DOM.
+// All surfaces read from this store only.
+// ══════════════════════════════════════════
+
+const LikeStore = (() => {
+  // postId → { count: number, liked: boolean }
+  const _db      = new Map();
+  // postId → debounce timer
+  const _timers  = new Map();
+  // postId → bool (request in-flight)
+  const _flying  = new Map();
+  const RED      = 'rgb(244,7,82)';
+  const GREY     = '#000000';
+
+  // ── Called once per post when it's loaded from DB ─────────
+  function seed(postId, count, liked) {
+    if (_db.has(postId)) {
+      // Already seeded — only update if we don't have a pending tap
+      if (!_timers.has(postId) && !_flying.get(postId)) {
+        const s = _db.get(postId);
+        s.count = Math.max(0, count || 0);
+        s.liked = !!liked;
+      }
+      return;
+    }
+    _db.set(postId, { count: Math.max(0, count || 0), liked: !!liked });
+  }
+
+  // ── Get state, creating a safe default if missing ─────────
+  function get(postId) {
+    if (!_db.has(postId)) _db.set(postId, { count: 0, liked: false });
+    return _db.get(postId);
+  }
+
+  // ── Main toggle — called by any like button anywhere ──────
+  function toggle(postId) {
+    if (!currentUser) { showToast('Sign in to like'); return; }
+
+    const s      = get(postId);
+    s.liked      = !s.liked;
+    s.count      = s.liked ? s.count + 1 : Math.max(0, s.count - 1);
+
+    // Keep global Set in sync (other parts of app read it)
+    if (s.liked) likedPosts.add(postId); else likedPosts.delete(postId);
+
+    // Paint every surface instantly
+    _paint(postId);
+
+    // Animate hearts
+    document.querySelectorAll(`.heart-ai[data-post-id="${postId}"] svg`).forEach(svg => animateHeart(svg, s.liked));
+    const cbBtn = document.getElementById('cb-like-btn');
+    if (cbBtn?.dataset.postId === postId) animateHeart(cbBtn.querySelector('svg'), s.liked);
+
+    // Debounce: collapse rapid taps into one DB call
+    if (_timers.has(postId)) clearTimeout(_timers.get(postId));
+    const snap = { liked: s.liked, count: s.count };
+    _timers.set(postId, setTimeout(() => {
+      _timers.delete(postId);
+      _commit(postId, snap.liked, snap.count);
+    }, 350));
+  }
+
+  // ── Paint every DOM surface for this post ─────────────────
+  function _paint(postId) {
+    const s       = get(postId);
+    const liked   = s.liked;
+    const countTx = s.count > 0 ? fmtNum(s.count) : '';
+
+    // 1. Feed + explore cards (.heart-ai)
+    document.querySelectorAll(`.heart-ai[data-post-id="${postId}"]`).forEach(c => {
+      c.dataset.liked = liked ? 'true' : 'false';
+      const path = c.querySelector('.heart-path');
+      if (path) { path.setAttribute('fill', liked ? RED : 'none'); path.setAttribute('stroke', liked ? RED : GREY); }
+      const cnt = c.querySelector('.like-count');
+      if (cnt) { cnt.textContent = countTx; cnt.classList.toggle('liked', liked); }
+    });
+
+    // 2. Detail comment-bar heart
+    const cbBtn = document.getElementById('cb-like-btn');
+    if (cbBtn?.dataset.postId === postId) {
+      cbBtn.dataset.liked = liked ? 'true' : 'false';
+      cbBtn.classList.toggle('cb-liked', liked);
+      const cbPath = cbBtn.querySelector('.cb-heart-path');
+      if (cbPath) { cbPath.setAttribute('fill', liked ? RED : 'none'); cbPath.setAttribute('stroke', liked ? RED : 'currentColor'); }
+      const cbCnt = document.getElementById('cb-like-count');
+      if (cbCnt) { cbCnt.textContent = countTx; cbCnt.classList.toggle('liked', liked); }
+    }
+
+    // 3. Detail stat bar (large number above actions)
+    if (typeof detailPostId !== 'undefined' && detailPostId === postId) {
+      const stat = document.querySelector('.detail-stat-n[data-type="likes"]');
+      if (stat) stat.textContent = fmtNum(s.count);
+    }
+
+    // 4. Profile masonry tiles
+    document.querySelectorAll(`.prf-masonry-like[data-post-id="${postId}"]`).forEach(btn => {
+      btn.classList.toggle('liked', liked);
+      btn.dataset.liked = liked ? 'true' : 'false';
+      const mc = btn.querySelector('.prf-masonry-like-count');
+      if (mc) mc.textContent = countTx;
+    });
+  }
+
+  // ── Commit to Supabase with retry ─────────────────────────
+  async function _commit(postId, liked, optimisticCount, attempt = 0) {
+    if (_flying.get(postId)) {
+      setTimeout(() => _commit(postId, liked, optimisticCount, attempt), 400);
+      return;
+    }
+    _flying.set(postId, true);
+    try {
+      if (liked) {
+        const { error } = await supabase.from('likes').insert({ post_id: postId, user_id: currentUser.id });
+        if (error && error.code !== '23505') throw error;
+        // Fire-and-forget notification
+        supabase.from('posts').select('user_id').eq('id', postId).single().then(({ data: post }) => {
+          if (post?.user_id && post.user_id !== currentUser.id)
+            insertNotification({ user_id: post.user_id, actor_id: currentUser.id, post_id: postId, type: 'like' });
+        });
+      } else {
+        await supabase.from('likes').delete().eq('post_id', postId).eq('user_id', currentUser.id);
+      }
+      _flying.set(postId, false);
+
+      // Reconcile with server — only apply if no tap is pending
+      if (!_timers.has(postId)) {
+        const { data } = await supabase.from('posts').select('like_count').eq('id', postId).single();
+        if (data && !_timers.has(postId)) {
+          const s = get(postId);
+          // Only accept server count if liked state still matches what we committed
+          if (s.liked === liked) {
+            s.count = Math.max(0, data.like_count);
+            _paint(postId);
+          }
+        }
+      }
+    } catch(e) {
+      _flying.set(postId, false);
+      if (attempt < 3) {
+        // Exponential backoff: 1s, 2s, 4s
+        setTimeout(() => _commit(postId, liked, optimisticCount, attempt + 1), 1000 * Math.pow(2, attempt));
+      } else {
+        // All retries failed — revert to pre-tap state
+        const s    = get(postId);
+        s.liked    = !liked;
+        s.count    = Math.max(0, optimisticCount + (liked ? -1 : 1));
+        if (s.liked) likedPosts.add(postId); else likedPosts.delete(postId);
+        _paint(postId);
+        showToast('Like failed — check your connection');
+      }
+    }
+  }
+
+  // ── External: force-sync a server count (e.g. realtime) ───
+  function serverSync(postId, serverCount) {
+    if (_timers.has(postId) || _flying.get(postId)) return; // tap in progress — ignore
+    const s = get(postId);
+    s.count = Math.max(0, serverCount);
+    _paint(postId);
+  }
+
+  return { seed, get, toggle, serverSync, _paint };
+})();
+
+// ── Entry points called from every surface ─────────────────
+function toggleLike(postId, _btn)       { LikeStore.toggle(postId); }
+function toggleMasonryLike(btn, postId) { LikeStore.toggle(postId); }
+function syncLikeCount(postId, count)   { LikeStore.serverSync(postId, count); }
+
+// Kept for backwards compat (checkLikedPosts calls this)
+function setLikeUI(postId, liked, count) {
+  const s = LikeStore.get(postId);
+  if (liked !== null && liked !== undefined) s.liked = !!liked;
+  if (count !== null && count !== undefined) s.count = Math.max(0, count);
+  LikeStore._paint(postId);
+}
+
 async function checkLikedPosts(postIds) {
   if (!currentUser || !postIds.length) return;
-  const { data } = await supabase
-    .from('likes').select('post_id').eq('user_id', currentUser.id).in('post_id', postIds);
-  (data || []).forEach(r => likedPosts.add(r.post_id));
+  const { data } = await supabase.from('likes').select('post_id').eq('user_id', currentUser.id).in('post_id', postIds);
+  const liked = new Set((data || []).map(r => r.post_id));
   postIds.forEach(id => {
-    if (likedPosts.has(id)) setLikeUI(id, true, null);
-    else setLikeUI(id, false, null);
+    liked.has(id) ? likedPosts.add(id) : likedPosts.delete(id);
+    // Only update liked state — never overwrite count with null
+    const s = LikeStore.get(id);
+    s.liked = liked.has(id);
+    LikeStore._paint(id);
   });
 }
 
@@ -3654,7 +3833,7 @@ async function checkRepostedPosts(postIds) {
 }
 
 
-// ── Universal heart animation — call with any SVG element ──
+// ── Universal heart animation ──────────────
 function animateHeart(svg, toLike) {
   if (!svg) return;
   svg.style.transition = 'none';
@@ -3681,148 +3860,7 @@ function animateHeart(svg, toLike) {
   }
 }
 
-async function toggleLike(postId, btn) {
-  if (!currentUser) { showToast('Sign in to like'); return; }
-  const isLiked = btn?.dataset.liked === 'true';
-  const newLiked = !isLiked;
-
-  // ── Optimistic count update — immediate, no DB wait ──
-  const allContainers = document.querySelectorAll(`.heart-ai[data-post-id="${postId}"]`);
-  let currentCount = 0;
-  allContainers.forEach(c => {
-    const sp = c.querySelector('.like-count');
-    currentCount = parseInt(sp?.textContent || '0') || 0;
-  });
-  const optimisticCount = newLiked ? currentCount + 1 : Math.max(0, currentCount - 1);
-
-  // Update UI immediately
-  if (newLiked) likedPosts.add(postId); else likedPosts.delete(postId);
-  setLikeUI(postId, newLiked, optimisticCount);
-
-  // ── Animate feed hearts ──
-  allContainers.forEach(container => {
-    animateHeart(container.querySelector('svg'), newLiked);
-  });
-  // ── Animate detail cb heart ──
-  const cbLikeBtn = document.getElementById('cb-like-btn');
-  if (cbLikeBtn && cbLikeBtn.dataset.postId === postId) {
-    animateHeart(cbLikeBtn.querySelector('svg'), newLiked);
-  }
-
-  // ── DB update in background ──
-  try {
-    if (newLiked) {
-      const { error } = await supabase.from('likes').insert({ post_id: postId, user_id: currentUser.id });
-      if (error && error.code !== '23505') throw error;
-    } else {
-      await supabase.from('likes').delete().eq('post_id', postId).eq('user_id', currentUser.id);
-    }
-    // Sync real count quietly — only update if different from optimistic
-    const { data } = await supabase.from('posts').select('like_count').eq('id', postId).single();
-    if (data && data.like_count !== optimisticCount) {
-      syncLikeCount(postId, data.like_count);
-    }
-    // Notification (fire and forget)
-    if (newLiked) {
-      supabase.from('posts').select('user_id').eq('id', postId).single().then(({ data: post }) => {
-        if (post && post.user_id !== currentUser.id) {
-          insertNotification({ user_id: post.user_id, actor_id: currentUser.id, post_id: postId, type: 'like' });
-        }
-      });
-    }
-  } catch(e) {
-    // Revert on error
-    if (newLiked) likedPosts.delete(postId); else likedPosts.add(postId);
-    setLikeUI(postId, !newLiked, currentCount);
-  }
-}
-
-function setLikeUI(postId, liked, count) {
-  const RED = 'rgb(244,7,82)';
-
-  // ── 1. Feed post hearts (.heart-ai) ──
-  document.querySelectorAll(`.heart-ai[data-post-id="${postId}"]`).forEach(container => {
-    container.dataset.liked = liked ? 'true' : 'false';
-    // Heart SVG — fill/stroke both path and svg element
-    const path = container.querySelector('.heart-path');
-    if (path) {
-      path.setAttribute('fill', liked ? RED : 'none');
-      path.setAttribute('stroke', liked ? RED : '#000000');
-    }
-    // Like count
-    const countEl = container.querySelector('.like-count');
-    if (countEl) {
-      countEl.classList.toggle('liked', liked);
-      if (count !== null) countEl.textContent = count > 0 ? fmtNum(count) : '';
-    }
-  });
-
-  // ── 2. Detail page comment bar heart ──
-  const cbLike = document.getElementById('cb-like-btn');
-  if (cbLike && cbLike.dataset.postId === postId) {
-    cbLike.dataset.liked = liked ? 'true' : 'false';
-    cbLike.classList.toggle('cb-liked', liked);
-    const cbPath = cbLike.querySelector('.cb-heart-path');
-    if (cbPath) {
-      cbPath.setAttribute('fill', liked ? RED : 'none');
-      cbPath.setAttribute('stroke', liked ? RED : '#000000');
-    }
-    const cbCount = document.getElementById('cb-like-count');
-    if (cbCount) {
-      cbCount.classList.toggle('liked', liked);
-      if (count !== null) cbCount.textContent = count > 0 ? fmtNum(count) : '';
-    }
-  }
-
-  // ── 3. Detail stat number (Likes count above actions) ──
-  const statEl = document.querySelector(`.detail-stat-n[data-type="likes"]`);
-  if (statEl && typeof detailPostId !== 'undefined' && detailPostId === postId && count !== null) {
-    statEl.textContent = fmtNum(count);
-  }
-
-  // ── 4. Profile masonry tiles (Posts tab, Liked tab) ──
-  document.querySelectorAll(`.prf-masonry-like[data-post-id="${postId}"]`).forEach(btn => {
-    btn.classList.toggle('liked', liked);
-    btn.dataset.liked = liked ? 'true' : 'false'; // CSS handles fill via [data-liked="true"]
-    const mCount = btn.querySelector('.prf-masonry-like-count');
-    if (mCount && count !== null) mCount.textContent = count > 0 ? fmtNum(count) : '';
-  });
-
-  // ── 5. Discovery / Explore feed hearts ──
-  document.querySelectorAll(`.heart-ai[data-post-id="${postId}"]`).forEach(c => {
-    // Already handled above — just ensure discover feed cards too
-    c.dataset.liked = liked ? 'true' : 'false';
-  });
-}
-
-function syncLikeCount(postId, count) {
-  const isLiked = likedPosts.has(postId);
-  // Feed
-  document.querySelectorAll(`.heart-ai[data-post-id="${postId}"] .like-count`).forEach(sp => {
-    sp.textContent = count > 0 ? fmtNum(count) : '';
-    sp.classList.toggle('liked', isLiked);
-  });
-  // Detail stat
-  const statEl = document.querySelector(`.detail-stat-n[data-type="likes"]`);
-  if (statEl && typeof detailPostId !== 'undefined' && detailPostId === postId) {
-    statEl.textContent = fmtNum(count);
-  }
-  // Comment bar count
-  const cbCount = document.getElementById('cb-like-count');
-  const cbLike  = document.getElementById('cb-like-btn');
-  if (cbCount && cbLike?.dataset.postId === postId) {
-    cbCount.textContent = count > 0 ? fmtNum(count) : '';
-    cbCount.classList.toggle('liked', isLiked);
-  }
-  // Masonry
-  document.querySelectorAll(`.prf-masonry-like[data-post-id="${postId}"] .prf-masonry-like-count`).forEach(el => {
-    el.textContent = count > 0 ? fmtNum(count) : '';
-  });
-}
-
-// ══════════════════════════════════════════
-// REPOSTS
-// ══════════════════════════════════════════
+// ── REPOSTS ────────────────────────────────
 
 function setRepostUI(postId, reposted) {
   document.querySelectorAll(`.repost-btn[data-post-id="${postId}"]`).forEach(btn => {
@@ -4823,21 +4861,12 @@ async function openDetail(postId, scrollToComments = false) {
     // Comment bar — wire like button
     const cbLike = document.getElementById('cb-like-btn');
     if (cbLike) {
+      // Seed store with real DB values — this is the authoritative count source
+      LikeStore.seed(postId, p.like_count || 0, isLiked);
       cbLike.dataset.postId = postId;
-      cbLike.dataset.liked = isLiked ? 'true' : 'false';
-      const cbPath = cbLike.querySelector('.cb-heart-path');
-      const cbCount = document.getElementById('cb-like-count');
-      if (isLiked) {
-        cbPath?.setAttribute('fill', 'rgb(244,7,82)');
-        cbPath?.setAttribute('stroke', 'rgb(244,7,82)');
-        cbLike.classList.add('cb-liked');
-      } else {
-        cbPath?.setAttribute('fill', 'none');
-        cbPath?.setAttribute('stroke', 'currentColor');
-        cbLike.classList.remove('cb-liked');
-      }
-      if (cbCount) cbCount.textContent = p.like_count > 0 ? fmtNum(p.like_count) : '';
-      cbLike.onclick = () => toggleLike(postId, cbLike);
+      cbLike.onclick = () => LikeStore.toggle(postId);
+      // Paint all surfaces from store
+      LikeStore._paint(postId);
     }
 
     // Comment bar — wire repost button
@@ -11304,45 +11333,6 @@ function seedDemoMoments(posts) {
 function escHtml(str) {
   if (!str) return '';
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
-
-function toggleMasonryLike(btn, postId) {
-  if (!currentUser) { showToast('Sign in to like'); return; }
-  const liked = btn.classList.contains('liked');
-  const newLiked = !liked;
-  const countEl = btn.querySelector('.prf-masonry-like-count');
-  const current = parseInt(countEl?.textContent?.replace(/[^0-9]/g,'')) || 0;
-  const newCount = Math.max(0, current + (newLiked ? 1 : -1));
-
-  if (newLiked) likedPosts.add(postId); else likedPosts.delete(postId);
-
-  // Animate FIRST before setLikeUI changes fill
-  animateHeart(btn.querySelector('svg'), newLiked);
-
-  // Update all instances everywhere via setLikeUI
-  btn.dataset.liked = newLiked ? 'true' : 'false';
-  setLikeUI(postId, newLiked, newCount);
-
-  // DB sync — then fetch real count and sync everywhere
-  const syncCount = async () => {
-    const { data } = await supabase.from('posts').select('like_count').eq('id', postId).single();
-    if (data) syncLikeCount(postId, data.like_count);
-  };
-
-  if (newLiked) {
-    supabase.from('likes').insert({ post_id: postId, user_id: currentUser.id }).then(({ error }) => {
-      if (error && error.code !== '23505') {
-        likedPosts.delete(postId);
-        setLikeUI(postId, false, current);
-      } else {
-        syncCount();
-      }
-    });
-  } else {
-    supabase.from('likes').delete()
-      .eq('post_id', postId).eq('user_id', currentUser.id)
-      .then(() => syncCount());
-  }
 }
 
 function gradientFor(id) {
