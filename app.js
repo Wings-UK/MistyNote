@@ -1897,7 +1897,12 @@ async function renderMyProfile() {
   const totalViews    = posts.reduce((s, p) => s + (p.views || 0), 0);
   const totalLikes    = posts.reduce((s, p) => s + (p.like_count || 0), 0);
 
-  likedPostsArr.forEach(p => { if (p?.id) likedPosts.add(p.id); });
+  likedPostsArr.forEach(p => {
+    if (p?.id) {
+      likedPosts.add(p.id);
+      LikeStore.seed(p.id, p.like_count || 0, true); // these ARE liked posts — always true
+    }
+  });
 
   container.innerHTML = `
     <div class="prf-wrap">
@@ -2096,7 +2101,17 @@ function switchPrfTab(tab, el) {
   const { posts, likedPosts: likedArr, mediaPosts, savedPosts: savedArr } = container._prfData || {};
   if (tab === 'list')  renderPrfPosts(posts || [],    'prf-panel-list',  true, true);
   if (tab === 'media') renderPrfMasonry(mediaPosts || [], 'prf-panel-media', true);
-  if (tab === 'likes') renderPrfPosts(likedArr || [], 'prf-panel-likes', false, true);
+  if (tab === 'likes') {
+    // renderPrfPosts already seeds each post after appendChild.
+    // Force liked=true for ALL posts in this tab since they are by definition liked.
+    renderPrfPosts(likedArr || [], 'prf-panel-likes', false, true);
+    (likedArr || []).forEach(p => {
+      if (p?.id) {
+        likedPosts.add(p.id);
+        LikeStore.seed(p.id, p.like_count || 0, true); // always true in likes tab
+      }
+    });
+  }
   if (tab === 'saved') renderPrfSavedSync(savedArr || [], 'prf-panel-saved');
   panel._loaded = true;
 }
@@ -2113,7 +2128,14 @@ function renderPrfPosts(posts, containerId, isOwn, isProfilePage = false, viewin
   container.innerHTML = '';
   posts.forEach(p => {
     const el = createFeedPost(p, isProfilePage, viewingUserId);
-    if (el) { container.appendChild(el); observePost(el); }
+    if (el) {
+      container.appendChild(el); // DOM exists now — seed and paint correctly
+      observePost(el);
+      if (p?.id) {
+        const isLiked = likedPosts.has(p.id);
+        LikeStore.seed(p.id, p.like_count || 0, isLiked);
+      }
+    }
   });
 }
 
@@ -2239,7 +2261,7 @@ function renderPrfSavedSync(posts, containerId) {
   posts.forEach(p => {
     if (!p) return;
     const el = createFeedPost(p, true);
-    if (el) { c.appendChild(el); observePost(el); }
+    if (el) { c.appendChild(el); observePost(el); LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id)); }
   });
 }
 
@@ -2260,7 +2282,7 @@ async function renderPrfSaved(containerId) {
   c.innerHTML = '';
   data.map(r => r.post).filter(Boolean).forEach(p => {
     const el = createFeedPost(p, true);
-    if (el) { c.appendChild(el); observePost(el); }
+    if (el) { c.appendChild(el); observePost(el); LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id)); }
   });
 }
 
@@ -2410,6 +2432,9 @@ async function showUserProfile(userId, tapEl) {
     body._uprfData = { posts: allPosts, mediaPosts, likedPosts };
     renderPrfPosts(allPosts, `uprf-list-${userId}`, false, true, userId);
     document.getElementById(`uprf-list-${userId}`)._loaded = true;
+    // Check which posts we've liked and repaint
+    const allIds = allPosts.map(p => p.id).filter(Boolean);
+    if (allIds.length) checkLikedPosts(allIds);
 
     const upPage   = document.getElementById('page-user-profile');
     const upHeader = document.getElementById('user-profile-header');
@@ -2929,7 +2954,11 @@ function renderFeedPosts(list, posts, PER_PAGE) {
     }
     loadedPostIds.add(p.id);
     const el = createFeedPost(p);
-    if (el) { list.appendChild(el); observePost(el); }
+    if (el) {
+      list.appendChild(el); // DOM exists — seed immediately after
+      observePost(el);
+      LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id));
+    }
   }
 
   feedOffset += posts.length;
@@ -2957,6 +2986,9 @@ function initFeedTabBar() {
 }
 
 function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
+  // NOTE: do NOT seed LikeStore here — the DOM element doesn't exist yet.
+  // Seeding happens in renderPrfPosts / feed loader AFTER appendChild.
+
   const user = p.user || { username: '@unknown', avatar: '' };
   const isRepost = !!p.reposted_post_id && !!p.reposted_post;
   const orig = isRepost ? p.reposted_post : null;
@@ -3227,9 +3259,8 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
   const saveBtn = el.querySelector('.save-btn');
   if (saveBtn && savedPosts.has(p.id)) setSaveBtnState(saveBtn, true);
 
-  // Like button — seed LikeStore with DB values, then paint
-  LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id));
-  LikeStore._paint(p.id);
+  // NOTE: LikeStore.seed/_paint is called by the caller AFTER appendChild
+  // so the element is in the document when _paint queries for it.
 
   // Long-press for post menu
   let lpTimer;
@@ -4309,6 +4340,7 @@ function prependPostToFeed(newPost) {
   // Prepend the new post
   list.prepend(el);
   loadedPostIds.add(newPost.id);
+  LikeStore.seed(newPost.id, newPost.like_count || 0, likedPosts.has(newPost.id));
   el.classList.add('fade-up');
   observePost(el);
 
@@ -5700,6 +5732,7 @@ async function discLoadForYou() {
       el.classList.add('fade-in');
       grid.appendChild(el);
       observePost(el);
+      LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id));
     }
   });
 
@@ -5829,7 +5862,7 @@ async function discFetchPosts(q, pane) {
 
   data.forEach(p => {
     const el = createFeedPost(p, false);
-    if (el) list.appendChild(el);
+    if (el) { list.appendChild(el); LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id)); }
   });
 
   pane.appendChild(list);
