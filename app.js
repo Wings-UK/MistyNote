@@ -8341,15 +8341,15 @@ function renderNotifItem(g, animDelay = 0) {
     ? `<div class="notif-thumb-wrap"><img class="notif-thumb" src="${escHtml(g.post.image)}" alt=""></div>`
     : '';
 
-  const clickTarget = g.post_id
-    ? `notifItemClick('${g.post_id}',null,'${g.ids.join(',')}')`
-    : `notifItemClick(null,'${g.actor_id || (g.actors[0]?.id) || ''}','${g.ids.join(',')}')`;
+  const clickActorId = g.actor_id || (g.actors[0]?.id) || '';
 
   return `
     <div class="notif-item${isUnread ? ' unread' : ''}${g.grouped ? ' grouped' : ''}"
          data-ids="${g.ids.join(',')}"
-         style="animation-delay:${animDelay}ms"
-         onclick="${clickTarget}">
+         data-post-id="${g.post_id || ''}"
+         data-actor-id="${clickActorId}"
+         data-type="${g.type}"
+         style="animation-delay:${animDelay}ms">
       ${avatarHtml}
       <div class="notif-body">
         <p class="notif-text">${who} ${cfg.label}</p>
@@ -8404,10 +8404,13 @@ function switchNotifFilter(filterId) {
   renderNotifList(filterId);
 }
 
-async function notifItemClick(postId, actorId, idsStr) {
+async function notifItemClick(postId, actorId, idsStr, type) {
+  // ── Mark read (fire-and-forget, must NOT crash navigation) ──
   const ids = idsStr.split(',').filter(Boolean);
   if (ids.length) {
-    supabase.from('notifications').update({ read: true }).in('id', ids).catch(() => {});
+    (async () => {
+      try { await supabase.from('notifications').update({ read: true }).in('id', ids); } catch(e) {}
+    })();
     ids.forEach(id => {
       const el = document.querySelector(`.notif-item[data-ids="${id}"], .notif-item[data-ids^="${id},"], .notif-item[data-ids*=",${id},"], .notif-item[data-ids$=",${id}"]`);
       if (el) { el.classList.remove('unread'); el.querySelector('.notif-unread-dot')?.remove(); }
@@ -8571,7 +8574,10 @@ function showNotifBanner(data) {
 
   banner.style.setProperty('--notif-accent', cfg.accentColor);
   banner.innerHTML = `
-    <div class="notif-banner-inner" onclick="notifBannerClick('${data.post_id || ''}','${data.actor_id || ''}','${data.id}')">
+    <div class="notif-banner-inner"
+         data-post-id="${data.post_id || ''}"
+         data-actor-id="${data.actor_id || ''}"
+         data-notif-id="${data.id}">
       <img class="notif-banner-avatar" src="${escHtml(src)}"
         onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=fallback'" alt="">
       <div class="notif-banner-content">
@@ -8580,6 +8586,12 @@ function showNotifBanner(data) {
       </div>
       ${data.post_image ? `<img class="notif-banner-thumb" src="${escHtml(data.post_image)}" alt="">` : `<span class="notif-banner-time">now</span>`}
     </div>`;
+  const inner = banner.querySelector('.notif-banner-inner');
+  if (inner) {
+    inner.addEventListener('click', () => {
+      notifBannerClick(inner.dataset.postId, inner.dataset.actorId, inner.dataset.notifId);
+    }, { once: true });
+  }
 
   requestAnimationFrame(() => { banner.classList.remove('hide'); banner.classList.add('show'); });
   clearTimeout(bannerTimer);
@@ -8598,9 +8610,9 @@ function dismissNotifBanner() {
 
 function notifBannerClick(postId, actorId, notifId) {
   dismissNotifBanner();
-  if (postId) openDetail(postId);
-  else if (actorId) showUserProfile(actorId, null);
-  if (notifId) supabase.from('notifications').update({ read: true }).eq('id', notifId).catch(() => {});
+  if (postId && postId !== 'null' && postId !== 'undefined') openDetail(postId);
+  else if (actorId && actorId !== 'null' && actorId !== 'undefined') showUserProfile(actorId, null);
+  if (notifId) (async () => { try { await supabase.from('notifications').update({ read: true }).eq('id', notifId); } catch(e){} })();
 }
 
 function attachBannerSwipe(banner) {
@@ -8634,7 +8646,7 @@ function attachSwipeDismiss(el) {
       el.classList.add('dismissed');
       setTimeout(() => el.remove(), 300);
       if (ids.length) {
-        supabase.from('notifications').delete().in('id', ids).catch(() => {});
+        (async () => { try { await supabase.from('notifications').delete().in('id', ids); } catch(e){} })();
         notifRawData = notifRawData.filter(n => !ids.includes(String(n.id)));
         updateNotifTabCounts();
       }
@@ -8647,6 +8659,55 @@ function attachSwipeDismiss(el) {
 
 function onNotifPageOpen() {
   buildNotifFilterTabs();
+
+  // ── Delegated tap handler — one listener on the static container.
+  // Survives innerHTML re-renders. Uses capture phase so swipe handlers can't block it.
+  const notifList = document.getElementById('notif-list');
+  if (notifList && !notifList._notifListenerAttached) {
+    notifList._notifListenerAttached = true;
+
+    // Record finger start position to distinguish tap from scroll
+    notifList.addEventListener('touchstart', e => {
+      const item = e.target.closest('.notif-item');
+      if (!item) return;
+      item._touchStartX = e.touches[0].clientX;
+      item._touchStartY = e.touches[0].clientY;
+    }, true);
+
+    const handleNotifTap = e => {
+      if (e.target.closest('.notif-follow-btn, .notif-type-badge')) return;
+      const item = e.target.closest('.notif-item');
+      if (!item) return;
+
+      // If finger moved more than 8px it's a scroll — ignore
+      if (e.type === 'touchend') {
+        const touch = e.changedTouches[0];
+        const dx = Math.abs(touch.clientX - (item._touchStartX || 0));
+        const dy = Math.abs(touch.clientY - (item._touchStartY || 0));
+        if (dx > 8 || dy > 8) return;
+      }
+
+      e.stopImmediatePropagation();
+      // Prevent double-fire when both touchend and click fire on same tap
+      if (e.type === 'click' && item._notifTapHandled) { item._notifTapHandled = false; return; }
+      if (e.type === 'touchend') item._notifTapHandled = true;
+
+      const postId  = item.dataset.postId  || null;
+      const actorId = item.dataset.actorId || null;
+      const idsStr  = item.dataset.ids     || '';
+      const type    = item.dataset.type    || '';
+      notifItemClick(
+        postId  && postId  !== 'null' && postId  !== 'undefined' ? postId  : null,
+        actorId && actorId !== 'null' && actorId !== 'undefined' ? actorId : null,
+        idsStr,
+        type
+      );
+    };
+
+    notifList.addEventListener('click',    handleNotifTap, true);
+    notifList.addEventListener('touchend', handleNotifTap, true);
+  }
+
   loadNotifications();
   setTimeout(async () => {
     if (unreadCount > 0) {
