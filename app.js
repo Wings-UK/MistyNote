@@ -6538,7 +6538,7 @@ function updateChatStatus(text, typing = false) {
   const statusEl = document.getElementById('chat-topbar-status');
   const onlineDot = document.getElementById('chat-topbar-online');
   if (statusEl) {
-    statusEl.textContent = typing ? '✦ typing...' : text;
+    statusEl.textContent = typing ? '· typing...' : text;
     statusEl.className = 'chat-topbar-status' + (typing ? ' typing' : '');
   }
   if (onlineDot) onlineDot.style.display = 'none';
@@ -8670,7 +8670,7 @@ function injectEchoesPanel() {
   el.innerHTML = `
     <div class="echoes-sheet" id="echoes-sheet">
       <div class="echoes-handle-row">
-        <span class="echoes-title">✦ echoes</span>
+        <span class="echoes-title">echoes</span>
         <button class="echoes-close" onclick="closeEchoes()">✕</button>
       </div>
       <div class="echoes-tabs">
@@ -9421,14 +9421,16 @@ const walletState = {
 };
 
 // ── FORMAT HELPERS ────────────────────────────────────────────────────────────
-// All user-facing amounts: ✦12 or ✦1,500 — never NGN
+// All user-facing amounts: MP 12 or MP 1,500
+// No Unicode star prefix — unreliable on Android browsers.
+// The wallet hero has its own HTML star element separately.
 function fmtPts(pts) {
-  if (pts === null || pts === undefined) return '✦0';
+  if (pts === null || pts === undefined) return 'MP 0';
   const n = Number(pts);
   const str = Number.isInteger(n)
     ? n.toLocaleString('en-NG')
     : n.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return '\u2736' + str;
+  return 'MP\u00a0' + str;
 }
 // Internal-only conversion helpers — results never shown to users
 function pointsToNgn(pts) { return pts * POINTS_RATE; }
