@@ -10126,8 +10126,8 @@ function renderEarningsSheet() {
     }
   }
   if (statusEl) statusEl.textContent = eligible
-    ? 'Estimated bank credit based on live KWD rate'
-    : 'Minimum ✶1 required for payout. Balance rolls over.';
+    ? 'Your balance will be settled to your bank automatically'
+    : 'Minimum MP 1 required for payout. Balance rolls over.';
 
   // Bank account display
   renderEarningsBankInfo();
