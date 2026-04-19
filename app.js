@@ -9481,7 +9481,7 @@ async function syncWalletBalance() {
 function renderWalletBalance() {
   const el = document.getElementById('wlt-balance');
   if (!el) return;
-  el.textContent = fmtPts(walletState.points);
+  el.textContent = fmtPts(walletState.points).replace(/^MP[\u00a0\s]*/,'');
   const hint = document.getElementById('gift-balance-hint');
   if (hint) hint.textContent = 'Balance: ' + fmtPts(walletState.points);
   // Subrow: show live escrow balance
