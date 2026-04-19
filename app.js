@@ -4633,19 +4633,34 @@ function prependPostToFeed(newPost) {
 async function uploadToStorage(file, onProgress) {
   onProgress(5);
 
-  const blob = file;
+  const isVideo = file.type.startsWith('video/');
+
+  let blob = file;
+  let mime = file.type || 'image/jpeg';
+  let ext  = file.name?.split('.').pop()?.toLowerCase() || 'jpg';
+
+  if (!isVideo) {
+    try {
+      blob = await compressImage(file, 1200);
+      mime = 'image/jpeg';
+      ext  = 'jpg';
+    } catch(e) {
+      console.warn('[uploadToStorage] compressImage failed, using raw file:', e);
+    }
+  }
+
   onProgress(25);
 
-  // Use correct extension and content type from the actual file
-  const ext  = file.name?.split('.').pop()?.toLowerCase() || 'jpg';
-  const mime = file.type || 'image/jpeg';
-  const path = `${currentUser.id}_${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
-  const bucket = 'post-images';
+  // ── CRITICAL: path must be userId/filename — not userId_filename at root ──
+  // Supabase RLS policies match on (storage.foldername(name))[1] = auth.uid()
+  // Avatar works because it uses userId/avatar.jpg — post images must do the same.
+  const filename = `${Date.now()}_${Math.random().toString(36).slice(2,7)}.${ext}`;
+  const path     = `${currentUser.id}/${filename}`;
+  const bucket   = 'post-images';
 
-  // Retry up to 4 times with exponential backoff — built for bad networks
   for (let attempt = 1; attempt <= 4; attempt++) {
     try {
-      onProgress(25 + attempt * 14); // 39 / 53 / 67 / 81
+      onProgress(25 + attempt * 14);
 
       const { error } = await supabase.storage
         .from(bucket)
@@ -4659,8 +4674,8 @@ async function uploadToStorage(file, onProgress) {
       return data.publicUrl;
 
     } catch (err) {
+      console.warn(`[uploadToStorage] attempt ${attempt} failed:`, err?.message || err);
       if (attempt === 4) throw err;
-      // Wait before retry: 2s, 4s, 8s
       await new Promise(r => setTimeout(r, attempt * 2000));
     }
   }
