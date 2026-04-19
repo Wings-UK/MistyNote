@@ -296,7 +296,7 @@ function _gpsAttempt(userId, highAccuracy, attempt) {
 
         if (location && country) {
           // Save silently — update every session so it's always current
-          try { await supabase.from('users').update({ location }).eq('id', userId); } catch(e) {}
+          await supabase.from('users').update({ location }).eq('id', userId).catch(() => {});
           if (currentProfile && currentUser?.id === userId) {
             currentProfile.location = location;
             if (document.getElementById('page-profile')?.classList.contains('active')) {
@@ -1297,10 +1297,6 @@ async function handleAuth() {
           followers: 0, following: 0
         });
 
-        // Create wallet row — safe if trigger already created it
-        await supabase.from('wallets')
-          .upsert({ user_id: data.user.id, points: 0 }, { onConflict: 'user_id', ignoreDuplicates: true });
-
         const { error: loginErr } = await supabase.auth.signInWithPassword({ email, password });
         if (!loginErr) {
           currentUser = data.user;
@@ -1442,6 +1438,18 @@ function slideTo(pageId, setupFn) {
   slideStack.push(pageId);
   const el = document.getElementById('page-' + pageId);
   if (!el) return;
+
+  // Block all post taps during slide — prevents ghost clicks
+  document.querySelectorAll('[data-post-id]').forEach(post => {
+    post.dataset.blockNavigation = 'true';
+    setTimeout(() => { post.dataset.blockNavigation = 'false'; }, 600);
+  });
+
+  // Block ALL post taps during slide — prevents ghost clicks from landing on profile posts
+  document.querySelectorAll('[data-post-id]').forEach(post => {
+    post.dataset.blockNavigation = 'true';
+    setTimeout(() => { post.dataset.blockNavigation = 'false'; }, 600);
+  });
 
   // Track which main page we're leaving
   const mainPages = ['feed','discover','notifications','profile'];
@@ -3217,11 +3225,9 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
   const saveBtn = el.querySelector('.save-btn');
   if (saveBtn && savedPosts.has(p.id)) setSaveBtnState(saveBtn, true);
 
-  // Like button — check initial state and seed LikeManager
+  // Like button — check initial state
   const heartContainer = el.querySelector('.heart-ai');
-  const _isLiked = likedPosts.has(p.id);
-  LikeManager.seed(p.id, p.like_count || 0, _isLiked);
-  if (heartContainer && _isLiked) {
+  if (heartContainer && likedPosts.has(p.id)) {
     heartContainer.setAttribute('data-liked', 'true');
     heartContainer.querySelector('.heart-icon')?.classList.add('liked');
     heartContainer.querySelector('.like-count')?.classList.add('liked');
@@ -3675,208 +3681,143 @@ function animateHeart(svg, toLike) {
   }
 }
 
-/* ═══════════════════════════════════════════════════════════
-   LIKE MANAGER — Twitter-style robust like system
-   • In-memory truth (never reads count from DOM)
-   • Debounced queue per post (rapid taps collapse to 1 request)
-   • Retry with exponential backoff on network failure (up to 3×)
-   • Works offline-first — UI updates instantly, syncs when possible
-   • Single source of truth across ALL surfaces:
-     feed, detail page, profile masonry, image tab, explore
-═══════════════════════════════════════════════════════════ */
-const LikeManager = (() => {
-  // In-memory state: postId → { count: number, liked: boolean }
-  const _state    = new Map();
-  // Per-post debounce timers (rapid taps collapse into one request)
-  const _timers   = new Map();
-  // Per-post in-flight flag (prevents overlapping DB requests)
-  const _inflight = new Map();
+async function toggleLike(postId, btn) {
+  if (!currentUser) { showToast('Sign in to like'); return; }
+  const isLiked = btn?.dataset.liked === 'true';
+  const newLiked = !isLiked;
 
+  // ── Optimistic count update — immediate, no DB wait ──
+  const allContainers = document.querySelectorAll(`.heart-ai[data-post-id="${postId}"]`);
+  let currentCount = 0;
+  allContainers.forEach(c => {
+    const sp = c.querySelector('.like-count');
+    currentCount = parseInt(sp?.textContent || '0') || 0;
+  });
+  const optimisticCount = newLiked ? currentCount + 1 : Math.max(0, currentCount - 1);
+
+  // Update UI immediately
+  if (newLiked) likedPosts.add(postId); else likedPosts.delete(postId);
+  setLikeUI(postId, newLiked, optimisticCount);
+
+  // ── Animate feed hearts ──
+  allContainers.forEach(container => {
+    animateHeart(container.querySelector('svg'), newLiked);
+  });
+  // ── Animate detail cb heart ──
+  const cbLikeBtn = document.getElementById('cb-like-btn');
+  if (cbLikeBtn && cbLikeBtn.dataset.postId === postId) {
+    animateHeart(cbLikeBtn.querySelector('svg'), newLiked);
+  }
+
+  // ── DB update in background ──
+  try {
+    if (newLiked) {
+      const { error } = await supabase.from('likes').insert({ post_id: postId, user_id: currentUser.id });
+      if (error && error.code !== '23505') throw error;
+    } else {
+      await supabase.from('likes').delete().eq('post_id', postId).eq('user_id', currentUser.id);
+    }
+    // Sync real count quietly — only update if different from optimistic
+    const { data } = await supabase.from('posts').select('like_count').eq('id', postId).single();
+    if (data && data.like_count !== optimisticCount) {
+      syncLikeCount(postId, data.like_count);
+    }
+    // Notification (fire and forget)
+    if (newLiked) {
+      supabase.from('posts').select('user_id').eq('id', postId).single().then(({ data: post }) => {
+        if (post && post.user_id !== currentUser.id) {
+          insertNotification({ user_id: post.user_id, actor_id: currentUser.id, post_id: postId, type: 'like' });
+        }
+      });
+    }
+  } catch(e) {
+    // Revert on error
+    if (newLiked) likedPosts.delete(postId); else likedPosts.add(postId);
+    setLikeUI(postId, !newLiked, currentCount);
+  }
+}
+
+function setLikeUI(postId, liked, count) {
   const RED = 'rgb(244,7,82)';
 
-  // ── Called when a post is first rendered — seeds the state ──
-  function seed(postId, count, liked) {
-    // Only seed once; don't overwrite if user already tapped
-    if (!_state.has(postId)) {
-      _state.set(postId, { count: Math.max(0, count || 0), liked: !!liked });
+  // ── 1. Feed post hearts (.heart-ai) ──
+  document.querySelectorAll(`.heart-ai[data-post-id="${postId}"]`).forEach(container => {
+    container.dataset.liked = liked ? 'true' : 'false';
+    // Heart SVG — fill/stroke both path and svg element
+    const path = container.querySelector('.heart-path');
+    if (path) {
+      path.setAttribute('fill', liked ? RED : 'none');
+      path.setAttribute('stroke', liked ? RED : '#000000');
+    }
+    // Like count
+    const countEl = container.querySelector('.like-count');
+    if (countEl) {
+      countEl.classList.toggle('liked', liked);
+      if (count !== null) countEl.textContent = count > 0 ? fmtNum(count) : '';
+    }
+  });
+
+  // ── 2. Detail page comment bar heart ──
+  const cbLike = document.getElementById('cb-like-btn');
+  if (cbLike && cbLike.dataset.postId === postId) {
+    cbLike.dataset.liked = liked ? 'true' : 'false';
+    cbLike.classList.toggle('cb-liked', liked);
+    const cbPath = cbLike.querySelector('.cb-heart-path');
+    if (cbPath) {
+      cbPath.setAttribute('fill', liked ? RED : 'none');
+      cbPath.setAttribute('stroke', liked ? RED : '#000000');
+    }
+    const cbCount = document.getElementById('cb-like-count');
+    if (cbCount) {
+      cbCount.classList.toggle('liked', liked);
+      if (count !== null) cbCount.textContent = count > 0 ? fmtNum(count) : '';
     }
   }
 
-  // ── Get state (creates a default if post not yet seeded) ────
-  function get(postId) {
-    if (!_state.has(postId)) _state.set(postId, { count: 0, liked: false });
-    return _state.get(postId);
+  // ── 3. Detail stat number (Likes count above actions) ──
+  const statEl = document.querySelector(`.detail-stat-n[data-type="likes"]`);
+  if (statEl && typeof detailPostId !== 'undefined' && detailPostId === postId && count !== null) {
+    statEl.textContent = fmtNum(count);
   }
 
-  // ── Called by every like button on every surface ─────────────
-  function toggle(postId, btn) {
-    if (!currentUser) { showToast('Sign in to like'); return; }
+  // ── 4. Profile masonry tiles (Posts tab, Liked tab) ──
+  document.querySelectorAll(`.prf-masonry-like[data-post-id="${postId}"]`).forEach(btn => {
+    btn.classList.toggle('liked', liked);
+    btn.dataset.liked = liked ? 'true' : 'false'; // CSS handles fill via [data-liked="true"]
+    const mCount = btn.querySelector('.prf-masonry-like-count');
+    if (mCount && count !== null) mCount.textContent = count > 0 ? fmtNum(count) : '';
+  });
 
-    const s = get(postId);
-    s.liked = !s.liked;
-    s.count = s.liked ? s.count + 1 : Math.max(0, s.count - 1);
+  // ── 5. Discovery / Explore feed hearts ──
+  document.querySelectorAll(`.heart-ai[data-post-id="${postId}"]`).forEach(c => {
+    // Already handled above — just ensure discover feed cards too
+    c.dataset.liked = liked ? 'true' : 'false';
+  });
+}
 
-    // Keep global likedPosts set in sync (used by other parts of the app)
-    if (s.liked) likedPosts.add(postId); else likedPosts.delete(postId);
-
-    // Instant UI on ALL surfaces — never waits for network
-    _updateAllUI(postId, s.liked, s.count);
-
-    // Animate the specific button that was tapped
-    if (btn) animateHeart(btn.querySelector('svg'), s.liked);
-    // Also animate feed hearts and cb heart if visible
-    document.querySelectorAll(`.heart-ai[data-post-id="${postId}"]`).forEach(c => {
-      if (c !== btn) animateHeart(c.querySelector('svg'), s.liked);
-    });
-    const cbBtn = document.getElementById('cb-like-btn');
-    if (cbBtn && cbBtn !== btn && cbBtn.dataset.postId === postId) {
-      animateHeart(cbBtn.querySelector('svg'), s.liked);
-    }
-
-    // Debounce: cancel previous pending request, schedule a new one after 300ms.
-    // This means like→unlike→like within 300ms = only ONE "like" request sent.
-    if (_timers.has(postId)) clearTimeout(_timers.get(postId));
-    const snapshot = { liked: s.liked, count: s.count };
-    _timers.set(postId, setTimeout(() => {
-      _timers.delete(postId);
-      _commit(postId, snapshot.liked, snapshot.count);
-    }, 300));
+function syncLikeCount(postId, count) {
+  const isLiked = likedPosts.has(postId);
+  // Feed
+  document.querySelectorAll(`.heart-ai[data-post-id="${postId}"] .like-count`).forEach(sp => {
+    sp.textContent = count > 0 ? fmtNum(count) : '';
+    sp.classList.toggle('liked', isLiked);
+  });
+  // Detail stat
+  const statEl = document.querySelector(`.detail-stat-n[data-type="likes"]`);
+  if (statEl && typeof detailPostId !== 'undefined' && detailPostId === postId) {
+    statEl.textContent = fmtNum(count);
   }
-
-  // ── Commit the final state to Supabase, with retry ─────────
-  async function _commit(postId, liked, optimisticCount, attempt = 0) {
-    // Wait if another request for this post is still running
-    if (_inflight.get(postId)) {
-      setTimeout(() => _commit(postId, liked, optimisticCount, attempt), 400);
-      return;
-    }
-    _inflight.set(postId, true);
-
-    try {
-      if (liked) {
-        const { error } = await supabase.from('likes')
-          .insert({ post_id: postId, user_id: currentUser.id });
-        // 23505 = unique violation = already liked = that's fine
-        if (error && error.code !== '23505') throw error;
-        // Fire-and-forget notification
-        supabase.from('posts').select('user_id').eq('id', postId).single()
-          .then(({ data: post }) => {
-            if (post && post.user_id !== currentUser.id) {
-              insertNotification({ user_id: post.user_id, actor_id: currentUser.id,
-                                   post_id: postId, type: 'like' });
-            }
-          });
-      } else {
-        await supabase.from('likes').delete()
-          .eq('post_id', postId).eq('user_id', currentUser.id);
-      }
-      _inflight.set(postId, false);
-
-      // Reconcile: quietly fetch the real server count, but only apply it
-      // if the user hasn't tapped again while the request was in-flight.
-      supabase.from('posts').select('like_count').eq('id', postId).single()
-        .then(({ data }) => {
-          if (!data) return;
-          // Skip if a new tap is pending or another request is running
-          if (_timers.has(postId) || _inflight.get(postId)) return;
-          const s = get(postId);
-          // Only accept server value if the liked state hasn't changed
-          if (s.liked === liked) {
-            s.count = Math.max(0, data.like_count);
-            _updateAllUI(postId, s.liked, s.count);
-          }
-        });
-
-    } catch (e) {
-      _inflight.set(postId, false);
-      if (attempt < 3) {
-        // Retry with exponential backoff: 1s → 2s → 4s
-        setTimeout(() => _commit(postId, liked, optimisticCount, attempt + 1),
-                   1000 * Math.pow(2, attempt));
-      } else {
-        // All retries exhausted — revert UI to what it was before the tap
-        const s = get(postId);
-        s.liked  = !liked;
-        s.count  = Math.max(0, optimisticCount + (liked ? -1 : 1));
-        if (s.liked) likedPosts.add(postId); else likedPosts.delete(postId);
-        _updateAllUI(postId, s.liked, s.count);
-        showToast('Like failed — check your connection');
-      }
-    }
+  // Comment bar count
+  const cbCount = document.getElementById('cb-like-count');
+  const cbLike  = document.getElementById('cb-like-btn');
+  if (cbCount && cbLike?.dataset.postId === postId) {
+    cbCount.textContent = count > 0 ? fmtNum(count) : '';
+    cbCount.classList.toggle('liked', isLiked);
   }
-
-  // ── Update every surface that shows this post's like state ─
-  function _updateAllUI(postId, liked, count) {
-    const countTxt = count > 0 ? fmtNum(count) : '';
-
-    // 1. Feed cards (.heart-ai) — also covers explore/discover feed
-    document.querySelectorAll(`.heart-ai[data-post-id="${postId}"]`).forEach(container => {
-      container.dataset.liked = liked ? 'true' : 'false';
-      const path = container.querySelector('.heart-path');
-      if (path) {
-        path.setAttribute('fill', liked ? RED : 'none');
-        path.setAttribute('stroke', liked ? RED : '#000000');
-      }
-      const countEl = container.querySelector('.like-count');
-      if (countEl) {
-        countEl.textContent = countTxt;
-        countEl.classList.toggle('liked', liked);
-      }
-    });
-
-    // 2. Detail page comment-bar heart + count
-    const cbLike = document.getElementById('cb-like-btn');
-    if (cbLike && cbLike.dataset.postId === postId) {
-      cbLike.dataset.liked  = liked ? 'true' : 'false';
-      cbLike.dataset.count  = count;  // authoritative — never stale
-      cbLike.classList.toggle('cb-liked', liked);
-      const cbPath = cbLike.querySelector('.cb-heart-path');
-      if (cbPath) {
-        cbPath.setAttribute('fill', liked ? RED : 'none');
-        cbPath.setAttribute('stroke', liked ? RED : '#000000');
-      }
-      const cbCount = document.getElementById('cb-like-count');
-      if (cbCount) {
-        cbCount.textContent = countTxt;
-        cbCount.classList.toggle('liked', liked);
-      }
-    }
-
-    // 3. Detail stat bar (large like count above action row)
-    const statEl = document.querySelector(`.detail-stat-n[data-type="likes"]`);
-    if (statEl && typeof detailPostId !== 'undefined' && detailPostId === postId) {
-      statEl.textContent = fmtNum(count);
-    }
-
-    // 4. Profile masonry tiles (Posts tab, Image tab, Liked tab)
-    document.querySelectorAll(`.prf-masonry-like[data-post-id="${postId}"]`).forEach(btn => {
-      btn.classList.toggle('liked', liked);
-      btn.dataset.liked = liked ? 'true' : 'false';
-      const mCount = btn.querySelector('.prf-masonry-like-count');
-      if (mCount) mCount.textContent = countTxt;
-    });
-  }
-
-  // ── Called by realtime subscriptions or external DB syncs ──
-  function syncCount(postId, serverCount) {
-    // Ignore if a tap is pending or a request is in-flight — our state is ahead
-    if (_timers.has(postId) || _inflight.get(postId)) return;
-    const s = get(postId);
-    s.count = Math.max(0, serverCount);
-    _updateAllUI(postId, s.liked, s.count);
-  }
-
-  return { seed, get, toggle, syncCount, _updateAllUI };
-})();
-
-// ── Shims: keep every existing call-site working unchanged ─────
-function toggleLike(postId, btn)        { LikeManager.toggle(postId, btn); }
-function syncLikeCount(postId, count)   { LikeManager.syncCount(postId, count); }
-function setLikeUI(postId, liked, count) {
-  const s = LikeManager.get(postId);
-  if (liked !== null && liked !== undefined) s.liked = liked;
-  if (count !== null && count !== undefined) s.count = Math.max(0, count);
-  LikeManager._updateAllUI(postId, s.liked, s.count);
+  // Masonry
+  document.querySelectorAll(`.prf-masonry-like[data-post-id="${postId}"] .prf-masonry-like-count`).forEach(el => {
+    el.textContent = count > 0 ? fmtNum(count) : '';
+  });
 }
 
 // ══════════════════════════════════════════
@@ -4476,10 +4417,6 @@ async function openDetail(postId, scrollToComments = false) {
   if (!postId) return;
   detailPostId = postId;
   detailCommentParentId = null;
-
-  // Clear any overlays/sheets that might block navigation
-  document.querySelectorAll('.action-sheet-overlay, .echoes-overlay, #video-fs, .bottom-sheet-backdrop').forEach(el => el.remove());
-
   pushRoute('/post/' + postId);
 
   // ── Inject styles once ──
@@ -4886,15 +4823,8 @@ async function openDetail(postId, scrollToComments = false) {
     // Comment bar — wire like button
     const cbLike = document.getElementById('cb-like-btn');
     if (cbLike) {
-      // Seed LikeManager with the real DB count for this post
-      LikeManager.seed(postId, p.like_count || 0, isLiked);
-      // If already seeded (user navigated back), force-update the count to DB value
-      const _s = LikeManager.get(postId);
-      if (_s.count === 0 && (p.like_count || 0) > 0) _s.count = p.like_count;
-
       cbLike.dataset.postId = postId;
       cbLike.dataset.liked = isLiked ? 'true' : 'false';
-      cbLike.dataset.count = _s.count;
       const cbPath = cbLike.querySelector('.cb-heart-path');
       const cbCount = document.getElementById('cb-like-count');
       if (isLiked) {
@@ -4906,7 +4836,7 @@ async function openDetail(postId, scrollToComments = false) {
         cbPath?.setAttribute('stroke', 'currentColor');
         cbLike.classList.remove('cb-liked');
       }
-      if (cbCount) cbCount.textContent = _s.count > 0 ? fmtNum(_s.count) : '';
+      if (cbCount) cbCount.textContent = p.like_count > 0 ? fmtNum(p.like_count) : '';
       cbLike.onclick = () => toggleLike(postId, cbLike);
     }
 
@@ -8329,16 +8259,15 @@ function renderNotifItem(g, animDelay = 0) {
     ? `<div class="notif-thumb-wrap"><img class="notif-thumb" src="${escHtml(g.post.image)}" alt=""></div>`
     : '';
 
-  // Pass type so notifItemClick knows exactly where to navigate
-  const clickActorId = g.actor_id || (g.actors[0]?.id) || '';
+  const clickTarget = g.post_id
+    ? `notifItemClick('${g.post_id}',null,'${g.ids.join(',')}')`
+    : `notifItemClick(null,'${g.actor_id || (g.actors[0]?.id) || ''}','${g.ids.join(',')}')`;
 
   return `
     <div class="notif-item${isUnread ? ' unread' : ''}${g.grouped ? ' grouped' : ''}"
          data-ids="${g.ids.join(',')}"
-         data-post-id="${g.post_id || ''}"
-         data-actor-id="${clickActorId}"
-         data-type="${g.type}"
-         style="animation-delay:${animDelay}ms">
+         style="animation-delay:${animDelay}ms"
+         onclick="${clickTarget}">
       ${avatarHtml}
       <div class="notif-body">
         <p class="notif-text">${who} ${cfg.label}</p>
@@ -8393,16 +8322,10 @@ function switchNotifFilter(filterId) {
   renderNotifList(filterId);
 }
 
-async function notifItemClick(postId, actorId, idsStr, type) {
-  // ── Mark read ──
+async function notifItemClick(postId, actorId, idsStr) {
   const ids = idsStr.split(',').filter(Boolean);
   if (ids.length) {
-    // Wrap in async IIFE — supabase queries are not Promises, can't chain .catch()
-    (async () => {
-      try {
-        await supabase.from('notifications').update({ read: true }).in('id', ids);
-      } catch (e) { /* ignore mark-read failures — navigation must still proceed */ }
-    })();
+    supabase.from('notifications').update({ read: true }).in('id', ids).catch(() => {});
     ids.forEach(id => {
       const el = document.querySelector(`.notif-item[data-ids="${id}"], .notif-item[data-ids^="${id},"], .notif-item[data-ids*=",${id},"], .notif-item[data-ids$=",${id}"]`);
       if (el) { el.classList.remove('unread'); el.querySelector('.notif-unread-dot')?.remove(); }
@@ -8416,37 +8339,10 @@ async function notifItemClick(postId, actorId, idsStr, type) {
   // so the back button returns here correctly
   lastMainPage = 'notifications';
 
-  const hasPost  = postId  && postId  !== 'null' && postId  !== 'undefined';
-  const hasActor = actorId && actorId !== 'null' && actorId !== 'undefined';
-
-  // ── Navigate based on notification type ──
-  if (type === 'follow') {
-    // Follow notification → open the follower's profile
-    if (hasActor) await showUserProfile(actorId, null);
-
-  } else if (type === 'comment' || type === 'mention') {
-    // Comment or mention → open post and scroll straight to the comments section
-    if (hasPost) await openDetail(postId, true);
-    else if (hasActor) await showUserProfile(actorId, null);
-
-  } else if (type === 'like' || type === 'repost' || type === 'like_comment' || type === 'quote') {
-    // Like / repost / like_comment / quote → open the post (no comment scroll)
-    if (hasPost) await openDetail(postId, false);
-    else if (hasActor) await showUserProfile(actorId, null);
-
-  } else if (type === 'order_placed' || type === 'order_shipped' || type === 'order_delivered') {
-    // Order notifications → open the product post if available
-    if (hasPost) await openDetail(postId, false);
-    else showToast('Open the Market tab to view your orders');
-
-  } else if (type === 'payment_received' || type === 'wallet_credit') {
-    // Wallet notifications → go straight to wallet page
-    slideTo('wallet');
-
-  } else {
-    // Fallback for system / unknown types
-    if (hasPost) await openDetail(postId, false);
-    else if (hasActor) await showUserProfile(actorId, null);
+  if (postId && postId !== 'null' && postId !== 'undefined') {
+    await openDetail(postId);
+  } else if (actorId && actorId !== 'null' && actorId !== 'undefined') {
+    await showUserProfile(actorId, null);
   }
 }
 
@@ -8593,10 +8489,7 @@ function showNotifBanner(data) {
 
   banner.style.setProperty('--notif-accent', cfg.accentColor);
   banner.innerHTML = `
-    <div class="notif-banner-inner"
-         data-post-id="${data.post_id || ''}"
-         data-actor-id="${data.actor_id || ''}"
-         data-notif-id="${data.id}">
+    <div class="notif-banner-inner" onclick="notifBannerClick('${data.post_id || ''}','${data.actor_id || ''}','${data.id}')">
       <img class="notif-banner-avatar" src="${escHtml(src)}"
         onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=fallback'" alt="">
       <div class="notif-banner-content">
@@ -8605,13 +8498,6 @@ function showNotifBanner(data) {
       </div>
       ${data.post_image ? `<img class="notif-banner-thumb" src="${escHtml(data.post_image)}" alt="">` : `<span class="notif-banner-time">now</span>`}
     </div>`;
-
-  const inner = banner.querySelector('.notif-banner-inner');
-  if (inner) {
-    inner.addEventListener('click', () => {
-      notifBannerClick(inner.dataset.postId, inner.dataset.actorId, inner.dataset.notifId);
-    }, { once: true });
-  }
 
   requestAnimationFrame(() => { banner.classList.remove('hide'); banner.classList.add('show'); });
   clearTimeout(bannerTimer);
@@ -8632,7 +8518,7 @@ function notifBannerClick(postId, actorId, notifId) {
   dismissNotifBanner();
   if (postId) openDetail(postId);
   else if (actorId) showUserProfile(actorId, null);
-  if (notifId) (async () => { try { await supabase.from('notifications').update({ read: true }).eq('id', notifId); } catch(e){} })();
+  if (notifId) supabase.from('notifications').update({ read: true }).eq('id', notifId).catch(() => {});
 }
 
 function attachBannerSwipe(banner) {
@@ -8666,7 +8552,7 @@ function attachSwipeDismiss(el) {
       el.classList.add('dismissed');
       setTimeout(() => el.remove(), 300);
       if (ids.length) {
-        (async () => { try { await supabase.from('notifications').delete().in('id', ids); } catch(e){} })();
+        supabase.from('notifications').delete().in('id', ids).catch(() => {});
         notifRawData = notifRawData.filter(n => !ids.includes(String(n.id)));
         updateNotifTabCounts();
       }
@@ -8679,58 +8565,6 @@ function attachSwipeDismiss(el) {
 
 function onNotifPageOpen() {
   buildNotifFilterTabs();
-
-  // ── Delegated tap handler — attached once to the static #notif-list container.
-  // Survives innerHTML re-renders because it's on the parent, not the items.
-  const notifList = document.getElementById('notif-list');
-  if (notifList && !notifList._notifListenerAttached) {
-    notifList._notifListenerAttached = true;
-
-    const handleNotifTap = e => {
-      // Let follow button and badge handle their own clicks
-      if (e.target.closest('.notif-follow-btn, .notif-type-badge')) return;
-      const item = e.target.closest('.notif-item');
-      if (!item) return;
-
-      // If the finger moved more than 8px it's a scroll — ignore
-      if (e.type === 'touchend') {
-        const touch = e.changedTouches[0];
-        const dx = Math.abs(touch.clientX - (item._touchStartX || 0));
-        const dy = Math.abs(touch.clientY - (item._touchStartY || 0));
-        if (dx > 8 || dy > 8) return;
-      }
-
-      // Stop other listeners (swipe, scroll, etc.) from swallowing this tap
-      e.stopImmediatePropagation();
-      // Prevent duplicate fire if both touchend + click fire on same tap
-      if (e.type === 'click' && item._notifTapHandled) { item._notifTapHandled = false; return; }
-      if (e.type === 'touchend') item._notifTapHandled = true;
-      const postId  = item.dataset.postId  || null;
-      const actorId = item.dataset.actorId || null;
-      const idsStr  = item.dataset.ids     || '';
-      const type    = item.dataset.type    || '';
-      notifItemClick(
-        postId  && postId  !== 'null' && postId  !== 'undefined'  ? postId  : null,
-        actorId && actorId !== 'null' && actorId !== 'undefined'  ? actorId : null,
-        idsStr,
-        type
-      );
-    };
-
-    // Record touch start position so we can detect scrolls vs taps
-    notifList.addEventListener('touchstart', e => {
-      const item = e.target.closest('.notif-item');
-      if (!item) return;
-      const touch = e.touches[0];
-      item._touchStartX = touch.clientX;
-      item._touchStartY = touch.clientY;
-    }, true);
-
-    // capture:true fires before child handlers; touchend covers Android WebView edge cases
-    notifList.addEventListener('click',    handleNotifTap, true);
-    notifList.addEventListener('touchend', handleNotifTap, true);
-  }
-
   loadNotifications();
   setTimeout(async () => {
     if (unreadCount > 0) {
@@ -9575,13 +9409,15 @@ function fmtNgn(amount) {
 
 // ── WALLET STATE ──────────────────────────────────────────────────────────────
 const walletState = {
-  points: 0,               // user's Misty Points balance (live from DB)
+  points: 0,               // available MP balance (maps to wallets.available)
+  escrow: 0,               // pending escrow balance (maps to wallets.escrow)
   balanceVisible: true,
-  selectedGiftRecipient: null, // renamed from selectedSendRecipient
-  giftAmount: 0,           // in points (renamed from sendAmount)
+  selectedGiftRecipient: null,
+  giftAmount: 0,
   activeSheet: null,
   txnFilter: 'all',
   squadPublicKey: '',      // set at runtime from Supabase secrets
+  bankAccount: null,
 };
 
 // ── FORMAT HELPERS ────────────────────────────────────────────────────────────
@@ -9630,23 +9466,12 @@ async function syncWalletBalance() {
   try {
     const { data, error } = await supabase
       .from('wallets')
-      .select('points')
+      .select('available, escrow')
       .eq('user_id', currentUser.id)
       .maybeSingle();
-    if (error) return;
-    if (!data) {
-      // Wallet row missing (trigger may have failed at signup) — create it now
-      await supabase.from('wallets')
-        .insert({ user_id: currentUser.id, points: 0 })
-        .select('points')
-        .single()
-        .then(({ data: newWallet }) => {
-          walletState.points = newWallet?.points ?? 0;
-          renderWalletBalance();
-        });
-      return;
-    }
-    walletState.points = data.points ?? 0;
+    if (error || !data) return;
+    walletState.points  = data.available ?? 0;
+    walletState.escrow  = data.escrow    ?? 0;
     renderWalletBalance();
   } catch (e) { /* silently fail — show cached value */ }
 }
@@ -10959,8 +10784,42 @@ function escHtml(str) {
 }
 
 function toggleMasonryLike(btn, postId) {
-  // Routes through LikeManager — same robust system as feed/detail likes
-  LikeManager.toggle(postId, btn);
+  if (!currentUser) { showToast('Sign in to like'); return; }
+  const liked = btn.classList.contains('liked');
+  const newLiked = !liked;
+  const countEl = btn.querySelector('.prf-masonry-like-count');
+  const current = parseInt(countEl?.textContent?.replace(/[^0-9]/g,'')) || 0;
+  const newCount = Math.max(0, current + (newLiked ? 1 : -1));
+
+  if (newLiked) likedPosts.add(postId); else likedPosts.delete(postId);
+
+  // Animate FIRST before setLikeUI changes fill
+  animateHeart(btn.querySelector('svg'), newLiked);
+
+  // Update all instances everywhere via setLikeUI
+  btn.dataset.liked = newLiked ? 'true' : 'false';
+  setLikeUI(postId, newLiked, newCount);
+
+  // DB sync — then fetch real count and sync everywhere
+  const syncCount = async () => {
+    const { data } = await supabase.from('posts').select('like_count').eq('id', postId).single();
+    if (data) syncLikeCount(postId, data.like_count);
+  };
+
+  if (newLiked) {
+    supabase.from('likes').insert({ post_id: postId, user_id: currentUser.id }).then(({ error }) => {
+      if (error && error.code !== '23505') {
+        likedPosts.delete(postId);
+        setLikeUI(postId, false, current);
+      } else {
+        syncCount();
+      }
+    });
+  } else {
+    supabase.from('likes').delete()
+      .eq('post_id', postId).eq('user_id', currentUser.id)
+      .then(() => syncCount());
+  }
 }
 
 function gradientFor(id) {
