@@ -1396,7 +1396,7 @@
           <div class="wlt-pending-note">🍕 "Pizza night split"</div>
           <div class="wlt-pending-time">2h ago</div>
         </div>
-        <div class="wlt-pending-amount ca-pending-amount">✦ 0.5</div>
+        <div class="wlt-pending-amount ca-pending-amount">MP 0.5</div>
         <div class="wlt-pending-btns">
           <button class="wlt-pend-decline ca-pend-decline" onclick="handlePendingRequest(this,'decline')">✕</button>
           <button class="wlt-pend-accept ca-pend-accept" onclick="handlePendingRequest(this,'accept')">Pay</button>
@@ -1409,7 +1409,7 @@
           <div class="wlt-pending-note">🚕 "Ride home"</div>
           <div class="wlt-pending-time">Yesterday</div>
         </div>
-        <div class="wlt-pending-amount ca-pending-amount">✦ 0.16</div>
+        <div class="wlt-pending-amount ca-pending-amount">MP 0.16</div>
         <div class="wlt-pending-btns">
           <button class="wlt-pend-decline ca-pend-decline" onclick="handlePendingRequest(this,'decline')">✕</button>
           <button class="wlt-pend-accept ca-pend-accept" onclick="handlePendingRequest(this,'accept')">Pay</button>
@@ -1448,7 +1448,7 @@
             </div>
           </div>
           <div class="wlt-txn-right">
-            <div class="wlt-txn-amount wlt-amount-neg ca-txn-amount">- ✦ 1</div>
+            <div class="wlt-txn-amount wlt-amount-neg ca-txn-amount">- MP 1</div>
             <div class="wlt-txn-status completed ca-txn-status">Gifted</div>
           </div>
         </div>
@@ -1468,7 +1468,7 @@
             </div>
           </div>
           <div class="wlt-txn-right">
-            <div class="wlt-txn-amount wlt-amount-pos ca-txn-amount ca-amount-pos">+ ✦ 3</div>
+            <div class="wlt-txn-amount wlt-amount-pos ca-txn-amount ca-amount-pos">+ MP 3</div>
             <div class="wlt-txn-status completed ca-txn-status">Received</div>
           </div>
         </div>
@@ -1490,7 +1490,7 @@
             </div>
           </div>
           <div class="wlt-txn-right">
-            <div class="wlt-txn-amount wlt-amount-neg ca-txn-amount">- ✦ 1.64</div>
+            <div class="wlt-txn-amount wlt-amount-neg ca-txn-amount">- MP 1.64</div>
             <div class="wlt-txn-status escrow ca-txn-status">In Escrow</div>
           </div>
         </div>
@@ -1512,7 +1512,7 @@
             </div>
           </div>
           <div class="wlt-txn-right">
-            <div class="wlt-txn-amount wlt-amount-neg ca-txn-amount">- ✦ 0.1</div>
+            <div class="wlt-txn-amount wlt-amount-neg ca-txn-amount">- MP 0.1</div>
             <div class="wlt-txn-status completed ca-txn-status">Delivered</div>
           </div>
         </div>
@@ -1529,12 +1529,12 @@
             </div>
             <div class="wlt-txn-details">
               <div class="wlt-txn-name ca-txn-name">Points Purchased</div>
-              <div class="wlt-txn-note ca-txn-note">✦ via Squad</div>
+              <div class="wlt-txn-note ca-txn-note">via Squad</div>
               <div class="wlt-txn-time ca-txn-time">Jan 27 · 11:00 AM</div>
             </div>
           </div>
           <div class="wlt-txn-right">
-            <div class="wlt-txn-amount wlt-amount-pos ca-txn-amount ca-amount-pos">+ ✦ 4</div>
+            <div class="wlt-txn-amount wlt-amount-pos ca-txn-amount ca-amount-pos">+ MP 4</div>
             <div class="wlt-txn-status completed ca-txn-status">Completed</div>
           </div>
         </div>
@@ -1578,10 +1578,10 @@
           <button class="wlt-sel-remove" onclick="clearGiftRecipient()">✕</button>
         </div>
         <div class="wlt-amount-display">
-          <span class="wlt-amount-currency">✦</span>
+          <span class="wlt-amount-currency">MP</span>
           <input class="wlt-amount-input" id="gift-amount-input" type="tel" placeholder="0" inputmode="decimal" oninput="updateGiftAmount(this.value)">
         </div>
-        <div class="wlt-balance-hint" id="gift-balance-hint">Balance: ✦ 0</div>
+        <div class="wlt-balance-hint" id="gift-balance-hint">Balance: MP 0</div>
         <div class="wlt-note-wrap">
           <span class="wlt-note-emoji" onclick="pickNoteEmoji(this)">🎁</span>
           <input class="wlt-note-input" id="gift-note" type="text" placeholder="Add a gift message" maxlength="100">
@@ -1606,16 +1606,16 @@
       </div>
       <div class="wlt-amount-entry">
         <div class="wlt-amount-display">
-          <span class="wlt-amount-currency">✦</span>
+          <span class="wlt-amount-currency">MP</span>
           <input class="wlt-amount-input" id="add-amount-input" type="tel" placeholder="0" inputmode="decimal" oninput="updateBuyPointsPreview(this.value)">
         </div>
         <div class="wlt-balance-hint" id="buy-pts-preview">Enter how many MistyPoints to buy</div>
         <div class="wlt-quick-amounts">
-          <button class="wlt-qa" onclick="setQuickAmount('add',1)">✦1</button>
-          <button class="wlt-qa" onclick="setQuickAmount('add',2)">✦2</button>
-          <button class="wlt-qa" onclick="setQuickAmount('add',5)">✦5</button>
-          <button class="wlt-qa" onclick="setQuickAmount('add',10)">✦10</button>
-          <button class="wlt-qa" onclick="setQuickAmount('add',20)">✦20</button>
+          <button class="wlt-qa" onclick="setQuickAmount('add',1)">MP 1</button>
+          <button class="wlt-qa" onclick="setQuickAmount('add',2)">MP 2</button>
+          <button class="wlt-qa" onclick="setQuickAmount('add',5)">MP 5</button>
+          <button class="wlt-qa" onclick="setQuickAmount('add',10)">MP 10</button>
+          <button class="wlt-qa" onclick="setQuickAmount('add',20)">MP 20</button>
         </div>
       </div>
       <p class="wlt-sheet-sublabel">Pay via</p>
@@ -1746,7 +1746,7 @@
       <div class="earn-summary-card">
         <div class="earn-summary-row">
           <span class="earn-label">Current balance</span>
-          <span class="earn-value" id="earnings-balance">✦ 0</span>
+          <span class="earn-value" id="earnings-balance">MP 0</span>
         </div>
         <div class="earn-divider"></div>
         <div class="earn-summary-row">
@@ -1757,7 +1757,7 @@
           <span class="earn-label">Bank credit (est.)</span>
           <span class="earn-value earn-net" id="earnings-net">—</span>
         </div>
-        <div class="earn-status-note" id="earnings-status">Minimum ✦1 required for payout.</div>
+        <div class="earn-status-note" id="earnings-status">Minimum MP 1 required for payout.</div>
       </div>
 
       <!-- How it works -->
@@ -1768,7 +1768,7 @@
         </div>
         <div class="earn-info-row">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="2"/></svg>
-          <span>A 1% settlement fee applies. Balances below ✦1 roll over to the following Friday.</span>
+          <span>A 1% settlement fee applies. Balances below MP 1 roll over to the following Friday.</span>
         </div>
       </div>
 
