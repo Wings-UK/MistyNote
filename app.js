@@ -3639,20 +3639,30 @@ const LikeStore = (() => {
   // ── Called once per post when it's loaded from DB ─────────
   function seed(postId, count, liked) {
     if (_db.has(postId)) {
-      // Already seeded — only update if we don't have a pending tap
+      // Already in store — update count+liked only if no tap is pending
       if (!_timers.has(postId) && !_flying.get(postId)) {
         const s = _db.get(postId);
         s.count = Math.max(0, count || 0);
         s.liked = !!liked;
+        _paint(postId); // always repaint so DOM reflects fresh DB values
       }
       return;
     }
     _db.set(postId, { count: Math.max(0, count || 0), liked: !!liked });
+    // Paint immediately so heart/count render correctly from first render
+    _paint(postId);
   }
 
-  // ── Get state, creating a safe default if missing ─────────
+  // ── Check if a post has been seeded (without creating a default) ──
+  function _has(postId) { return _db.has(postId); }
+
+  // ── Check if a tap is pending or in-flight for this post ──
+  function _pending(postId) { return _timers.has(postId) || !!_flying.get(postId); }
+
+  // ── Get state. Only creates a default if not seeded yet ───
+  // Use _has() first if you don't want auto-creation.
   function get(postId) {
-    if (!_db.has(postId)) _db.set(postId, { count: 0, liked: false });
+    if (!_db.has(postId)) _db.set(postId, { count: 0, liked: likedPosts.has(postId) });
     return _db.get(postId);
   }
 
@@ -3783,7 +3793,7 @@ const LikeStore = (() => {
     _paint(postId);
   }
 
-  return { seed, get, toggle, serverSync, _paint };
+  return { seed, get, toggle, serverSync, _paint, _has, _pending };
 })();
 
 // ── Entry points called from every surface ─────────────────
@@ -3804,11 +3814,18 @@ async function checkLikedPosts(postIds) {
   const { data } = await supabase.from('likes').select('post_id').eq('user_id', currentUser.id).in('post_id', postIds);
   const liked = new Set((data || []).map(r => r.post_id));
   postIds.forEach(id => {
+    // Update global set
     liked.has(id) ? likedPosts.add(id) : likedPosts.delete(id);
-    // Only update liked state — never overwrite count with null
-    const s = LikeStore.get(id);
-    s.liked = liked.has(id);
-    LikeStore._paint(id);
+    // Only update the store if the entry already exists (seeded at render time)
+    // Never create a new entry here — count would be wrong (0)
+    if (LikeStore._has(id)) {
+      const s = LikeStore.get(id);
+      // Don't overwrite if user has a tap in progress
+      if (!LikeStore._pending(id)) {
+        s.liked = liked.has(id);
+        LikeStore._paint(id);
+      }
+    }
   });
 }
 
