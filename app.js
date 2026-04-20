@@ -3978,51 +3978,6 @@ async function getMyRepostOfPost(originalPostId) {
   return data?.id || null;
 }
 
-async function handleRepost(postId, btn, postUserId) {
-  if (!currentUser) { showToast('Sign in to repost'); return; }
-  if (postUserId && postUserId === currentUser.id) { showToast("You can't repost your own post"); return; }
-  const alreadyReposted = btn?.dataset.reposted === 'true';
-
-  if (alreadyReposted) {
-    showActionSheet([
-      { label: 'Undo Repost', icon: '🔄', action: () => undoRepost(postId, btn) },
-    ]);
-  } else {
-    repostTargetId  = postId;
-    repostTargetBtn = btn;
-
-    const { data: orig } = await supabase.from('posts')
-      .select(`id,content,image,user_id,user:users(username,avatar)`)
-      .eq('id', postId).single();
-
-    openComposer();
-
-    // Wire repost preview into new composer
-    if (orig) {
-      setTimeout(() => {
-        const preview = document.getElementById('cmp-repost-preview');
-        if (preview) {
-          const safeUser = (orig.user?.username || '').replace(/</g,'&lt;');
-          const safeText = orig.content ? orig.content.slice(0,120).replace(/</g,'&lt;') + (orig.content.length > 120 ? '…' : '') : '';
-          preview.innerHTML = _cmpRepostPreviewHTML(safeUser, safeText);
-          const postBtn = document.getElementById('cmp-post-btn');
-          if (postBtn) postBtn.disabled = false;
-        }
-      }, 80);
-    }
-  }
-}
-
-function clearRepost() {
-  repostTargetId  = null;
-  repostTargetBtn = null;
-  const preview = document.getElementById('cmp-repost-preview');
-  if (preview) { preview.innerHTML = ''; preview.style.display = 'none'; }
-  const ta  = document.getElementById('cmp-textarea');
-  const btn = document.getElementById('cmp-post-btn');
-  if (btn) btn.disabled = !(ta?.value?.trim()) && !selectedFile;
-}
-
 async function undoRepost(postId, btn) {
   // Optimistic UI immediately
   setRepostUI(postId, false);
@@ -4078,547 +4033,774 @@ async function undoRepost(postId, btn) {
 // COMPOSER — clean rewrite
 // ══════════════════════════════════════════
 
+
+// ═══════════════════════════════════════════════════════════
+// COMPOSER — Premium Redesign (Universal Upload)
+// Replaces all previous composer/upload functions
+// ═══════════════════════════════════════════════════════════
+
+let composerState = {
+    isOpen: false,
+    get selectedFile() { return selectedFile; },
+    set selectedFile(v) { selectedFile = v; },
+    get repostTargetId() { return repostTargetId; },
+    set repostTargetId(v) { repostTargetId = v; },
+    get repostTargetBtn() { return repostTargetBtn; },
+    set repostTargetBtn(v) { repostTargetBtn = v; },
+    uploadInProgress: false,
+    uploadRetryFn: null,
+    pendingPostData: null,
+};
+
+// ═══════════════════════════════════════════════════════════
+// COMPOSER — Premium Redesign (Universal Upload)
+// ═══════════════════════════════════════════════════════════
+
+// ──────────────────────────────────────────────────────────
+// OPEN COMPOSER — Premium UI
+// ──────────────────────────────────────────────────────────
 function openComposer() {
-  if (!currentUser) { showToast('Sign in to post'); return; }
+    if (!currentUser) {
+        showToast('Sign in to post');
+        return;
+    }
 
-  if (!document.getElementById('composer-v2-style')) {
-    const s = document.createElement('style');
-    s.id = 'composer-v2-style';
-    s.textContent = `
-      #composer-overlay {
-        position:fixed;inset:0;z-index:2000;
-        background:#fff;
-        display:flex;flex-direction:column;
-        opacity:0;transform:translateY(100%);
-        transition:opacity .3s ease,transform .35s cubic-bezier(.32,.72,0,1);
-        pointer-events:none;
-      }
-      #composer-overlay.open{opacity:1;transform:translateY(0);pointer-events:all}
+    // Remove existing overlay if any
+    const existing = document.getElementById('composer-premium');
+    if (existing) existing.remove();
 
-      /* Top bar */
-      .cmp-bar{
-        display:flex;align-items:center;justify-content:space-between;
-        padding:16px 20px 12px;
-        border-bottom:1px solid rgba(0,0,0,.07);
-        flex-shrink:0;
-      }
-      .cmp-cancel{
-        font-size:15px;color:#888;
-        background:none;border:none;cursor:pointer;padding:4px;
-        font-weight:400;letter-spacing:-.01em;
-      }
-      .cmp-post-btn{
-        height:34px;padding:0 20px;border-radius:17px;
-        background:#000;color:#fff;
-        font-weight:600;font-size:14px;
-        border:none;cursor:pointer;letter-spacing:-.01em;
-        transition:opacity .15s,transform .1s;
-      }
-      .cmp-post-btn:disabled{background:#e8e8e8;color:#bbb;cursor:default}
-      .cmp-post-btn:not(:disabled):active{transform:scale(.95);opacity:.9}
+    // Create premium composer container
+    const composer = document.createElement('div');
+    composer.id = 'composer-premium';
+    composer.className = 'composer-premium';
+    composer.innerHTML = `
+        <div class="composer-premium-overlay"></div>
+        <div class="composer-premium-container">
+            <div class="composer-premium-header">
+                <button class="composer-premium-cancel" onclick="closeComposer()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                    </svg>
+                </button>
+                <span class="composer-premium-title">Create post</span>
+                <button class="composer-premium-post" id="composer-post-btn" disabled onclick="submitPost()">
+                    <span>Post</span>
+                </button>
+            </div>
 
-      /* Scrollable area */
-      .cmp-body{
-        flex:1;overflow-y:auto;
-        padding:24px 20px 16px;
-        display:flex;flex-direction:column;
-        gap:0;
-        -webkit-overflow-scrolling:touch;
-      }
+            <div class="composer-premium-body" id="composer-body">
+                <div class="composer-premium-user">
+                    <img class="composer-premium-avatar" id="composer-avatar" 
+                         src="${currentProfile?.avatar || ''}" 
+                         onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${currentUser?.id}'" 
+                         alt="">
+                    <div class="composer-premium-user-info">
+                        <span class="composer-premium-name">${escHtml(currentProfile?.display_name || currentProfile?.username || 'You')}</span>
+                        <span class="composer-premium-handle">@${escHtml(currentProfile?.username || 'user')}</span>
+                    </div>
+                </div>
 
-      /* Author */
-      .cmp-author{
-        display:flex;align-items:center;gap:12px;
-        margin-bottom:20px;flex-shrink:0;
-      }
-      .cmp-avatar{
-        width:46px;height:46px;border-radius:50%;
-        object-fit:cover;flex-shrink:0;
-        border:1.5px solid #f0f0f0;
-      }
-      .cmp-author-name{
-        font-size:16px;font-weight:700;color:#0a0a0a;
-        letter-spacing:-.025em;line-height:1.2;
-      }
-      .cmp-author-handle{
-        font-size:13px;color:#aaa;margin-top:1px;letter-spacing:-.01em;
-      }
+                <div class="composer-premium-input-wrap">
+                    <textarea class="composer-premium-textarea" id="composer-textarea" 
+                              placeholder="What's on your mind?" maxlength="280" rows="1"></textarea>
+                </div>
 
-      /* Main textarea — large and expressive */
-      .cmp-textarea{
-        width:100%;border:none;outline:none;resize:none;
-        font-size:22px;line-height:1.45;font-weight:400;
-        color:#0a0a0a;background:transparent;
-        font-family:inherit;letter-spacing:-.03em;
-        min-height:150px;padding:0;flex-shrink:0;
-        caret-color:var(--accent,#6C47FF);
-      }
-      .cmp-textarea::placeholder{
-        color:#d0d0d0;font-weight:300;
-      }
+                <!-- Media Preview Area -->
+                <div class="composer-premium-media-preview" id="composer-media-preview" style="display: none;">
+                    <div class="composer-premium-media-wrapper">
+                        <img id="composer-media-img" class="composer-premium-media-img" style="display: none;">
+                        <video id="composer-media-video" class="composer-premium-media-video" controls style="display: none;"></video>
+                        <button class="composer-premium-media-remove" onclick="removeMedia()">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5">
+                                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <textarea class="composer-premium-caption" id="composer-caption" 
+                              placeholder="Add a caption..." maxlength="280" rows="1"></textarea>
+                </div>
 
-      /* Media preview */
-      .cmp-media-wrap{
-        margin-top:16px;border-radius:20px;overflow:hidden;
-        position:relative;flex-shrink:0;
-        background:#f5f5f5;
-        box-shadow:0 4px 24px rgba(0,0,0,.1);
-      }
-      .cmp-media-wrap img,.cmp-media-wrap video{
-        width:100%;max-height:340px;object-fit:cover;display:block;
-      }
-      .cmp-media-remove{
-        position:absolute;top:12px;right:12px;
-        width:32px;height:32px;border-radius:50%;
-        background:rgba(0,0,0,.45);
-        border:none;color:#fff;font-size:16px;
-        display:flex;align-items:center;justify-content:center;
-        cursor:pointer;
-        backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
-      }
+                <!-- Repost Preview -->
+                <div class="composer-premium-repost-preview" id="composer-repost-preview" style="display: none;">
+                    <div class="composer-premium-repost-card">
+                        <div class="composer-premium-repost-header">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <polyline points="17 1 21 5 17 9"/>
+                                <path d="M3 11V9a4 4 0 014-4h14"/>
+                                <polyline points="7 23 3 19 7 15"/>
+                                <path d="M21 13v2a4 4 0 01-4 4H3"/>
+                            </svg>
+                            <span>Reposting</span>
+                            <span class="composer-premium-repost-username" id="composer-repost-username"></span>
+                        </div>
+                        <p class="composer-premium-repost-text" id="composer-repost-text"></p>
+                        <button class="composer-premium-repost-remove" onclick="clearRepost()">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
 
-      /* Caption */
-      .cmp-caption{
-        width:100%;border:none;outline:none;resize:none;
-        font-size:15px;line-height:1.5;
-        color:#555;background:transparent;
-        font-family:inherit;padding:12px 0 0;min-height:36px;flex-shrink:0;
-        letter-spacing:-.01em;
-        caret-color:var(--accent,#6C47FF);
-      }
-      .cmp-caption::placeholder{color:#ccc}
-
-      /* Repost card */
-      .cmp-repost-card{
-        margin-top:16px;border:1.5px solid #efefef;
-        border-radius:16px;padding:14px 16px;
-        background:#fafafa;position:relative;flex-shrink:0;
-      }
-      .cmp-repost-label{
-        font-size:11px;font-weight:700;letter-spacing:.08em;
-        text-transform:uppercase;color:var(--accent,#6C47FF);
-        margin-bottom:6px;display:flex;align-items:center;gap:5px;
-      }
-      .cmp-repost-text{font-size:13px;color:#666;margin:0;line-height:1.45}
-      .cmp-repost-remove{
-        position:absolute;top:10px;right:12px;
-        background:none;border:none;font-size:18px;
-        color:#ccc;cursor:pointer;line-height:1;
-      }
-
-      /* Divider */
-      .cmp-divider{height:1px;background:rgba(0,0,0,.06);flex-shrink:0}
-
-      /* Bottom toolbar */
-      .cmp-toolbar{
-        display:flex;align-items:center;
-        padding:12px 20px calc(12px + env(safe-area-inset-bottom,0px));
-        gap:4px;flex-shrink:0;
-      }
-      .cmp-tool{
-        width:40px;height:40px;border-radius:50%;
-        display:flex;align-items:center;justify-content:center;
-        background:none;border:none;cursor:pointer;
-        color:var(--accent,#6C47FF);flex-shrink:0;
-        transition:background .15s;
-      }
-      .cmp-tool:active{background:rgba(108,71,255,.1)}
-
-      /* Char counter — circular ring */
-      .cmp-char-group{margin-left:auto;display:flex;align-items:center;gap:8px}
-      .cmp-char-num{font-size:12px;font-weight:600;color:#ccc;min-width:24px;text-align:right}
-      .cmp-char-num.warn{color:#f59e0b}
-      .cmp-char-num.danger{color:#ef4444}
-      .cmp-ring-svg{width:26px;height:26px;flex-shrink:0;transform:rotate(-90deg)}
-      .cmp-ring-bg{fill:none;stroke:#f0f0f0;stroke-width:3}
-      .cmp-ring-fg{
-        fill:none;stroke:var(--accent,#6C47FF);stroke-width:3;
-        stroke-linecap:round;
-        stroke-dasharray:66;stroke-dashoffset:66;
-        transition:stroke-dashoffset .15s,stroke .15s;
-      }
-      #cmp-file-input{display:none}
+            <div class="composer-premium-footer">
+                <div class="composer-premium-tools">
+                    <button class="composer-premium-tool" id="composer-attach-btn" title="Add image or video">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="2" width="20" height="20" rx="4" stroke-linecap="round"/>
+                            <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/>
+                            <polyline points="21,15 16,10 5,21" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                    <button class="composer-premium-tool" id="composer-emoji-btn" title="Add emoji">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10" stroke-linecap="round"/>
+                            <path d="M8 14s1.5 2 4 2 4-2 4-2" stroke-linecap="round"/>
+                            <circle cx="9" cy="9" r="1" fill="currentColor" stroke="none"/>
+                            <circle cx="15" cy="9" r="1" fill="currentColor" stroke="none"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="composer-premium-char">
+                    <span class="composer-premium-char-count" id="composer-char-count">0/280</span>
+                    <div class="composer-premium-char-ring">
+                        <svg width="24" height="24" viewBox="0 0 24 24">
+                            <circle class="composer-premium-ring-bg" cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" opacity="0.2"/>
+                            <circle class="composer-premium-ring-fill" id="composer-char-ring" cx="12" cy="12" r="10" fill="none" stroke="#6C47FF" stroke-width="2" 
+                                    stroke-dasharray="62.8" stroke-dashoffset="0" stroke-linecap="round" transform="rotate(-90 12 12)"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
     `;
-    document.head.appendChild(s);
-  }
 
-  document.getElementById('composer-overlay')?.remove();
+    document.body.appendChild(composer);
 
-  const avatarSrc = currentProfile?.avatar || '';
-  const username  = currentProfile?.username || 'you';
-  const dispName  = currentProfile?.display_name || currentProfile?.username || 'you';
-
-  const overlay = document.createElement('div');
-  overlay.id = 'composer-overlay';
-  overlay.innerHTML = `
-    <div class="cmp-bar">
-      <button class="cmp-cancel" onclick="closeComposer()">Cancel</button>
-      <button class="cmp-post-btn" id="cmp-post-btn" disabled onclick="cmpSubmit()">Post</button>
-    </div>
-
-    <div class="cmp-body" id="cmp-body">
-      <div class="cmp-author">
-        <img class="cmp-avatar"
-          src="${avatarSrc}"
-          onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${username}'"
-          alt="">
-        <div>
-          <div class="cmp-author-name">${dispName.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-          <div class="cmp-author-handle">@${username.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-        </div>
-      </div>
-
-      <textarea class="cmp-textarea" id="cmp-textarea"
-        placeholder="What's on your mind?"
-        maxlength="${MAX_CHARS}"></textarea>
-
-      <div id="cmp-repost-preview"></div>
-      <div id="cmp-media-section"></div>
-    </div>
-
-    <div class="cmp-divider"></div>
-    <div class="cmp-toolbar">
-      <button class="cmp-tool" title="Photo / Video"
-        onclick="document.getElementById('cmp-file-input').click()">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" stroke-width="2"
-          stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="4"/>
-          <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/>
-          <polyline points="21,15 16,10 5,21"/>
-        </svg>
-      </button>
-      <div class="cmp-char-group">
-        <span class="cmp-char-num" id="cmp-char-num"></span>
-        <svg class="cmp-ring-svg" viewBox="0 0 24 24">
-          <circle class="cmp-ring-bg" cx="12" cy="12" r="10.5"/>
-          <circle class="cmp-ring-fg" id="cmp-ring-fg" cx="12" cy="12" r="10.5"/>
-        </svg>
-      </div>
-    </div>
-
-    <input type="file" id="cmp-file-input" accept="image/*,video/*">
-  `;
-
-  document.body.appendChild(overlay);
-
-  requestAnimationFrame(() => {
-    overlay.classList.add('open');
-    setTimeout(() => document.getElementById('cmp-textarea')?.focus(), 80);
-  });
-
-  _initCmpEvents(overlay);
-
-  // Keyboard / viewport handling — keeps composer above keyboard
-  const _onVP = () => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-    overlay.style.height = vv.height + 'px';
-    overlay.style.top    = vv.offsetTop + 'px';
-  };
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', _onVP);
-    window.visualViewport.addEventListener('scroll', _onVP);
-    overlay._vp = _onVP;
-  }
-
-  // Restore repost if pending
-  if (repostTargetId) {
-    const rp = document.getElementById('cmp-repost-preview');
-    if (rp) rp.innerHTML = _cmpRepostPreviewHTML('', '');
-    const btn = document.getElementById('cmp-post-btn');
-    if (btn) btn.disabled = false;
-  }
-}
-
-function _initCmpEvents(overlay) {
-  const ta      = document.getElementById('cmp-textarea');
-  const postBtn = document.getElementById('cmp-post-btn');
-
-  function _updateBtn() {
-    if (postBtn) postBtn.disabled = !(ta?.value?.trim()) && !selectedFile && !repostTargetId;
-  }
-
-  function _updateChar(val) {
-    const numEl  = document.getElementById('cmp-char-num');
-    const ringEl = document.getElementById('cmp-ring-fg');
-    const len    = val?.length || 0;
-    const rem    = MAX_CHARS - len;
-    const pct    = len / MAX_CHARS;
-    const CIRC   = 66; // 2π × r(10.5) ≈ 66
-    if (numEl) {
-      numEl.textContent = rem < 60 ? rem : '';
-      numEl.className   = 'cmp-char-num' + (rem < 20 ? ' danger' : rem < 60 ? ' warn' : '');
-    }
-    if (ringEl) {
-      ringEl.style.strokeDashoffset = CIRC * (1 - pct);
-      ringEl.style.stroke = rem < 20 ? '#ef4444' : rem < 60 ? '#f59e0b' : 'var(--accent,#6C47FF)';
-    }
-  }
-
-  if (ta) {
-    ta.addEventListener('input', () => {
-      _updateBtn();
-      _updateChar(ta.value);
-      // Auto-grow freely — no height cap
-      ta.style.height = 'auto';
-      ta.style.height = ta.scrollHeight + 'px';
-      wireMentionInput(ta, null);
+    // Trigger entrance animation
+    requestAnimationFrame(() => {
+        composer.classList.add('composer-premium-open');
     });
-  }
 
-  const fileInput = document.getElementById('cmp-file-input');
-  if (fileInput) {
-    fileInput.addEventListener('change', e => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      _handleCmpFile(file, _updateBtn);
-    });
-  }
-
-  _updateBtn();
-}
-
-function _handleCmpFile(file, updateBtn) {
-  const isImage = file.type.startsWith('image/');
-  const isVideo = file.type.startsWith('video/');
-  if (!isImage && !isVideo) { showToast('Images and videos only'); return; }
-
-  const maxBytes = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
-  if (file.size > maxBytes) { showToast('Max ' + (isVideo ? '50MB for video' : '10MB for image')); return; }
-
-  selectedFile = file;
-
-  const section = document.getElementById('cmp-media-section');
-  if (!section) return;
-
-  if (isImage) {
-    const reader = new FileReader();
-    reader.onload = ev => {
-      section.innerHTML = `
-        <div class="cmp-media-wrap">
-          <img src="${ev.target.result}" alt="Preview" style="width:100%;max-height:320px;object-fit:cover;display:block;">
-          <button class="cmp-media-remove" onclick="cmpRemoveMedia()">&#x2715;</button>
-        </div>
-        <textarea class="cmp-caption" id="cmp-caption" placeholder="Add a caption…" maxlength="${MAX_CHARS}"></textarea>`;
-      // Wire caption input
-      const cap = document.getElementById('cmp-caption');
-      if (cap) cap.addEventListener('input', () => {
-        cap.style.height = 'auto';
-        cap.style.height = cap.scrollHeight + 'px';
-      });
-    };
-    reader.onerror = () => {
-      section.innerHTML = `<div style="padding:12px;font-size:13px;color:var(--text3)">📷 ${file.name} ready</div>`;
-    };
-    reader.readAsDataURL(file);
-  } else {
-    const url = URL.createObjectURL(file);
-    section.innerHTML = `
-      <div class="cmp-media-wrap">
-        <video src="${url}" muted playsinline controls style="width:100%;max-height:320px;display:block;"></video>
-        <button class="cmp-media-remove" onclick="cmpRemoveMedia()">&#x2715;</button>
-      </div>
-      <textarea class="cmp-caption" id="cmp-caption" placeholder="Add a caption…" maxlength="${MAX_CHARS}"></textarea>`;
-    const cap = document.getElementById('cmp-caption');
-    if (cap) cap.addEventListener('input', () => {
-      cap.style.height = 'auto';
-      cap.style.height = cap.scrollHeight + 'px';
-    });
-  }
-
-  if (updateBtn) updateBtn();
-
-  // Scroll body to show preview
-  setTimeout(() => {
-    const body = document.getElementById('cmp-body');
-    if (body) body.scrollTop = body.scrollHeight;
-  }, 100);
-}
-
-function cmpRemoveMedia() {
-  selectedFile = null;
-  const fileInput = document.getElementById('cmp-file-input');
-  if (fileInput) fileInput.value = '';
-  const section = document.getElementById('cmp-media-section');
-  if (section) section.innerHTML = '';
-  const ta  = document.getElementById('cmp-textarea');
-  const btn = document.getElementById('cmp-post-btn');
-  if (btn) btn.disabled = !(ta?.value?.trim()) && !repostTargetId;
-}
-
-function cmpSwitchTab(tab) { /* no-op — new composer has no tabs */ }
-
-function _cmpRepostPreviewHTML(username, text) {
-  return `<div class="cmp-repost-card">
-    <div class="cmp-repost-label">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
-      Reposting${username ? ' @' + username : ''}
-    </div>
-    ${text ? '<p class="cmp-repost-text">' + text + '</p>' : ''}
-    <button class="cmp-repost-remove" onclick="clearRepost()">&#x2715;</button>
-  </div>`;
-}
-
-async function cmpSubmit() {
-  const ta      = document.getElementById('cmp-textarea');
-  const caption = document.getElementById('cmp-caption'); // only exists after media is added
-  const content = (ta?.value?.trim() || '') || (caption?.value?.trim() || '');
-  const btn     = document.getElementById('cmp-post-btn');
-
-  if (!content && !selectedFile && !repostTargetId) return;
-  if (!currentUser) { showToast('Please sign in'); return; }
-  if (btn) btn.disabled = true;
-
-  const fileToUpload = selectedFile;
-  const postContent  = content;
-  const targetId     = repostTargetId;
-
-  closeComposer(true);
-
-  // ── Text-only / repost ──
-  if (!fileToUpload) {
-    try {
-      const { data: post, error } = await supabase.from('posts').insert({
-        user_id: currentUser.id,
-        content: postContent || null,
-        image: null,
-        reposted_post_id: targetId || null
-      }).select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
-        user:users(id,username,avatar,location),
-        reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))`).single();
-      if (error) throw error;
-      prependPostToFeed(post);
-      showToast('Posted! ✓');
-    } catch(e) { showToast('Post failed — try again'); }
-    return;
-  }
-
-  // ── Media post — FAB shows upload progress ──
-  setComposeRing('uploading', 5);
-  const doUpload = async () => {
-    try {
-      const imageUrl = await uploadToStorage(fileToUpload, pct => setComposeRing('uploading', pct));
-      setComposeRing('uploading', 92);
-      const isVideo = fileToUpload.type.startsWith('video/');
-      const { data: post, error } = await supabase.from('posts').insert({
-        user_id: currentUser.id,
-        content: postContent || null,
-        image:   isVideo ? null : imageUrl,
-        video:   isVideo ? imageUrl : null,
-        reposted_post_id: targetId || null
-      }).select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
-        user:users(id,username,avatar,location),
-        reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))`).single();
-      if (error) throw error;
-      setComposeRing('success');
-      prependPostToFeed(post);
-      uploadState.retryFn = null;
-    } catch(e) {
-      setComposeRing('failed');
-      uploadState.retryFn = doUpload;
-    }
-  };
-  doUpload();
-}
-
-function closeComposer(instant = false) {
-  const overlay = document.getElementById('composer-overlay');
-  if (!overlay) return;
-
-  if (overlay._vp && window.visualViewport) {
-    window.visualViewport.removeEventListener('resize', overlay._vp);
-    window.visualViewport.removeEventListener('scroll', overlay._vp);
-    overlay._vp = null;
-  }
-
-  const cleanup = () => {
-    overlay.remove();
-    selectedFile    = null;
-    repostTargetId  = null;
-    repostTargetBtn = null;
-  };
-
-  if (instant) {
-    cleanup();
-  } else {
-    overlay.classList.remove('open');
-    setTimeout(cleanup, 280);
-  }
-}
-
-// initComposerFile, removeMedia, updateComposerBtn, updateCharCount removed —
-// replaced by openComposer() / _initCmpEvents() / cmpSubmit()
-
-function insertEmoji() { showToast('Emoji picker coming soon!'); }
-
-// ══════════════════════════════════════════
-// EMOJI & STICKER PICKER
-// ══════════════════════════════════════════
-
-let stickerPickerContext = null; // 'dm' or 'comment'
-
-
-// Common emojis grouped
-const EMOJI_LIST = [
-  '😀','😂','🥹','😍','🥰','😘','😎','🤩','😭','😤',
-  '🙏','👏','🔥','❤️','💜','💯','✨','🎉','👀','😏',
-  '🤣','😅','😬','🫡','🫶','💪','👍','👎','🤝','🙌',
-  '😴','🤔','🤯','😱','🥳','🤗','😇','😈','💀','👻',
-  '🍔','🍕','🌮','🍜','🍣','🍦','🎂','🥂','🍻','☕',
-  '💰','🛍️','📦','🚀','🌍','🏆','🎯','💡','📱','💻',
-];
-
-// Milk & Mocha sticker pack — fetched via Telegram Bot API proxy
-
-
-
-function openStickerPicker(context) {
-  stickerPickerContext = context;
-  const picker = document.getElementById('sticker-picker');
-  if (!picker) return;
-
-  // Position above the triggering button
-  const btnId = context === 'dm' ? 'dm-emoji-btn' : 'comment-emoji-btn';
-  const btn = document.getElementById(btnId);
-  if (btn) {
-    const rect = btn.getBoundingClientRect();
-    picker.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
-  }
-
-  picker.classList.toggle('hidden');
-
-  if (!picker.classList.contains('hidden')) {
-    // Populate emoji grid if empty
-    const grid = document.getElementById('sp-emoji-grid');
-    if (grid && !grid.children.length) {
-      EMOJI_LIST.forEach(emoji => {
-        const btn = document.createElement('button');
-        btn.className = 'emoji-btn';
-        btn.textContent = emoji;
-        btn.onclick = () => insertEmojiOrSticker(emoji, 'emoji');
-        grid.appendChild(btn);
-      });
-    }
-    // Close when tapping outside
+    // Focus textarea after animation
     setTimeout(() => {
-      document.addEventListener('click', closeStickerPickerOutside, { once: true });
-    }, 50);
-  }
+        const textarea = document.getElementById('composer-textarea');
+        if (textarea) {
+            textarea.focus();
+            autoResizeTextarea(textarea);
+        }
+    }, 200);
+
+    composerState.isOpen = true;
+
+    // ──────────────────────────────────────────────────────────
+    // WIRE EVENT LISTENERS
+    // ──────────────────────────────────────────────────────────
+    
+    // Textarea character counter
+    const textarea = document.getElementById('composer-textarea');
+    if (textarea) {
+        textarea.addEventListener('input', (e) => {
+            updateCharCounter(e.target.value.length);
+            autoResizeTextarea(e.target);
+            updatePostButtonState();
+        });
+    }
+
+    // Caption input
+    const caption = document.getElementById('composer-caption');
+    if (caption) {
+        caption.addEventListener('input', (e) => {
+            autoResizeTextarea(e.target);
+            updatePostButtonState();
+        });
+    }
+
+    // Attach button - UNIVERSAL FILE INPUT
+    const attachBtn = document.getElementById('composer-attach-btn');
+    if (attachBtn) {
+        attachBtn.addEventListener('click', () => {
+            createUniversalFileInput();
+        });
+    }
+
+    // Emoji button
+    const emojiBtn = document.getElementById('composer-emoji-btn');
+    if (emojiBtn) {
+        emojiBtn.addEventListener('click', () => {
+            showEmojiPicker('composer-textarea');
+        });
+    }
+
+    // Close on overlay click
+    const overlay = composer.querySelector('.composer-premium-overlay');
+    if (overlay) {
+        overlay.addEventListener('click', closeComposer);
+    }
+
+    // Repost preview if pending
+    if (composerState.repostTargetId) {
+        loadRepostPreview(composerState.repostTargetId);
+    }
+
+    updatePostButtonState();
 }
 
-function closeStickerPickerOutside(e) {
-  const picker = document.getElementById('sticker-picker');
-  if (picker && !picker.contains(e.target)) {
-    picker.classList.add('hidden');
-  } else if (picker && !picker.classList.contains('hidden')) {
-    document.addEventListener('click', closeStickerPickerOutside, { once: true });
-  }
+// ──────────────────────────────────────────────────────────
+// UNIVERSAL FILE INPUT — Works on ALL browsers
+// ──────────────────────────────────────────────────────────
+function createUniversalFileInput() {
+    // Create a temporary file input element
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*,video/*';
+    fileInput.multiple = false;
+    
+    // Store reference for cleanup
+    fileInput.style.position = 'absolute';
+    fileInput.style.left = '-9999px';
+    fileInput.style.top = '-9999px';
+    document.body.appendChild(fileInput);
+    
+    // Handle file selection
+    fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            await handleFileSelection(file);
+        }
+        // Clean up
+        document.body.removeChild(fileInput);
+    });
+    
+    // Trigger click - this works on ALL browsers including Chrome
+    fileInput.click();
+    
+    // Fallback for browsers that block programmatic click
+    setTimeout(() => {
+        if (document.body.contains(fileInput)) {
+            document.body.removeChild(fileInput);
+        }
+    }, 5000);
 }
 
+// ──────────────────────────────────────────────────────────
+// HANDLE FILE SELECTION — Universal validation & preview
+// ──────────────────────────────────────────────────────────
+async function handleFileSelection(file) {
+    // Validate file type
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+    
+    if (!isImage && !isVideo) {
+        showToast('Please select an image or video file');
+        return;
+    }
+    
+    // Validate size
+    const maxSize = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+        showToast(`File too large. Max ${isVideo ? '50MB' : '10MB'}`);
+        return;
+    }
+    
+    // Store the actual file object (not just data URL)
+    composerState.selectedFile = file;
+    
+    // Create preview
+    const previewContainer = document.getElementById('composer-media-preview');
+    const imgElement = document.getElementById('composer-media-img');
+    const videoElement = document.getElementById('composer-media-video');
+    
+    if (!previewContainer || !imgElement || !videoElement) return;
+    
+    // Clear previous previews
+    imgElement.style.display = 'none';
+    videoElement.style.display = 'none';
+    imgElement.src = '';
+    videoElement.src = '';
+    
+    // Show preview based on type
+    if (isImage) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            imgElement.src = e.target.result;
+            imgElement.style.display = 'block';
+            previewContainer.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    } else if (isVideo) {
+        const videoURL = URL.createObjectURL(file);
+        videoElement.src = videoURL;
+        videoElement.style.display = 'block';
+        previewContainer.style.display = 'block';
+        // Clean up object URL when video is done or removed
+        videoElement.onloadeddata = () => {
+            URL.revokeObjectURL(videoURL);
+        };
+    }
+    
+    updatePostButtonState();
+}
 
+// ──────────────────────────────────────────────────────────
+// REMOVE MEDIA
+// ──────────────────────────────────────────────────────────
+function removeMedia() {
+    composerState.selectedFile = null;
+    
+    const previewContainer = document.getElementById('composer-media-preview');
+    const imgElement = document.getElementById('composer-media-img');
+    const videoElement = document.getElementById('composer-media-video');
+    const caption = document.getElementById('composer-caption');
+    
+    if (previewContainer) previewContainer.style.display = 'none';
+    if (imgElement) {
+        imgElement.src = '';
+        imgElement.style.display = 'none';
+    }
+    if (videoElement) {
+        videoElement.src = '';
+        videoElement.style.display = 'none';
+    }
+    if (caption) caption.value = '';
+    
+    updatePostButtonState();
+}
 
+// ──────────────────────────────────────────────────────────
+// LOAD REPOST PREVIEW
+// ──────────────────────────────────────────────────────────
+async function loadRepostPreview(postId) {
+    try {
+        const { data: post, error } = await supabase
+            .from('posts')
+            .select(`id, content, user:users(id, username, avatar)`)
+            .eq('id', postId)
+            .single();
+        
+        if (error || !post) return;
+        
+        const previewContainer = document.getElementById('composer-repost-preview');
+        const usernameSpan = document.getElementById('composer-repost-username');
+        const textSpan = document.getElementById('composer-repost-text');
+        
+        if (previewContainer && usernameSpan && textSpan) {
+            usernameSpan.textContent = `@${post.user?.username || 'user'}`;
+            textSpan.textContent = post.content ? 
+                (post.content.length > 120 ? post.content.slice(0, 120) + '...' : post.content) : 
+                '';
+            previewContainer.style.display = 'block';
+        }
+    } catch (e) {
+        console.warn('Failed to load repost preview:', e);
+    }
+}
 
+// ──────────────────────────────────────────────────────────
+// CLEAR REPOST
+// ──────────────────────────────────────────────────────────
+function clearRepost() {
+    composerState.repostTargetId = null;
+    composerState.repostTargetBtn = null;
+    
+    const previewContainer = document.getElementById('composer-repost-preview');
+    if (previewContainer) {
+        previewContainer.style.display = 'none';
+    }
+    
+    updatePostButtonState();
+}
+
+// ──────────────────────────────────────────────────────────
+// UPDATE CHAR COUNTER & RING
+// ──────────────────────────────────────────────────────────
+function updateCharCounter(length) {
+    const countSpan = document.getElementById('composer-char-count');
+    const ring = document.getElementById('composer-char-ring');
+    
+    if (!countSpan) return;
+    
+    const remaining = 280 - length;
+    countSpan.textContent = `${length}/280`;
+    
+    // Change color based on remaining
+    if (remaining < 0) {
+        countSpan.style.color = '#ff3b5c';
+        if (ring) ring.setAttribute('stroke', '#ff3b5c');
+    } else if (remaining < 20) {
+        countSpan.style.color = '#f59e0b';
+        if (ring) ring.setAttribute('stroke', '#f59e0b');
+    } else {
+        countSpan.style.color = 'var(--text2)';
+        if (ring) ring.setAttribute('stroke', '#6C47FF');
+    }
+    
+    // Update ring progress
+    if (ring) {
+        const percent = Math.min(1, length / 280);
+        const circumference = 62.8; // 2 * PI * 10
+        const offset = circumference * (1 - percent);
+        ring.style.strokeDashoffset = offset;
+    }
+}
+
+// ──────────────────────────────────────────────────────────
+// AUTO-RESIZE TEXTAREA
+// ──────────────────────────────────────────────────────────
+function autoResizeTextarea(textarea) {
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+}
+
+// ──────────────────────────────────────────────────────────
+// UPDATE POST BUTTON STATE
+// ──────────────────────────────────────────────────────────
+function updatePostButtonState() {
+    const textarea = document.getElementById('composer-textarea');
+    const caption = document.getElementById('composer-caption');
+    const postBtn = document.getElementById('composer-post-btn');
+    
+    if (!postBtn) return;
+    
+    const hasText = (textarea?.value?.trim()?.length > 0) || (caption?.value?.trim()?.length > 0);
+    const hasMedia = composerState.selectedFile !== null;
+    const hasRepost = composerState.repostTargetId !== null;
+    
+    const isValid = (hasText || hasMedia || hasRepost) && 
+                    (textarea?.value?.length || 0) <= 280 &&
+                    (caption?.value?.length || 0) <= 280;
+    
+    postBtn.disabled = !isValid;
+    postBtn.classList.toggle('active', isValid);
+}
+
+// ──────────────────────────────────────────────────────────
+// SHOW EMOJI PICKER
+// ──────────────────────────────────────────────────────────
+function showEmojiPicker(targetId) {
+    const target = document.getElementById(targetId);
+    if (!target) return;
+    
+    // Simple emoji picker
+    const emojis = ['😀','😂','🥹','😍','🔥','❤️','💯','✨','🎉','🙏','👏','🫶','💪','🤝','😎','🤩','🥳','😭','😤','💀'];
+    
+    const picker = document.createElement('div');
+    picker.className = 'composer-emoji-picker';
+    picker.innerHTML = emojis.map(e => `<button class="composer-emoji-btn">${e}</button>`).join('');
+    
+    // Position near the emoji button
+    const emojiBtn = document.getElementById('composer-emoji-btn');
+    const rect = emojiBtn?.getBoundingClientRect();
+    if (rect) {
+        picker.style.bottom = (window.innerHeight - rect.top + 10) + 'px';
+        picker.style.left = rect.left + 'px';
+    }
+    
+    document.body.appendChild(picker);
+    
+    // Handle emoji selection
+    picker.querySelectorAll('.composer-emoji-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const emoji = e.target.textContent;
+            const start = target.selectionStart;
+            const end = target.selectionEnd;
+            const value = target.value;
+            target.value = value.slice(0, start) + emoji + value.slice(end);
+            target.setSelectionRange(start + emoji.length, start + emoji.length);
+            target.focus();
+            target.dispatchEvent(new Event('input'));
+            picker.remove();
+        });
+    });
+    
+    // Close on outside click
+    const closePicker = (e) => {
+        if (!picker.contains(e.target) && e.target !== emojiBtn) {
+            picker.remove();
+            document.removeEventListener('click', closePicker);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closePicker), 100);
+}
+
+// ──────────────────────────────────────────────────────────
+// SUBMIT POST — With upload progress ring
+// ──────────────────────────────────────────────────────────
+async function submitPost() {
+    const textarea = document.getElementById('composer-textarea');
+    const caption = document.getElementById('composer-caption');
+    const postBtn = document.getElementById('composer-post-btn');
+    
+    const content = (textarea?.value?.trim() || '') + 
+                    (caption?.value?.trim() ? '\n\n' + caption.value.trim() : '');
+    
+    if (!content && !composerState.selectedFile && !composerState.repostTargetId) return;
+    if (!currentUser) {
+        showToast('Please sign in');
+        return;
+    }
+    
+    // Disable button during submission
+    if (postBtn) {
+        postBtn.disabled = true;
+        postBtn.innerHTML = '<div class="composer-spinner"></div>';
+    }
+    
+    const fileToUpload = composerState.selectedFile;
+    const targetId = composerState.repostTargetId;
+    
+    try {
+        let imageUrl = null;
+        let videoUrl = null;
+        
+        // Upload file if exists
+        if (fileToUpload) {
+            const isVideo = fileToUpload.type.startsWith('video/');
+            const result = await uploadMediaWithProgress(fileToUpload, (progress) => {
+                updatePostButtonProgress(progress);
+            });
+            
+            if (isVideo) {
+                videoUrl = result;
+            } else {
+                imageUrl = result;
+            }
+        }
+        
+        // Create post
+        const { data: post, error } = await supabase
+            .from('posts')
+            .insert({
+                user_id: currentUser.id,
+                content: content || null,
+                image: imageUrl,
+                video: videoUrl,
+                reposted_post_id: targetId || null
+            })
+            .select(`id, content, image, video, created_at, like_count, repost_count, views, user_id, reposted_post_id,
+                     user:users(id, username, avatar, location),
+                     reposted_post:reposted_post_id(id, content, image, video, created_at, user_id, 
+                                                    user:users(id, username, avatar, location))`)
+            .single();
+        
+        if (error) throw error;
+        
+        // Add to feed
+        prependPostToFeed(post);
+        showToast('Posted! ✓');
+        
+        // Clear state and close
+        composerState.selectedFile = null;
+        composerState.repostTargetId = null;
+        composerState.repostTargetBtn = null;
+        
+        closeComposer();
+        
+    } catch (error) {
+        console.error('Post failed:', error);
+        showToast('Failed to post. Please try again.');
+        
+        if (postBtn) {
+            postBtn.disabled = false;
+            postBtn.innerHTML = '<span>Post</span>';
+        }
+    }
+}
+
+// ──────────────────────────────────────────────────────────
+// UPLOAD MEDIA WITH PROGRESS — Chrome-safe implementation
+// ──────────────────────────────────────────────────────────
+async function uploadMediaWithProgress(file, onProgress) {
+    if (!file) throw new Error('No file');
+    if (!currentUser) throw new Error('Not logged in');
+    
+    const isVideo = file.type.startsWith('video/');
+    let blob = file;
+    let ext = (file.name?.split('.').pop()?.toLowerCase()) || (isVideo ? 'mp4' : 'jpg');
+    
+    // Compress images (not videos)
+    if (!isVideo) {
+        try {
+            blob = await compressImageForUpload(file, 1200);
+            ext = 'jpg';
+        } catch (e) {
+            console.warn('Compression failed, using original:', e);
+            blob = file;
+        }
+    }
+    
+    onProgress(30);
+    
+    // Generate unique path
+    const timestamp = Date.now();
+    const filename = `${timestamp}.${ext}`;
+    const path = `${currentUser.id}/${filename}`;
+    const bucket = 'post-images';
+    
+    // Upload with Supabase storage
+    const { data, error } = await supabase.storage
+        .from(bucket)
+        .upload(path, blob, {
+            upsert: true,
+            contentType: isVideo ? (file.type || 'video/mp4') : 'image/jpeg',
+            cacheControl: '3600'
+        });
+    
+    if (error) {
+        console.error('Upload error:', error);
+        throw new Error(error.message || 'Upload failed');
+    }
+    
+    onProgress(90);
+    
+    const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
+    onProgress(100);
+    
+    return urlData.publicUrl;
+}
+
+// ──────────────────────────────────────────────────────────
+// COMPRESS IMAGE — Chrome-compatible canvas method
+// ──────────────────────────────────────────────────────────
+function compressImageForUpload(file, maxSize) {
+    return new Promise((resolve, reject) => {
+        // For non-image files or already small enough, resolve immediately
+        if (!file.type.startsWith('image/')) {
+            resolve(file);
+            return;
+        }
+        
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(file);
+        
+        img.onload = () => {
+            URL.revokeObjectURL(objectUrl);
+            
+            let width = img.width;
+            let height = img.height;
+            
+            // Calculate scale
+            if (width > maxSize || height > maxSize) {
+                if (width > height) {
+                    height = Math.round(height * maxSize / width);
+                    width = maxSize;
+                } else {
+                    width = Math.round(width * maxSize / height);
+                    height = maxSize;
+                }
+            }
+            
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                reject(new Error('Canvas context not available'));
+                return;
+            }
+            
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            canvas.toBlob(
+                (blob) => {
+                    if (blob) {
+                        resolve(blob);
+                    } else {
+                        reject(new Error('Compression failed'));
+                    }
+                },
+                'image/jpeg',
+                0.85
+            );
+        };
+        
+        img.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+            reject(new Error('Failed to load image'));
+        };
+        
+        img.src = objectUrl;
+    });
+}
+
+// ──────────────────────────────────────────────────────────
+// UPDATE POST BUTTON PROGRESS (for uploads)
+// ──────────────────────────────────────────────────────────
+function updatePostButtonProgress(percent) {
+    const postBtn = document.getElementById('composer-post-btn');
+    if (!postBtn) return;
+    
+    if (percent < 100) {
+        postBtn.innerHTML = `<div class="composer-progress-ring">
+                              <svg width="20" height="20" viewBox="0 0 20 20">
+                                <circle cx="10" cy="10" r="8" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
+                                <circle cx="10" cy="10" r="8" fill="none" stroke="white" stroke-width="2" 
+                                        stroke-dasharray="50.24" stroke-dashoffset="${50.24 * (1 - percent / 100)}" 
+                                        stroke-linecap="round" transform="rotate(-90 10 10)"/>
+                              </svg>
+                            </div>`;
+    } else {
+        postBtn.innerHTML = '<span>Post</span>';
+    }
+}
+
+// ──────────────────────────────────────────────────────────
+// CLOSE COMPOSER
+// ──────────────────────────────────────────────────────────
+function closeComposer() {
+    const composer = document.getElementById('composer-premium');
+    if (!composer) return;
+    
+    composer.classList.remove('composer-premium-open');
+    
+    setTimeout(() => {
+        composer.remove();
+        composerState.isOpen = false;
+        composerState.selectedFile = null;
+    }, 300);
+}
+
+// ──────────────────────────────────────────────────────────
+// WRAPPER FOR EXISTING HANDLE REPOST FUNCTION
+// ──────────────────────────────────────────────────────────
+function handleRepost(postId, btn, postUserId) {
+    if (!currentUser) {
+        showToast('Sign in to repost');
+        return;
+    }
+    
+    if (postUserId === currentUser.id) {
+        showToast("You can't repost your own post");
+        return;
+    }
+    
+    const alreadyReposted = btn?.dataset.reposted === 'true';
+    
+    if (alreadyReposted) {
+        showActionSheet([
+            { label: 'Undo Repost', icon: '🔄', action: () => undoRepost(postId, btn) },
+        ]);
+    } else {
+        composerState.repostTargetId = postId;
+        composerState.repostTargetBtn = btn;
+        openComposer();
+    }
+}
+
+// ──────────────────────────────────────────────────────────
+// ESCAPE HTML
+// ──────────────────────────────────────────────────────────
+function escHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+    });
+}
 
 function insertEmojiOrSticker(value, type, stickerData) {
   const picker = document.getElementById('sticker-picker');
@@ -4716,57 +4898,12 @@ function prependPostToFeed(newPost) {
 
 // ── Image → JPEG blob via canvas, with FileReader fallback ──
 // ── Upload: compress → retry loop → return public URL ──
+// uploadToStorage — alias to uploadMediaWithProgress for backward compatibility
+// (setComposeRing retry calls this name)
 async function uploadToStorage(file, onProgress) {
-  if (!file) throw new Error('No file');
-  if (!currentUser) throw new Error('Not logged in');
-
-  onProgress(10);
-
-  const isVideo = file.type.startsWith('video/');
-  let blob = file;
-  let ext  = (file.name?.split('.').pop()?.toLowerCase()) || (isVideo ? 'mp4' : 'jpg');
-
-  // Compress images exactly like avatar upload does
-  if (!isVideo) {
-    try {
-      blob = await compressImage(file, 1200);
-      ext  = 'jpg';
-    } catch(e) {
-      console.warn('[uploadToStorage] compress failed, using raw:', e.message);
-      blob = file;
-    }
-  }
-
-  onProgress(40);
-
-  // Path structure identical to avatar: userId/filename — satisfies RLS
-  const filename = `${Date.now()}.${ext}`;
-  const path     = `${currentUser.id}/${filename}`;
-
-  // Use 'avatars' bucket as fallback test — swap to 'post-images' when that bucket is confirmed ready
-  const bucket = 'post-images';
-
-  const { error } = await supabase.storage
-    .from(bucket)
-    .upload(path, blob, {
-      upsert: true,
-      contentType: isVideo ? (file.type || 'video/mp4') : 'image/jpeg'
-    });
-
-  if (error) {
-    // Surface the real error so you can see it in console
-    console.error('[uploadToStorage] REAL ERROR:', error.message, error);
-    throw new Error(error.message || 'Upload failed');
-  }
-
-  onProgress(90);
-  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-  onProgress(100);
-  return data.publicUrl;
+    return uploadMediaWithProgress(file, onProgress);
 }
 
-// ── Submit post ──
-// submitPost() removed — replaced by cmpSubmit() in new composer
 
 // ══════════════════════════════════════════
 // POST DETAIL
