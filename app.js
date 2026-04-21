@@ -4083,7 +4083,7 @@ function openComposer() {
                     </svg>
                 </button>
                 <span class="composer-premium-title">Create post</span>
-                <button class="composer-premium-post" id="composer-post-btn" disabled onclick="submitPost()">
+                <button class="composer-premium-post" id="composer-post-btn" onclick="submitPost()" style="pointer-events:none;opacity:0.4;">
                     <span>Post</span>
                 </button>
             </div>
@@ -4250,37 +4250,26 @@ function openComposer() {
 // UNIVERSAL FILE INPUT — Works on ALL browsers
 // ──────────────────────────────────────────────────────────
 function createUniversalFileInput() {
-    // Create a temporary file input element
-    const fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.accept = 'image/*,video/*';
-    fileInput.multiple = false;
-    
-    // Store reference for cleanup
-    fileInput.style.position = 'absolute';
-    fileInput.style.left = '-9999px';
-    fileInput.style.top = '-9999px';
-    document.body.appendChild(fileInput);
-    
-    // Handle file selection
-    fileInput.addEventListener('change', async (e) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            await handleFileSelection(file);
-        }
-        // Clean up
-        document.body.removeChild(fileInput);
-    });
-    
-    // Trigger click - this works on ALL browsers including Chrome
+    // Must create and click synchronously inside the user gesture handler.
+    // Chrome blocks .click() on hidden/off-screen inputs — keep it visible but invisible.
+    let fileInput = document.getElementById('composer-file-input-hidden');
+    if (!fileInput) {
+        fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.id = 'composer-file-input-hidden';
+        fileInput.accept = 'image/*,video/*';
+        fileInput.multiple = false;
+        // Invisible but NOT off-screen — Chrome allows clicks on zero-size elements
+        fileInput.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;opacity:0;z-index:-1;';
+        document.body.appendChild(fileInput);
+
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files?.[0];
+            if (file) await handleFileSelection(file);
+            fileInput.value = ''; // reset so same file can be re-selected
+        });
+    }
     fileInput.click();
-    
-    // Fallback for browsers that block programmatic click
-    setTimeout(() => {
-        if (document.body.contains(fileInput)) {
-            document.body.removeChild(fileInput);
-        }
-    }, 5000);
 }
 
 // ──────────────────────────────────────────────────────────
@@ -4458,21 +4447,26 @@ function autoResizeTextarea(textarea) {
 // ──────────────────────────────────────────────────────────
 function updatePostButtonState() {
     const textarea = document.getElementById('composer-textarea');
-    const caption = document.getElementById('composer-caption');
-    const postBtn = document.getElementById('composer-post-btn');
-    
+    const caption  = document.getElementById('composer-caption');
+    const postBtn  = document.getElementById('composer-post-btn');
+
     if (!postBtn) return;
-    
-    const hasText = (textarea?.value?.trim()?.length > 0) || (caption?.value?.trim()?.length > 0);
-    const hasMedia = composerState.selectedFile !== null;
+
+    const hasText   = (textarea?.value?.trim()?.length > 0) || (caption?.value?.trim()?.length > 0);
+    const hasMedia  = composerState.selectedFile !== null;
     const hasRepost = composerState.repostTargetId !== null;
-    
-    const isValid = (hasText || hasMedia || hasRepost) && 
-                    (textarea?.value?.length || 0) <= 280 &&
-                    (caption?.value?.length || 0) <= 280;
-    
-    postBtn.disabled = !isValid;
+    const withinLimit = (textarea?.value?.length || 0) <= MAX_CHARS &&
+                        (caption?.value?.length || 0) <= MAX_CHARS;
+
+    const isValid = (hasText || hasMedia || hasRepost) && withinLimit;
+
+    // Use ONLY the CSS class — never the disabled attribute.
+    // The disabled attribute overrides class-based styles on Android/Chrome
+    // and blocks pointer events even when we toggle the class.
+    postBtn.disabled = false; // always re-enable so onclick fires
     postBtn.classList.toggle('active', isValid);
+    postBtn.style.pointerEvents = isValid ? '' : 'none';
+    postBtn.style.opacity = isValid ? '' : '0.4';
 }
 
 // ──────────────────────────────────────────────────────────
