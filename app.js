@@ -5266,8 +5266,6 @@ function prependPostToFeed(newPost) {
   }
 }
 
-}
-
 
 // ══════════════════════════════════════════
 // POST DETAIL
