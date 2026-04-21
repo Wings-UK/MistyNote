@@ -4201,28 +4201,27 @@ function openComposer() {
     composer.classList.add('composer-premium-open');
   }));
 
-  // ── Focus textarea ──
+  composerState.isOpen = true;
+
+  // ── Wire events + focus — inside setTimeout so DOM is fully painted ──
   setTimeout(() => {
+    _composerWireEvents(composer);
+
     const ta = document.getElementById('composer-textarea');
     if (ta) {
       ta.focus();
       autoResizeTextarea(ta);
       wireMentionToComposer();
     }
-  }, 320);
 
-  composerState.isOpen = true;
+    // Repost preview only if this was triggered from a repost action
+    if (composerState.repostTargetId) {
+      loadRepostPreview(composerState.repostTargetId);
+    }
 
-  // ─────── Wire all events ───────
-  _composerWireEvents(composer);
-
-  // Repost preview
-  if (composerState.repostTargetId) {
-    loadRepostPreview(composerState.repostTargetId);
-  }
-
-  updatePostButtonState();
-  updateCharCounter(0);
+    updatePostButtonState();
+    updateCharCounter(0);
+  }, 50);
 }
 
 // ──────────────────────────────────────────────────────────
@@ -4836,8 +4835,13 @@ function closeComposer() {
   setTimeout(() => {
     composer.remove();
     document.body.style.overflow = '';
-    composerState.isOpen       = false;
-    composerState.selectedFile = null;
+    composerState.isOpen          = false;
+    composerState.selectedFile    = null;
+    composerState.repostTargetId  = null;
+    composerState.repostTargetBtn = null;
+    selectedFile    = null;
+    repostTargetId  = null;
+    repostTargetBtn = null;
   }, 360);
 }
 
