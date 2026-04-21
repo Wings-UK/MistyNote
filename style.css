@@ -6448,7 +6448,8 @@
   transform: translateY(100%);
   transition: transform 0.42s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   will-change: transform;
-  overflow: hidden;
+  /* Do NOT use overflow:hidden — it breaks touch events and textarea focus on iOS */
+  overflow: visible;
 }
 
 .composer-premium-open .cpr-sheet {
@@ -6466,6 +6467,8 @@
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  border-radius: 24px 24px 0 0;
+  background: var(--bg, #fff);
 }
 
 .cpr-drag-bar:active {
@@ -6577,8 +6580,9 @@
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   padding: 12px 16px 0;
-  /* Subtle scroll indicator */
   scrollbar-width: none;
+  /* Clip content to sheet boundary without blocking parent touch events */
+  border-radius: 0;
 }
 
 .cpr-body::-webkit-scrollbar {
