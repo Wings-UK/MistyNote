@@ -4481,23 +4481,43 @@ async function _cSubmit() {
         videoUrl = urlData.publicUrl;
         console.log('[MistyNote] ✅ video uploaded:', videoUrl);
       } else {
-        // Upload raw file — no compression, no object URL issues
-        // Phone JPEGs are already compressed. Supabase handles them fine.
-        const rawExt = (_c.file.name || '').split('.').pop().toLowerCase();
-        const safeExt = (rawExt && rawExt.length >= 2 && rawExt.length <= 5) ? rawExt : 'jpg';
-        const mime = _c.file.type || 'image/jpeg';
-        const path = `${currentUser.id}/post_${Date.now()}.${safeExt}`;
-        console.log('[MistyNote] uploading raw file, size:', (_c.file.size/1024).toFixed(0)+'KB', 'mime:', mime);
+        // Compress via canvas using the preview img element directly —
+        // no new object URLs, no FileReader, works on all mobile browsers
+        const path = `${currentUser.id}/post_${Date.now()}.jpg`;
+        console.log('[MistyNote] compressing via canvas...');
+
+        const blob = await new Promise((resolve, reject) => {
+          // Grab the already-rendered img element in the composer preview
+          const previewImg = document.getElementById('mnc-img');
+          if (!previewImg || !previewImg.complete || !previewImg.naturalWidth) {
+            reject(new Error('Preview image not ready')); return;
+          }
+          const maxPx = 1200;
+          const scale = Math.min(1, maxPx / Math.max(previewImg.naturalWidth, previewImg.naturalHeight));
+          const w = Math.max(1, Math.round(previewImg.naturalWidth * scale));
+          const h = Math.max(1, Math.round(previewImg.naturalHeight * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) { reject(new Error('No canvas context')); return; }
+          ctx.drawImage(previewImg, 0, 0, w, h);
+          canvas.toBlob(
+            b => b ? resolve(b) : reject(new Error('canvas.toBlob returned null')),
+            'image/jpeg', 0.82
+          );
+        });
+
+        console.log('[MistyNote] compressed to', (blob.size/1024).toFixed(0)+'KB, uploading...');
         const { error: upErr } = await supabase.storage
           .from('avatars')
-          .upload(path, _c.file, { upsert: true, contentType: mime, cacheControl: '3600' });
+          .upload(path, blob, { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
         if (upErr) {
-          console.error('[MistyNote] ❌ image upload error:', upErr.statusCode, upErr.message);
-          throw new Error('Image upload failed: ' + upErr.message);
+          console.error('[MistyNote] ❌ upload error:', upErr.statusCode, upErr.message);
+          throw new Error('Upload failed: ' + upErr.message);
         }
         const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
         imageUrl = urlData.publicUrl;
-        console.log('[MistyNote] ✅ image uploaded:', imageUrl);
+        console.log('[MistyNote] ✅ uploaded:', imageUrl);
       }
     }
 
