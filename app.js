@@ -4466,55 +4466,69 @@ async function _cSubmit() {
 
     if (_c.file) {
       const isVid = _c.file.type.startsWith('video/');
+      const fileType = _c.file.type || 'unknown';
+      console.log(`[upload] file: ${_c.file.name}, type: ${fileType}, size: ${(_c.file.size/1024).toFixed(0)}KB`);
 
-      // Always derive a safe extension — never let it be undefined
-      const rawExt = (_c.file.name || '').split('.').pop().toLowerCase();
-      const safeExt = rawExt && rawExt.length <= 5 && rawExt !== 'file'
-        ? rawExt
-        : (isVid ? 'mp4' : 'jpg');
-
-      const path = `${currentUser.id}/${Date.now()}.${safeExt}`;
-
+      // STEP 1: Compress
       let blob;
       let mimeType;
-
       if (isVid) {
-        // Videos: upload raw, no compression
         blob = _c.file;
-        mimeType = _c.file.type || 'video/mp4';
+        mimeType = fileType || 'video/mp4';
       } else {
-        // Images: compress using the proven compressImage() fn used for avatars
-        // If compression fails for any reason, fall back to raw file with correct mime
         try {
           blob = await compressImage(_c.file, 1200);
-          mimeType = 'image/jpeg'; // compressImage always outputs jpeg
+          mimeType = 'image/jpeg';
+          console.log('[upload] compressed ok:', (blob.size/1024).toFixed(0)+'KB');
         } catch (compressErr) {
-          console.warn('[composer] compression failed, uploading original:', compressErr);
+          console.warn('[upload] compression failed:', compressErr.message);
           blob = _c.file;
-          mimeType = _c.file.type || 'image/jpeg';
+          mimeType = fileType;
         }
       }
 
-      // Use the 'media' bucket — same proven bucket used elsewhere in the app
-      const bucket = isVid ? 'media' : 'media';
-      const { error: upErr } = await supabase.storage
-        .from(bucket)
-        .upload(path, blob, {
-          upsert: true,
-          contentType: mimeType,
-          cacheControl: '3600',
-        });
+      // STEP 2: Safe path
+      const rawExt = (_c.file.name || '').split('.').pop().toLowerCase();
+      const safeExt = (rawExt && rawExt.length >= 2 && rawExt.length <= 5) ? rawExt : (isVid ? 'mp4' : 'jpg');
+      const path = `${currentUser.id}/${Date.now()}.${safeExt}`;
+      console.log(`[upload] path="${path}" mime="${mimeType}"`);
 
-      if (upErr) {
-        console.error('[composer] upload error:', upErr);
-        throw new Error(upErr.message || 'Upload failed');
+      // STEP 3: Try buckets in order until one works
+      const bucketsToTry = ['avatars', 'media', 'post-images'];
+      let uploaded = false;
+      let lastUpErr = null;
+
+      for (const bucket of bucketsToTry) {
+        console.log(`[MistyNote] Trying bucket: "${bucket}"...`);
+        const { error: upErr } = await supabase.storage
+          .from(bucket)
+          .upload(path, blob, { upsert: true, contentType: mimeType, cacheControl: '3600' });
+
+        if (!upErr) {
+          const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
+          console.log(`[MistyNote] ✅ Upload SUCCESS on bucket "${bucket}":`, urlData.publicUrl);
+          if (isVid) videoUrl = urlData.publicUrl;
+          else       imageUrl = urlData.publicUrl;
+          uploaded = true;
+          break;
+        } else {
+          lastUpErr = upErr;
+          console.error(`[MistyNote] ❌ Bucket "${bucket}" failed:`, {
+            status: upErr.statusCode,
+            message: upErr.message,
+            error: upErr.error,
+            full: upErr
+          });
+        }
       }
 
-      const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
-      if (isVid) videoUrl = urlData.publicUrl;
-      else       imageUrl = urlData.publicUrl;
+      if (!uploaded) {
+        throw new Error('All buckets failed. Last: ' + (lastUpErr?.message || 'unknown'));
+      }
     }
 
+    // STEP 4: Insert post row
+    console.log('[upload] inserting post...', { imageUrl, videoUrl });
     const { data: post, error: postErr } = await supabase
       .from('posts')
       .insert({
@@ -4529,26 +4543,24 @@ async function _cSubmit() {
                reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))`)
       .single();
 
-    if (postErr) throw postErr;
+    if (postErr) {
+      console.error('[upload] DB insert failed:', postErr);
+      throw new Error('DB error: ' + (postErr.message || postErr.code || 'unknown'));
+    }
 
-    // Success tick
+    console.log('[upload] post ok, id:', post.id);
+
     if (btn) {
-      btn.innerHTML = `
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-             stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M20 6L9 17l-5-5"/>
-        </svg>`;
+      btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
       btn.style.background = '#00b87a';
     }
 
-    // Handle repost tracking
     if (_c.repostId) {
       repostedPosts.set(_c.repostId, post.id);
       setRepostUI(_c.repostId, true);
       setTimeout(() => syncRepostCount(_c.repostId), 1200);
     }
 
-    // Mention notifications
     if (text) {
       const mentions = text.match(/@([a-zA-Z0-9_]+)/g);
       if (mentions) {
@@ -4563,20 +4575,18 @@ async function _cSubmit() {
       }
     }
 
-    setTimeout(() => {
-      closeComposer();
-      prependPostToFeed(post);
-      showToast('Posted ✓');
-    }, 380);
+    setTimeout(() => { closeComposer(); prependPostToFeed(post); showToast('Posted ✓'); }, 380);
 
   } catch (err) {
-    console.error('[composer] Post failed:', err);
-    showToast(err.message ? `Post failed: ${err.message}` : 'Failed to post — try again');
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = 'Post';
-      btn.classList.add('mnc-post-ready');
-    }
+    console.error('[composer] FINAL ERROR:', err);
+    console.error('[MistyNote] 💥 FINAL POST ERROR:', {
+      message: err?.message,
+      name: err?.name,
+      stack: err?.stack,
+      full: err
+    });
+    showToast('Post failed — check console (F12)', 4000);
+    if (btn) { btn.disabled = false; btn.textContent = 'Post'; btn.classList.add('mnc-post-ready'); }
   } finally {
     _c.busy = false;
   }
