@@ -4466,64 +4466,35 @@ async function _cSubmit() {
 
     if (_c.file) {
       const isVid = _c.file.type.startsWith('video/');
-      const fileType = _c.file.type || 'unknown';
-      console.log(`[upload] file: ${_c.file.name}, type: ${fileType}, size: ${(_c.file.size/1024).toFixed(0)}KB`);
+      console.log(`[MistyNote] uploading ${isVid ? 'video' : 'image'}:`, _c.file.name, _c.file.type);
 
-      // STEP 1: Compress
-      let blob;
-      let mimeType;
       if (isVid) {
-        blob = _c.file;
-        mimeType = fileType || 'video/mp4';
-      } else {
-        try {
-          blob = await compressImage(_c.file, 1200);
-          mimeType = 'image/jpeg';
-          console.log('[upload] compressed ok:', (blob.size/1024).toFixed(0)+'KB');
-        } catch (compressErr) {
-          console.warn('[upload] compression failed:', compressErr.message);
-          blob = _c.file;
-          mimeType = fileType;
-        }
-      }
-
-      // STEP 2: Safe path
-      const rawExt = (_c.file.name || '').split('.').pop().toLowerCase();
-      const safeExt = (rawExt && rawExt.length >= 2 && rawExt.length <= 5) ? rawExt : (isVid ? 'mp4' : 'jpg');
-      const path = `${currentUser.id}/${Date.now()}.${safeExt}`;
-      console.log(`[upload] path="${path}" mime="${mimeType}"`);
-
-      // STEP 3: Try buckets in order until one works
-      const bucketsToTry = ['avatars', 'media', 'post-images'];
-      let uploaded = false;
-      let lastUpErr = null;
-
-      for (const bucket of bucketsToTry) {
-        console.log(`[MistyNote] Trying bucket: "${bucket}"...`);
+        // Video: upload raw to avatars bucket under posts/ subfolder
+        const rawExt = (_c.file.name || '').split('.').pop().toLowerCase();
+        const safeExt = (rawExt && rawExt.length >= 2 && rawExt.length <= 5) ? rawExt : 'mp4';
+        const path = `${currentUser.id}/post_${Date.now()}.${safeExt}`;
         const { error: upErr } = await supabase.storage
-          .from(bucket)
-          .upload(path, blob, { upsert: true, contentType: mimeType, cacheControl: '3600' });
-
-        if (!upErr) {
-          const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
-          console.log(`[MistyNote] ✅ Upload SUCCESS on bucket "${bucket}":`, urlData.publicUrl);
-          if (isVid) videoUrl = urlData.publicUrl;
-          else       imageUrl = urlData.publicUrl;
-          uploaded = true;
-          break;
-        } else {
-          lastUpErr = upErr;
-          console.error(`[MistyNote] ❌ Bucket "${bucket}" failed:`, {
-            status: upErr.statusCode,
-            message: upErr.message,
-            error: upErr.error,
-            full: upErr
-          });
+          .from('avatars')
+          .upload(path, _c.file, { upsert: true, contentType: _c.file.type || 'video/mp4', cacheControl: '3600' });
+        if (upErr) throw new Error('Video upload failed: ' + upErr.message);
+        const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
+        videoUrl = urlData.publicUrl;
+        console.log('[MistyNote] ✅ video uploaded:', videoUrl);
+      } else {
+        // Image: use the exact same uploadImage() function that works for avatars/covers
+        // but with a unique post path so it doesn't overwrite the avatar slot
+        const compressed = await compressImage(_c.file, 1200);
+        const path = `${currentUser.id}/post_${Date.now()}.jpg`;
+        const { error: upErr } = await supabase.storage
+          .from('avatars')
+          .upload(path, compressed, { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
+        if (upErr) {
+          console.error('[MistyNote] ❌ image upload error:', upErr);
+          throw new Error('Image upload failed: ' + upErr.message);
         }
-      }
-
-      if (!uploaded) {
-        throw new Error('All buckets failed. Last: ' + (lastUpErr?.message || 'unknown'));
+        const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
+        imageUrl = urlData.publicUrl;
+        console.log('[MistyNote] ✅ image uploaded:', imageUrl);
       }
     }
 
@@ -4579,13 +4550,8 @@ async function _cSubmit() {
 
   } catch (err) {
     console.error('[composer] FINAL ERROR:', err);
-    console.error('[MistyNote] 💥 FINAL POST ERROR:', {
-      message: err?.message,
-      name: err?.name,
-      stack: err?.stack,
-      full: err
-    });
-    showToast('Post failed — check console (F12)', 4000);
+    console.error('[MistyNote] 💥 POST ERROR:', err?.message, err);
+    showToast('Post failed: ' + (err?.message || 'unknown error'), 4000);
     if (btn) { btn.disabled = false; btn.textContent = 'Post'; btn.classList.add('mnc-post-ready'); }
   } finally {
     _c.busy = false;
