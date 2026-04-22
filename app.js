@@ -4466,28 +4466,53 @@ async function _cSubmit() {
 
     if (_c.file) {
       const isVid = _c.file.type.startsWith('video/');
-      let blob = _c.file;
 
-      // Compress images
-      if (!isVid) {
-        try { blob = await _cCompress(_c.file, 1200); } catch (e) { /* use original */ }
+      // Always derive a safe extension — never let it be undefined
+      const rawExt = (_c.file.name || '').split('.').pop().toLowerCase();
+      const safeExt = rawExt && rawExt.length <= 5 && rawExt !== 'file'
+        ? rawExt
+        : (isVid ? 'mp4' : 'jpg');
+
+      const path = `${currentUser.id}/${Date.now()}.${safeExt}`;
+
+      let blob;
+      let mimeType;
+
+      if (isVid) {
+        // Videos: upload raw, no compression
+        blob = _c.file;
+        mimeType = _c.file.type || 'video/mp4';
+      } else {
+        // Images: compress using the proven compressImage() fn used for avatars
+        // If compression fails for any reason, fall back to raw file with correct mime
+        try {
+          blob = await compressImage(_c.file, 1200);
+          mimeType = 'image/jpeg'; // compressImage always outputs jpeg
+        } catch (compressErr) {
+          console.warn('[composer] compression failed, uploading original:', compressErr);
+          blob = _c.file;
+          mimeType = _c.file.type || 'image/jpeg';
+        }
       }
 
-      const ext  = (_c.file.name?.split('.').pop()?.toLowerCase()) || (isVid ? 'mp4' : 'jpg');
-      const path = `${currentUser.id}/${Date.now()}.${ext}`;
-
+      // Use the 'media' bucket — same proven bucket used elsewhere in the app
+      const bucket = isVid ? 'media' : 'media';
       const { error: upErr } = await supabase.storage
-        .from('post-images')
+        .from(bucket)
         .upload(path, blob, {
           upsert: true,
-          contentType: isVid ? (_c.file.type || 'video/mp4') : 'image/jpeg',
-          cacheControl: '3600'
+          contentType: mimeType,
+          cacheControl: '3600',
         });
-      if (upErr) throw upErr;
 
-      const { data: urlData } = supabase.storage.from('post-images').getPublicUrl(path);
+      if (upErr) {
+        console.error('[composer] upload error:', upErr);
+        throw new Error(upErr.message || 'Upload failed');
+      }
+
+      const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
       if (isVid) videoUrl = urlData.publicUrl;
-      else        imageUrl = urlData.publicUrl;
+      else       imageUrl = urlData.publicUrl;
     }
 
     const { data: post, error: postErr } = await supabase
@@ -4545,8 +4570,8 @@ async function _cSubmit() {
     }, 380);
 
   } catch (err) {
-    console.error('Post failed:', err);
-    showToast('Failed to post — try again');
+    console.error('[composer] Post failed:', err);
+    showToast(err.message ? `Post failed: ${err.message}` : 'Failed to post — try again');
     if (btn) {
       btn.disabled = false;
       btn.textContent = 'Post';
