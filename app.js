@@ -4481,9 +4481,9 @@ async function _cSubmit() {
         videoUrl = urlData.publicUrl;
         console.log('[MistyNote] ✅ video uploaded:', videoUrl);
       } else {
-        // Image: use the exact same uploadImage() function that works for avatars/covers
-        // but with a unique post path so it doesn't overwrite the avatar slot
-        const compressed = await compressImage(_c.file, 1200);
+        // Image: compress using the already-created preview blob URL
+        // so we never double-create/revoke object URLs (breaks Android WebView)
+        const compressed = await _cCompressFromPreview(_c.file, _c.preview, 1200);
         const path = `${currentUser.id}/post_${Date.now()}.jpg`;
         const { error: upErr } = await supabase.storage
           .from('avatars')
@@ -4556,6 +4556,77 @@ async function _cSubmit() {
   } finally {
     _c.busy = false;
   }
+}
+
+// ── Compress using existing preview URL (avoids double object-URL on Android) ──
+function _cCompressFromPreview(file, existingPreviewUrl, maxPx) {
+  return new Promise((resolve, reject) => {
+    // If we already have a valid preview URL, reuse it — don't create another
+    const useUrl = existingPreviewUrl || URL.createObjectURL(file);
+    const createdNew = !existingPreviewUrl;
+
+    const img = new Image();
+
+    img.onerror = () => {
+      // Only revoke if WE created it
+      if (createdNew) URL.revokeObjectURL(useUrl);
+      // Fallback: try direct FileReader approach
+      console.warn('[compress] img.onerror on preview URL, trying FileReader fallback');
+      _cCompressViaFileReader(file, maxPx).then(resolve).catch(reject);
+    };
+
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, maxPx / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
+        const w = Math.max(1, Math.round(img.naturalWidth * scale));
+        const h = Math.max(1, Math.round(img.naturalHeight * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject(new Error('Canvas not supported')); return; }
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob(
+          blob => blob ? resolve(blob) : reject(new Error('toBlob returned null')),
+          'image/jpeg', 0.85
+        );
+      } catch (err) {
+        reject(err);
+      }
+    };
+
+    img.src = useUrl;
+  });
+}
+
+// ── FileReader fallback for stubborn Android WebViews ──────────
+function _cCompressViaFileReader(file, maxPx) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('FileReader failed'));
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Image load failed even via FileReader'));
+      img.onload = () => {
+        try {
+          const scale = Math.min(1, maxPx / Math.max(img.naturalWidth || 1, img.naturalHeight || 1));
+          const w = Math.max(1, Math.round(img.naturalWidth * scale));
+          const h = Math.max(1, Math.round(img.naturalHeight * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) { reject(new Error('No canvas context')); return; }
+          ctx.drawImage(img, 0, 0, w, h);
+          canvas.toBlob(
+            blob => blob ? resolve(blob) : reject(new Error('toBlob null')),
+            'image/jpeg', 0.85
+          );
+        } catch (err) { reject(err); }
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 // ── Image compression ──────────────────────────────────────────
