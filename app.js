@@ -4481,15 +4481,18 @@ async function _cSubmit() {
         videoUrl = urlData.publicUrl;
         console.log('[MistyNote] ✅ video uploaded:', videoUrl);
       } else {
-        // Image: compress using the already-created preview blob URL
-        // so we never double-create/revoke object URLs (breaks Android WebView)
-        const compressed = await _cCompressFromPreview(_c.file, _c.preview, 1200);
-        const path = `${currentUser.id}/post_${Date.now()}.jpg`;
+        // Upload raw file — no compression, no object URL issues
+        // Phone JPEGs are already compressed. Supabase handles them fine.
+        const rawExt = (_c.file.name || '').split('.').pop().toLowerCase();
+        const safeExt = (rawExt && rawExt.length >= 2 && rawExt.length <= 5) ? rawExt : 'jpg';
+        const mime = _c.file.type || 'image/jpeg';
+        const path = `${currentUser.id}/post_${Date.now()}.${safeExt}`;
+        console.log('[MistyNote] uploading raw file, size:', (_c.file.size/1024).toFixed(0)+'KB', 'mime:', mime);
         const { error: upErr } = await supabase.storage
           .from('avatars')
-          .upload(path, compressed, { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
+          .upload(path, _c.file, { upsert: true, contentType: mime, cacheControl: '3600' });
         if (upErr) {
-          console.error('[MistyNote] ❌ image upload error:', upErr);
+          console.error('[MistyNote] ❌ image upload error:', upErr.statusCode, upErr.message);
           throw new Error('Image upload failed: ' + upErr.message);
         }
         const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
