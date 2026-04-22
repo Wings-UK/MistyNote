@@ -4026,26 +4026,6 @@ async function undoRepost(postId, btn) {
 }
 
 
-// ═══════════════════════════════════════════════════════════
-// COMPOSER — World-Class Redesign
-// ═══════════════════════════════════════════════════════════
-
-let composerState = {
-  isOpen: false,
-  selectedFile: null,
-  repostTargetId: null,
-  repostTargetBtn: null,
-  uploadInProgress: false,
-  uploadRetryFn: null,
-  pendingPostData: null,
-  _dragStartY: 0,
-  _dragCurrentY: 0,
-  _isDragging: false,
-};
-
-// ──────────────────────────────────────────────────────────
-// OPEN COMPOSER — World-Class UI
-// ──────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════
 // MISTYNOTE COMPOSER v2 — Complete Rebuild
 // Drop-in replacement. Find the old composer block in app.js
@@ -4371,7 +4351,7 @@ function _cRemoveQuote() {
 // ── Emoji tray ─────────────────────────────────────────────────
 const _EMOJIS = [
   '😀','😂','🥹','😍','🥰','😎','🤩','🥳','😭','😤',
-  '🔥',❤️','💯','✨','🎉','🙏','👏','🫶','💪','💀',
+  '🔥','❤️','💯','✨','🎉','🙏','👏','🫶','💪','💀',
   '🤝','👀','💬','🫠','😮','🤔','💅','🫡','⚡','🌟',
   '🇳🇬','🎵','🍕','🍔','⚽','🏆','💰','📱','🛍️','😩'
 ];
@@ -4639,11 +4619,6 @@ function handleRepost(postId, btn, postUserId) {
   _c.repostBtn = btn;
   repostTargetId  = postId;
   repostTargetBtn = btn;
-  openComposer();
-}
-
-// ── Compat shim so old code still works ───────────────────────
-function composeOrRetry() {
   openComposer();
 }
 
