@@ -4046,128 +4046,94 @@ let composerState = {
 // ──────────────────────────────────────────────────────────
 // OPEN COMPOSER — World-Class UI
 // ──────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+// MISTYNOTE COMPOSER v2 — Complete Rebuild
+// Drop-in replacement. Find the old composer block in app.js
+// (from "// ═══ COMPOSER — World-Class Redesign" to the end of
+//  "function prependPostToFeed") and replace with this entire file.
+// ═══════════════════════════════════════════════════════════════
+
+// ── State ──────────────────────────────────────────────────────
+const _c = {
+  file: null,         // selected File object
+  preview: null,      // object URL for preview
+  repostId: null,     // post id being quoted
+  repostBtn: null,    // the repost button el
+  busy: false,        // upload in progress
+};
+
+// ── Open ───────────────────────────────────────────────────────
 function openComposer() {
   if (!currentUser) { showToast('Sign in to post'); return; }
+  if (document.getElementById('mn-composer')) return;
 
-  const existing = document.getElementById('composer-premium');
-  if (existing) existing.remove();
+  const el = document.createElement('div');
+  el.id = 'mn-composer';
+  el.innerHTML = `
+    <div class="mnc-scrim" id="mnc-scrim"></div>
+    <div class="mnc-sheet" id="mnc-sheet">
+      <div class="mnc-pill"></div>
 
-  const avatarSrc = currentProfile?.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${currentUser.id}`;
-  const displayName = escHtml(currentProfile?.display_name || currentProfile?.username || 'You');
-  const handle = escHtml(currentProfile?.username || 'user');
-
-  const composer = document.createElement('div');
-  composer.id = 'composer-premium';
-  composer.className = 'composer-premium';
-  composer.setAttribute('role', 'dialog');
-  composer.setAttribute('aria-modal', 'true');
-  composer.setAttribute('aria-label', 'Create post');
-
-  composer.innerHTML = `
-    <div class="cpr-backdrop"></div>
-    <div class="cpr-sheet" id="cpr-sheet">
-      <div class="cpr-drag-bar" id="cpr-drag-bar">
-        <div class="cpr-drag-pill"></div>
-      </div>
-
-      <div class="cpr-header">
-        <button class="cpr-cancel-btn" id="cpr-cancel" aria-label="Close">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+      <div class="mnc-topbar">
+        <button class="mnc-x" id="mnc-x" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
             <path d="M18 6L6 18M6 6l12 12"/>
           </svg>
         </button>
-        <span class="cpr-title">New Post</span>
-        <button class="cpr-post-btn" id="composer-post-btn" disabled aria-label="Publish post">
-          <span class="cpr-post-label">Post</span>
-        </button>
+        <button class="mnc-post-btn" id="mnc-post-btn" disabled>Post</button>
       </div>
 
-      <div class="cpr-body" id="cpr-body">
-        <div class="cpr-author-row">
-          <div class="cpr-avatar-wrap">
-            <img class="cpr-avatar" id="composer-avatar"
-                 src="${avatarSrc}"
-                 onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${currentUser.id}'"
-                 alt="">
-            <div class="cpr-avatar-pulse"></div>
-          </div>
-          <div class="cpr-author-info">
-            <span class="cpr-author-name">${displayName}</span>
-            <span class="cpr-author-handle">@${handle}</span>
-          </div>
+      <div class="mnc-body" id="mnc-body">
+        <textarea
+          class="mnc-textarea"
+          id="mnc-textarea"
+          placeholder="What's happening?"
+          maxlength="280"
+          autocomplete="off"
+          autocorrect="on"
+          spellcheck="true"
+        ></textarea>
+
+        <div class="mnc-media-wrap" id="mnc-media-wrap" style="display:none">
+          <img  id="mnc-img"   class="mnc-preview-img" style="display:none" alt="">
+          <video id="mnc-vid"  class="mnc-preview-vid" controls playsinline style="display:none"></video>
+          <button class="mnc-remove-media" id="mnc-remove-media" aria-label="Remove">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.6" stroke-linecap="round">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+          </button>
         </div>
 
-        <div class="cpr-input-row">
-          <div class="cpr-thread-line"></div>
-          <div class="cpr-input-area">
-            <textarea
-              class="cpr-textarea"
-              id="composer-textarea"
-              placeholder="What's happening?"
-              maxlength="280"
-              rows="1"
-              aria-label="Post content"
-              autocomplete="off"
-              autocorrect="on"
-              spellcheck="true"
-            ></textarea>
-
-            <!-- Media Preview -->
-            <div class="cpr-media-preview" id="composer-media-preview" hidden>
-              <div class="cpr-media-card">
-                <img id="composer-media-img" class="cpr-media-img" hidden alt="Attachment">
-                <video id="composer-media-video" class="cpr-media-video" controls playsinline hidden></video>
-                <button class="cpr-media-remove" id="cpr-media-remove" aria-label="Remove media">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                    <path d="M18 6L6 18M6 6l12 12"/>
-                  </svg>
-                </button>
-              </div>
-              <textarea
-                class="cpr-caption"
-                id="composer-caption"
-                placeholder="Add a caption…"
-                maxlength="280"
-                rows="1"
-                aria-label="Caption"
-              ></textarea>
-            </div>
-
-            <!-- Repost Preview -->
-            <div class="cpr-repost-card" id="composer-repost-preview" hidden>
-              <div class="cpr-repost-accent"></div>
-              <div class="cpr-repost-inner">
-                <div class="cpr-repost-meta">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                    <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/>
-                    <polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/>
-                  </svg>
-                  <span>Quoting</span>
-                  <span class="cpr-repost-handle" id="composer-repost-username"></span>
-                </div>
-                <p class="cpr-repost-body" id="composer-repost-text"></p>
-              </div>
-              <button class="cpr-repost-remove" id="cpr-repost-remove" aria-label="Remove quote">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-                  <path d="M18 6L6 18M6 6l12 12"/>
-                </svg>
-              </button>
-            </div>
+        <div class="mnc-quote-wrap" id="mnc-quote-wrap" style="display:none">
+          <div class="mnc-quote-bar"></div>
+          <div class="mnc-quote-body">
+            <span class="mnc-quote-who" id="mnc-quote-who"></span>
+            <p class="mnc-quote-text" id="mnc-quote-text"></p>
           </div>
+          <button class="mnc-remove-quote" id="mnc-remove-quote" aria-label="Remove quote">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.6" stroke-linecap="round">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+          </button>
         </div>
       </div>
 
-      <div class="cpr-footer" id="cpr-footer">
-        <div class="cpr-tools">
-          <button class="cpr-tool-btn" id="composer-attach-btn" aria-label="Attach photo or video">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <rect x="3" y="3" width="18" height="18" rx="4"/>
+      <div class="mnc-footer" id="mnc-footer">
+        <div class="mnc-tools">
+          <button class="mnc-tool" id="mnc-attach" aria-label="Photo / Video">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="1.8">
+              <rect x="3" y="3" width="18" height="18" rx="3"/>
               <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/>
               <path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
-          <button class="cpr-tool-btn" id="composer-emoji-btn" aria-label="Add emoji">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <button class="mnc-tool" id="mnc-emoji-btn" aria-label="Emoji">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="1.8">
               <circle cx="12" cy="12" r="10"/>
               <path d="M8 14s1.5 2 4 2 4-2 4-2" stroke-linecap="round"/>
               <circle cx="9" cy="9.5" r="1.2" fill="currentColor" stroke="none"/>
@@ -4175,744 +4141,550 @@ function openComposer() {
             </svg>
           </button>
         </div>
-
-        <div class="cpr-char-area">
-          <span class="cpr-char-label" id="composer-char-count" aria-live="polite" aria-atomic="true"></span>
-          <div class="cpr-ring-wrap" aria-hidden="true">
-            <svg class="cpr-ring-svg" viewBox="0 0 36 36">
-              <circle class="cpr-ring-track" cx="18" cy="18" r="15" fill="none" stroke-width="3"/>
-              <circle class="cpr-ring-fill" id="composer-char-ring" cx="18" cy="18" r="15" fill="none" stroke-width="3"
-                      stroke-dasharray="94.25" stroke-dashoffset="94.25"
-                      stroke-linecap="round" transform="rotate(-90 18 18)"/>
-            </svg>
-          </div>
+        <div class="mnc-ring-wrap">
+          <svg class="mnc-ring-svg" viewBox="0 0 32 32">
+            <circle class="mnc-ring-bg" cx="16" cy="16" r="12" fill="none" stroke-width="2.5"/>
+            <circle class="mnc-ring-fill" id="mnc-ring" cx="16" cy="16" r="12" fill="none"
+              stroke-width="2.5" stroke-dasharray="75.4" stroke-dashoffset="75.4"
+              stroke-linecap="round" transform="rotate(-90 16 16)"/>
+          </svg>
+          <span class="mnc-char-num" id="mnc-char-num"></span>
         </div>
       </div>
+
+      <div class="mnc-emoji-tray" id="mnc-emoji-tray" style="display:none"></div>
     </div>
   `;
 
-  document.body.appendChild(composer);
-
-  // ── Lock body scroll ──
+  document.body.appendChild(el);
   document.body.style.overflow = 'hidden';
 
-  // ── Entrance animation (double RAF for reliable paint) ──
+  // Animate in
   requestAnimationFrame(() => requestAnimationFrame(() => {
-    composer.classList.add('composer-premium-open');
+    el.classList.add('mnc-open');
   }));
 
-  composerState.isOpen = true;
+  _cWire(el);
 
-  // ── Wire events + focus — inside setTimeout so DOM is fully painted ──
   setTimeout(() => {
-    _composerWireEvents(composer);
-
-    const ta = document.getElementById('composer-textarea');
-    if (ta) {
-      ta.focus();
-      autoResizeTextarea(ta);
-      wireMentionToComposer();
-    }
-
-    // Repost preview only if this was triggered from a repost action
-    if (composerState.repostTargetId) {
-      loadRepostPreview(composerState.repostTargetId);
-    }
-
-    updatePostButtonState();
-    updateCharCounter(0);
-  }, 50);
+    const ta = document.getElementById('mnc-textarea');
+    if (ta) { ta.focus(); _cAutoGrow(ta); }
+    if (_c.repostId) _cLoadQuote(_c.repostId);
+    _cSync();
+  }, 60);
 }
 
-// ──────────────────────────────────────────────────────────
-// WIRE COMPOSER EVENTS
-// ──────────────────────────────────────────────────────────
-function _composerWireEvents(composer) {
-  const sheet    = document.getElementById('cpr-sheet');
-  const dragBar  = document.getElementById('cpr-drag-bar');
-  const backdrop = composer.querySelector('.cpr-backdrop');
-  const textarea = document.getElementById('composer-textarea');
-  const caption  = document.getElementById('composer-caption');
-  const footer   = document.getElementById('cpr-footer');
+// ── Wire all events ────────────────────────────────────────────
+function _cWire(root) {
+  const ta      = root.querySelector('#mnc-textarea');
+  const postBtn = root.querySelector('#mnc-post-btn');
+  const scrim   = root.querySelector('#mnc-scrim');
+  const xBtn    = root.querySelector('#mnc-x');
+  const attach  = root.querySelector('#mnc-attach');
+  const emojiB  = root.querySelector('#mnc-emoji-btn');
+  const rmMedia = root.querySelector('#mnc-remove-media');
+  const rmQuote = root.querySelector('#mnc-remove-quote');
+  const footer  = root.querySelector('#mnc-footer');
+  const sheet   = root.querySelector('#mnc-sheet');
+  const pill    = root.querySelector('.mnc-pill');
 
-  // ── Cancel / backdrop ──
-  document.getElementById('cpr-cancel')?.addEventListener('click', closeComposer);
-  backdrop?.addEventListener('click', closeComposer);
+  // Textarea — the most critical event
+  ta.addEventListener('input', () => {
+    _cAutoGrow(ta);
+    _cUpdateRing(ta.value.length);
+    _cSync();
+  });
+  ta.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') _cSubmit();
+  });
 
-  // ── Textarea ──
-  if (textarea) {
-    textarea.addEventListener('input', e => {
-      const len = e.target.value.length;
-      updateCharCounter(len);
-      autoResizeTextarea(e.target);
-      updatePostButtonState();
-    });
-    textarea.addEventListener('keydown', e => {
-      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitPost();
-    });
-  }
+  // Buttons
+  postBtn.addEventListener('click', _cSubmit);
+  scrim.addEventListener('click', closeComposer);
+  xBtn.addEventListener('click', closeComposer);
+  attach.addEventListener('click', _cPickFile);
+  emojiB.addEventListener('click', _cToggleEmoji);
+  rmMedia.addEventListener('click', _cRemoveMedia);
+  rmQuote.addEventListener('click', _cRemoveQuote);
 
-  // ── Caption ──
-  if (caption) {
-    caption.addEventListener('input', e => {
-      autoResizeTextarea(e.target);
-      updatePostButtonState();
-    });
-  }
-
-  // ── Toolbar ──
-  document.getElementById('composer-attach-btn')?.addEventListener('click', createUniversalFileInput);
-  document.getElementById('composer-emoji-btn')?.addEventListener('click', () => showEmojiPicker('composer-textarea'));
-  document.getElementById('composer-post-btn')?.addEventListener('click', submitPost);
-  document.getElementById('cpr-media-remove')?.addEventListener('click', removeMedia);
-  document.getElementById('cpr-repost-remove')?.addEventListener('click', clearRepost);
-
-  // ── Keyboard-aware footer push ──
+  // Keyboard push (visual viewport)
   if (window.visualViewport) {
-    const onViewportChange = () => {
-      const vv = window.visualViewport;
-      const offset = window.innerHeight - vv.height - vv.offsetTop;
-      if (footer) footer.style.transform = `translateY(-${Math.max(0, offset)}px)`;
+    const onVP = () => {
+      const offset = window.innerHeight - window.visualViewport.height;
+      footer.style.transform = `translateY(-${Math.max(0, offset)}px)`;
     };
-    window.visualViewport.addEventListener('resize', onViewportChange);
-    window.visualViewport.addEventListener('scroll', onViewportChange);
-    // Store for cleanup
-    composer._vpCleanup = () => {
-      window.visualViewport.removeEventListener('resize', onViewportChange);
-      window.visualViewport.removeEventListener('scroll', onViewportChange);
+    window.visualViewport.addEventListener('resize', onVP);
+    window.visualViewport.addEventListener('scroll', onVP);
+    root._vpClean = () => {
+      window.visualViewport.removeEventListener('resize', onVP);
+      window.visualViewport.removeEventListener('scroll', onVP);
     };
   }
 
-  // ── Drag-to-dismiss ──
-  let startY = 0, startScroll = 0, dragging = false;
-  const body = document.getElementById('cpr-body');
-
-  const onDragStart = (e) => {
-    const touch = e.touches?.[0] || e;
-    startY = touch.clientY;
-    startScroll = body?.scrollTop || 0;
+  // Drag-to-dismiss on the pill / topbar
+  let sy = 0, dragging = false;
+  const startDrag = e => {
+    sy = (e.touches ? e.touches[0] : e).clientY;
     dragging = false;
-    composerState._dragStartY = startY;
     sheet.style.transition = 'none';
   };
-
-  const onDragMove = (e) => {
-    const touch = e.touches?.[0] || e;
-    const dy = touch.clientY - startY;
-    // Only drag-dismiss when scrolled to top and pulling down
-    if (dy > 0 && startScroll <= 1) {
-      dragging = true;
-      composerState._isDragging = true;
-      const resistance = dy / (1 + dy * 0.003);
-      sheet.style.transform = `translateY(${resistance}px)`;
-      const opacity = Math.max(0.2, 1 - resistance / 400);
-      composer.querySelector('.cpr-backdrop').style.opacity = opacity;
-      e.preventDefault();
-    }
+  const moveDrag = e => {
+    const dy = (e.touches ? e.touches[0] : e).clientY - sy;
+    if (dy < 0) return;
+    dragging = true;
+    sheet.style.transform = `translateY(${Math.min(dy * 0.6, 220)}px)`;
+    root.querySelector('.mnc-scrim').style.opacity = String(Math.max(0, 1 - dy / 300));
+    if (e.cancelable) e.preventDefault();
   };
-
-  const onDragEnd = (e) => {
+  const endDrag = e => {
     sheet.style.transition = '';
-    const touch = e.changedTouches?.[0] || e;
-    const dy = touch.clientY - startY;
-    if (dragging && dy > 100) {
-      closeComposer();
-    } else {
-      sheet.style.transform = '';
-      composer.querySelector('.cpr-backdrop').style.opacity = '';
-    }
+    const dy = (e.changedTouches ? e.changedTouches[0] : e).clientY - sy;
+    if (dragging && dy > 110) { closeComposer(); }
+    else { sheet.style.transform = ''; root.querySelector('.mnc-scrim').style.opacity = ''; }
     dragging = false;
-    composerState._isDragging = false;
   };
 
-  dragBar.addEventListener('touchstart', onDragStart, { passive: true });
-  dragBar.addEventListener('touchmove', onDragMove, { passive: false });
-  dragBar.addEventListener('touchend', onDragEnd, { passive: true });
+  [pill, root.querySelector('.mnc-topbar')].forEach(el => {
+    el.addEventListener('touchstart', startDrag, { passive: true });
+    el.addEventListener('touchmove', moveDrag, { passive: false });
+    el.addEventListener('touchend', endDrag, { passive: true });
+  });
 }
 
-// ──────────────────────────────────────────────────────────
-// UNIVERSAL FILE INPUT — Works on ALL browsers
-// ──────────────────────────────────────────────────────────
-function createUniversalFileInput() {
-  const fileInput = document.createElement('input');
-  fileInput.type = 'file';
-  fileInput.accept = 'image/*,video/*';
-  fileInput.multiple = false;
+// ── File picker — bulletproof ──────────────────────────────────
+function _cPickFile() {
+  // Remove any stale input
+  const old = document.getElementById('mnc-file-input');
+  if (old) old.remove();
 
-  fileInput.style.position = 'absolute';
-  fileInput.style.left = '-9999px';
-  fileInput.style.top = '-9999px';
-  document.body.appendChild(fileInput);
+  const inp = document.createElement('input');
+  inp.id = 'mnc-file-input';
+  inp.type = 'file';
+  inp.accept = 'image/*,video/*';
+  // NO capture attribute — always gallery
+  Object.assign(inp.style, {
+    position: 'fixed', top: '0', left: '0',
+    width: '1px', height: '1px',
+    opacity: '0', pointerEvents: 'none', zIndex: '-1'
+  });
+  document.body.appendChild(inp);
 
-  fileInput.addEventListener('change', async (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      await handleFileSelection(file);
-    }
-    if (document.body.contains(fileInput)) document.body.removeChild(fileInput);
+  inp.addEventListener('change', async () => {
+    const file = inp.files[0];
+    inp.remove();
+    if (!file) return;
+    await _cHandleFile(file);
   });
 
-  fileInput.click();
-
-  // Cleanup fallback
-  setTimeout(() => {
-    if (document.body.contains(fileInput)) document.body.removeChild(fileInput);
-  }, 5000);
+  // Focus composer textarea first to keep keyboard from hiding, then trigger
+  setTimeout(() => inp.click(), 10);
 }
 
-// ──────────────────────────────────────────────────────────
-// HANDLE FILE SELECTION — validation & preview
-// ──────────────────────────────────────────────────────────
-async function handleFileSelection(file) {
-  const isImage = file.type.startsWith('image/');
-  const isVideo = file.type.startsWith('video/');
+async function _cHandleFile(file) {
+  const isImg = file.type.startsWith('image/');
+  const isVid = file.type.startsWith('video/');
+  if (!isImg && !isVid) { showToast('Please select an image or video'); return; }
 
-  if (!isImage && !isVideo) {
-    showToast('Please select an image or video file');
+  const maxMB = isVid ? 100 : 20;
+  if (file.size > maxMB * 1024 * 1024) {
+    showToast(`Max ${maxMB}MB for ${isVid ? 'videos' : 'images'}`);
     return;
   }
 
-  const maxSize = isVideo ? 100 * 1024 * 1024 : 20 * 1024 * 1024;
-  if (file.size > maxSize) {
-    showToast(`File too large. Max ${isVideo ? '100MB' : '20MB'}`);
-    return;
-  }
+  // Revoke old preview URL
+  if (_c.preview) URL.revokeObjectURL(_c.preview);
 
-  composerState.selectedFile = file;
-  selectedFile = file;
+  _c.file = file;
+  _c.preview = URL.createObjectURL(file);
 
-  const previewContainer = document.getElementById('composer-media-preview');
-  const imgElement       = document.getElementById('composer-media-img');
-  const videoElement     = document.getElementById('composer-media-video');
+  const wrap = document.getElementById('mnc-media-wrap');
+  const img  = document.getElementById('mnc-img');
+  const vid  = document.getElementById('mnc-vid');
 
-  if (!previewContainer || !imgElement || !videoElement) return;
+  img.style.display = 'none';
+  vid.style.display = 'none';
 
-  // Reset
-  imgElement.hidden  = true;
-  videoElement.hidden = true;
-  imgElement.src  = '';
-  videoElement.src = '';
-
-  if (isImage) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      imgElement.src = e.target.result;
-      imgElement.hidden = false;
-      previewContainer.hidden = false;
-      previewContainer.classList.add('cpr-media-entering');
-      requestAnimationFrame(() => previewContainer.classList.remove('cpr-media-entering'));
-    };
-    reader.readAsDataURL(file);
+  if (isImg) {
+    img.src = _c.preview;
+    img.style.display = 'block';
   } else {
-    const videoURL = URL.createObjectURL(file);
-    videoElement.src = videoURL;
-    videoElement.hidden = false;
-    previewContainer.hidden = false;
-    previewContainer.classList.add('cpr-media-entering');
-    requestAnimationFrame(() => previewContainer.classList.remove('cpr-media-entering'));
-    videoElement.onloadeddata = () => URL.revokeObjectURL(videoURL);
+    vid.src = _c.preview;
+    vid.style.display = 'block';
   }
 
-  // Scroll body to show preview
+  wrap.style.display = 'block';
+
+  // Scroll body down so preview is visible
   setTimeout(() => {
-    document.getElementById('cpr-body')?.scrollTo({ top: 9999, behavior: 'smooth' });
-  }, 100);
+    const body = document.getElementById('mnc-body');
+    if (body) body.scrollTop = body.scrollHeight;
+  }, 80);
 
-  updatePostButtonState();
+  _cSync();
 }
 
-// ──────────────────────────────────────────────────────────
-// REMOVE MEDIA
-// ──────────────────────────────────────────────────────────
-function removeMedia() {
-  composerState.selectedFile = null;
-  selectedFile = null;
+function _cRemoveMedia() {
+  if (_c.preview) { URL.revokeObjectURL(_c.preview); _c.preview = null; }
+  _c.file = null;
 
-  const previewContainer = document.getElementById('composer-media-preview');
-  const imgElement       = document.getElementById('composer-media-img');
-  const videoElement     = document.getElementById('composer-media-video');
-  const caption          = document.getElementById('composer-caption');
+  const wrap = document.getElementById('mnc-media-wrap');
+  const img  = document.getElementById('mnc-img');
+  const vid  = document.getElementById('mnc-vid');
+  if (wrap) wrap.style.display = 'none';
+  if (img)  { img.src = ''; img.style.display = 'none'; }
+  if (vid)  { vid.src = ''; vid.style.display = 'none'; }
 
-  if (imgElement)  { imgElement.src = '';   imgElement.hidden  = true; }
-  if (videoElement){ videoElement.src = ''; videoElement.hidden = true; }
-  if (previewContainer) previewContainer.hidden = true;
-  if (caption) caption.value = '';
-
-  // Focus back to textarea
-  document.getElementById('composer-textarea')?.focus();
-  updatePostButtonState();
+  document.getElementById('mnc-textarea')?.focus();
+  _cSync();
 }
 
-// ──────────────────────────────────────────────────────────
-// LOAD REPOST PREVIEW
-// ──────────────────────────────────────────────────────────
-async function loadRepostPreview(postId) {
+// ── Quote / repost ─────────────────────────────────────────────
+async function _cLoadQuote(postId) {
   try {
-    const { data: post, error } = await supabase
-      .from('posts')
-      .select(`id, content, user:users(id, username, avatar)`)
-      .eq('id', postId)
-      .single();
+    const { data } = await supabase.from('posts')
+      .select('id,content,user:users(id,username)')
+      .eq('id', postId).single();
+    if (!data) return;
 
-    if (error || !post) return;
+    const wrap = document.getElementById('mnc-quote-wrap');
+    const who  = document.getElementById('mnc-quote-who');
+    const text = document.getElementById('mnc-quote-text');
+    if (!wrap) return;
 
-    const previewContainer = document.getElementById('composer-repost-preview');
-    const usernameSpan     = document.getElementById('composer-repost-username');
-    const textSpan         = document.getElementById('composer-repost-text');
-
-    if (previewContainer && usernameSpan && textSpan) {
-      usernameSpan.textContent = `@${post.user?.username || 'user'}`;
-      textSpan.textContent = post.content
-        ? (post.content.length > 120 ? post.content.slice(0, 120) + '…' : post.content)
-        : '';
-      previewContainer.hidden = false;
-    }
-  } catch (e) {
-    console.warn('Failed to load repost preview:', e);
-  }
+    who.textContent  = '@' + (data.user?.username || 'user');
+    text.textContent = (data.content || '').slice(0, 120) + (data.content?.length > 120 ? '…' : '');
+    wrap.style.display = 'flex';
+    _cSync();
+  } catch (e) { /* silent */ }
 }
 
-// ──────────────────────────────────────────────────────────
-// CLEAR REPOST
-// ──────────────────────────────────────────────────────────
-function clearRepost() {
-  composerState.repostTargetId  = null;
-  composerState.repostTargetBtn = null;
+function _cRemoveQuote() {
+  _c.repostId  = null;
+  _c.repostBtn = null;
   repostTargetId  = null;
   repostTargetBtn = null;
-
-  const previewContainer = document.getElementById('composer-repost-preview');
-  if (previewContainer) previewContainer.hidden = true;
-
-  updatePostButtonState();
+  const wrap = document.getElementById('mnc-quote-wrap');
+  if (wrap) wrap.style.display = 'none';
+  _cSync();
 }
 
-// ──────────────────────────────────────────────────────────
-// UPDATE CHAR COUNTER & RING
-// ──────────────────────────────────────────────────────────
-function updateCharCounter(length) {
-  const countSpan = document.getElementById('composer-char-count');
-  const ring      = document.getElementById('composer-char-ring');
-  const MAX = 280;
+// ── Emoji tray ─────────────────────────────────────────────────
+const _EMOJIS = [
+  '😀','😂','🥹','😍','🥰','😎','🤩','🥳','😭','😤',
+  '🔥',❤️','💯','✨','🎉','🙏','👏','🫶','💪','💀',
+  '🤝','👀','💬','🫠','😮','🤔','💅','🫡','⚡','🌟',
+  '🇳🇬','🎵','🍕','🍔','⚽','🏆','💰','📱','🛍️','😩'
+];
 
-  if (!countSpan) return;
+function _cToggleEmoji() {
+  const tray = document.getElementById('mnc-emoji-tray');
+  if (!tray) return;
 
-  const remaining = MAX - length;
-
-  // Show count label only when approaching limit
-  if (remaining <= 30) {
-    countSpan.textContent = remaining;
-    countSpan.style.display = '';
-  } else {
-    countSpan.textContent = '';
-    countSpan.style.display = 'none';
-  }
-
-  // Color states
-  let strokeColor = '#6C47FF';
-  if (remaining < 0)  { strokeColor = '#ff3b5c'; countSpan.style.color = '#ff3b5c'; }
-  else if (remaining <= 10) { strokeColor = '#ff3b5c'; countSpan.style.color = '#ff3b5c'; }
-  else if (remaining <= 30) { strokeColor = '#f59e0b'; countSpan.style.color = '#f59e0b'; }
-  else                { countSpan.style.color = 'var(--text2, #6b7280)'; }
-
-  // Ring — r=15, circumference=94.25
-  if (ring) {
-    const pct = Math.min(1, length / MAX);
-    ring.style.strokeDashoffset = 94.25 * (1 - pct);
-    ring.setAttribute('stroke', strokeColor);
-
-    // Show ring only after a few chars
-    ring.style.opacity = length > 0 ? '1' : '0';
-  }
-}
-
-// ──────────────────────────────────────────────────────────
-// AUTO-RESIZE TEXTAREA
-// ──────────────────────────────────────────────────────────
-function autoResizeTextarea(textarea) {
-  if (!textarea) return;
-  textarea.style.height = 'auto';
-  textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
-}
-
-// ──────────────────────────────────────────────────────────
-// UPDATE POST BUTTON STATE
-// ──────────────────────────────────────────────────────────
-function updatePostButtonState() {
-  const textarea = document.getElementById('composer-textarea');
-  const caption  = document.getElementById('composer-caption');
-  const postBtn  = document.getElementById('composer-post-btn');
-
-  if (!postBtn) return;
-
-  const hasText   = (textarea?.value?.trim()?.length > 0) || (caption?.value?.trim()?.length > 0);
-  const hasMedia  = composerState.selectedFile !== null;
-  const hasRepost = composerState.repostTargetId !== null;
-
-  const isValid = (hasText || hasMedia || hasRepost) &&
-                  (textarea?.value?.length || 0) <= 280 &&
-                  (caption?.value?.length   || 0) <= 280;
-
-  postBtn.disabled = !isValid;
-  postBtn.classList.toggle('active', isValid);
-}
-
-// ──────────────────────────────────────────────────────────
-// SHOW EMOJI PICKER
-// ──────────────────────────────────────────────────────────
-function showEmojiPicker(targetId) {
-  const target = document.getElementById(targetId);
-  if (!target) return;
-
-  document.querySelector('.composer-emoji-picker')?.remove();
-
-  const emojis = [
-    '😀','😂','🥹','😍','🥰','😎','🤩','🥳','😭','😤',
-    '🔥','❤️','💯','✨','🎉','🙏','👏','🫶','💪','💀',
-    '🤝','👀','💬','🫠','😮','🤔','💅','🫡','⚡','🌟'
-  ];
-
-  const picker = document.createElement('div');
-  picker.className = 'composer-emoji-picker';
-  picker.innerHTML = emojis.map(e =>
-    `<button class="composer-emoji-btn" type="button" aria-label="${e}">${e}</button>`
-  ).join('');
-
-  // Smart position: above the toolbar, left-aligned
-  const footer = document.getElementById('cpr-footer');
-  const footerRect = footer?.getBoundingClientRect();
-  if (footerRect) {
-    picker.style.bottom = (window.innerHeight - footerRect.top + 8) + 'px';
-    picker.style.left = '16px';
-    picker.style.right = '16px';
-    picker.style.maxWidth = 'none';
-  }
-
-  document.body.appendChild(picker);
-
-  // Animate in
-  requestAnimationFrame(() => picker.classList.add('composer-emoji-picker-open'));
-
-  picker.querySelectorAll('.composer-emoji-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const emoji = e.currentTarget.textContent;
-      const start = target.selectionStart ?? target.value.length;
-      const end   = target.selectionEnd ?? target.value.length;
-      target.value = target.value.slice(0, start) + emoji + target.value.slice(end);
-      target.setSelectionRange(start + emoji.length, start + emoji.length);
-      target.focus();
-      target.dispatchEvent(new Event('input'));
-      picker.classList.remove('composer-emoji-picker-open');
-      setTimeout(() => picker.remove(), 150);
-    });
-  });
-
-  const closePicker = (e) => {
-    if (!picker.contains(e.target)) {
-      picker.classList.remove('composer-emoji-picker-open');
-      setTimeout(() => picker.remove(), 150);
-      document.removeEventListener('click', closePicker);
+  if (tray.style.display === 'none') {
+    // Build grid once
+    if (!tray.children.length) {
+      _EMOJIS.forEach(em => {
+        const b = document.createElement('button');
+        b.className = 'mnc-emoji';
+        b.textContent = em;
+        b.type = 'button';
+        b.addEventListener('mousedown', e => e.preventDefault());
+        b.addEventListener('click', () => {
+          const ta = document.getElementById('mnc-textarea');
+          if (!ta) return;
+          const s = ta.selectionStart ?? ta.value.length;
+          const e2 = ta.selectionEnd ?? ta.value.length;
+          ta.value = ta.value.slice(0, s) + em + ta.value.slice(e2);
+          ta.setSelectionRange(s + em.length, s + em.length);
+          ta.focus();
+          ta.dispatchEvent(new Event('input'));
+        });
+        tray.appendChild(b);
+      });
     }
-  };
-  setTimeout(() => document.addEventListener('click', closePicker), 100);
-}
-
-// ──────────────────────────────────────────────────────────
-// UPDATE POST BUTTON PROGRESS (for uploads)
-// ──────────────────────────────────────────────────────────
-function updatePostButtonProgress(percent) {
-  const postBtn = document.getElementById('composer-post-btn');
-  if (!postBtn) return;
-
-  if (percent < 100) {
-    postBtn.innerHTML = `<div class="composer-progress-ring">
-      <svg width="20" height="20" viewBox="0 0 20 20">
-        <circle cx="10" cy="10" r="8" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
-        <circle cx="10" cy="10" r="8" fill="none" stroke="white" stroke-width="2"
-                stroke-dasharray="50.24" stroke-dashoffset="${50.24 * (1 - percent / 100)}"
-                stroke-linecap="round" transform="rotate(-90 10 10)"/>
-      </svg>
-    </div>`;
+    tray.style.display = 'grid';
+    // Click outside to close
+    setTimeout(() => {
+      const close = e => {
+        if (!tray.contains(e.target) && e.target.id !== 'mnc-emoji-btn') {
+          tray.style.display = 'none';
+          document.removeEventListener('click', close);
+        }
+      };
+      document.addEventListener('click', close);
+    }, 50);
   } else {
-    postBtn.innerHTML = '<span>Post</span>';
+    tray.style.display = 'none';
   }
 }
 
-// ──────────────────────────────────────────────────────────
-// SUBMIT POST — with upload progress ring
-// ──────────────────────────────────────────────────────────
-async function submitPost() {
-  const textarea = document.getElementById('composer-textarea');
-  const caption  = document.getElementById('composer-caption');
-  const postBtn  = document.getElementById('composer-post-btn');
+// ── Ring + sync ────────────────────────────────────────────────
+function _cUpdateRing(len) {
+  const MAX = 280;
+  const ring    = document.getElementById('mnc-ring');
+  const numEl   = document.getElementById('mnc-char-num');
+  if (!ring || !numEl) return;
 
-  const mainText    = textarea?.value?.trim() || '';
-  const captionText = caption?.value?.trim() || '';
-  const content     = mainText + (captionText ? (mainText ? '\n\n' : '') + captionText : '');
+  const pct    = Math.min(1, len / MAX);
+  const circ   = 75.4;
+  ring.style.strokeDashoffset = String(circ * (1 - pct));
 
-  if (!content && !composerState.selectedFile && !composerState.repostTargetId) return;
-  if (!currentUser) { showToast('Please sign in'); return; }
-  if (composerState.uploadInProgress) return;
-
-  composerState.uploadInProgress = true;
-
-  if (postBtn) {
-    postBtn.disabled  = true;
-    postBtn.classList.remove('active');
-    postBtn.innerHTML = '<div class="composer-spinner"></div>';
+  const rem = MAX - len;
+  if (rem <= 30) {
+    numEl.textContent = String(rem);
+    numEl.style.display = '';
+    ring.style.stroke = rem < 0 ? '#ff3b5c' : rem <= 10 ? '#ff3b5c' : '#f59e0b';
+    numEl.style.color = ring.style.stroke;
+  } else {
+    numEl.textContent = '';
+    numEl.style.display = 'none';
+    ring.style.stroke = '#6C47FF';
   }
 
-  const fileToUpload = composerState.selectedFile;
-  const targetId     = composerState.repostTargetId;
+  ring.style.opacity = len > 0 ? '1' : '0';
+}
+
+function _cSync() {
+  const ta  = document.getElementById('mnc-textarea');
+  const btn = document.getElementById('mnc-post-btn');
+  if (!ta || !btn) return;
+
+  const hasText   = ta.value.trim().length > 0;
+  const hasMedia  = !!_c.file;
+  const hasQuote  = !!_c.repostId;
+  const underLimit = ta.value.length <= 280;
+  const ok = (hasText || hasMedia || hasQuote) && underLimit;
+
+  btn.disabled = !ok;
+  btn.classList.toggle('mnc-post-ready', ok);
+}
+
+function _cAutoGrow(ta) {
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(ta.scrollHeight, 260) + 'px';
+}
+
+// ── Submit ─────────────────────────────────────────────────────
+async function _cSubmit() {
+  const ta = document.getElementById('mnc-textarea');
+  if (!ta || _c.busy || !currentUser) return;
+
+  const text = ta.value.trim();
+  if (!text && !_c.file && !_c.repostId) return;
+  if (text.length > 280) return;
+
+  _c.busy = true;
+  const btn = document.getElementById('mnc-post-btn');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="mnc-spinner"></span>';
+  }
 
   try {
     let imageUrl = null;
     let videoUrl = null;
 
-    if (fileToUpload) {
-      const isVideo = fileToUpload.type.startsWith('video/');
-      const result  = await uploadMediaWithProgress(fileToUpload, (progress) => {
-        updatePostButtonProgress(progress);
-      });
-      if (isVideo) { videoUrl = result; } else { imageUrl = result; }
+    if (_c.file) {
+      const isVid = _c.file.type.startsWith('video/');
+      let blob = _c.file;
+
+      // Compress images
+      if (!isVid) {
+        try { blob = await _cCompress(_c.file, 1200); } catch (e) { /* use original */ }
+      }
+
+      const ext  = (_c.file.name?.split('.').pop()?.toLowerCase()) || (isVid ? 'mp4' : 'jpg');
+      const path = `${currentUser.id}/${Date.now()}.${ext}`;
+
+      const { error: upErr } = await supabase.storage
+        .from('post-images')
+        .upload(path, blob, {
+          upsert: true,
+          contentType: isVid ? (_c.file.type || 'video/mp4') : 'image/jpeg',
+          cacheControl: '3600'
+        });
+      if (upErr) throw upErr;
+
+      const { data: urlData } = supabase.storage.from('post-images').getPublicUrl(path);
+      if (isVid) videoUrl = urlData.publicUrl;
+      else        imageUrl = urlData.publicUrl;
     }
 
-    const { data: post, error } = await supabase
+    const { data: post, error: postErr } = await supabase
       .from('posts')
       .insert({
         user_id:          currentUser.id,
-        content:          content || null,
+        content:          text || null,
         image:            imageUrl,
         video:            videoUrl,
-        reposted_post_id: targetId || null
+        reposted_post_id: _c.repostId || null,
       })
-      .select(`id, content, image, video, created_at, like_count, repost_count, views, user_id, reposted_post_id,
-               user:users(id, username, avatar, location),
-               reposted_post:reposted_post_id(id, content, image, video, created_at, user_id,
-                                              user:users(id, username, avatar, location))`)
+      .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
+               user:users(id,username,avatar,location),
+               reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))`)
       .single();
 
-    if (error) throw error;
+    if (postErr) throw postErr;
 
-    // Show checkmark briefly before closing
-    if (postBtn) {
-      postBtn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`;
+    // Success tick
+    if (btn) {
+      btn.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+             stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 6L9 17l-5-5"/>
+        </svg>`;
+      btn.style.background = '#00b87a';
     }
 
-    composerState.selectedFile    = null;
-    composerState.repostTargetId  = null;
-    composerState.repostTargetBtn = null;
-    selectedFile    = null;
-    repostTargetId  = null;
-    repostTargetBtn = null;
+    // Handle repost tracking
+    if (_c.repostId) {
+      repostedPosts.set(_c.repostId, post.id);
+      setRepostUI(_c.repostId, true);
+      setTimeout(() => syncRepostCount(_c.repostId), 1200);
+    }
+
+    // Mention notifications
+    if (text) {
+      const mentions = text.match(/@([a-zA-Z0-9_]+)/g);
+      if (mentions) {
+        const names = [...new Set(mentions.map(m => m.slice(1).toLowerCase()))];
+        supabase.from('users').select('id,username').in('username', names).then(({ data: users }) => {
+          (users || []).forEach(u => {
+            if (u.id !== currentUser.id) {
+              insertNotification({ user_id: u.id, actor_id: currentUser.id, post_id: post.id, type: 'mention' });
+            }
+          });
+        });
+      }
+    }
 
     setTimeout(() => {
       closeComposer();
       prependPostToFeed(post);
       showToast('Posted ✓');
-    }, 450);
+    }, 380);
 
   } catch (err) {
     console.error('Post failed:', err);
-    showToast('Failed to post. Try again.');
-
-    if (postBtn) {
-      postBtn.disabled  = false;
-      postBtn.innerHTML = '<span class="cpr-post-label">Post</span>';
-      updatePostButtonState();
+    showToast('Failed to post — try again');
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Post';
+      btn.classList.add('mnc-post-ready');
     }
   } finally {
-    composerState.uploadInProgress = false;
+    _c.busy = false;
   }
 }
 
-// ──────────────────────────────────────────────────────────
-// UPLOAD MEDIA WITH PROGRESS
-// ──────────────────────────────────────────────────────────
-async function uploadMediaWithProgress(file, onProgress) {
-  if (!file) throw new Error('No file');
-  if (!currentUser) throw new Error('Not logged in');
-
-  const isVideo = file.type.startsWith('video/');
-  let blob = file;
-  let ext  = (file.name?.split('.').pop()?.toLowerCase()) || (isVideo ? 'mp4' : 'jpg');
-
-  if (!isVideo) {
-    try {
-      blob = await compressImageForUpload(file, 1200);
-      ext  = 'jpg';
-    } catch (e) {
-      console.warn('Compression failed, using original:', e);
-      blob = file;
-    }
-  }
-
-  onProgress(30);
-
-  const timestamp = Date.now();
-  const filename  = `${timestamp}.${ext}`;
-  const path      = `${currentUser.id}/${filename}`;
-  const bucket    = 'post-images';
-
-  const { data, error } = await supabase.storage
-    .from(bucket)
-    .upload(path, blob, {
-      upsert:       true,
-      contentType:  isVideo ? (file.type || 'video/mp4') : 'image/jpeg',
-      cacheControl: '3600'
-    });
-
-  if (error) {
-    console.error('Upload error:', error);
-    throw new Error(error.message || 'Upload failed');
-  }
-
-  onProgress(90);
-
-  const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
-  onProgress(100);
-
-  return urlData.publicUrl;
-}
-
-// Alias for backward compatibility
-async function uploadToStorage(file, onProgress) {
-  return uploadMediaWithProgress(file, onProgress);
-}
-
-// ──────────────────────────────────────────────────────────
-// COMPRESS IMAGE — canvas method
-// ──────────────────────────────────────────────────────────
-function compressImageForUpload(file, maxSize) {
+// ── Image compression ──────────────────────────────────────────
+function _cCompress(file, maxPx) {
   return new Promise((resolve, reject) => {
-    if (!file.type.startsWith('image/')) { resolve(file); return; }
-
-    const img       = new Image();
-    const objectUrl = URL.createObjectURL(file);
-
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-
-      let { width, height } = img;
-      if (width > maxSize || height > maxSize) {
-        if (width > height) { height = Math.round(height * maxSize / width); width = maxSize; }
-        else                { width  = Math.round(width * maxSize / height); height = maxSize; }
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('load fail')); };
+    img.onload  = () => {
+      URL.revokeObjectURL(url);
+      let { naturalWidth: w, naturalHeight: h } = img;
+      if (w > maxPx || h > maxPx) {
+        if (w >= h) { h = Math.round(h * maxPx / w); w = maxPx; }
+        else        { w = Math.round(w * maxPx / h); h = maxPx; }
       }
-
       const canvas = document.createElement('canvas');
-      canvas.width  = width;
-      canvas.height = height;
-
+      canvas.width = w; canvas.height = h;
       const ctx = canvas.getContext('2d');
-      if (!ctx) { reject(new Error('Canvas context not available')); return; }
-
-      ctx.drawImage(img, 0, 0, width, height);
-      canvas.toBlob(
-        (blob) => blob ? resolve(blob) : reject(new Error('Compression failed')),
-        'image/jpeg',
-        0.85
-      );
+      if (!ctx) { reject(new Error('no ctx')); return; }
+      ctx.drawImage(img, 0, 0, w, h);
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob fail')), 'image/jpeg', 0.85);
     };
-
-    img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('Failed to load image')); };
-    img.src = objectUrl;
+    img.src = url;
   });
 }
 
-// ──────────────────────────────────────────────────────────
-// CLOSE COMPOSER
-// ──────────────────────────────────────────────────────────
+// ── Close ──────────────────────────────────────────────────────
 function closeComposer() {
-  const composer = document.getElementById('composer-premium');
-  if (!composer) return;
+  const root = document.getElementById('mn-composer');
+  if (!root) return;
 
-  // Clean up viewport listeners
-  if (composer._vpCleanup) composer._vpCleanup();
+  if (root._vpClean) root._vpClean();
 
-  composer.classList.remove('composer-premium-open');
+  root.classList.remove('mnc-open');
+
+  // Revoke preview blob
+  if (_c.preview) { URL.revokeObjectURL(_c.preview); _c.preview = null; }
 
   setTimeout(() => {
-    composer.remove();
+    root.remove();
     document.body.style.overflow = '';
-    composerState.isOpen          = false;
-    composerState.selectedFile    = null;
-    composerState.repostTargetId  = null;
-    composerState.repostTargetBtn = null;
-    selectedFile    = null;
+    _c.busy = false;
+    _c.file = null;
+    _c.repostId  = null;
+    _c.repostBtn = null;
     repostTargetId  = null;
     repostTargetBtn = null;
-  }, 360);
+  }, 340);
 }
 
-// ──────────────────────────────────────────────────────────
-// HANDLE REPOST (called from feed)
-// ──────────────────────────────────────────────────────────
+// ── Repost handler (called from feed) ─────────────────────────
 function handleRepost(postId, btn, postUserId) {
   if (!currentUser) { showToast('Sign in to repost'); return; }
-  if (postUserId === currentUser.id) { showToast("You can't repost your own post"); return; }
+  if (postUserId === currentUser.id) { showToast("Can't repost your own post"); return; }
 
-  const alreadyReposted = btn?.dataset.reposted === 'true';
-  if (alreadyReposted) {
+  if (btn?.dataset.reposted === 'true') {
     showActionSheet([{ label: 'Undo Repost', icon: '🔄', action: () => undoRepost(postId, btn) }]);
-  } else {
-    composerState.repostTargetId  = postId;
-    composerState.repostTargetBtn = btn;
-    repostTargetId  = postId;
-    repostTargetBtn = btn;
-    openComposer();
+    return;
   }
+
+  _c.repostId  = postId;
+  _c.repostBtn = btn;
+  repostTargetId  = postId;
+  repostTargetBtn = btn;
+  openComposer();
 }
 
-// ── Feed prepend ──
-// FIXED VERSION — removes empty state when first post arrives
+// ── Compat shim so old code still works ───────────────────────
+function composeOrRetry() {
+  openComposer();
+}
+
+// ── Feed prepend ───────────────────────────────────────────────
 function prependPostToFeed(newPost) {
   if (!newPost) return;
-
   const adapted = { ...newPost, comments: [{ count: 0 }] };
   const el = createFeedPost(adapted);
   const list = document.getElementById('feed-list');
   if (!list || !el) return;
 
-  // ←←← THIS IS THE FIX
-  // Remove any existing empty-state message
-  const emptyState = list.querySelector('.empty-state');
-  if (emptyState) {
-    emptyState.remove();
-  }
-
-  // Reset exhausted flag now that we have content
+  list.querySelector('.empty-state')?.remove();
   feedExhausted = false;
 
-  // Prepend the new post
   list.prepend(el);
   loadedPostIds.add(newPost.id);
-  LikeStore.seed(newPost.id, newPost.like_count || 0, likedPosts.has(newPost.id));
+  LikeStore.seed(newPost.id, 0, false);
   el.classList.add('fade-up');
   observePost(el);
 
-  // Rest of your original code (notifications, repost handling, etc.)
   if (newPost.reposted_post_id) {
     repostedPosts.set(newPost.reposted_post_id, newPost.id);
     setRepostUI(newPost.reposted_post_id, true);
     setTimeout(() => syncRepostCount(newPost.reposted_post_id), 1200);
-    supabase.from('posts').select('user_id').eq('id', newPost.reposted_post_id).single().then(({ data: orig }) => {
-      if (orig && orig.user_id !== currentUser.id) {
-        insertNotification({ user_id: orig.user_id, actor_id: currentUser.id, post_id: newPost.reposted_post_id, type: 'repost' });
-      }
-    });
+    supabase.from('posts').select('user_id').eq('id', newPost.reposted_post_id).single()
+      .then(({ data: orig }) => {
+        if (orig?.user_id && orig.user_id !== currentUser.id) {
+          insertNotification({ user_id: orig.user_id, actor_id: currentUser.id, post_id: newPost.reposted_post_id, type: 'repost' });
+        }
+      });
   }
 
   if (document.getElementById('page-profile')?.classList.contains('active')) {
     renderMyProfile();
   }
 
-  // Mention notifications
   if (newPost.content) {
-    const mentionMatches = newPost.content.match(/@([a-zA-Z0-9_]+)/g);
-    if (mentionMatches) {
-      const mentioned = [...new Set(mentionMatches.map(m => m.slice(1).toLowerCase()))];
-      supabase.from('users').select('id,username').in('username', mentioned).then(({ data: users }) => {
+    const mentions = newPost.content.match(/@([a-zA-Z0-9_]+)/g);
+    if (mentions) {
+      const names = [...new Set(mentions.map(m => m.slice(1).toLowerCase()))];
+      supabase.from('users').select('id,username').in('username', names).then(({ data: users }) => {
         (users || []).forEach(u => {
           if (u.id !== currentUser.id) {
             insertNotification({ user_id: u.id, actor_id: currentUser.id, post_id: newPost.id, type: 'mention' });
