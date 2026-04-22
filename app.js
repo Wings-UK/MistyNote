@@ -151,61 +151,47 @@ async function handleRoute(route) {
 // ═══════════════════════════════════════════════════════════
 // BACK BUTTON — World-Class System
 // ═══════════════════════════════════════════════════════════
-
-// ── How it works ──────────────────────────────────────────
-// We do NOT use the sentinel/pushState trick — it fights with
-// the URL router and breaks on reload.
 //
-// Instead we use a simple boolean flag. The popstate listener
-// checks: did the URL actually change to a real route?
-// If yes — handle the route. If no (URL is still '/') —
-// run handlePhysicalBack() which has the full priority logic.
+// Strategy: the ONLY reliable cross-browser approach.
 //
-// To keep the browser from leaving the app on the FIRST back
-// press, we push one sentinel hash on app boot. After that,
-// handlePhysicalBack() always replaces the hash at the end
-// so the next back press fires popstate again.
-// ─────────────────────────────────────────────────────────
+// On app boot we push ONE extra history entry.
+// When back is pressed, popstate fires, we immediately
+// push another entry to replace what was popped — so the
+// browser stack never empties and the user never leaves.
+// Then we run the priority logic.
+//
+// No URL manipulation. No hash tricks. No arm/rearm.
+// Just: pop fires → push one back → handle the action.
+// ═══════════════════════════════════════════════════════════
 
-function _armBackButton() {
-  // Push a known hash entry so back fires popstate instead of
-  // leaving the page. Use replaceState first to avoid adding
-  // an extra entry on deep-link loads.
-  if (window.location.pathname === '/' && !window.location.hash) {
-    window.history.replaceState({ _mn: 'root' }, '', '/#app');
-    window.history.pushState({ _mn: 'top' }, '', '/');
-  }
+let _backReady = false; // true after app is visible & user is in
+
+function _initBackButton() {
+  if (_backReady) return;
+  _backReady = true;
+  // Push one extra entry so the first back press fires popstate
+  window.history.pushState({ _mn: 1 }, '');
 }
 
-function _rearmBackButton() {
-  // Always called at the END of handlePhysicalBack so the next
-  // back press fires popstate again (not leaves the app).
-  // Use pushState so each back press generates a new pop.
-  if (window.location.pathname === '/') {
-    window.history.pushState({ _mn: 'top' }, '', '/');
-  }
-}
-
-// ── Helpers ────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────
 
 function _getActiveMainPage() {
-  const mains = ['feed', 'discover', 'notifications', 'profile', 'market'];
-  for (const id of mains) {
+  const pages = ['feed', 'discover', 'notifications', 'profile', 'market'];
+  for (const id of pages) {
     if (document.getElementById('page-' + id)?.classList.contains('active')) return id;
   }
   return lastMainPage || 'feed';
 }
 
 function _getActiveProfileTab() {
-  const el = document.querySelector('#prf-tabs .prf-icon-tab.active');
-  return el?.dataset?.tab || 'list';
+  return document.querySelector('#prf-tabs .prf-icon-tab.active')?.dataset?.tab || 'list';
 }
 
 function _isDiscoverSearchActive() {
   return (document.getElementById('disc-input')?.value || '').trim().length > 0;
 }
 
-// ── Exit confirmation dialog ───────────────────────────────
+// ── Exit dialog ───────────────────────────────────────────
 
 function _showExitConfirm() {
   if (document.getElementById('mn-exit-dialog')) return;
@@ -224,9 +210,9 @@ function _showExitConfirm() {
   overlay.style.cssText =
     'position:fixed;inset:0;z-index:99999;' +
     'display:flex;align-items:flex-end;justify-content:center;' +
-    'background:rgba(0,0,0,0.45);' +
+    'background:rgba(0,0,0,0.5);' +
     'backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);' +
-    'animation:mnFadeIn .18s ease;';
+    'animation:mnFadeIn .15s ease;';
 
   overlay.innerHTML =
     '<div style="' +
@@ -234,167 +220,143 @@ function _showExitConfirm() {
       'background:var(--bg,#fff);' +
       'border-radius:24px 24px 0 0;' +
       'padding:24px 20px calc(28px + env(safe-area-inset-bottom,0px));' +
-      'box-shadow:0 -4px 32px rgba(0,0,0,.14);' +
-      'animation:mnSlideUp .22s cubic-bezier(.25,.46,.45,.94);' +
+      'box-shadow:0 -4px 32px rgba(0,0,0,.15);' +
+      'animation:mnSlideUp .2s cubic-bezier(.25,.46,.45,.94);' +
     '">' +
     '<div style="width:36px;height:4px;border-radius:2px;background:var(--border,#e5e7eb);margin:0 auto 20px;"></div>' +
     '<p style="font-size:17px;font-weight:700;color:var(--text,#111);margin:0 0 6px;text-align:center;">Leave MistyNote?</p>' +
-    '<p style="font-size:14px;color:var(--text2,#6b7280);margin:0 0 24px;text-align:center;line-height:1.5;">Everything will be here when you get back.</p>' +
-    '<button id="mn-exit-confirm" style="width:100%;padding:15px;border-radius:14px;border:none;background:#ff3b5c;color:#fff;font-size:16px;font-weight:700;margin-bottom:10px;cursor:pointer;">Close app</button>' +
-    '<button id="mn-exit-cancel" style="width:100%;padding:15px;border-radius:14px;border:none;background:var(--bg2,#f3f4f6);color:var(--text,#111);font-size:16px;font-weight:600;cursor:pointer;">Stay on MistyNote</button>' +
+    '<p style="font-size:14px;color:var(--text2,#6b7280);margin:0 0 24px;text-align:center;line-height:1.5;">Everything will be here when you come back.</p>' +
+    '<button id="mn-exit-confirm" style="width:100%;padding:15px;border-radius:14px;border:none;background:#ff3b5c;color:#fff;font-size:16px;font-weight:700;margin-bottom:10px;cursor:pointer;-webkit-tap-highlight-color:transparent;">Exit</button>' +
+    '<button id="mn-exit-cancel" style="width:100%;padding:15px;border-radius:14px;border:none;background:var(--bg2,#f3f4f6);color:var(--text,#111);font-size:16px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent;">Stay</button>' +
     '</div>';
 
   document.body.appendChild(overlay);
 
   const close = () => {
     overlay.style.opacity = '0';
-    overlay.style.transition = 'opacity .18s';
-    setTimeout(() => overlay.remove(), 180);
-    _rearmBackButton(); // re-arm after dismissing dialog
+    overlay.style.transition = 'opacity .15s';
+    setTimeout(() => overlay.remove(), 150);
   };
 
   document.getElementById('mn-exit-cancel').onclick  = close;
   document.getElementById('mn-exit-confirm').onclick = () => {
+    // Remove our injected history entry then go back for real
     overlay.remove();
-    // Go back past our injected entries to actually leave
-    window.history.go(-2);
+    _backReady = false;
+    window.history.back();
   };
   overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
 }
 
-// ── Core back handler (priority stack) ────────────────────
+// ── Main handler ──────────────────────────────────────────
 
 function handlePhysicalBack() {
+  // Immediately push a new entry so next back press works too
+  window.history.pushState({ _mn: 1 }, '');
 
-  // P1-A: Exit dialog already showing → dismiss it
+  // P1-A: Exit dialog showing → just dismiss it
   const exitDlg = document.getElementById('mn-exit-dialog');
   if (exitDlg) {
     exitDlg.style.opacity = '0';
-    exitDlg.style.transition = 'opacity .18s';
-    setTimeout(() => exitDlg.remove(), 180);
-    _rearmBackButton();
+    exitDlg.style.transition = 'opacity .15s';
+    setTimeout(() => exitDlg.remove(), 150);
     return;
   }
 
-  // P1-B: Composer open
+  // P1-B: Composer
   if (document.getElementById('mn-composer')) {
-    closeComposer();
-    _rearmBackButton();
-    return;
+    closeComposer(); return;
   }
 
   // P1-C: Action sheet
-  const actionSheet = document.querySelector('.action-sheet-overlay');
-  if (actionSheet) {
-    document.body.removeChild(actionSheet);
-    _rearmBackButton();
-    return;
-  }
+  const as = document.querySelector('.action-sheet-overlay');
+  if (as) { document.body.removeChild(as); return; }
 
-  // P1-D: Echoes overlay
+  // P1-D: Echoes
   if (document.getElementById('echoes-overlay')) {
-    closeEchoes();
-    _rearmBackButton();
-    return;
+    closeEchoes(); return;
   }
 
   // P1-E: Follow list
   if (document.getElementById('follow-list-overlay')) {
-    closeFollowList();
-    _rearmBackButton();
-    return;
+    closeFollowList(); return;
   }
 
   // P1-F: Video fullscreen
   const vfs = document.getElementById('video-fs');
   if (vfs && (vfs.classList.contains('active') || vfs.style.display === 'flex')) {
-    closeVideoFS();
-    _rearmBackButton();
-    return;
+    closeVideoFS(); return;
   }
 
   // P1-G: Chat image viewer
-  if (document.getElementById('chat-img-viewer')) {
-    document.getElementById('chat-img-viewer').remove();
-    _rearmBackButton();
-    return;
-  }
+  const civ = document.getElementById('chat-img-viewer');
+  if (civ) { civ.remove(); return; }
 
-  // P1-H: Emoji / emoji tray
-  const emojiEl = document.querySelector('.mnc-emoji-tray, .composer-emoji-picker');
-  if (emojiEl) {
-    emojiEl.remove();
-    _rearmBackButton();
-    return;
-  }
+  // P1-H: Emoji tray
+  const emoji = document.querySelector('.mnc-emoji-tray, .composer-emoji-picker');
+  if (emoji) { emoji.remove(); return; }
 
   // P2: Slide stack (detail, user-profile, messages, chat,
-  //     settings, settings sub-pages, wallet…)
+  //     settings, sub-settings, wallet…)
   if (slideStack.length > 0) {
-    slideBack();
-    _rearmBackButton();
-    return;
+    slideBack(); return;
   }
 
-  // ── Root main pages from here ──────────────────────────
+  // ── Root main pages ────────────────────────────────────
   const page = _getActiveMainPage();
 
-  // P3-A: Feed on "following" → switch to "for-you"
+  // P3-A: Feed on "following" → "for-you"
   if (page === 'feed' && currentFeedTab === 'following') {
     const btn = document.getElementById('feed-tab-foryou');
     if (btn) setFeedTab('for-you', btn);
-    _rearmBackButton();
     return;
   }
 
   // P3-B: Discover with active search
   if (page === 'discover' && _isDiscoverSearchActive()) {
     if (discCurrentTab && discCurrentTab !== 'posts') {
-      const postsBtn = document.querySelector('.disc-tab[data-tab="posts"]');
-      if (postsBtn) discTab('posts', postsBtn);
+      const btn = document.querySelector('.disc-tab[data-tab="posts"]');
+      if (btn) discTab('posts', btn);
     } else {
       discClear();
     }
-    _rearmBackButton();
     return;
   }
 
-  // P3-C: Profile on non-list tab → go to list (posts) tab
+  // P3-C: Profile on non-list tab → list tab
   if (page === 'profile' && _getActiveProfileTab() !== 'list') {
-    const listBtn = document.querySelector('#prf-tabs .prf-icon-tab[data-tab="list"]');
-    if (listBtn) switchPrfTab('list', listBtn);
-    _rearmBackButton();
+    const btn = document.querySelector('#prf-tabs .prf-icon-tab[data-tab="list"]');
+    if (btn) switchPrfTab('list', btn);
     return;
   }
 
-  // P4: Any non-home main page → go to feed
+  // P4: Any non-home page → go to feed
   if (page !== 'feed') {
-    navTo('feed');
-    _rearmBackButton();
-    return;
+    navTo('feed'); return;
   }
 
-  // P5: Home, clean state → show exit dialog
-  // (do NOT rearm here — _showExitConfirm rearms after dismiss)
+  // P5: Home, clean → exit dialog
   _showExitConfirm();
 }
 
-// ── Popstate listener ──────────────────────────────────────
+// ── Popstate listener ─────────────────────────────────────
 
-window.addEventListener('popstate', (e) => {
+window.addEventListener('popstate', () => {
+  // If app isn't active yet (auth / onboarding), ignore
+  if (!_backReady) return;
+
   const route = getRoute();
 
-  // Real deep-link URL (not just '/')
+  // Real deep-link navigation (e.g. /post/id or /profile/username)
   if (route.type !== 'home') {
     handleRoute(route);
-    _rearmBackButton();
+    // Re-push so next back is still intercepted
+    window.history.pushState({ _mn: 1 }, '');
     return;
   }
 
-  // URL is '/' — this is a physical back button press
   handlePhysicalBack();
 });
-
 
 // ══════════════════════════════════════════
 // USERNAME / BIO VALIDATION
@@ -779,7 +741,7 @@ async function bootApp(isDeepLink = false) {
   const feedEl = document.getElementById('page-feed');
   if (isDeepLink && feedEl) feedEl.style.visibility = 'hidden';
   appEl.classList.remove('hidden');
-  _armBackButton(); // arm back button now that app is live
+  _initBackButton(); // arm back button now that app is live
 
   injectFeedPostStyles();
   injectEchoesPanel();
@@ -1252,7 +1214,7 @@ async function obFinish() {
   hideOnboarding();
   const appEl = document.getElementById('app');
   if (appEl) appEl.classList.remove('hidden');
-  _armBackButton(); // arm back button for new user
+  _initBackButton(); // arm back button for new user
 
   // Inject feed styles that bootApp normally handles
   injectFeedPostStyles();
