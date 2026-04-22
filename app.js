@@ -151,32 +151,45 @@ async function handleRoute(route) {
 // ═══════════════════════════════════════════════════════════
 // BACK BUTTON — World-Class System
 // ═══════════════════════════════════════════════════════════
-//
-// Priority order (highest → lowest):
-//   1. Close any open overlay (composer, action sheet, echoes,
-//      follow list, video FS, chat image viewer, emoji picker)
-//   2. Pop the slide stack (detail, user-profile, messages,
-//      chat, settings, wallet…)
-//   3. Sub-tab reset:
-//      feed "following" → "for-you"
-//      discover search non-posts-tab → posts tab
-//      discover search posts tab → clear search (home)
-//      profile non-list tab → list tab
-//   4. Non-home main page → go to feed
-//   5. Home + clean state → exit confirmation dialog
-// ═══════════════════════════════════════════════════════════
 
-// Push a sentinel so the next back press always fires popstate
-// instead of the browser navigating away from the app.
-function _pushSentinel() {
-  window.history.pushState({ _mn: true }, '');
+// ── How it works ──────────────────────────────────────────
+// We do NOT use the sentinel/pushState trick — it fights with
+// the URL router and breaks on reload.
+//
+// Instead we use a simple boolean flag. The popstate listener
+// checks: did the URL actually change to a real route?
+// If yes — handle the route. If no (URL is still '/') —
+// run handlePhysicalBack() which has the full priority logic.
+//
+// To keep the browser from leaving the app on the FIRST back
+// press, we push one sentinel hash on app boot. After that,
+// handlePhysicalBack() always replaces the hash at the end
+// so the next back press fires popstate again.
+// ─────────────────────────────────────────────────────────
+
+function _armBackButton() {
+  // Push a known hash entry so back fires popstate instead of
+  // leaving the page. Use replaceState first to avoid adding
+  // an extra entry on deep-link loads.
+  if (window.location.pathname === '/' && !window.location.hash) {
+    window.history.replaceState({ _mn: 'root' }, '', '/#app');
+    window.history.pushState({ _mn: 'top' }, '', '/');
+  }
 }
-_pushSentinel(); // arm immediately on load
+
+function _rearmBackButton() {
+  // Always called at the END of handlePhysicalBack so the next
+  // back press fires popstate again (not leaves the app).
+  // Use pushState so each back press generates a new pop.
+  if (window.location.pathname === '/') {
+    window.history.pushState({ _mn: 'top' }, '', '/');
+  }
+}
 
 // ── Helpers ────────────────────────────────────────────────
 
 function _getActiveMainPage() {
-  const mains = ['feed','discover','notifications','profile','market'];
+  const mains = ['feed', 'discover', 'notifications', 'profile', 'market'];
   for (const id of mains) {
     if (document.getElementById('page-' + id)?.classList.contains('active')) return id;
   }
@@ -192,195 +205,193 @@ function _isDiscoverSearchActive() {
   return (document.getElementById('disc-input')?.value || '').trim().length > 0;
 }
 
+// ── Exit confirmation dialog ───────────────────────────────
+
 function _showExitConfirm() {
   if (document.getElementById('mn-exit-dialog')) return;
 
-  // Inject keyframes once
   if (!document.getElementById('mn-exit-kf')) {
     const s = document.createElement('style');
     s.id = 'mn-exit-kf';
-    s.textContent = [
-      '@keyframes mnFadeIn{from{opacity:0}to{opacity:1}}',
-      '@keyframes mnSlideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}'
-    ].join('');
+    s.textContent =
+      '@keyframes mnFadeIn{from{opacity:0}to{opacity:1}}' +
+      '@keyframes mnSlideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}';
     document.head.appendChild(s);
   }
 
   const overlay = document.createElement('div');
   overlay.id = 'mn-exit-dialog';
-  overlay.style.cssText = [
-    'position:fixed;inset:0;z-index:99999;',
-    'display:flex;align-items:flex-end;justify-content:center;',
-    'background:rgba(0,0,0,0.45);',
-    'backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);',
-    'animation:mnFadeIn .18s ease;'
-  ].join('');
+  overlay.style.cssText =
+    'position:fixed;inset:0;z-index:99999;' +
+    'display:flex;align-items:flex-end;justify-content:center;' +
+    'background:rgba(0,0,0,0.45);' +
+    'backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);' +
+    'animation:mnFadeIn .18s ease;';
 
   overlay.innerHTML =
-    '<div style="' + [
-      'width:100%;max-width:480px;',
-      'background:var(--bg,#fff);',
-      'border-radius:24px 24px 0 0;',
-      'padding:24px 20px calc(28px + env(safe-area-inset-bottom,0px));',
-      'box-shadow:0 -4px 32px rgba(0,0,0,.14);',
-      'animation:mnSlideUp .22s cubic-bezier(.25,.46,.45,.94);'
-    ].join('') + '">' +
+    '<div style="' +
+      'width:100%;max-width:480px;' +
+      'background:var(--bg,#fff);' +
+      'border-radius:24px 24px 0 0;' +
+      'padding:24px 20px calc(28px + env(safe-area-inset-bottom,0px));' +
+      'box-shadow:0 -4px 32px rgba(0,0,0,.14);' +
+      'animation:mnSlideUp .22s cubic-bezier(.25,.46,.45,.94);' +
+    '">' +
     '<div style="width:36px;height:4px;border-radius:2px;background:var(--border,#e5e7eb);margin:0 auto 20px;"></div>' +
     '<p style="font-size:17px;font-weight:700;color:var(--text,#111);margin:0 0 6px;text-align:center;">Leave MistyNote?</p>' +
-    '<p style="font-size:14px;color:var(--text2,#6b7280);margin:0 0 24px;text-align:center;line-height:1.5;">Your feed and everything else will be waiting when you come back.</p>' +
+    '<p style="font-size:14px;color:var(--text2,#6b7280);margin:0 0 24px;text-align:center;line-height:1.5;">Everything will be here when you get back.</p>' +
     '<button id="mn-exit-confirm" style="width:100%;padding:15px;border-radius:14px;border:none;background:#ff3b5c;color:#fff;font-size:16px;font-weight:700;margin-bottom:10px;cursor:pointer;">Close app</button>' +
-    '<button id="mn-exit-cancel" style="width:100%;padding:15px;border-radius:14px;border:none;background:var(--bg2,#f3f4f6);color:var(--text,#111);font-size:16px;font-weight:600;cursor:pointer;">Stay</button>' +
+    '<button id="mn-exit-cancel" style="width:100%;padding:15px;border-radius:14px;border:none;background:var(--bg2,#f3f4f6);color:var(--text,#111);font-size:16px;font-weight:600;cursor:pointer;">Stay on MistyNote</button>' +
     '</div>';
 
   document.body.appendChild(overlay);
-  _pushSentinel(); // next back press dismisses this dialog
 
   const close = () => {
     overlay.style.opacity = '0';
     overlay.style.transition = 'opacity .18s';
     setTimeout(() => overlay.remove(), 180);
+    _rearmBackButton(); // re-arm after dismissing dialog
   };
 
   document.getElementById('mn-exit-cancel').onclick  = close;
   document.getElementById('mn-exit-confirm').onclick = () => {
-    close();
-    setTimeout(() => {
-      try { window.history.go(-(window.history.length)); } catch(e) {}
-      setTimeout(() => window.close(), 300);
-    }, 200);
+    overlay.remove();
+    // Go back past our injected entries to actually leave
+    window.history.go(-2);
   };
   overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
 }
 
-// ── Core handler ───────────────────────────────────────────
+// ── Core back handler (priority stack) ────────────────────
 
 function handlePhysicalBack() {
 
-  // PRIORITY 1-A: Exit confirm dialog
+  // P1-A: Exit dialog already showing → dismiss it
   const exitDlg = document.getElementById('mn-exit-dialog');
   if (exitDlg) {
     exitDlg.style.opacity = '0';
     exitDlg.style.transition = 'opacity .18s';
     setTimeout(() => exitDlg.remove(), 180);
-    _pushSentinel();
+    _rearmBackButton();
     return;
   }
 
-  // PRIORITY 1-B: Composer
+  // P1-B: Composer open
   if (document.getElementById('mn-composer')) {
     closeComposer();
-    _pushSentinel();
+    _rearmBackButton();
     return;
   }
 
-  // PRIORITY 1-C: Action sheet
+  // P1-C: Action sheet
   const actionSheet = document.querySelector('.action-sheet-overlay');
   if (actionSheet) {
     document.body.removeChild(actionSheet);
-    _pushSentinel();
+    _rearmBackButton();
     return;
   }
 
-  // PRIORITY 1-D: Echoes overlay
+  // P1-D: Echoes overlay
   if (document.getElementById('echoes-overlay')) {
     closeEchoes();
-    _pushSentinel();
+    _rearmBackButton();
     return;
   }
 
-  // PRIORITY 1-E: Follow list
+  // P1-E: Follow list
   if (document.getElementById('follow-list-overlay')) {
     closeFollowList();
-    _pushSentinel();
+    _rearmBackButton();
     return;
   }
 
-  // PRIORITY 1-F: Video fullscreen
+  // P1-F: Video fullscreen
   const vfs = document.getElementById('video-fs');
   if (vfs && (vfs.classList.contains('active') || vfs.style.display === 'flex')) {
     closeVideoFS();
-    _pushSentinel();
+    _rearmBackButton();
     return;
   }
 
-  // PRIORITY 1-G: Chat image viewer
+  // P1-G: Chat image viewer
   if (document.getElementById('chat-img-viewer')) {
     document.getElementById('chat-img-viewer').remove();
-    _pushSentinel();
+    _rearmBackButton();
     return;
   }
 
-  // PRIORITY 1-H: Emoji picker
-  const emojiPicker = document.querySelector('.mnc-emoji-tray, .composer-emoji-picker');
-  if (emojiPicker) {
-    emojiPicker.remove();
-    _pushSentinel();
+  // P1-H: Emoji / emoji tray
+  const emojiEl = document.querySelector('.mnc-emoji-tray, .composer-emoji-picker');
+  if (emojiEl) {
+    emojiEl.remove();
+    _rearmBackButton();
     return;
   }
 
-  // PRIORITY 2: Slide stack
-  // Covers: detail, user-profile, messages, chat,
-  //         settings, settings sub-pages, wallet, etc.
+  // P2: Slide stack (detail, user-profile, messages, chat,
+  //     settings, settings sub-pages, wallet…)
   if (slideStack.length > 0) {
     slideBack();
-    _pushSentinel();
+    _rearmBackButton();
     return;
   }
 
-  // ── At this point: we are on a root main page ──────────
-  const activePage = _getActiveMainPage();
+  // ── Root main pages from here ──────────────────────────
+  const page = _getActiveMainPage();
 
-  // PRIORITY 3-A: Feed on "following" tab → switch to "for-you"
-  if (activePage === 'feed' && currentFeedTab === 'following') {
+  // P3-A: Feed on "following" → switch to "for-you"
+  if (page === 'feed' && currentFeedTab === 'following') {
     const btn = document.getElementById('feed-tab-foryou');
     if (btn) setFeedTab('for-you', btn);
-    _pushSentinel();
+    _rearmBackButton();
     return;
   }
 
-  // PRIORITY 3-B: Discover — search active
-  if (activePage === 'discover' && _isDiscoverSearchActive()) {
+  // P3-B: Discover with active search
+  if (page === 'discover' && _isDiscoverSearchActive()) {
     if (discCurrentTab && discCurrentTab !== 'posts') {
-      // Step back to posts tab first
       const postsBtn = document.querySelector('.disc-tab[data-tab="posts"]');
       if (postsBtn) discTab('posts', postsBtn);
     } else {
-      // Already on posts tab → clear search → discover home
       discClear();
     }
-    _pushSentinel();
+    _rearmBackButton();
     return;
   }
 
-  // PRIORITY 3-C: Profile on non-list tab → go to list tab
-  if (activePage === 'profile' && _getActiveProfileTab() !== 'list') {
+  // P3-C: Profile on non-list tab → go to list (posts) tab
+  if (page === 'profile' && _getActiveProfileTab() !== 'list') {
     const listBtn = document.querySelector('#prf-tabs .prf-icon-tab[data-tab="list"]');
     if (listBtn) switchPrfTab('list', listBtn);
-    _pushSentinel();
+    _rearmBackButton();
     return;
   }
 
-  // PRIORITY 4: Any non-home main page → go to feed
-  if (activePage !== 'feed') {
+  // P4: Any non-home main page → go to feed
+  if (page !== 'feed') {
     navTo('feed');
-    _pushSentinel();
+    _rearmBackButton();
     return;
   }
 
-  // PRIORITY 5: Home, clean state → exit confirmation
+  // P5: Home, clean state → show exit dialog
+  // (do NOT rearm here — _showExitConfirm rearms after dismiss)
   _showExitConfirm();
 }
 
-// ── Wire popstate ──────────────────────────────────────────
+// ── Popstate listener ──────────────────────────────────────
 
-window.addEventListener('popstate', () => {
+window.addEventListener('popstate', (e) => {
   const route = getRoute();
+
+  // Real deep-link URL (not just '/')
   if (route.type !== 'home') {
-    // Real URL pop (/post/id, /profile/username) — handle normally
     handleRoute(route);
-    _pushSentinel();
+    _rearmBackButton();
     return;
   }
+
+  // URL is '/' — this is a physical back button press
   handlePhysicalBack();
 });
 
@@ -768,6 +779,7 @@ async function bootApp(isDeepLink = false) {
   const feedEl = document.getElementById('page-feed');
   if (isDeepLink && feedEl) feedEl.style.visibility = 'hidden';
   appEl.classList.remove('hidden');
+  _armBackButton(); // arm back button now that app is live
 
   injectFeedPostStyles();
   injectEchoesPanel();
@@ -1240,6 +1252,7 @@ async function obFinish() {
   hideOnboarding();
   const appEl = document.getElementById('app');
   if (appEl) appEl.classList.remove('hidden');
+  _armBackButton(); // arm back button for new user
 
   // Inject feed styles that bootApp normally handles
   injectFeedPostStyles();
