@@ -148,16 +148,240 @@ async function handleRoute(route) {
   }
 }
 
+// ═══════════════════════════════════════════════════════════
+// BACK BUTTON — World-Class System
+// ═══════════════════════════════════════════════════════════
+//
+// Priority order (highest → lowest):
+//   1. Close any open overlay (composer, action sheet, echoes,
+//      follow list, video FS, chat image viewer, emoji picker)
+//   2. Pop the slide stack (detail, user-profile, messages,
+//      chat, settings, wallet…)
+//   3. Sub-tab reset:
+//      feed "following" → "for-you"
+//      discover search non-posts-tab → posts tab
+//      discover search posts tab → clear search (home)
+//      profile non-list tab → list tab
+//   4. Non-home main page → go to feed
+//   5. Home + clean state → exit confirmation dialog
+// ═══════════════════════════════════════════════════════════
+
+// Push a sentinel so the next back press always fires popstate
+// instead of the browser navigating away from the app.
+function _pushSentinel() {
+  window.history.pushState({ _mn: true }, '');
+}
+_pushSentinel(); // arm immediately on load
+
+// ── Helpers ────────────────────────────────────────────────
+
+function _getActiveMainPage() {
+  const mains = ['feed','discover','notifications','profile','market'];
+  for (const id of mains) {
+    if (document.getElementById('page-' + id)?.classList.contains('active')) return id;
+  }
+  return lastMainPage || 'feed';
+}
+
+function _getActiveProfileTab() {
+  const el = document.querySelector('#prf-tabs .prf-icon-tab.active');
+  return el?.dataset?.tab || 'list';
+}
+
+function _isDiscoverSearchActive() {
+  return (document.getElementById('disc-input')?.value || '').trim().length > 0;
+}
+
+function _showExitConfirm() {
+  if (document.getElementById('mn-exit-dialog')) return;
+
+  // Inject keyframes once
+  if (!document.getElementById('mn-exit-kf')) {
+    const s = document.createElement('style');
+    s.id = 'mn-exit-kf';
+    s.textContent = [
+      '@keyframes mnFadeIn{from{opacity:0}to{opacity:1}}',
+      '@keyframes mnSlideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}'
+    ].join('');
+    document.head.appendChild(s);
+  }
+
+  const overlay = document.createElement('div');
+  overlay.id = 'mn-exit-dialog';
+  overlay.style.cssText = [
+    'position:fixed;inset:0;z-index:99999;',
+    'display:flex;align-items:flex-end;justify-content:center;',
+    'background:rgba(0,0,0,0.45);',
+    'backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);',
+    'animation:mnFadeIn .18s ease;'
+  ].join('');
+
+  overlay.innerHTML =
+    '<div style="' + [
+      'width:100%;max-width:480px;',
+      'background:var(--bg,#fff);',
+      'border-radius:24px 24px 0 0;',
+      'padding:24px 20px calc(28px + env(safe-area-inset-bottom,0px));',
+      'box-shadow:0 -4px 32px rgba(0,0,0,.14);',
+      'animation:mnSlideUp .22s cubic-bezier(.25,.46,.45,.94);'
+    ].join('') + '">' +
+    '<div style="width:36px;height:4px;border-radius:2px;background:var(--border,#e5e7eb);margin:0 auto 20px;"></div>' +
+    '<p style="font-size:17px;font-weight:700;color:var(--text,#111);margin:0 0 6px;text-align:center;">Leave MistyNote?</p>' +
+    '<p style="font-size:14px;color:var(--text2,#6b7280);margin:0 0 24px;text-align:center;line-height:1.5;">Your feed and everything else will be waiting when you come back.</p>' +
+    '<button id="mn-exit-confirm" style="width:100%;padding:15px;border-radius:14px;border:none;background:#ff3b5c;color:#fff;font-size:16px;font-weight:700;margin-bottom:10px;cursor:pointer;">Close app</button>' +
+    '<button id="mn-exit-cancel" style="width:100%;padding:15px;border-radius:14px;border:none;background:var(--bg2,#f3f4f6);color:var(--text,#111);font-size:16px;font-weight:600;cursor:pointer;">Stay</button>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+  _pushSentinel(); // next back press dismisses this dialog
+
+  const close = () => {
+    overlay.style.opacity = '0';
+    overlay.style.transition = 'opacity .18s';
+    setTimeout(() => overlay.remove(), 180);
+  };
+
+  document.getElementById('mn-exit-cancel').onclick  = close;
+  document.getElementById('mn-exit-confirm').onclick = () => {
+    close();
+    setTimeout(() => {
+      try { window.history.go(-(window.history.length)); } catch(e) {}
+      setTimeout(() => window.close(), 300);
+    }, 200);
+  };
+  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+}
+
+// ── Core handler ───────────────────────────────────────────
+
+function handlePhysicalBack() {
+
+  // PRIORITY 1-A: Exit confirm dialog
+  const exitDlg = document.getElementById('mn-exit-dialog');
+  if (exitDlg) {
+    exitDlg.style.opacity = '0';
+    exitDlg.style.transition = 'opacity .18s';
+    setTimeout(() => exitDlg.remove(), 180);
+    _pushSentinel();
+    return;
+  }
+
+  // PRIORITY 1-B: Composer
+  if (document.getElementById('mn-composer')) {
+    closeComposer();
+    _pushSentinel();
+    return;
+  }
+
+  // PRIORITY 1-C: Action sheet
+  const actionSheet = document.querySelector('.action-sheet-overlay');
+  if (actionSheet) {
+    document.body.removeChild(actionSheet);
+    _pushSentinel();
+    return;
+  }
+
+  // PRIORITY 1-D: Echoes overlay
+  if (document.getElementById('echoes-overlay')) {
+    closeEchoes();
+    _pushSentinel();
+    return;
+  }
+
+  // PRIORITY 1-E: Follow list
+  if (document.getElementById('follow-list-overlay')) {
+    closeFollowList();
+    _pushSentinel();
+    return;
+  }
+
+  // PRIORITY 1-F: Video fullscreen
+  const vfs = document.getElementById('video-fs');
+  if (vfs && (vfs.classList.contains('active') || vfs.style.display === 'flex')) {
+    closeVideoFS();
+    _pushSentinel();
+    return;
+  }
+
+  // PRIORITY 1-G: Chat image viewer
+  if (document.getElementById('chat-img-viewer')) {
+    document.getElementById('chat-img-viewer').remove();
+    _pushSentinel();
+    return;
+  }
+
+  // PRIORITY 1-H: Emoji picker
+  const emojiPicker = document.querySelector('.mnc-emoji-tray, .composer-emoji-picker');
+  if (emojiPicker) {
+    emojiPicker.remove();
+    _pushSentinel();
+    return;
+  }
+
+  // PRIORITY 2: Slide stack
+  // Covers: detail, user-profile, messages, chat,
+  //         settings, settings sub-pages, wallet, etc.
+  if (slideStack.length > 0) {
+    slideBack();
+    _pushSentinel();
+    return;
+  }
+
+  // ── At this point: we are on a root main page ──────────
+  const activePage = _getActiveMainPage();
+
+  // PRIORITY 3-A: Feed on "following" tab → switch to "for-you"
+  if (activePage === 'feed' && currentFeedTab === 'following') {
+    const btn = document.getElementById('feed-tab-foryou');
+    if (btn) setFeedTab('for-you', btn);
+    _pushSentinel();
+    return;
+  }
+
+  // PRIORITY 3-B: Discover — search active
+  if (activePage === 'discover' && _isDiscoverSearchActive()) {
+    if (discCurrentTab && discCurrentTab !== 'posts') {
+      // Step back to posts tab first
+      const postsBtn = document.querySelector('.disc-tab[data-tab="posts"]');
+      if (postsBtn) discTab('posts', postsBtn);
+    } else {
+      // Already on posts tab → clear search → discover home
+      discClear();
+    }
+    _pushSentinel();
+    return;
+  }
+
+  // PRIORITY 3-C: Profile on non-list tab → go to list tab
+  if (activePage === 'profile' && _getActiveProfileTab() !== 'list') {
+    const listBtn = document.querySelector('#prf-tabs .prf-icon-tab[data-tab="list"]');
+    if (listBtn) switchPrfTab('list', listBtn);
+    _pushSentinel();
+    return;
+  }
+
+  // PRIORITY 4: Any non-home main page → go to feed
+  if (activePage !== 'feed') {
+    navTo('feed');
+    _pushSentinel();
+    return;
+  }
+
+  // PRIORITY 5: Home, clean state → exit confirmation
+  _showExitConfirm();
+}
+
+// ── Wire popstate ──────────────────────────────────────────
+
 window.addEventListener('popstate', () => {
   const route = getRoute();
-  if (route.type === 'home') {
-    // Close any open slide pages
-    if (slideStack.length > 0) {
-      slideBack();
-    }
-  } else {
+  if (route.type !== 'home') {
+    // Real URL pop (/post/id, /profile/username) — handle normally
     handleRoute(route);
+    _pushSentinel();
+    return;
   }
+  handlePhysicalBack();
 });
 
 
