@@ -117,36 +117,15 @@ function composeOrRetry() {
 // ROUTER
 // ══════════════════════════════════════════
 
-function getRoute() {
-  const path = window.location.pathname;
-  if (path === '/' || path === '') return { type: 'home' };
-  const postMatch = path.match(/^\/post\/([^/]+)$/);
-  if (postMatch) return { type: 'post', id: postMatch[1] };
-  const profileMatch = path.match(/^\/profile\/([^/]+)$/);
-  if (profileMatch) return { type: 'profile', username: profileMatch[1] };
-  return { type: 'home' };
-}
+// ═══════════════════════════════════════════════════════════
+// ROUTER — disabled (deep links removed, homepage only)
+// pushRoute/replaceRoute kept as no-ops so call sites don't break
+// ═══════════════════════════════════════════════════════════
 
-function pushRoute(path) {
-  if (window.location.pathname !== path) {
-    window.history.pushState({}, '', path);
-  }
-}
-
-function replaceRoute(path) {
-  window.history.replaceState({}, '', path);
-}
-
-async function handleRoute(route) {
-  if (!route) route = getRoute();
-  if (route.type === 'post') {
-    await openDetail(route.id);
-  } else if (route.type === 'profile') {
-    // Look up user by username then open profile
-    const { data: user } = await supabase.from('users').select('id').eq('username', route.username).maybeSingle();
-    if (user) await showUserProfile(user.id, null);
-  }
-}
+function getRoute()          { return { type: 'home' }; }
+function pushRoute(path)     { /* no-op */ }
+function replaceRoute(path)  { /* no-op */ }
+async function handleRoute() { /* no-op */ }
 
 // ═══════════════════════════════════════════════════════════
 // BACK BUTTON — Mobile Back Navigation
@@ -341,84 +320,30 @@ window.addEventListener('supabase-ready', init);
 
 // ── INIT ──────────────────────────────────────────────────
 async function init() {
-  const route = getRoute();
-  const isDeepLink = route.type !== 'home';
-
-  // On deep links — show splash immediately, hide auth form so it never flashes
-  if (isDeepLink) {
-    showDeepLinkSplash();
-  }
-
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
-      hideDeepLinkSplash();
       showAuthScreen();
       return;
     }
     currentUser = session.user;
 
-    // Check if this user has a username — Google sign-ups won't have one yet
     const { data: profile } = await supabase
       .from('users').select('username').eq('id', currentUser.id).maybeSingle();
 
     if (!profile?.username) {
-      hideDeepLinkSplash();
       showUsernamePicker(currentUser);
       return;
     }
 
-    await bootApp(isDeepLink);
+    await bootApp();
   } catch (e) {
     console.error('Init error:', e);
-    hideDeepLinkSplash();
     showAuthScreen();
   }
 }
 
-function showDeepLinkSplash() {
-  // Hide auth screen completely
-  const auth = document.getElementById('auth-screen');
-  if (auth) auth.style.display = 'none';
-
-  // Create and show a minimal branded splash
-  if (document.getElementById('deep-link-splash')) return;
-  const splash = document.createElement('div');
-  splash.id = 'deep-link-splash';
-  splash.innerHTML = `
-    <div style="
-      position:fixed;inset:0;
-      background:var(--bg, #fff);
-      display:flex;flex-direction:column;
-      align-items:center;justify-content:center;
-      z-index:9999;gap:16px;
-    ">
-      <svg width="52" height="52" viewBox="0 0 48 48" fill="none">
-        <path d="M8 24C8 24 12 8 24 8C36 8 40 24 40 24" stroke="#6C47FF" stroke-width="3" stroke-linecap="round"/>
-        <path d="M8 24C8 24 16 18 24 24C32 30 40 24 40 24" stroke="#6C47FF" stroke-width="3" stroke-linecap="round"/>
-        <path d="M8 24C8 24 12 40 24 40C36 40 40 24 40 24" stroke="#6C47FF" stroke-width="3" stroke-linecap="round"/>
-      </svg>
-      <div style="font-family:'Roboto',sans-serif;font-weight:700;font-size:22px;color:var(--text,#111);">MistyNote</div>
-      <div style="width:32px;height:3px;background:#6C47FF;border-radius:2px;animation:splashBar 1.2s ease-in-out infinite alternate;"></div>
-    </div>
-    <style>
-      @keyframes splashBar {
-        from { width: 24px; opacity: 0.5; }
-        to   { width: 48px; opacity: 1; }
-      }
-    </style>
-  `;
-  document.body.appendChild(splash);
-}
-
-function hideDeepLinkSplash() {
-  const splash = document.getElementById('deep-link-splash');
-  if (splash) {
-    splash.style.transition = 'opacity 0.25s';
-    splash.style.opacity = '0';
-    setTimeout(() => splash.remove(), 260);
-  }
-}
+// showDeepLinkSplash / hideDeepLinkSplash removed — deep links disabled
 
 // ══════════════════════════════════════════
 // LOCATION — silent auto-detect on every boot
@@ -669,7 +594,7 @@ function startMktCountdown() {
   _mktCountdownInterval = setInterval(tick, 1000);
 }
 
-async function bootApp(isDeepLink = false) {
+async function bootApp() {
   document.getElementById('auth-screen').style.display = 'none';
 
   // Check if this user needs to pick a username (Google OAuth new users)
@@ -694,17 +619,13 @@ async function bootApp(isDeepLink = false) {
     }
   }
 
-  // On deep links — keep feed hidden until content is ready, preventing feed flash
   const appEl = document.getElementById('app');
-  const feedEl = document.getElementById('page-feed');
-  if (isDeepLink && feedEl) feedEl.style.visibility = 'hidden';
   appEl.classList.remove('hidden');
-  _initBackButton(); // arm back button now that app is live
+  _initBackButton();
 
   injectFeedPostStyles();
   injectEchoesPanel();
 
-  // Apply dark mode early to avoid flash
   if (localStorage.getItem('darkMode') === 'true') {
     document.documentElement.setAttribute('data-theme', 'dark');
     const toggle = document.getElementById('dark-mode-toggle');
@@ -721,25 +642,10 @@ async function bootApp(isDeepLink = false) {
   subscribeToNotifs();
   subscribeToPostUpdates();
 
-  if (isDeepLink) {
-    // Deep link — go straight to content, load feed silently in background
-    const route = getRoute();
-    hideDeepLinkSplash();
-    await handleRoute(route);
-    // Restore feed visibility and load in background
-    if (feedEl) feedEl.style.visibility = '';
-    setTimeout(() => {
-      // Only load feed if not already loading from bootApp
-      if (!feedLoading && loadedPostIds.size === 0) loadFeed();
-      loadNotifications();
-      loadInitialNotifCount();
-    }, 600);
-  } else {
-    // Normal load — show feed immediately
-    loadFeed();
-    loadNotifications();
-    loadInitialNotifCount();
-  }
+  // Always load feed normally
+  loadFeed();
+  loadNotifications();
+  loadInitialNotifCount();
 }
 
 // ══════════════════════════════════════════
