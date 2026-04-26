@@ -6706,6 +6706,9 @@ function msgFormatTime(iso) {
 }
 
 // ── Get or create conversation between current user and another user ──
+async function getOrCreateConversation(otherUserId) {
+  return msgGetOrCreateConversation(otherUserId);
+}
 async function msgGetOrCreateConversation(otherUserId) {
   if (!currentUser) return null;
 
@@ -8371,26 +8374,109 @@ function chatSendMP() {
     showToast('Open a conversation first');
     return;
   }
-  // Pre-fill gift sheet with this DM's recipient, then open it
   walletState.selectedGiftRecipient = {
     id:        activeChatUserId,
     name:      activeChatUser.username || activeChatUser.name || 'User',
     avatarUrl: activeChatUser.avatar || '',
-    fromDM:    true,                   // flag so gift confirms back into DM
+    fromDM:    true,
     convId:    activeChatId,
   };
-  openWalletSheet('gift');
-  setTimeout(function() {
-    var selBlock = document.getElementById('gift-selected-user');
-    var selName  = document.getElementById('gift-sel-name');
-    var selAv    = document.getElementById('gift-sel-avatar');
-    if (selBlock) selBlock.classList.remove('hidden');
-    if (selName)  selName.textContent  = walletState.selectedGiftRecipient.name;
-    if (selAv)    selAv.src            = walletState.selectedGiftRecipient.avatarUrl ||
-      'https://api.dicebear.com/7.x/adventurer/svg?seed=' + activeChatUserId;
-    var noteEl = document.getElementById('gift-note');
-    if (noteEl)   noteEl.placeholder   = 'Add a message...';
-  }, 60);
+  openDMGiftModal();
+}
+
+function openDMGiftModal() {
+  var existing = document.getElementById('dm-gift-modal');
+  if (existing) existing.remove();
+  var r       = walletState.selectedGiftRecipient;
+  var balance = walletState.points || 0;
+  var modal   = document.createElement('div');
+  modal.id = 'dm-gift-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,0.55);backdrop-filter:blur(4px);';
+  modal.innerHTML =
+    '<div style="width:100%;max-width:480px;background:var(--surface,#1a1a2e);border-radius:24px 24px 0 0;padding:24px 20px 44px;box-shadow:0 -8px 40px rgba(0,0,0,0.4);">' +
+      '<div style="width:40px;height:4px;border-radius:2px;background:var(--border,rgba(255,255,255,0.15));margin:0 auto 20px;"></div>' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">' +
+        '<h3 style="font-size:18px;font-weight:800;color:var(--text,#fff);margin:0;">Gift MistyPoints</h3>' +
+        '<button onclick="closeDMGiftModal()" style="background:var(--bg2,rgba(255,255,255,0.08));border:none;color:var(--text2,rgba(255,255,255,0.6));width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer;line-height:1;">×</button>' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:12px;background:var(--bg2,rgba(255,255,255,0.06));border-radius:14px;padding:12px;margin-bottom:16px;">' +
+        '<img src="' + (r.avatarUrl || 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + r.id) + '" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" alt="">' +
+        '<div>' +
+          '<div style="font-size:14px;font-weight:700;color:var(--text,#fff);">' + escHtml(r.name) + '</div>' +
+          '<div style="font-size:12px;color:var(--text3,rgba(255,255,255,0.4));">Balance: MP ' + balance.toLocaleString('en-NG', {maximumFractionDigits:4}) + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:10px;background:var(--bg2,rgba(255,255,255,0.06));border-radius:14px;padding:14px 16px;margin-bottom:12px;">' +
+        '<span style="font-size:15px;font-weight:700;color:var(--text3,rgba(255,255,255,0.5));">MP</span>' +
+        '<input id="dm-gift-amount" type="tel" inputmode="decimal" placeholder="0" oninput="dmGiftPreview(this.value)" ' +
+          'style="flex:1;background:none;border:none;outline:none;font-size:30px;font-weight:800;color:var(--text,#fff);font-family:inherit;">' +
+      '</div>' +
+      '<div id="dm-gift-preview" style="font-size:12px;color:var(--text3,rgba(255,255,255,0.45));text-align:center;margin-bottom:14px;">Enter amount to gift</div>' +
+      '<div style="display:flex;align-items:center;gap:10px;background:var(--bg2,rgba(255,255,255,0.06));border-radius:14px;padding:12px 16px;margin-bottom:20px;">' +
+        '<span style="font-size:18px;">🎁</span>' +
+        '<input id="dm-gift-note" type="text" placeholder="Add a message..." maxlength="100" ' +
+          'style="flex:1;background:none;border:none;outline:none;font-size:14px;color:var(--text,#fff);font-family:inherit;">' +
+      '</div>' +
+      '<button id="dm-gift-btn" onclick="confirmDMGift()" disabled ' +
+        'style="width:100%;padding:16px;border-radius:14px;border:none;background:linear-gradient(135deg,#6c47ff,#a78bfa);color:#fff;font-size:16px;font-weight:700;cursor:pointer;opacity:0.5;font-family:inherit;transition:opacity 0.2s;">' +
+        'Gift Points' +
+      '</button>' +
+    '</div>';
+  modal.addEventListener('click', function(e) { if (e.target === modal) closeDMGiftModal(); });
+  document.body.appendChild(modal);
+  setTimeout(function() { var i = document.getElementById('dm-gift-amount'); if (i) i.focus(); }, 100);
+}
+
+function dmGiftPreview(val) {
+  var pts  = parseFloat(val) || 0;
+  var prev = document.getElementById('dm-gift-preview');
+  var btn  = document.getElementById('dm-gift-btn');
+  if (!prev || !btn) return;
+  var bal  = walletState.points || 0;
+  if (pts <= 0) {
+    prev.textContent = 'Enter amount to gift';
+    btn.disabled = true; btn.style.opacity = '0.5';
+  } else if (pts > bal) {
+    prev.textContent = 'Not enough MistyPoints';
+    btn.disabled = true; btn.style.opacity = '0.5';
+  } else {
+    prev.textContent = 'Gifting MP ' + pts.toLocaleString('en-NG', {maximumFractionDigits:4}) + ' to ' + escHtml(walletState.selectedGiftRecipient.name);
+    btn.disabled = false; btn.style.opacity = '1';
+  }
+}
+
+function closeDMGiftModal() {
+  var m = document.getElementById('dm-gift-modal'); if (m) m.remove();
+}
+
+async function confirmDMGift() {
+  var amtEl  = document.getElementById('dm-gift-amount');
+  var noteEl = document.getElementById('dm-gift-note');
+  var amount = parseFloat(amtEl ? amtEl.value : '0') || 0;
+  var note   = noteEl ? noteEl.value.trim() : '';
+  var r      = walletState.selectedGiftRecipient;
+  if (!r || amount <= 0 || amount > walletState.points) return;
+  var pinOk  = await walletPinCheck();
+  if (!pinOk) return;
+  closeDMGiftModal();
+  showToast('Gifting MP ' + amount + ' to ' + r.name + '...');
+  try {
+    var res = await supabase.rpc('p2p_transfer_points', {
+      sender_id: currentUser.id, recipient_id: r.id, points: amount, note: note,
+    });
+    if (res.error) throw res.error;
+    var ref = 'MN-' + Date.now().toString(36).toUpperCase();
+    walletState.points -= amount;
+    renderWalletBalance();
+    showToast('✓ Gifted MP ' + amount + ' to ' + r.name);
+    syncWalletBalance();
+    refreshTransactionList();
+    if (typeof postGiftBubbleToDM === 'function') postGiftBubbleToDM(r, amount, note, ref);
+    if (typeof sendGiftNotification === 'function') sendGiftNotification(r.id, amount, note, ref);
+  } catch (e) {
+    showToast('Gift failed — please try again');
+    console.error('DM gift error:', e);
+  }
 }
 function chatTagProduct() {
   showToast('Tag a product — coming soon 🛒');
@@ -10579,6 +10665,8 @@ async function refreshTransactionList() {
   if (!currentUser) return;
   var listEl = document.getElementById('wlt-txn-list');
   if (!listEl) return;
+  // Wipe immediately — never leave hardcoded HTML visible
+  listEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text3);font-size:13px;">Loading activity…</div>';
   try {
     var res = await supabase
       .from('wallet_transactions')
@@ -10647,6 +10735,7 @@ async function refreshTransactionList() {
 
     listEl.innerHTML = html || '<div class="wlt-txn-empty">No transactions yet</div>';
   } catch (e) {
+    listEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text3);font-size:13px;">Could not load transactions. Check your connection.</div>';
     console.warn('refreshTransactionList error:', e);
   }
 }
@@ -10963,14 +11052,16 @@ function openPinSheet(mode) {
   if (mode === 'verify') {
     if (title) title.textContent = 'Enter Wallet PIN';
     if (sub)   sub.textContent   = 'Required to complete this action';
+    _pinBuffer = ''; clearPinDots();      // full reset for verify
   } else if (mode === 'set') {
     if (title) title.textContent = 'Set Wallet PIN';
     if (sub)   sub.textContent   = 'Choose a 4-digit PIN to protect outgoing payments';
+    resetPinBuffers();                    // full reset for set
   } else if (mode === 'confirm') {
     if (title) title.textContent = 'Confirm PIN';
     if (sub)   sub.textContent   = 'Enter the same PIN again';
+    _confirmBuffer = ''; clearPinDots(); // preserve _pinBuffer!
   }
-  clearPinDots();
   sheet.classList.remove('hidden');
   walletState.activeSheet = 'pin';
 }
@@ -10983,9 +11074,7 @@ function closePinSheet(cancel) {
     walletPinState.resolver(false);
     walletPinState.resolver = null;
   }
-  walletPinState._pinBuffer   = '';
-  walletPinState._confirmBuf  = '';
-  clearPinDots();
+  resetPinBuffers();
 }
 
 var _pinBuffer = '';
@@ -11056,8 +11145,12 @@ function updatePinDots(filled) {
 }
 
 function clearPinDots() {
-  _pinBuffer = ''; _confirmBuffer = '';
+  // Visual only — never wipes buffers
   document.querySelectorAll('.pin-dot').forEach(function(d) { d.classList.remove('filled'); });
+}
+function resetPinBuffers() {
+  _pinBuffer = ''; _confirmBuffer = '';
+  clearPinDots();
 }
 
 async function verifyWalletPin(pin) {
@@ -11110,7 +11203,7 @@ async function saveWalletPin(pin) {
 }
 
 function openSetPin() {
-  _pinBuffer = ''; _confirmBuffer = '';
+  resetPinBuffers();
   openPinSheet('set');
 }
 
