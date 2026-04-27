@@ -652,6 +652,7 @@ async function bootApp() {
   loadFeed();
   loadNotifications();
   loadInitialNotifCount();
+  initOneSignal(); // OneSignal push — links device to logged-in user
 }
 
 // ══════════════════════════════════════════
