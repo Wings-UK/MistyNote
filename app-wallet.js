@@ -871,16 +871,24 @@ async function postGiftBubbleToDM(recipient, amount, note, ref) {
 
 // Fire in-app notification for the recipient
 async function sendGiftNotification(recipientId, amount, note, ref) {
-  try {
-    var bannerText = 'MP ' + amount + (note ? ' - ' + note.slice(0, 60) : '');
-    await supabase.from('notifications').insert({
+  // Routes through insertNotification which auto-dispatches push notification
+  var bannerText = 'MP ' + amount + (note ? ' - ' + note.slice(0, 60) : '');
+  if (typeof insertNotification === 'function') {
+    insertNotification({
       user_id:      recipientId,
-      type:         'mp_gift',
       actor_id:     currentUser.id,
+      type:         'mp_gift',
+      comment_text: bannerText,
+    });
+  } else {
+    supabase.from('notifications').insert({
+      user_id:      recipientId,
+      actor_id:     currentUser.id,
+      type:         'mp_gift',
       comment_text: bannerText,
       read:         false,
-    });
-  } catch (e) { /* non-critical */ }
+    }).catch(() => {});
+  }
 }
 // Legacy alias
 async function confirmSendMoney() { return confirmGiftPoints(); }
