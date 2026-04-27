@@ -377,9 +377,9 @@ function updateNotifBadge() {
 // ── REAL-TIME SUBSCRIPTION ────────────────
 
 // ── Safe notification insert — logs errors, never throws ──
+// All notification types flow through here — push is fired automatically.
 async function insertNotification(payload) {
   try {
-    // Build clean payload — omit post_id entirely if null/undefined (avoids NOT NULL constraint issues)
     const row = {
       user_id:      payload.user_id,
       actor_id:     payload.actor_id,
@@ -391,6 +391,11 @@ async function insertNotification(payload) {
 
     const { error } = await supabase.from('notifications').insert(row);
     if (error) console.warn(`[notif:${payload.type}] Insert failed:`, error.message, error.details || '', error.hint || '');
+
+    // ── Fire push for every notification type ──
+    // Non-blocking — never delays the UI action that triggered it
+    dispatchPush(payload).catch(e => console.warn('[push] dispatch error:', e));
+
     return !error;
   } catch(e) {
     console.warn('[notif] Unexpected error:', e.message);
@@ -915,3 +920,98 @@ async function deletePost(postId, el) {
   showToast('Post deleted');
 }
 
+
+// ════════════════════════════════
+// ONESIGNAL PUSH NOTIFICATIONS
+// App ID: 913a9816-aa82-4607-a168-66a80c0c5cb3
+// ════════════════════════════════
+
+const ONESIGNAL_APP_ID = '913a9816-aa82-4607-a168-66a80c0c5cb3';
+
+// ── Init OneSignal — called from bootApp() in app-core.js ────────
+async function initOneSignal() {
+  try {
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    await new Promise(resolve => {
+      window.OneSignalDeferred.push(async function(OneSignal) {
+        await OneSignal.init({
+          appId: ONESIGNAL_APP_ID,
+          notifyButton: { enable: false },
+          allowLocalhostAsSecureOrigin: true,
+        });
+        // Link this device token to the logged-in user's UUID
+        if (currentUser) {
+          try { await OneSignal.login(currentUser.id); } catch(e) {}
+        }
+        resolve();
+      });
+    });
+    console.log('[OneSignal] Ready');
+  } catch (e) {
+    console.warn('[OneSignal] Init failed:', e);
+  }
+}
+
+// ── Request permission — call after onboarding, not on load ───
+async function requestPushPermission() {
+  try {
+    window.OneSignalDeferred?.push(async function(OneSignal) {
+      const granted = await OneSignal.Notifications.permission;
+      if (!granted) await OneSignal.Notifications.requestPermission();
+    });
+  } catch (e) {}
+}
+
+// ── Push message map — every notification type has a message template ──
+function buildPushPayload(type, actorName, extras) {
+  const name = actorName ? '@' + actorName : 'Someone';
+  const note = extras.comment_text ? ' · ' + extras.comment_text.slice(0, 60) : '';
+  const map = {
+    like:         { title: '❤️ New Like',        message: name + ' liked your post' },
+    comment:      { title: '💬 New Comment',      message: name + ':' + note },
+    reply:        { title: '💬 New Reply',        message: name + ' replied:' + note },
+    follow:       { title: '✨ New Follower',       message: name + ' started following you' },
+    repost:       { title: '🔁 Repost',              message: name + ' reposted your post' },
+    mention:      { title: '📣 You were mentioned', message: name + ' mentioned you:' + note },
+    like_comment: { title: '❤️ Comment liked',   message: name + ' liked your comment' },
+    mp_gift:      { title: '🎁 MistyPoints Received', message: name + ' sent you' + (extras.comment_text ? ' ' + extras.comment_text : ' MistyPoints') },
+    payment_received: { title: '💰 Payment Received',  message: name + ' paid you' },
+    system:       { title: '📢 MistyNote',            message: extras.comment_text || 'You have a new notification' },
+  };
+  return map[type] || { title: 'MistyNote', message: 'You have a new notification' };
+}
+
+// ── Central push dispatcher — called from insertNotification for every type ──
+async function dispatchPush(payload) {
+  if (!payload.user_id || !payload.type) return;
+  // Never push to yourself
+  if (payload.user_id === currentUser?.id) return;
+
+  try {
+    // Fetch actor name for the message
+    let actorName = '';
+    if (payload.actor_id && currentProfile && payload.actor_id === currentUser?.id) {
+      actorName = currentProfile.username || '';
+    } else if (payload.actor_id) {
+      const { data } = await supabase
+        .from('users').select('username').eq('id', payload.actor_id).maybeSingle();
+      actorName = data?.username || '';
+    }
+
+    const push = buildPushPayload(payload.type, actorName, payload);
+
+    // Call Supabase edge function which hits OneSignal REST API server-side
+    await supabase.functions.invoke('send-push', {
+      body: {
+        recipient_user_id: payload.user_id,
+        title:   push.title,
+        message: push.message,
+        url:     'https://mistynote.pages.dev',
+        data:    { type: payload.type, post_id: payload.post_id || null },
+      }
+    });
+  } catch(e) {
+    // Silent — push failure never interrupts the user action
+    console.warn('[push] dispatchPush error:', e);
+  }
+}
