@@ -2434,13 +2434,34 @@ const LikeStore = (() => {
       if (liked) {
         const { error } = await supabase.from('likes').insert({ post_id: postId, user_id: currentUser.id });
         if (error && error.code !== '23505') throw error;
-        // Fire-and-forget notification
+        // Fire-and-forget notification — delete any existing one first to prevent
+        // duplicates from retries or rapid like→unlike→like sequences
         supabase.from('posts').select('user_id').eq('id', postId).single().then(({ data: post }) => {
-          if (post?.user_id && post.user_id !== currentUser.id)
-            insertNotification({ user_id: post.user_id, actor_id: currentUser.id, post_id: postId, type: 'like' });
+          if (post?.user_id && post.user_id !== currentUser.id) {
+            supabase.from('notifications')
+              .delete()
+              .eq('user_id', post.user_id)
+              .eq('actor_id', currentUser.id)
+              .eq('post_id', postId)
+              .eq('type', 'like')
+              .then(() => {
+                insertNotification({ user_id: post.user_id, actor_id: currentUser.id, post_id: postId, type: 'like' });
+              });
+          }
         });
       } else {
         await supabase.from('likes').delete().eq('post_id', postId).eq('user_id', currentUser.id);
+        // Remove the like notification when unliking — clean slate for next like
+        supabase.from('posts').select('user_id').eq('id', postId).single().then(({ data: post }) => {
+          if (post?.user_id && post.user_id !== currentUser.id) {
+            supabase.from('notifications')
+              .delete()
+              .eq('user_id', post.user_id)
+              .eq('actor_id', currentUser.id)
+              .eq('post_id', postId)
+              .eq('type', 'like');
+          }
+        });
       }
       _flying.set(postId, false);
 
