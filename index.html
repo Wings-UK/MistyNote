@@ -756,10 +756,13 @@
           </div>
 
           <!-- DM icon — far right -->
-          <button class="feed-dm-btn" onclick="openMessagesInbox()" aria-label="Messages">
-            <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-            </svg>
+          <button class="feed-dm-btn" id="feed-dm-btn" onclick="openMessagesInbox()" aria-label="Messages">
+            <div style="position:relative;display:flex;align-items:center;justify-content:center">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+              </svg>
+              <div class="dm-dot" id="dm-dot" style="display:none"></div>
+            </div>
           </button>
 
         </div>
