@@ -587,6 +587,18 @@
     -webkit-tap-highlight-color: transparent;
   }
   .feed-dm-btn:active { background: var(--bg3); color: var(--accent); }
+
+  .dm-dot {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: rgb(244, 7, 82);
+    border: 2px solid var(--bg);
+    pointer-events: none;
+  }
   
   /* ══════════════════════════════════════════
      STORIES ROW
