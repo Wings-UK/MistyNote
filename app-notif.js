@@ -1133,25 +1133,41 @@ async function _psmSaveImageWithWatermark(imageUrl, post) {
     const stripMid = stripY + STRIP_H / 2;
     const gap      = Math.round(STRIP_H * 0.12);
     const fontSize = Math.round(STRIP_H * 0.28);
+    const font700  = `700 ${fontSize}px 'Inter', 'Helvetica Neue', Arial, sans-serif`;
+    const font500  = `500 ${Math.round(fontSize * 0.75)}px 'Inter', 'Helvetica Neue', Arial, sans-serif`;
 
-    // Total content width = logo + gap + text
-    ctx.font        = `600 ${fontSize}px -apple-system, sans-serif`;
-    const textW     = ctx.measureText('mistynote.com').width;
-    const totalW    = logoW + gap + textW;
+    // Measure widths for centering
+    ctx.font        = font700;
+    const mistyW    = ctx.measureText('Misty').width;
+    const noteW     = ctx.measureText('Note').width;
+    ctx.font        = font500;
+    const subW      = ctx.measureText('mistynote.com').width;
+    const textBlockW = Math.max(mistyW + noteW, subW);
+    const totalW    = logoW + gap + textBlockW;
     const startX    = (canvas.width - totalW) / 2;
 
     ctx.drawImage(logoImg, startX, stripMid - logoH / 2, logoW, logoH);
 
-    // "MistyNote" label
-    ctx.fillStyle   = '#1a1a2e';
-    ctx.font        = `700 ${fontSize}px -apple-system, sans-serif`;
+    const textX     = startX + logoW + gap;
     ctx.textBaseline = 'middle';
-    ctx.fillText('MistyNote', startX + logoW + gap, stripMid - fontSize * 0.15);
 
-    // "mistynote.com" sub-label
-    ctx.fillStyle   = '#888';
-    ctx.font        = `500 ${Math.round(fontSize * 0.75)}px -apple-system, sans-serif`;
-    ctx.fillText('mistynote.com', startX + logoW + gap, stripMid + fontSize * 0.65);
+    // "Misty" — black
+    ctx.font      = font700;
+    ctx.fillStyle = '#111111';
+    ctx.fillText('Misty', textX, stripMid - fontSize * 0.15);
+
+    // "Note" — purple gradient, immediately after "Misty" with zero gap
+    const noteX   = textX + mistyW;
+    const noteGrad = ctx.createLinearGradient(noteX, 0, noteX + noteW, 0);
+    noteGrad.addColorStop(0, '#C040E0');
+    noteGrad.addColorStop(1, '#7722EE');
+    ctx.fillStyle = noteGrad;
+    ctx.fillText('Note', noteX, stripMid - fontSize * 0.15);
+
+    // "mistynote.com" — grey below
+    ctx.font      = font500;
+    ctx.fillStyle = '#999999';
+    ctx.fillText('mistynote.com', textX, stripMid + fontSize * 0.65);
 
     URL.revokeObjectURL(logoUrl);
 
