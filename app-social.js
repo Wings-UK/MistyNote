@@ -3807,18 +3807,18 @@ async function openDetail(postId, scrollToComments = false) {
       <div id="comments-container"></div>
     `;
 
-    // Share btn (header)
-    document.getElementById('detail-share-btn').onclick = () => sharePost(p);
-
-    // Dots btn (header) — only visible on own posts
-    const detailMoreBtn = document.getElementById('detail-more-btn');
-    if (detailMoreBtn) {
-      if (isOwn) {
+    // Header right buttons — dots for own post, share arrow for others
+    const detailShareBtn = document.getElementById('detail-share-btn');
+    const detailMoreBtn  = document.getElementById('detail-more-btn');
+    if (isOwn) {
+      if (detailShareBtn) detailShareBtn.style.display = 'none';
+      if (detailMoreBtn)  {
         detailMoreBtn.style.display = '';
         detailMoreBtn.onclick = () => showPostMenu(p, null, detailMoreBtn);
-      } else {
-        detailMoreBtn.style.display = 'none';
       }
+    } else {
+      if (detailShareBtn) { detailShareBtn.style.display = ''; detailShareBtn.onclick = () => sharePost(p); }
+      if (detailMoreBtn)  detailMoreBtn.style.display = 'none';
     }
 
     // ── Mini identity in detail header (fades in when author avatar scrolls out) ──
