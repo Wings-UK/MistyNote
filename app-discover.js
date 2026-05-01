@@ -232,20 +232,21 @@ async function discFetchPosts(q, pane) {
     list.style.cssText = 'display:flex;flex-direction:column;gap:10px;padding:10px 0';
 
     data.forEach(p => {
+      if (typeof createFeedPost !== 'function') return;
       const el = createFeedPost(p, false);
       if (el) {
         list.appendChild(el);
-        observePost(el);
-        LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id));
+        if (typeof observePost === 'function') observePost(el);
+        if (typeof LikeStore !== "undefined") LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id));
       }
     });
 
     pane.appendChild(list);
 
     const ids = data.map(p => p.id);
-    checkLikedPosts(ids);
-    checkRepostedPosts(ids);
-    checkSavedPosts(ids);
+    if (typeof checkLikedPosts    === 'function') checkLikedPosts(ids);
+    if (typeof checkRepostedPosts === 'function') checkRepostedPosts(ids);
+    if (typeof checkSavedPosts    === 'function') checkSavedPosts(ids);
 
   } catch (err) {
     console.error('[Discover] posts error:', err);
@@ -544,19 +545,20 @@ async function discLoadForYou() {
     }
 
     posts.forEach(p => {
+      if (typeof createFeedPost !== 'function') return;
       const el = createFeedPost(p, false);
       if (el) {
         el.classList.add('fade-in');
         grid.appendChild(el);
-        observePost(el);
-        LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id));
+        if (typeof observePost === 'function') observePost(el);
+        if (typeof LikeStore !== "undefined") LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id));
       }
     });
 
     const ids = posts.map(p => p.id);
-    checkLikedPosts(ids);
-    checkRepostedPosts(ids);
-    checkSavedPosts(ids);
+    if (typeof checkLikedPosts    === 'function') checkLikedPosts(ids);
+    if (typeof checkRepostedPosts === 'function') checkRepostedPosts(ids);
+    if (typeof checkSavedPosts    === 'function') checkSavedPosts(ids);
 
   } catch (err) {
     console.error('[Discover] ForYou error:', err);
