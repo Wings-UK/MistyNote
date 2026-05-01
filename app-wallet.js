@@ -569,10 +569,6 @@ function openWallet() {
   syncWalletBalance();
   loadBankAccount();
   refreshTransactionList();
-  // Referral: wire pending tap + expire stale
-  if (typeof initReferral === 'function') initReferral();
-  if (typeof expireStaleReferrals === 'function') expireStaleReferrals();
-}
   subscribeToWalletUpdates();
   const fab = document.querySelector('.wlt-qr-fab');
   if (fab) fab.classList.remove('hidden');
@@ -580,6 +576,9 @@ function openWallet() {
   if (nav) nav.style.display = 'none';
   const app = document.getElementById('app');
   if (app) app.classList.add('wallet-active');
+  // Referral: wire pending tap + expire stale
+  if (typeof initReferral === 'function') initReferral();
+  if (typeof expireStaleReferrals === 'function') expireStaleReferrals();
 }
 
 // Called by slideBack when leaving wallet page
