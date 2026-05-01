@@ -841,19 +841,459 @@ function renderEchoTab(tab) {
 // POST MENU / ACTION SHEET
 // ══════════════════════════════════════════
 
-function showPostMenu(post, el, triggerBtn, fromLongPress = false) {
-  const isOwn = currentUser && post.user_id === currentUser.id;
-  const actions = isOwn
-    ? [
-        { label: 'Delete Post', icon: '🗑️', danger: true, action: () => deletePost(post.id, el) }
-      ]
-    : [
-        { label: 'Report Post', icon: '🚩', action: () => showToast('Reported') },
-        { label: 'Not Interested', icon: '🙅', action: () => { el.style.transition = 'opacity .3s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 300); showToast('Got it'); } }
-      ];
+// ═══════════════════════════════════════════
+// POST SHARE SHEET — rich 3-row menu
+// ═══════════════════════════════════════════
 
-  showActionSheet(actions);
+const SHARE_APPS = [
+  { id: 'whatsapp',  label: 'WhatsApp',  color: '#25D366', icon: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.117.553 4.103 1.523 5.828L0 24l6.341-1.498A11.94 11.94 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.8 9.8 0 01-5.001-1.368l-.36-.214-3.762.888.939-3.658-.235-.374A9.787 9.787 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>` },
+  { id: 'telegram',  label: 'Telegram',  color: '#2AABEE', icon: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.19 13.238l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.958.321z"/></svg>` },
+  { id: 'twitter',   label: 'X',         color: '#000000', icon: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.742l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>` },
+  { id: 'facebook',  label: 'Facebook',  color: '#1877F2', icon: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>` },
+  { id: 'instagram', label: 'Instagram', color: '#E1306C', icon: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>` },
+  { id: 'copy',      label: 'Copy link', color: '#6C47FF', icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>` },
+];
+
+// Logo SVG for watermark
+const MISTYNOTE_LOGO_SVG = `<svg width="22" height="11" viewBox="0 0 470 230" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="wm1" x1="62" y1="115" x2="408" y2="115" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#FF1080"/><stop offset="28%" stop-color="#F030B8"/><stop offset="58%" stop-color="#C040E0"/><stop offset="100%" stop-color="#7722EE"/></linearGradient></defs><path d="M 235,40 C 235,40 330,36 370,50 C 408,64 408,100 408,114 C 408,148 398,164 382,174 C 374,180 362,184 350,184 C 340,184 330,180 324,172 C 318,164 314,154 308,143 C 302,132 294,120 284,114 C 276,109 266,107 258,109 C 250,111 244,116 240,122 C 237,127 235,134 235,142 C 235,134 233,127 230,122 C 226,116 220,111 212,109 C 204,107 194,109 186,114 C 176,120 168,132 162,143 C 156,154 152,164 146,172 C 140,180 130,184 120,184 C 108,184 96,180 88,174 C 72,164 62,148 62,114 C 62,100 62,64 100,50 C 140,36 235,40 235,40 Z" fill="none" stroke="url(#wm1)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/><path d="M 355,93 C 356,103 365,111 375,113 C 365,115 356,123 355,133 C 354,123 345,115 335,113 C 345,111 354,103 355,93 Z" fill="url(#wm1)"/></svg>`;
+
+async function showPostMenu(post, el, triggerBtn, fromLongPress = false) {
+  const isOwn    = currentUser && post.user_id === currentUser.id;
+  const postUrl  = `${window.location.origin}/post/${post.id}`;
+  const hasImage = !!(post.image);
+
+  // ── Build overlay ──
+  const overlay = document.createElement('div');
+  overlay.className = 'psm-overlay';
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  const sheet = document.createElement('div');
+  sheet.className = 'psm-sheet';
+
+  // ── Handle bar ──
+  const handle = document.createElement('div');
+  handle.className = 'psm-handle';
+  sheet.appendChild(handle);
+
+  // ════════════════════════════
+  // ROW 1 — People
+  // ════════════════════════════
+  const row1Label = document.createElement('div');
+  row1Label.className = 'psm-row-label';
+  row1Label.textContent = 'Send to';
+  sheet.appendChild(row1Label);
+
+  const row1 = document.createElement('div');
+  row1.className = 'psm-people-row';
+
+  // Invite Friends pill
+  const inviteBtn = document.createElement('div');
+  inviteBtn.className = 'psm-person-pill';
+  inviteBtn.innerHTML = `
+    <div class="psm-person-av psm-invite-av">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <line x1="19" y1="8" x2="19" y2="14"/>
+        <line x1="16" y1="11" x2="22" y2="11"/>
+      </svg>
+    </div>
+    <span class="psm-person-name">Invite</span>`;
+  inviteBtn.addEventListener('click', () => {
+    overlay.remove();
+    if (typeof openInvitePage === 'function') openInvitePage();
+  });
+  row1.appendChild(inviteBtn);
+
+  // Top followers (async load)
+  _psmLoadFollowers(row1, post, postUrl, overlay);
+
+  sheet.appendChild(row1);
+
+  // ════════════════════════════
+  // ROW 2 — Apps
+  // ════════════════════════════
+  const row2Label = document.createElement('div');
+  row2Label.className = 'psm-row-label';
+  row2Label.textContent = 'Share via';
+  sheet.appendChild(row2Label);
+
+  const row2 = document.createElement('div');
+  row2.className = 'psm-apps-row';
+
+  SHARE_APPS.forEach(app => {
+    const btn = document.createElement('div');
+    btn.className = 'psm-app-pill';
+    btn.innerHTML = `
+      <div class="psm-app-icon" style="background:${app.color}20;color:${app.color}">
+        ${app.icon}
+      </div>
+      <span class="psm-app-name">${app.label}</span>`;
+    btn.addEventListener('click', () => {
+      overlay.remove();
+      _psmShareToApp(app.id, post, postUrl);
+    });
+    row2.appendChild(btn);
+  });
+
+  sheet.appendChild(row2);
+
+  // ════════════════════════════
+  // ROW 3 — Actions
+  // ════════════════════════════
+  const row3 = document.createElement('div');
+  row3.className = 'psm-actions-row';
+
+  // Copy link — always shown
+  _psmActionBtn(row3, `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`, 'Copy link', () => {
+    overlay.remove();
+    navigator.clipboard?.writeText(postUrl).then(() => showToast('Link copied! 🔗'));
+  });
+
+  // Save image — only if post has image
+  if (hasImage) {
+    _psmActionBtn(row3, `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`, 'Save image', () => {
+      overlay.remove();
+      _psmSaveImageWithWatermark(post.image, post);
+    });
+  }
+
+  if (isOwn) {
+    // Edit — dormant
+    _psmActionBtn(row3, `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`, 'Edit', () => {
+      overlay.remove();
+      showToast('Edit post coming soon ✏️');
+    });
+
+    // Boost — dormant monetisation
+    _psmActionBtn(row3, `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>`, 'Boost post', () => {
+      overlay.remove();
+      showToast('Boost is coming soon ⚡ — stay tuned!');
+    }, 'psm-action-boost');
+
+    // Delete — danger
+    _psmActionBtn(row3, `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>`, 'Delete post', () => {
+      overlay.remove();
+      deletePost(post.id, el);
+    }, 'psm-action-danger');
+
+  } else {
+    // Dislike
+    _psmActionBtn(row3, `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3H10z"/><path d="M17 2h2.67A2.31 2.31 0 0122 4v7a2.31 2.31 0 01-2.33 2H17"/></svg>`, 'Dislike', () => {
+      overlay.remove();
+      showToast('Noted — you won\'t see more like this');
+    });
+
+    // Report
+    _psmActionBtn(row3, `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>`, 'Report post', () => {
+      overlay.remove();
+      showToast('Post reported 🚩');
+    }, 'psm-action-danger');
+  }
+
+  sheet.appendChild(row3);
+
+  // Cancel
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'psm-cancel';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.addEventListener('click', () => overlay.remove());
+  sheet.appendChild(cancelBtn);
+
+  overlay.appendChild(sheet);
+  document.body.appendChild(overlay);
+
+  // Animate in
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => sheet.classList.add('psm-sheet-open'));
+  });
 }
+
+// ── Helper: action button in row 3 ──
+function _psmActionBtn(container, iconSvg, label, onClick, extraClass = '') {
+  const btn = document.createElement('div');
+  btn.className = `psm-action-btn ${extraClass}`.trim();
+  btn.innerHTML = `<div class="psm-action-icon">${iconSvg}</div><span>${label}</span>`;
+  btn.addEventListener('click', onClick);
+  container.appendChild(btn);
+  return btn;
+}
+
+// ── Helper: load top followers async ──
+async function _psmLoadFollowers(row1, post, postUrl, overlay) {
+  if (!currentUser) return;
+  try {
+    const { data } = await supabase
+      .from('follows')
+      .select('follower_id, user:follower_id(id, username, avatar)')
+      .eq('following_id', currentUser.id)
+      .order('created_at', { ascending: false })
+      .limit(6);
+
+    if (!data?.length) return;
+
+    data.forEach(f => {
+      const u = f.user;
+      if (!u) return;
+      const pill = document.createElement('div');
+      pill.className = 'psm-person-pill';
+      pill.innerHTML = `
+        <img class="psm-person-av" src="${escHtml(u.avatar || '')}"
+             onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(u.id)}'" alt="">
+        <span class="psm-person-name">${escHtml((u.username || '').slice(0, 9))}</span>`;
+      pill.addEventListener('click', async () => {
+        overlay.remove();
+        showToast(`Sending to @${u.username}...`);
+        const convId = await msgGetOrCreateConversation(u.id);
+        if (!convId) { showToast('Could not open chat'); return; }
+        const postText = post.content
+          ? `${post.content.slice(0, 80)}${post.content.length > 80 ? '…' : ''}\n${postUrl}`
+          : postUrl;
+        await supabase.from('messages').insert({
+          conversation_id: convId,
+          sender_id: currentUser.id,
+          content: postText,
+          type: 'text',
+        });
+        showToast(`Sent to @${u.username} 📩`);
+        updateDmBadge();
+      });
+      row1.appendChild(pill);
+    });
+  } catch (e) {
+    console.warn('[PostMenu] followers load failed:', e);
+  }
+}
+
+// ── Helper: share to external app ──
+function _psmShareToApp(appId, post, postUrl) {
+  const text  = post.content ? post.content.slice(0, 100) : 'Check this out on MistyNote';
+  const encoded = encodeURIComponent(`${text}\n${postUrl}`);
+  const encodedUrl = encodeURIComponent(postUrl);
+
+  const urls = {
+    whatsapp:  `https://wa.me/?text=${encoded}`,
+    telegram:  `https://t.me/share/url?url=${encodedUrl}&text=${encodeURIComponent(text)}`,
+    twitter:   `https://twitter.com/intent/tweet?text=${encoded}`,
+    facebook:  `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
+    instagram: null, // Instagram has no web share URL — use native share
+    copy:      null,
+  };
+
+  if (appId === 'copy') {
+    navigator.clipboard?.writeText(postUrl).then(() => showToast('Link copied! 🔗'));
+    return;
+  }
+  if (appId === 'instagram') {
+    // Fall back to native share for Instagram
+    navigator.share?.({ text: `${text}\n${postUrl}` })
+      .catch(() => navigator.clipboard?.writeText(postUrl).then(() => showToast('Link copied — paste into Instagram 📋')));
+    return;
+  }
+
+  const url = urls[appId];
+  if (url) window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+// ── Helper: save image with watermark ──
+async function _psmSaveImageWithWatermark(imageUrl, post) {
+  showToast('Preparing image...');
+  try {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    await new Promise((res, rej) => {
+      img.onload = res;
+      img.onerror = rej;
+      img.src = imageUrl;
+    });
+
+    const STRIP_H  = Math.round(img.naturalHeight * 0.08); // ~8% = approx 2cm feel
+    const canvas   = document.createElement('canvas');
+    canvas.width   = img.naturalWidth;
+    canvas.height  = img.naturalHeight + STRIP_H;
+    const ctx      = canvas.getContext('2d');
+
+    // Draw original image
+    ctx.drawImage(img, 0, 0);
+
+    // White strip at bottom
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, img.naturalHeight, canvas.width, STRIP_H);
+
+    // Logo (render SVG to image)
+    const logoH    = Math.round(STRIP_H * 0.55);
+    const logoW    = Math.round(logoH * (470 / 230));
+    const svgBlob  = new Blob([`<svg width="${logoW}" height="${logoH}" viewBox="0 0 470 230" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="wml" x1="62" y1="115" x2="408" y2="115" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#FF1080"/><stop offset="28%" stop-color="#F030B8"/><stop offset="58%" stop-color="#C040E0"/><stop offset="100%" stop-color="#7722EE"/></linearGradient></defs><path d="M 235,40 C 235,40 330,36 370,50 C 408,64 408,100 408,114 C 408,148 398,164 382,174 C 374,180 362,184 350,184 C 340,184 330,180 324,172 C 318,164 314,154 308,143 C 302,132 294,120 284,114 C 276,109 266,107 258,109 C 250,111 244,116 240,122 C 237,127 235,134 235,142 C 235,134 233,127 230,122 C 226,116 220,111 212,109 C 204,107 194,109 186,114 C 176,120 168,132 162,143 C 156,154 152,164 146,172 C 140,180 130,184 120,184 C 108,184 96,180 88,174 C 72,164 62,148 62,114 C 62,100 62,64 100,50 C 140,36 235,40 235,40 Z" fill="none" stroke="url(#wml)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/><path d="M 355,93 C 356,103 365,111 375,113 C 365,115 356,123 355,133 C 354,123 345,115 335,113 C 345,111 354,103 355,93 Z" fill="url(#wml)"/></svg>`], { type: 'image/svg+xml' });
+    const logoUrl  = URL.createObjectURL(svgBlob);
+    const logoImg  = new Image();
+    await new Promise((res, rej) => { logoImg.onload = res; logoImg.onerror = rej; logoImg.src = logoUrl; });
+
+    // Centre logo + text in strip
+    const stripY   = img.naturalHeight;
+    const stripMid = stripY + STRIP_H / 2;
+    const gap      = Math.round(STRIP_H * 0.12);
+    const fontSize = Math.round(STRIP_H * 0.28);
+
+    // Total content width = logo + gap + text
+    ctx.font        = `600 ${fontSize}px -apple-system, sans-serif`;
+    const textW     = ctx.measureText('mistynote.com').width;
+    const totalW    = logoW + gap + textW;
+    const startX    = (canvas.width - totalW) / 2;
+
+    ctx.drawImage(logoImg, startX, stripMid - logoH / 2, logoW, logoH);
+
+    // "MistyNote" label
+    ctx.fillStyle   = '#1a1a2e';
+    ctx.font        = `700 ${fontSize}px -apple-system, sans-serif`;
+    ctx.textBaseline = 'middle';
+    ctx.fillText('MistyNote', startX + logoW + gap, stripMid - fontSize * 0.15);
+
+    // "mistynote.com" sub-label
+    ctx.fillStyle   = '#888';
+    ctx.font        = `500 ${Math.round(fontSize * 0.75)}px -apple-system, sans-serif`;
+    ctx.fillText('mistynote.com', startX + logoW + gap, stripMid + fontSize * 0.65);
+
+    URL.revokeObjectURL(logoUrl);
+
+    // Download
+    const a   = document.createElement('a');
+    a.href    = canvas.toDataURL('image/jpeg', 0.92);
+    a.download = `mistynote-${post.id?.slice(0,8) || Date.now()}.jpg`;
+    a.click();
+    showToast('Image saved! 🖼️');
+  } catch (e) {
+    console.error('[SaveImage]', e);
+    showToast('Could not save image — try again');
+  }
+}
+
+// ── Inject post share menu styles ──
+function _injectPsmStyles() {
+  if (document.getElementById('psm-styles')) return;
+  const s = document.createElement('style');
+  s.id = 'psm-styles';
+  s.textContent = `
+  .psm-overlay {
+    position: fixed; inset: 0; z-index: 9999;
+    background: rgba(0,0,0,0.55);
+    display: flex; align-items: flex-end;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+  .psm-sheet {
+    width: 100%; background: var(--bg);
+    border-radius: 24px 24px 0 0;
+    padding: 0 0 max(env(safe-area-inset-bottom), 16px);
+    transform: translateY(100%);
+    transition: transform 0.32s cubic-bezier(0.32,0.72,0,1);
+    max-height: 88vh; overflow-y: auto;
+  }
+  .psm-sheet-open { transform: translateY(0) !important; }
+  .psm-handle {
+    width: 36px; height: 4px; border-radius: 2px;
+    background: var(--border); margin: 12px auto 16px; 
+  }
+  .psm-row-label {
+    font-size: 11px; font-weight: 700; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--text3);
+    padding: 0 18px; margin-bottom: 10px;
+  }
+
+  /* ── Row 1: People ── */
+  .psm-people-row {
+    display: flex; gap: 14px; padding: 0 18px 18px;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .psm-people-row::-webkit-scrollbar { display: none; }
+  .psm-person-pill {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 6px; flex-shrink: 0; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .psm-person-pill:active { opacity: 0.7; transform: scale(0.93); }
+  .psm-person-av {
+    width: 52px; height: 52px; border-radius: 50%;
+    object-fit: cover; background: var(--bg3);
+    border: 2px solid var(--border);
+  }
+  .psm-invite-av {
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, #6C47FF, #a855f7);
+    color: white; border: none;
+  }
+  .psm-person-name {
+    font-size: 11px; color: var(--text2); font-weight: 500;
+    max-width: 56px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; text-align: center;
+  }
+
+  /* ── Row 2: Apps ── */
+  .psm-apps-row {
+    display: flex; gap: 6px; padding: 0 18px 18px;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .psm-apps-row::-webkit-scrollbar { display: none; }
+  .psm-app-pill {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 6px; flex-shrink: 0; cursor: pointer; min-width: 58px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .psm-app-pill:active { opacity: 0.7; transform: scale(0.93); }
+  .psm-app-icon {
+    width: 48px; height: 48px; border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    padding: 11px; box-sizing: border-box;
+  }
+  .psm-app-icon svg { width: 100%; height: 100%; }
+  .psm-app-name {
+    font-size: 11px; color: var(--text2); font-weight: 500;
+    white-space: nowrap;
+  }
+
+  /* ── Row 3: Actions ── */
+  .psm-actions-row {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 8px; padding: 0 18px 14px;
+  }
+  .psm-action-btn {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 14px; padding: 13px 14px;
+    cursor: pointer; font-size: 13px; font-weight: 600;
+    color: var(--text);
+    -webkit-tap-highlight-color: transparent;
+    transition: all .15s;
+  }
+  .psm-action-btn:active { transform: scale(0.96); background: var(--bg3); }
+  .psm-action-icon {
+    width: 18px; height: 18px; flex-shrink: 0; color: var(--text2);
+  }
+  .psm-action-boost .psm-action-icon { color: #f59e0b; }
+  .psm-action-boost { border-color: rgba(245,158,11,0.25); }
+  .psm-action-danger { color: rgb(244,7,82) !important; }
+  .psm-action-danger .psm-action-icon { color: rgb(244,7,82); }
+  .psm-action-danger { border-color: rgba(244,7,82,0.25); }
+
+  /* ── Cancel ── */
+  .psm-cancel {
+    display: block; width: calc(100% - 36px); margin: 0 18px;
+    background: var(--bg2); border: 1.5px solid var(--border);
+    border-radius: 14px; padding: 14px;
+    font-size: 15px; font-weight: 700; color: var(--text);
+    cursor: pointer; font-family: inherit;
+    -webkit-tap-highlight-color: transparent;
+    transition: all .15s;
+  }
+  .psm-cancel:active { background: var(--bg3); transform: scale(0.98); }
+  `;
+  document.head.appendChild(s);
+}
+
+// Auto-inject styles when this file loads
+_injectPsmStyles();
+
 
 function showActionSheet(actions) {
   const overlay = document.createElement('div');
