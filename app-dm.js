@@ -93,6 +93,25 @@ async function msgGetOrCreateConversation(otherUserId) {
   return conv.id;
 }
 
+// ── DM dot badge on feed header ──
+function updateDmBadge() {
+  if (!currentUser) return;
+  supabase
+    .from('conversation_participants')
+    .select('conversation_id, last_read_at, conversation:conversations(last_message_at, last_sender_id)')
+    .eq('user_id', currentUser.id)
+    .then(({ data }) => {
+      const hasUnread = (data || []).some(row => {
+        if (!row.conversation?.last_message_at) return false;
+        if (row.conversation.last_sender_id === currentUser.id) return false;
+        if (!row.last_read_at) return true;
+        return new Date(row.conversation.last_message_at) > new Date(row.last_read_at);
+      });
+      const dot = document.getElementById('dm-dot');
+      if (dot) dot.style.display = hasUnread ? 'block' : 'none';
+    });
+}
+
 // ── Open DM from anywhere in the app ──
 async function openDM(userId) {
   if (!currentUser) { showToast('Sign in to send messages'); return; }
@@ -193,6 +212,7 @@ async function loadMessages() {
 
   // Subscribe to real-time inbox updates
   subscribeToInbox(convIds);
+  updateDmBadge();
 
   convs.forEach(conv => {
     const otherUser = partMap[conv.id];
@@ -1647,6 +1667,7 @@ function subscribeToInbox(convIds) {
           badge.textContent = current + 1 > 9 ? '9+' : current + 1;
         }
       }
+      updateDmBadge();
       // Move to top
       const list = document.getElementById('msg-inbox-list');
       if (list && list.firstChild !== row) list.prepend(row);
@@ -1676,6 +1697,7 @@ async function markConvRead(convId) {
   if (badge) badge.remove();
   const preview = document.querySelector(`.msg-conv-row[data-conv-id="${convId}"] .msg-conv-preview`);
   if (preview) preview.classList.remove('unread');
+  updateDmBadge();
 }
 
 // ── Input helpers ──
