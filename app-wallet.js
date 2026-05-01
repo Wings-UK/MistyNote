@@ -535,6 +535,7 @@ function fmtNgn(amount) {
 const walletState = {
   points: 0,               // available MP balance (maps to wallets.available)
   escrow: 0,               // pending escrow balance (maps to wallets.escrow)
+  pendingReferral: 0,      // pending referral rewards (maps to wallets.pending_referral)
   balanceVisible: true,
   selectedGiftRecipient: null,
   giftAmount: 0,
@@ -568,6 +569,10 @@ function openWallet() {
   syncWalletBalance();
   loadBankAccount();
   refreshTransactionList();
+  // Referral: wire pending tap + expire stale
+  if (typeof initReferral === 'function') initReferral();
+  if (typeof expireStaleReferrals === 'function') expireStaleReferrals();
+}
   subscribeToWalletUpdates();
   const fab = document.querySelector('.wlt-qr-fab');
   if (fab) fab.classList.remove('hidden');
@@ -594,12 +599,13 @@ async function syncWalletBalance() {
   try {
     const { data, error } = await supabase
       .from('wallets')
-      .select('available, escrow')
+      .select('available, escrow, pending_referral')
       .eq('user_id', currentUser.id)
       .maybeSingle();
     if (error || !data) return;
-    walletState.points  = data.available ?? 0;
-    walletState.escrow  = data.escrow    ?? 0;
+    walletState.points          = data.available        ?? 0;
+    walletState.escrow          = data.escrow           ?? 0;
+    walletState.pendingReferral = data.pending_referral ?? 0;
     renderWalletBalance();
   } catch (e) { /* silently fail — show cached value */ }
 }
@@ -617,24 +623,26 @@ function renderWalletBalance() {
 async function renderEscrowSubrow() {
   var subEl = document.getElementById('wlt-escrow-subrow');
   if (!subEl) return;
-  // Default immediately — never hang on "Loading..."
   subEl.textContent = 'No pending balance';
   subEl.style.color = 'rgba(255,255,255,0.45)';
   if (!currentUser) return;
   try {
     var res = await supabase
       .from('wallets')
-      .select('escrow')
+      .select('escrow, pending_referral')
       .eq('user_id', currentUser.id)
       .maybeSingle();
-    if (res.error || !res.data) return; // table missing or no row — keep default
-    var escrow = Number(res.data.escrow) || 0;
-    if (escrow > 0) {
-      subEl.textContent = 'Pending: ' + fmtPts(escrow) + ' · releases on delivery';
+    if (res.error || !res.data) return;
+    var escrow          = Number(res.data.escrow)           || 0;
+    var pendingReferral = Number(res.data.pending_referral) || 0;
+    var totalPending    = escrow + pendingReferral;
+
+    if (totalPending > 0) {
+      subEl.textContent = 'Pending: ' + fmtPts(totalPending) + ' · tap to see breakdown';
       subEl.style.color = 'rgba(255,255,255,0.75)';
     }
   } catch (e) {
-    // Table not yet created — silently show default, no error surfaced
+    // Table not yet created — silently show default
   }
 }
 
