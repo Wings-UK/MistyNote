@@ -653,6 +653,10 @@ async function bootApp() {
   loadNotifications();
   loadInitialNotifCount();
   initOneSignal(); // OneSignal push — links device to logged-in user
+
+  // Referral system init
+  if (typeof initReferral === 'function') initReferral();
+  if (typeof handleReferralOnSignup === 'function') handleReferralOnSignup();
 }
 
 // ══════════════════════════════════════════
@@ -1095,6 +1099,10 @@ async function obFinish() {
   requestAnimationFrame(initFeedTabBar);
   updateNavAvatar();
   setTimeout(() => detectAndSaveLocation(), 2000);
+
+  // Referral — process invite link for new signup
+  if (typeof initReferral === 'function') initReferral();
+  if (typeof handleReferralOnSignup === 'function') handleReferralOnSignup();
 
   navTo('feed');
 }
