@@ -271,7 +271,8 @@ function handlePhysicalBack() {
 
   // Discover: search active → clear (tab first if not on posts)
   if (page === 'discover' && (document.getElementById('disc-input')?.value || '').trim()) {
-    if (discCurrentTab && discCurrentTab !== 'posts') {
+    const _discTab = (typeof Disc !== 'undefined' ? Disc.tab : null);
+    if (_discTab && _discTab !== 'posts') {
       const btn = document.querySelector('.disc-tab[data-tab="posts"]');
       if (btn) discTab('posts', btn);
     } else {
