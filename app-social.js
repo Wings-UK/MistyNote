@@ -3817,7 +3817,7 @@ async function openDetail(postId, scrollToComments = false) {
         detailMoreBtn.onclick = () => showPostMenu(p, null, detailMoreBtn);
       }
     } else {
-      if (detailShareBtn) { detailShareBtn.style.display = ''; detailShareBtn.onclick = () => sharePost(p); }
+      if (detailShareBtn) { detailShareBtn.style.display = ''; detailShareBtn.onclick = () => showPostMenu(p, null, detailShareBtn); }
       if (detailMoreBtn)  detailMoreBtn.style.display = 'none';
     }
 
