@@ -3810,6 +3810,17 @@ async function openDetail(postId, scrollToComments = false) {
     // Share btn (header)
     document.getElementById('detail-share-btn').onclick = () => sharePost(p);
 
+    // Dots btn (header) — only visible on own posts
+    const detailMoreBtn = document.getElementById('detail-more-btn');
+    if (detailMoreBtn) {
+      if (isOwn) {
+        detailMoreBtn.style.display = '';
+        detailMoreBtn.onclick = () => showPostMenu(p, null, detailMoreBtn);
+      } else {
+        detailMoreBtn.style.display = 'none';
+      }
+    }
+
     // ── Mini identity in detail header (fades in when author avatar scrolls out) ──
     const dpHeaderIdentity = document.getElementById('dp-header-identity');
     const dpHeaderAvatar   = document.getElementById('dp-header-avatar');
