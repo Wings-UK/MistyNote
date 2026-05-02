@@ -178,7 +178,6 @@ function slideBack() {
   // Hide comment bar only when leaving detail
   if (pageId === 'detail') {
     document.getElementById('comment-bar').style.display = 'none';
-    if (typeof chaptersDetailCleanup === 'function') chaptersDetailCleanup();
   }
 
   // Clean up wallet when navigating away
@@ -1891,8 +1890,6 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
       ${urlPreviewHtml}
 
       ${cleanDisplay || cleanText ? `<div class="tir"><p class="tired">${cleanDisplay}</p></div>` : ''}
-
-      ${(typeof chaptersGetFeedIndicator === 'function') ? chaptersGetFeedIndicator(p) : ''}
     `;
   }
 
@@ -2143,7 +2140,7 @@ function injectFeedPostStyles() {
     .tir {
       padding: 10px 5px 8px;
     }
-    .tired { width: 100%; font-size: 16px; white-space: pre-wrap; word-break: break-word; color: var(--text); }
+    .tired { width: 100%; font-size: 16px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; color: var(--text); }
     .reer { color: rgba(244,7,82,0.7); cursor: pointer; }
 
     .laptop1 { max-width: 100%; margin-top: 10px; padding: 0; overflow: hidden; border-radius: 14px; background: #f4f3f0; max-height: 400px; display: flex; align-items: center; justify-content: center; }
@@ -2952,9 +2949,6 @@ function openComposer() {
 
   _cWire(el);
 
-  // Wire Note (chapter) button
-  if (typeof chaptersWireComposer === 'function') chaptersWireComposer();
-
   setTimeout(() => {
     const ta = document.getElementById('mnc-textarea');
     if (ta) { ta.focus(); _cAutoGrow(ta); }
@@ -3255,11 +3249,6 @@ function _cAutoGrow(ta) {
 
 // ── Submit ─────────────────────────────────────────────────────
 async function _cSubmit() {
-  // Route to chapter submit if Note mode is active
-  if (typeof ChapterComposer !== 'undefined' && ChapterComposer.active) {
-    return chaptersSubmit();
-  }
-
   const ta = document.getElementById('mnc-textarea');
   if (!ta || _c.busy || !currentUser) return;
 
@@ -3661,7 +3650,7 @@ async function openDetail(postId, scrollToComments = false) {
 
       /* ── Content text ── */
       .dp-text {
-        font-size: 17px; line-height: 1.65; color: var(--text);
+        font-size: 18px; line-height: 1.5; color: var(--text);
         padding: 14px 16px 4px; margin: 0;
         white-space: pre-wrap; word-break: break-word;
       }
@@ -3824,7 +3813,7 @@ async function openDetail(postId, scrollToComments = false) {
 
     const { data: p, error } = await supabase
       .from('posts')
-      .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,has_chapters,
+      .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
                user:users(id,username,avatar,location),
                reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))`)
       .eq('id', postId)
@@ -3960,13 +3949,18 @@ async function openDetail(postId, scrollToComments = false) {
       <div id="comments-container"></div>
     `;
 
-    // Header right buttons — always show 3-dots; showPostMenu handles own vs other internally
+    // Header right buttons — dots for own post, share arrow for others
     const detailShareBtn = document.getElementById('detail-share-btn');
     const detailMoreBtn  = document.getElementById('detail-more-btn');
-    if (detailShareBtn) detailShareBtn.style.display = 'none';
-    if (detailMoreBtn)  {
-      detailMoreBtn.style.display = '';
-      detailMoreBtn.onclick = () => showPostMenu(p, null, detailMoreBtn);
+    if (isOwn) {
+      if (detailShareBtn) detailShareBtn.style.display = 'none';
+      if (detailMoreBtn)  {
+        detailMoreBtn.style.display = '';
+        detailMoreBtn.onclick = () => showPostMenu(p, null, detailMoreBtn);
+      }
+    } else {
+      if (detailShareBtn) { detailShareBtn.style.display = ''; detailShareBtn.onclick = () => sharePost(p); }
+      if (detailMoreBtn)  detailMoreBtn.style.display = 'none';
     }
 
     // ── Mini identity in detail header (fades in when author avatar scrolls out) ──
@@ -4034,12 +4028,6 @@ async function openDetail(postId, scrollToComments = false) {
     // Track view + load comments
     await recordView(postId);
     await syncViewCount(postId);
-
-    // Render chapters if this is a Note post
-    if (p.has_chapters && typeof chaptersRenderDetail === 'function') {
-      const detailPage = document.getElementById('page-detail');
-      await chaptersRenderDetail(postId, body, detailPage);
-    }
 
     await loadComments(postId);
 
