@@ -178,6 +178,7 @@ function slideBack() {
   // Hide comment bar only when leaving detail
   if (pageId === 'detail') {
     document.getElementById('comment-bar').style.display = 'none';
+    if (typeof chaptersDetailCleanup === 'function') chaptersDetailCleanup();
   }
 
   // Clean up wallet when navigating away
@@ -1890,6 +1891,8 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
       ${urlPreviewHtml}
 
       ${cleanDisplay || cleanText ? `<div class="tir"><p class="tired">${cleanDisplay}</p></div>` : ''}
+
+      ${(typeof chaptersGetFeedIndicator === 'function') ? chaptersGetFeedIndicator(p) : ''}
     `;
   }
 
@@ -2949,6 +2952,9 @@ function openComposer() {
 
   _cWire(el);
 
+  // Wire Note (chapter) button
+  if (typeof chaptersWireComposer === 'function') chaptersWireComposer();
+
   setTimeout(() => {
     const ta = document.getElementById('mnc-textarea');
     if (ta) { ta.focus(); _cAutoGrow(ta); }
@@ -3249,6 +3255,11 @@ function _cAutoGrow(ta) {
 
 // ── Submit ─────────────────────────────────────────────────────
 async function _cSubmit() {
+  // Route to chapter submit if Note mode is active
+  if (typeof ChapterComposer !== 'undefined' && ChapterComposer.active) {
+    return chaptersSubmit();
+  }
+
   const ta = document.getElementById('mnc-textarea');
   if (!ta || _c.busy || !currentUser) return;
 
@@ -3813,7 +3824,7 @@ async function openDetail(postId, scrollToComments = false) {
 
     const { data: p, error } = await supabase
       .from('posts')
-      .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
+      .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,has_chapters,
                user:users(id,username,avatar,location),
                reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))`)
       .eq('id', postId)
@@ -4023,6 +4034,12 @@ async function openDetail(postId, scrollToComments = false) {
     // Track view + load comments
     await recordView(postId);
     await syncViewCount(postId);
+
+    // Render chapters if this is a Note post
+    if (p.has_chapters && typeof chaptersRenderDetail === 'function') {
+      const detailPage = document.getElementById('page-detail');
+      await chaptersRenderDetail(postId, body, detailPage);
+    }
 
     await loadComments(postId);
 
