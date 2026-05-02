@@ -1425,7 +1425,7 @@ function buildPushPayload(type, actorName, extras) {
   const name = actorName ? '@' + actorName : 'Someone';
   const note = extras.comment_text ? ' · ' + extras.comment_text.slice(0, 60) : '';
   const map = {
-    like:         { title: '❤️ New Love',          message: name + ' loved your note' },
+    like:         { title: '❤️ New Heart',         message: name + ' loved your note' },
     comment:      { title: '💬 New Comment',      message: name + ':' + note },
     reply:        { title: '💬 New Reply',        message: name + ' replied:' + note },
     follow:       { title: '✨ New Follower',       message: name + ' started following you' },
