@@ -1107,76 +1107,78 @@ async function _psmSaveImageWithWatermark(imageUrl, post) {
       img.src = imageUrl;
     });
 
-    const STRIP_H  = Math.round(img.naturalHeight * 0.08); // ~8% = approx 2cm feel
-    const canvas   = document.createElement('canvas');
-    canvas.width   = img.naturalWidth;
-    canvas.height  = img.naturalHeight + STRIP_H;
-    const ctx      = canvas.getContext('2d');
+    const W   = img.naturalWidth;
+    const H   = img.naturalHeight;
 
-    // Draw original image
+    // Canvas = exact image size, no strip added
+    const canvas = document.createElement('canvas');
+    canvas.width  = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+
+    // Draw original image at full size
     ctx.drawImage(img, 0, 0);
 
-    // White strip at bottom
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, img.naturalHeight, canvas.width, STRIP_H);
-
-    // Logo (render SVG to image)
-    const logoH    = Math.round(STRIP_H * 0.55);
+    // ── Watermark sizing — scale to image width ──
+    const SCALE    = W / 390;                          // baseline 390px phone width
+    const PAD      = Math.round(12 * SCALE);           // margin from edges
+    const logoH    = Math.round(16 * SCALE);           // small — wallet-icon size
     const logoW    = Math.round(logoH * (470 / 230));
-    const svgBlob  = new Blob([`<svg width="${logoW}" height="${logoH}" viewBox="0 0 470 230" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="wml" x1="62" y1="115" x2="408" y2="115" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#FF1080"/><stop offset="28%" stop-color="#F030B8"/><stop offset="58%" stop-color="#C040E0"/><stop offset="100%" stop-color="#7722EE"/></linearGradient></defs><path d="M 235,40 C 235,40 330,36 370,50 C 408,64 408,100 408,114 C 408,148 398,164 382,174 C 374,180 362,184 350,184 C 340,184 330,180 324,172 C 318,164 314,154 308,143 C 302,132 294,120 284,114 C 276,109 266,107 258,109 C 250,111 244,116 240,122 C 237,127 235,134 235,142 C 235,134 233,127 230,122 C 226,116 220,111 212,109 C 204,107 194,109 186,114 C 176,120 168,132 162,143 C 156,154 152,164 146,172 C 140,180 130,184 120,184 C 108,184 96,180 88,174 C 72,164 62,148 62,114 C 62,100 62,64 100,50 C 140,36 235,40 235,40 Z" fill="none" stroke="url(#wml)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/><path d="M 355,93 C 356,103 365,111 375,113 C 365,115 356,123 355,133 C 354,123 345,115 335,113 C 345,111 354,103 355,93 Z" fill="url(#wml)"/></svg>`], { type: 'image/svg+xml' });
-    const logoUrl  = URL.createObjectURL(svgBlob);
-    const logoImg  = new Image();
+    const fontSize = Math.round(11 * SCALE);
+    const gap      = Math.round(5 * SCALE);            // gap between logo and text
+    const font     = `500 ${fontSize}px 'Inter', 'Helvetica Neue', Arial, sans-serif`;
+
+    // ── Render logo SVG in light grey ──
+    const svgStr = `<svg width="${logoW}" height="${logoH}" viewBox="0 0 470 230" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M 235,40 C 235,40 330,36 370,50 C 408,64 408,100 408,114 C 408,148 398,164 382,174 C 374,180 362,184 350,184 C 340,184 330,180 324,172 C 318,164 314,154 308,143 C 302,132 294,120 284,114 C 276,109 266,107 258,109 C 250,111 244,116 240,122 C 237,127 235,134 235,142 C 235,134 233,127 230,122 C 226,116 220,111 212,109 C 204,107 194,109 186,114 C 176,120 168,132 162,143 C 156,154 152,164 146,172 C 140,180 130,184 120,184 C 108,184 96,180 88,174 C 72,164 62,148 62,114 C 62,100 62,64 100,50 C 140,36 235,40 235,40 Z"
+        fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M 355,93 C 356,103 365,111 375,113 C 365,115 356,123 355,133 C 354,123 345,115 335,113 C 345,111 354,103 355,93 Z"
+        fill="rgba(255,255,255,0.55)"/>
+    </svg>`;
+
+    const svgBlob = new Blob([svgStr], { type: 'image/svg+xml' });
+    const logoUrl = URL.createObjectURL(svgBlob);
+    const logoImg = new Image();
     await new Promise((res, rej) => { logoImg.onload = res; logoImg.onerror = rej; logoImg.src = logoUrl; });
-
-    // Centre logo + text in strip
-    const stripY   = img.naturalHeight;
-    const stripMid = stripY + STRIP_H / 2;
-    const gap      = Math.round(STRIP_H * 0.12);
-    const fontSize = Math.round(STRIP_H * 0.28);
-    const font700  = `700 ${fontSize}px 'Inter', 'Helvetica Neue', Arial, sans-serif`;
-    const font500  = `500 ${Math.round(fontSize * 0.75)}px 'Inter', 'Helvetica Neue', Arial, sans-serif`;
-
-    // Measure widths for centering
-    ctx.font        = font700;
-    const mistyW    = ctx.measureText('Misty').width;
-    const noteW     = ctx.measureText('Note').width;
-    ctx.font        = font500;
-    const subW      = ctx.measureText('mistynote.com').width;
-    const textBlockW = Math.max(mistyW + noteW, subW);
-    const totalW    = logoW + gap + textBlockW;
-    const startX    = (canvas.width - totalW) / 2;
-
-    ctx.drawImage(logoImg, startX, stripMid - logoH / 2, logoW, logoH);
-
-    const textX     = startX + logoW + gap;
-    ctx.textBaseline = 'middle';
-
-    // "Misty" — black
-    ctx.font      = font700;
-    ctx.fillStyle = '#111111';
-    ctx.fillText('Misty', textX, stripMid - fontSize * 0.15);
-
-    // "Note" — purple gradient, immediately after "Misty" with zero gap
-    const noteX   = textX + mistyW;
-    const noteGrad = ctx.createLinearGradient(noteX, 0, noteX + noteW, 0);
-    noteGrad.addColorStop(0, '#C040E0');
-    noteGrad.addColorStop(1, '#7722EE');
-    ctx.fillStyle = noteGrad;
-    ctx.fillText('Note', noteX, stripMid - fontSize * 0.15);
-
-    // "mistynote.com" — grey below
-    ctx.font      = font500;
-    ctx.fillStyle = '#999999';
-    ctx.fillText('mistynote.com', textX, stripMid + fontSize * 0.65);
-
     URL.revokeObjectURL(logoUrl);
 
-    // Download
-    const a   = document.createElement('a');
-    a.href    = canvas.toDataURL('image/jpeg', 0.92);
-    a.download = `mistynote-${post.id?.slice(0,8) || Date.now()}.jpg`;
+    // ── Measure text width ──
+    ctx.font = font;
+    const textW = ctx.measureText('mistynote.com').width;
+
+    // ── Total watermark block width ──
+    const totalW = logoW + gap + textW;
+
+    // ── Position: bottom right with padding ──
+    const blockX = W - PAD - totalW;
+    const blockY = H - PAD - logoH;
+
+    // Subtle dark shadow so it's legible on both light and dark images
+    ctx.shadowColor   = 'rgba(0,0,0,0.35)';
+    ctx.shadowBlur    = Math.round(4 * SCALE);
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = Math.round(1 * SCALE);
+
+    // Draw logo
+    ctx.drawImage(logoImg, blockX, blockY, logoW, logoH);
+
+    // Draw "mistynote.com" vertically centred with logo
+    ctx.font         = font;
+    ctx.fillStyle    = 'rgba(255,255,255,0.55)';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('mistynote.com', blockX + logoW + gap, blockY + logoH / 2);
+
+    // Reset shadow
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur  = 0;
+
+    // ── Download ──
+    const a    = document.createElement('a');
+    a.href     = canvas.toDataURL('image/jpeg', 0.93);
+    a.download = `mistynote-${post.id?.slice(0, 8) || Date.now()}.jpg`;
     a.click();
     showToast('Image saved! 🖼️');
+
   } catch (e) {
     console.error('[SaveImage]', e);
     showToast('Could not save image — try again');
