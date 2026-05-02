@@ -18,12 +18,12 @@ const NOTIF_CONFIG = {
 };
 
 const NOTIF_TYPES = {
-  like:             { emoji: '❤️',  label: 'liked your post',           badgeClass: 'badge-like',    accentColor: '#f0385a' },
-  comment:          { emoji: '💬',  label: 'replied to your post',      badgeClass: 'badge-comment', accentColor: '#6c47ff' },
+  like:             { emoji: '❤️',  label: 'loved your note',           badgeClass: 'badge-like',    accentColor: '#f0385a' },
+  comment:          { emoji: '💬',  label: 'replied to your note',      badgeClass: 'badge-comment', accentColor: '#6c47ff' },
   follow:           { emoji: '👤',  label: 'started following you',     badgeClass: 'badge-follow',  accentColor: '#00b87a' },
-  repost:           { emoji: '🔁',  label: 'reposted your post',        badgeClass: 'badge-repost',  accentColor: '#f5a623' },
+  repost:           { emoji: '🔁',  label: 'reposted your note',        badgeClass: 'badge-repost',  accentColor: '#f5a623' },
   mention:          { emoji: '📣',  label: 'mentioned you',             badgeClass: 'badge-mention', accentColor: '#00c4ff' },
-  like_comment:     { emoji: '❤️',  label: 'liked your comment',        badgeClass: 'badge-like',    accentColor: '#f0385a' },
+  like_comment:     { emoji: '❤️',  label: 'loved your reply',          badgeClass: 'badge-like',    accentColor: '#f0385a' },
   order_placed:     { emoji: '📦',  label: 'placed an order',           badgeClass: 'badge-order',   accentColor: '#ff6b35' },
   order_shipped:    { emoji: '🚚',  label: 'Your order has shipped',    badgeClass: 'badge-order',   accentColor: '#ff6b35' },
   order_delivered:  { emoji: '✅',  label: 'Order delivered!',          badgeClass: 'badge-order',   accentColor: '#00b87a' },
@@ -83,7 +83,7 @@ function renderNotifList(filter) {
   if (!items.length) {
     container.innerHTML = renderNotifEmpty(
       filter === 'all' ? 'All caught up! 🎉' : `No ${filterDef?.label?.toLowerCase()} notifications`,
-      filter === 'all' ? "When people interact with your posts, you'll see it here." : ''
+      filter === 'all' ? "When people interact with your notes, you'll see it here." : ''
     );
     return;
   }
@@ -1425,11 +1425,11 @@ function buildPushPayload(type, actorName, extras) {
   const name = actorName ? '@' + actorName : 'Someone';
   const note = extras.comment_text ? ' · ' + extras.comment_text.slice(0, 60) : '';
   const map = {
-    like:         { title: '❤️ New Like',        message: name + ' liked your post' },
+    like:         { title: '❤️ New Love',          message: name + ' loved your note' },
     comment:      { title: '💬 New Comment',      message: name + ':' + note },
     reply:        { title: '💬 New Reply',        message: name + ' replied:' + note },
     follow:       { title: '✨ New Follower',       message: name + ' started following you' },
-    repost:       { title: '🔁 Repost',              message: name + ' reposted your post' },
+    repost:       { title: '🔁 Repost',              message: name + ' reposted your note' },
     mention:      { title: '📣 You were mentioned', message: name + ' mentioned you:' + note },
     like_comment: { title: '❤️ Comment liked',   message: name + ' liked your comment' },
     mp_gift:      { title: '🎁 MistyPoints Received', message: name + ' sent you' + (extras.comment_text ? ' ' + extras.comment_text : ' MistyPoints') },
