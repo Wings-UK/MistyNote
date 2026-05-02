@@ -66,6 +66,8 @@ function navTo(pageId) {
     const feedList = document.getElementById('feed-list');
     const hasPosts = feedList && feedList.querySelector('.poster');
     if (!hasPosts && !feedLoading) loadFeed();
+    // Reset header + nav position when returning to feed
+    document.dispatchEvent(new Event('feedTabActivated'));
   }
 }
 
@@ -1640,6 +1642,146 @@ function setFeedTab(tab, btn) {
 function initFeedTabBar() {
   // tab bar removed
 }
+
+// ═══════════════════════════════════════════
+// FEED SCROLL — hide header up, nav down
+// World-class: velocity-aware, spring-like,
+// only on feed page, resets on tab switch
+// ═══════════════════════════════════════════
+
+(function initFeedScrollBehaviour() {
+  const HEADER_H    = 56;   // px — matches .feed-header height
+  const NAV_H       = 60;   // px — matches --nav-h
+  const THRESHOLD   = 6;    // px scrolled before we react
+  const SHOW_ZONE   = 80;   // px from top — always show chrome
+
+  let lastY         = 0;
+  let headerOffset  = 0;   // 0 = fully visible, HEADER_H = fully hidden
+  let navOffset     = 0;   // 0 = fully visible, NAV_H    = fully hidden
+  let ticking       = false;
+  let wired         = false;
+
+  function clamp(val, min, max) {
+    return Math.min(Math.max(val, min), max);
+  }
+
+  function applyOffsets() {
+    const header = document.querySelector('.feed-header');
+    const nav    = document.getElementById('bottom-nav');
+    if (header) {
+      header.style.transform  = `translateY(${-headerOffset}px)`;
+      // Fade slightly as it hides — premium feel
+      header.style.opacity    = String(1 - (headerOffset / HEADER_H) * 0.35);
+    }
+    if (nav) {
+      nav.style.transform     = `translateY(${navOffset}px)`;
+      nav.style.opacity       = String(1 - (navOffset / NAV_H) * 0.4);
+    }
+  }
+
+  function onScroll() {
+    if (!ticking) {
+      requestAnimationFrame(() => {
+        const page   = document.getElementById('page-feed');
+        if (!page || !page.classList.contains('active')) {
+          ticking = false;
+          return;
+        }
+
+        const currentY = page.scrollTop;
+        const delta    = currentY - lastY;
+
+        // Always show chrome near top of feed
+        if (currentY <= SHOW_ZONE) {
+          headerOffset = 0;
+          navOffset    = 0;
+          applyOffsets();
+          lastY   = currentY;
+          ticking = false;
+          return;
+        }
+
+        // Only react to intentional scrolls past threshold
+        if (Math.abs(delta) > THRESHOLD) {
+          if (delta > 0) {
+            // Scrolling DOWN — hide chrome proportionally
+            headerOffset = clamp(headerOffset + delta * 0.85, 0, HEADER_H);
+            navOffset    = clamp(navOffset    + delta * 0.85, 0, NAV_H);
+          } else {
+            // Scrolling UP — reveal chrome snappily
+            headerOffset = clamp(headerOffset + delta * 1.4, 0, HEADER_H);
+            navOffset    = clamp(navOffset    + delta * 1.4, 0, NAV_H);
+          }
+          applyOffsets();
+        }
+
+        lastY   = currentY;
+        ticking = false;
+      });
+      ticking = true;
+    }
+  }
+
+  function resetChrome() {
+    headerOffset = 0;
+    navOffset    = 0;
+    applyOffsets();
+
+    // Ensure transitions are smooth on reset
+    const header = document.querySelector('.feed-header');
+    const nav    = document.getElementById('bottom-nav');
+    if (header) header.style.transition = 'transform 0.32s cubic-bezier(0.25,0.46,0.45,0.94), opacity 0.32s ease';
+    if (nav)    nav.style.transition    = 'transform 0.32s cubic-bezier(0.25,0.46,0.45,0.94), opacity 0.32s ease';
+    setTimeout(() => {
+      if (header) header.style.transition = '';
+      if (nav)    nav.style.transition    = '';
+    }, 340);
+  }
+
+  function wire() {
+    if (wired) return;
+    const page = document.getElementById('page-feed');
+    if (!page) return;
+
+    // Inject CSS transitions onto header and nav
+    const style = document.createElement('style');
+    style.id    = 'feed-scroll-style';
+    style.textContent = `
+      .feed-header {
+        will-change: transform, opacity;
+        transition: none;
+        transform-origin: top center;
+      }
+      #bottom-nav {
+        will-change: transform, opacity;
+        transition: none;
+        transform-origin: bottom center;
+      }
+    `;
+    if (!document.getElementById('feed-scroll-style')) {
+      document.head.appendChild(style);
+    }
+
+    page.addEventListener('scroll', onScroll, { passive: true });
+    wired = true;
+  }
+
+  // Wire on DOMContentLoaded or immediately if already ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', wire);
+  } else {
+    // Defer slightly so page DOM is fully rendered
+    setTimeout(wire, 400);
+  }
+
+  // Reset chrome whenever user navigates back to feed tab
+  const _origNavTo = window.navTo;
+  window._feedScrollReset = resetChrome;
+
+  // Expose reset so navTo can call it
+  document.addEventListener('feedTabActivated', resetChrome);
+
+})();
 
 function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
   // NOTE: do NOT seed LikeStore here — the DOM element doesn't exist yet.
@@ -3817,7 +3959,7 @@ async function openDetail(postId, scrollToComments = false) {
         detailMoreBtn.onclick = () => showPostMenu(p, null, detailMoreBtn);
       }
     } else {
-      if (detailShareBtn) { detailShareBtn.style.display = ''; detailShareBtn.onclick = () => showPostMenu(p, null, detailShareBtn); }
+      if (detailShareBtn) { detailShareBtn.style.display = ''; detailShareBtn.onclick = () => sharePost(p); }
       if (detailMoreBtn)  detailMoreBtn.style.display = 'none';
     }
 
