@@ -3949,18 +3949,13 @@ async function openDetail(postId, scrollToComments = false) {
       <div id="comments-container"></div>
     `;
 
-    // Header right buttons — dots for own post, share arrow for others
+    // Header right buttons — always show 3-dots; showPostMenu handles own vs other internally
     const detailShareBtn = document.getElementById('detail-share-btn');
     const detailMoreBtn  = document.getElementById('detail-more-btn');
-    if (isOwn) {
-      if (detailShareBtn) detailShareBtn.style.display = 'none';
-      if (detailMoreBtn)  {
-        detailMoreBtn.style.display = '';
-        detailMoreBtn.onclick = () => showPostMenu(p, null, detailMoreBtn);
-      }
-    } else {
-      if (detailShareBtn) { detailShareBtn.style.display = ''; detailShareBtn.onclick = () => sharePost(p); }
-      if (detailMoreBtn)  detailMoreBtn.style.display = 'none';
+    if (detailShareBtn) detailShareBtn.style.display = 'none';
+    if (detailMoreBtn)  {
+      detailMoreBtn.style.display = '';
+      detailMoreBtn.onclick = () => showPostMenu(p, null, detailMoreBtn);
     }
 
     // ── Mini identity in detail header (fades in when author avatar scrolls out) ──
