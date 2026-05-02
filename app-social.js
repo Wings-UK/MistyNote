@@ -617,7 +617,7 @@ async function renderMyProfile() {
         </div>
         <div class="prf-stat-card">
           <span class="prf-stat-n">${fmtNum(totalLikes)}</span>
-          <span class="prf-stat-l">Loves</span>
+          <span class="prf-stat-l">Hearts</span>
         </div>
       </div>
 
@@ -781,7 +781,7 @@ function renderPrfPosts(posts, containerId, isOwn, isProfilePage = false, viewin
   const container = document.getElementById(containerId);
   if (!container) return;
   if (!posts.length) {
-    container.innerHTML = `<div class="prf-empty"><div class="prf-empty-icon">${isOwn ? '✍️' : '❤️'}</div><p>${isOwn ? 'No posts yet' : 'No likes yet'}</p>${isOwn ? '<span>Share your first thought</span>' : ''}</div>`;
+    container.innerHTML = `<div class="prf-empty"><div class="prf-empty-icon">${isOwn ? '✍️' : '❤️'}</div><p>${isOwn ? 'No notes yet' : 'No hearts yet'}</p>${isOwn ? '<span>Share your first thought</span>' : ''}</div>`;
     return;
   }
   container.innerHTML = '';
@@ -3925,7 +3925,7 @@ async function openDetail(postId, scrollToComments = false) {
         <div class="dp-stats">
           <div class="dp-stat">
             <span class="dp-stat-n detail-stat-n" data-type="likes">${fmtNum(p.like_count||0)}</span>
-            <span class="dp-stat-l">Loves</span>
+            <span class="dp-stat-l">Hearts</span>
           </div>
           <div class="dp-stat">
             <span class="dp-stat-n repost-count-display">${fmtNum(p.repost_count||0)}</span>
