@@ -617,7 +617,7 @@ async function renderMyProfile() {
         </div>
         <div class="prf-stat-card">
           <span class="prf-stat-n">${fmtNum(totalLikes)}</span>
-          <span class="prf-stat-l">Likes</span>
+          <span class="prf-stat-l">Loves</span>
         </div>
       </div>
 
@@ -2871,8 +2871,8 @@ function openComposer() {
         <textarea
           class="mnc-textarea"
           id="mnc-textarea"
-          placeholder="What's happening?"
-          maxlength="280"
+          placeholder="What's on your mind?"
+          maxlength="2000"
           autocomplete="off"
           autocorrect="on"
           spellcheck="true"
@@ -3203,7 +3203,7 @@ function _cToggleEmoji() {
 
 // ── Ring + sync ────────────────────────────────────────────────
 function _cUpdateRing(len) {
-  const MAX = 280;
+  const MAX = 2000;
   const ring    = document.getElementById('mnc-ring');
   const numEl   = document.getElementById('mnc-char-num');
   if (!ring || !numEl) return;
@@ -3213,10 +3213,10 @@ function _cUpdateRing(len) {
   ring.style.strokeDashoffset = String(circ * (1 - pct));
 
   const rem = MAX - len;
-  if (rem <= 30) {
+  if (rem <= 200) {
     numEl.textContent = String(rem);
     numEl.style.display = '';
-    ring.style.stroke = rem < 0 ? '#ff3b5c' : rem <= 10 ? '#ff3b5c' : '#f59e0b';
+    ring.style.stroke = rem < 0 ? '#ff3b5c' : rem <= 50 ? '#ff3b5c' : '#f59e0b';
     numEl.style.color = ring.style.stroke;
   } else {
     numEl.textContent = '';
@@ -3235,7 +3235,7 @@ function _cSync() {
   const hasText   = ta.value.trim().length > 0;
   const hasMedia  = !!_c.file;
   const hasQuote  = !!_c.repostId;
-  const underLimit = ta.value.length <= 280;
+  const underLimit = ta.value.length <= 2000;
   const ok = (hasText || hasMedia || hasQuote) && underLimit;
 
   btn.disabled = !ok;
@@ -3254,7 +3254,7 @@ async function _cSubmit() {
 
   const text = ta.value.trim();
   if (!text && !_c.file && !_c.repostId) return;
-  if (text.length > 280) return;
+  if (text.length > 2000) return;
 
   _c.busy = true;
   const btn = document.getElementById('mnc-post-btn');
@@ -3925,7 +3925,7 @@ async function openDetail(postId, scrollToComments = false) {
         <div class="dp-stats">
           <div class="dp-stat">
             <span class="dp-stat-n detail-stat-n" data-type="likes">${fmtNum(p.like_count||0)}</span>
-            <span class="dp-stat-l">Likes</span>
+            <span class="dp-stat-l">Loves</span>
           </div>
           <div class="dp-stat">
             <span class="dp-stat-n repost-count-display">${fmtNum(p.repost_count||0)}</span>
