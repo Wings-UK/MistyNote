@@ -798,6 +798,133 @@
   .post-media { margin: 10px 0 0 53px; border-radius: var(--radius); overflow: hidden; }
   .post-media img { width: 100%; max-height: 400px; object-fit: cover; }
   .post-media video { width: 100%; max-height: 400px; }
+
+  /* ── Feed image badge (1/N) ── */
+  .post-img-badge {
+    position: absolute;
+    top: 10px; right: 10px;
+    background: rgba(0,0,0,0.55);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 20px;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    letter-spacing: .02em;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: opacity .15s;
+  }
+  .post-img-badge:active { opacity: .7; }
+
+  /* ── Composer multi-image strip ── */
+  .mnc-img-strip {
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px 4px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .mnc-img-strip::-webkit-scrollbar { display: none; }
+
+  .mnc-img-thumb {
+    position: relative;
+    flex-shrink: 0;
+    width: 80px; height: 80px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--bg3);
+    border: 1.5px solid var(--border);
+  }
+  .mnc-img-thumb img {
+    width: 100%; height: 100%;
+    object-fit: cover; display: block;
+  }
+  .mnc-img-thumb-remove {
+    position: absolute;
+    top: 4px; right: 4px;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.65);
+    border: none; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mnc-img-thumb-add {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    color: var(--text2);
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 600;
+    -webkit-tap-highlight-color: transparent;
+    transition: background .15s;
+  }
+  .mnc-img-thumb-add:active { background: var(--bg3); }
+
+  /* ── Detail page swiper ── */
+  .dp-swiper {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    border-radius: 14px;
+    background: var(--bg2);
+    margin-bottom: 4px;
+    touch-action: pan-y;
+  }
+  .dp-swiper-track {
+    display: flex;
+    will-change: transform;
+  }
+  .dp-swiper-slide {
+    flex-shrink: 0;
+    width: 100%;
+  }
+  .dp-swiper-slide img {
+    width: 100%;
+    max-height: 420px;
+    object-fit: contain;
+    display: block;
+    background: var(--bg2);
+  }
+  .dp-swiper-counter {
+    position: absolute;
+    top: 10px; right: 10px;
+    background: rgba(0,0,0,0.55);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 20px;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    pointer-events: none;
+  }
+  .dp-swiper-dots {
+    display: flex;
+    justify-content: center;
+    gap: 5px;
+    padding: 8px 0 4px;
+  }
+  .dp-swiper-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--border);
+    transition: all .2s;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .dp-swiper-dot.active {
+    background: #6C47FF;
+    width: 18px;
+    border-radius: 3px;
+  }
   
   .video-thumb-wrap { position: relative; cursor: pointer; }
   .video-play-overlay {
