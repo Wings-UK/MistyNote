@@ -1821,6 +1821,15 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
     mainContentHTML = `
       ${text ? `<div class="tir repost-commentary"><p class="tired">${displayText}</p></div>` : ''}
 
+      ${p.image ? `
+        <div class="laptop1" style="position:relative">
+          <img src="${p.image}" class="laptop" alt="" loading="lazy">
+          ${(p.images && p.images.length > 1) ? `
+            <div class="post-img-badge" onclick="event.stopPropagation(); openDetail('${p.id}')">
+              1/${p.images.length}
+            </div>` : ''}
+        </div>` : ''}
+
       <div class="quote-card" data-original-id="${orig.id}" onclick="openDetail('${orig.id}');event.stopPropagation()">
         <div class="quote-card-inner">
           <div class="quote-card-header">
