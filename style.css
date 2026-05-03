@@ -873,8 +873,8 @@
     position: relative;
     width: 100%;
     overflow: hidden;
+    border-radius: 14px;
     background: var(--bg2);
-    margin-top: 14px;
     margin-bottom: 4px;
     touch-action: pan-y;
   }
@@ -3351,7 +3351,7 @@
   }
   .quote-card-img {
     width: 100%; display: block;
-    max-height: 200px; object-fit: cover; object-position: top;
+    max-height: 200px; object-fit: cover; object-position: center;
   }
   .quote-card-video-wrap {
     position: relative; width: 100%;
