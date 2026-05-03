@@ -481,6 +481,7 @@ function injectProfileStyles() {
     .prf-masonry-col { flex:1; display:flex; flex-direction:column; gap:8px; }
     .prf-masonry-tile { border-radius:12px; overflow:hidden; cursor:pointer; background:var(--surface); transition:transform .18s; box-shadow:0 1px 4px rgba(0,0,0,.08); }
     .prf-masonry-tile:active { transform:scale(.97); }
+    .prf-masonry-repost-badge { position:absolute; top:7px; right:7px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; color:#fff; pointer-events:none; }
     .prf-masonry-img { width:100%; display:block; object-fit:cover; }
     .prf-masonry-text-tile { width:100%; min-height:120px; display:flex; align-items:center; justify-content:center; padding:16px 12px; }
     .prf-masonry-text-tile p { font-size:13px; color:#fff; line-height:1.45; text-align:center; font-weight:600; margin:0; }
@@ -547,7 +548,13 @@ async function renderMyProfile() {
   const posts         = postsRes.data || [];
   const likedPostsArr = (likedRes.data || []).map(r => r.post).filter(Boolean);
   const savedPostsArr = (savedRes.data || []).map(r => r.post).filter(Boolean);
-  const mediaPosts    = posts.filter(p => (p.image || p.video) && !p.reposted_post_id);
+  const mediaPosts = posts.filter(p => {
+    if (p.reposted_post_id) {
+      // Include repost only if the ORIGINAL post has an image/video
+      return !!(p.reposted_post?.image || p.reposted_post?.video);
+    }
+    return !!(p.image || p.video);
+  });
   const totalViews    = posts.reduce((s, p) => s + (p.views || 0), 0);
   const totalLikes    = posts.reduce((s, p) => s + (p.like_count || 0), 0);
 
@@ -801,9 +808,14 @@ function renderPrfPosts(posts, containerId, isOwn, isProfilePage = false, viewin
 function renderPrfMasonry(posts, containerId, mediaOnly = false) {
   const container = document.getElementById(containerId);
   if (!container) return;
-  const items = mediaOnly ? posts.filter(p => (p.image || p.video) && !p.reposted_post_id) : posts;
+
+  const items = mediaOnly ? posts.filter(p => {
+    if (p.reposted_post_id) return !!(p.reposted_post?.image || p.reposted_post?.video);
+    return !!(p.image || p.video);
+  }) : posts;
+
   if (!items.length) {
-    container.innerHTML = `<div class="prf-empty"><div class="prf-empty-icon">✍️</div><p>No posts yet</p><span>Start sharing your world</span></div>`;
+    container.innerHTML = `<div class="prf-empty"><div class="prf-empty-icon">✍️</div><p>No notes yet</p><span>Start sharing your world</span></div>`;
     return;
   }
   const wrap = document.createElement('div');
@@ -814,38 +826,64 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false) {
   right.className = 'prf-masonry-col';
 
   items.forEach((post, i) => {
-    const img    = post.image || post.reposted_post?.image || '';
-    const text   = post.content || post.reposted_post?.content || '';
-    const user   = post.user || post.reposted_post?.user || {};
+    const isRepost = !!post.reposted_post_id && !!post.reposted_post;
+    const orig     = isRepost ? post.reposted_post : null;
+
+    // Repost tile shows original post's content
+    const img    = isRepost ? (orig.image || '') : (post.image || '');
+    const text   = isRepost ? (orig.content || '') : (post.content || '');
+    const user   = isRepost ? (orig.user || {}) : (post.user || {});
     const avatar = user.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${user.username}`;
     const uname  = user.username || '';
-    const liked  = likedPosts.has(post.id);
-    const likes  = post.like_count || 0;
-    // Seed store so masonry taps have correct base count
-    LikeStore.seed(post.id, likes, liked);
+
+    // Hearts always from original post if repost
+    const likePostId = isRepost ? orig.id : post.id;
+    const liked  = likedPosts.has(likePostId);
+    const likes  = isRepost ? (orig.like_count || 0) : (post.like_count || 0);
+    LikeStore.seed(likePostId, likes, liked);
+
+    // Tap always opens this user's post (repost or not)
+    const openId = post.id;
 
     const tile = document.createElement('div');
     tile.className = 'prf-masonry-tile';
     tile.innerHTML = `
-      ${img
-        ? `<img src="${escHtml(img)}" alt="" loading="lazy" class="prf-masonry-img">`
-        : `<div class="prf-masonry-text-tile" style="background:${gradientFor(post.id)}"><p>${escHtml(text.slice(0,120))}</p></div>`
-      }
+      <div style="position:relative">
+        ${img
+          ? `<img src="${escHtml(img)}" alt="" loading="lazy" class="prf-masonry-img">`
+          : `<div class="prf-masonry-text-tile" style="background:${gradientFor(post.id)}"><p>${escHtml(text.slice(0,120))}</p></div>`
+        }
+        ${isRepost ? `
+          <div class="prf-masonry-repost-badge">
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="17 1 21 5 17 9"/>
+              <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+              <polyline points="7 23 3 19 7 15"/>
+              <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+            </svg>
+          </div>` : ''}
+      </div>
       ${text && img ? `<div class="prf-masonry-caption">${escHtml(text.slice(0,80))}${text.length > 80 ? '…' : ''}</div>` : ''}
       <div class="prf-masonry-footer">
         <div class="prf-masonry-author">
-          <img class="prf-masonry-avatar" src="${escHtml(avatar)}" onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(uname)}'">
+          <img class="prf-masonry-avatar" src="${escHtml(avatar)}"
+               onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(uname)}'">
           <span class="prf-masonry-username">${escHtml(uname)}</span>
         </div>
-        <button class="prf-masonry-like ${liked ? 'liked' : ''}" data-post-id="${post.id}" data-liked="${liked ? 'true' : 'false'}" onclick="event.stopPropagation(); toggleMasonryLike(this, '${post.id}')">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button class="prf-masonry-like ${liked ? 'liked' : ''}"
+                data-post-id="${likePostId}"
+                data-liked="${liked ? 'true' : 'false'}"
+                onclick="event.stopPropagation(); toggleMasonryLike(this, '${likePostId}')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="none"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path class="heart-path" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
           </svg>
           <span class="prf-masonry-like-count">${likes > 0 ? fmtNum(likes) : ''}</span>
         </button>
       </div>`;
 
-    tile.addEventListener('click', () => openDetail(post.id));
+    tile.addEventListener('click', () => openDetail(openId));
     if (i % 2 === 0) left.appendChild(tile);
     else             right.appendChild(tile);
   });
