@@ -526,7 +526,7 @@ async function renderMyProfile() {
     supabase.from('posts')
       .select(`id,content,image,video,images,created_at,like_count,repost_count,views,user_id,reposted_post_id,
                user:users(id,username,avatar,location),
-               reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))`)
+               reposted_post:reposted_post_id(id,content,image,video,images,created_at,user_id,user:users(id,username,avatar,location))`)
       .eq('user_id', currentUser.id)
       .order('created_at', { ascending: false })
       .limit(60),
@@ -539,7 +539,7 @@ async function renderMyProfile() {
     supabase.from('saved_posts')
       .select(`post:posts(id,content,image,video,images,created_at,like_count,repost_count,views,user_id,reposted_post_id,
                user:users(id,username,avatar),
-               reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar)))`)
+               reposted_post:reposted_post_id(id,content,image,video,images,created_at,user_id,user:users(id,username,avatar)))`)
       .eq('user_id', currentUser.id)
       .order('created_at', { ascending: false })
       .limit(60)
@@ -968,7 +968,7 @@ async function renderPrfSaved(containerId) {
   if (!c) return;
   if (!currentUser) { c.innerHTML = '<div class="prf-empty"><p>Sign in to see saved posts</p></div>'; return; }
   const { data, error } = await supabase.from('saved_posts')
-    .select(`post:posts(id,content,image,video,images,created_at,like_count,repost_count,views,user_id,reposted_post_id,user:users(id,username,avatar),reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar)))`)
+    .select(`post:posts(id,content,image,video,images,created_at,like_count,repost_count,views,user_id,reposted_post_id,user:users(id,username,avatar),reposted_post:reposted_post_id(id,content,image,video,images,created_at,user_id,user:users(id,username,avatar)))`)
     .eq('user_id', currentUser.id)
     .order('created_at', { ascending: false })
     .limit(60);
@@ -1029,7 +1029,7 @@ async function showUserProfile(userId, tapEl) {
     const { data: posts } = await supabase.from('posts')
       .select(`id,content,image,video,images,created_at,like_count,repost_count,views,user_id,reposted_post_id,
                user:users(id,username,avatar,location),
-               reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))`)
+               reposted_post:reposted_post_id(id,content,image,video,images,created_at,user_id,user:users(id,username,avatar,location))`)
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(60);
@@ -1407,7 +1407,7 @@ async function loadFollowingFeed(list, PER_PAGE) {
       .from('posts')
       .select(`id,content,image,video,images,created_at,like_count,repost_count,views,user_id,reposted_post_id,
                user:users(id,username,avatar),
-               reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar)),
+               reposted_post:reposted_post_id(id,content,image,video,images,created_at,user_id,user:users(id,username,avatar)),
                comments(count)`)
       .in('user_id', followingIds)
       .neq('user_id', currentUser.id)
@@ -1432,7 +1432,7 @@ async function loadExploreFeed(list, PER_PAGE) {
   try {
     const SELECT = `id,content,image,video,images,created_at,like_count,repost_count,views,user_id,reposted_post_id,
       user:users(id,username,avatar,location),
-      reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar)),
+      reposted_post:reposted_post_id(id,content,image,video,images,created_at,user_id,user:users(id,username,avatar)),
       comments(count)`;
 
     // ── Time windows ────────────────────────────────────────
@@ -1877,7 +1877,7 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
           </div>
           ${orig.content ? `<p class="quote-card-text">${escHtml(orig.content.slice(0,240))}${orig.content.length>240?'…':''}</p>` : ''}
         </div>
-        ${orig.image ? `<img class="quote-card-img" src="${orig.image}" alt="" loading="lazy">` : ''}
+        ${(orig.image || orig.images?.[0]) ? `<img class="quote-card-img" src="${orig.image || orig.images[0]}" alt="" loading="lazy">` : ''}
         ${orig.video && !orig.image ? `
           <div class="quote-card-video-wrap">
             <video class="quote-card-video" preload="metadata"><source src="${orig.video}" type="video/mp4"></video>
@@ -3539,7 +3539,7 @@ async function _cSubmit() {
       })
       .select(`id,content,image,video,images,created_at,like_count,repost_count,views,user_id,reposted_post_id,
                user:users(id,username,avatar,location),
-               reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))`)
+               reposted_post:reposted_post_id(id,content,image,video,images,created_at,user_id,user:users(id,username,avatar,location))`)
       .single();
 
     if (postErr) {
@@ -4019,7 +4019,7 @@ async function openDetail(postId, scrollToComments = false) {
       .from('posts')
       .select(`id,content,image,video,images,created_at,like_count,repost_count,views,user_id,reposted_post_id,
                user:users(id,username,avatar,location),
-               reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))`)
+               reposted_post:reposted_post_id(id,content,image,video,images,created_at,user_id,user:users(id,username,avatar,location))`)
       .eq('id', postId)
       .single();
 
@@ -4094,7 +4094,7 @@ async function openDetail(postId, scrollToComments = false) {
             </div>
             ${orig.content ? `<p class="quote-card-text">${escHtml(orig.content.slice(0,240))}${orig.content.length>240?'…':''}</p>` : ''}
           </div>
-          ${orig.image ? `<img class="quote-card-img" src="${orig.image}" alt="">` : ''}
+          ${(orig.image || orig.images?.[0]) ? `<img class="quote-card-img" src="${orig.image || orig.images[0]}" alt="">` : ''}
           ${orig.video && !orig.image ? `
             <div class="quote-card-video-wrap">
               <video class="quote-card-video" preload="metadata"><source src="${orig.video}" type="video/mp4"></video>
