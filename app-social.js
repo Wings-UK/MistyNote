@@ -523,20 +523,20 @@ async function renderMyProfile() {
 
   const [postsRes, likedRes, savedRes] = await Promise.all([
     supabase.from('posts')
-      .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
+      .select(`id,content,image,video,images,created_at,like_count,repost_count,views,user_id,reposted_post_id,
                user:users(id,username,avatar,location),
                reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))`)
       .eq('user_id', currentUser.id)
       .order('created_at', { ascending: false })
       .limit(60),
     supabase.from('likes')
-      .select(`post:posts(id,content,image,video,created_at,like_count,repost_count,views,user_id,
+      .select(`post:posts(id,content,image,video,images,created_at,like_count,repost_count,views,user_id,
                user:users(id,username,avatar))`)
       .eq('user_id', currentUser.id)
       .order('created_at', { ascending: false })
       .limit(60),
     supabase.from('saved_posts')
-      .select(`post:posts(id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
+      .select(`post:posts(id,content,image,video,images,created_at,like_count,repost_count,views,user_id,reposted_post_id,
                user:users(id,username,avatar),
                reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar)))`)
       .eq('user_id', currentUser.id)
@@ -930,7 +930,7 @@ async function renderPrfSaved(containerId) {
   if (!c) return;
   if (!currentUser) { c.innerHTML = '<div class="prf-empty"><p>Sign in to see saved posts</p></div>'; return; }
   const { data, error } = await supabase.from('saved_posts')
-    .select(`post:posts(id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,user:users(id,username,avatar),reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar)))`)
+    .select(`post:posts(id,content,image,video,images,created_at,like_count,repost_count,views,user_id,reposted_post_id,user:users(id,username,avatar),reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar)))`)
     .eq('user_id', currentUser.id)
     .order('created_at', { ascending: false })
     .limit(60);
@@ -989,7 +989,7 @@ async function showUserProfile(userId, tapEl) {
     pushRoute('/profile/' + profile.username);
 
     const { data: posts } = await supabase.from('posts')
-      .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
+      .select(`id,content,image,video,images,created_at,like_count,repost_count,views,user_id,reposted_post_id,
                user:users(id,username,avatar,location),
                reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))`)
       .eq('user_id', userId)
@@ -1367,7 +1367,7 @@ async function loadFollowingFeed(list, PER_PAGE) {
 
     const { data: posts, error } = await supabase
       .from('posts')
-      .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
+      .select(`id,content,image,video,images,created_at,like_count,repost_count,views,user_id,reposted_post_id,
                user:users(id,username,avatar),
                reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar)),
                comments(count)`)
@@ -1392,7 +1392,7 @@ async function loadFollowingFeed(list, PER_PAGE) {
 // ── EXPLORE / FOR YOU FEED ── more like X For You (2025 style)
 async function loadExploreFeed(list, PER_PAGE) {
   try {
-    const SELECT = `id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
+    const SELECT = `id,content,image,video,images,created_at,like_count,repost_count,views,user_id,reposted_post_id,
       user:users(id,username,avatar,location),
       reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar)),
       comments(count)`;
@@ -1869,7 +1869,14 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
       : '';
 
     mainContentHTML = `
-      ${p.image ? `<div class="laptop1"><img src="${p.image}" class="laptop" alt="" loading="lazy"></div>` : ''}
+      ${p.image ? `
+        <div class="laptop1" style="position:relative">
+          <img src="${p.image}" class="laptop" alt="" loading="lazy">
+          ${(p.images && p.images.length > 1) ? `
+            <div class="post-img-badge" onclick="event.stopPropagation(); openDetail('${p.id}')">
+              1/${p.images.length}
+            </div>` : ''}
+        </div>` : ''}
 
       ${p.video && !p.image ? `
         <div class="video-container laptop1" data-post-id="${p.id}">
@@ -2838,12 +2845,15 @@ async function undoRepost(postId, btn) {
 
 // ── State ──────────────────────────────────────────────────────
 const _c = {
-  file: null,         // selected File object
-  preview: null,      // object URL for preview
+  file: null,         // selected File object (single, kept for video)
+  preview: null,      // object URL for preview (single video)
+  files: [],          // array of { file, preview } for multi-image (max 6)
   repostId: null,     // post id being quoted
   repostBtn: null,    // the repost button el
   busy: false,        // upload in progress
 };
+
+const _C_MAX_IMAGES = 6;
 
 // ── Open ───────────────────────────────────────────────────────
 function openComposer() {
@@ -3044,7 +3054,7 @@ function _cPickFile() {
   inp.id = 'mnc-file-input';
   inp.type = 'file';
   inp.accept = 'image/*,video/*';
-  // NO capture attribute — always gallery
+  inp.multiple = true;
   Object.assign(inp.style, {
     position: 'fixed', top: '0', left: '0',
     width: '1px', height: '1px',
@@ -3053,14 +3063,121 @@ function _cPickFile() {
   document.body.appendChild(inp);
 
   inp.addEventListener('change', async () => {
-    const file = inp.files[0];
+    const files = Array.from(inp.files || []);
     inp.remove();
-    if (!file) return;
-    await _cHandleFile(file);
+    if (!files.length) return;
+
+    // If first file is video — single video, existing flow
+    if (files[0].type.startsWith('video/')) {
+      await _cHandleFile(files[0]);
+      return;
+    }
+
+    // Images — multi-image flow
+    const imgFiles = files.filter(f => f.type.startsWith('image/'));
+    if (!imgFiles.length) { showToast('Please select images'); return; }
+
+    const remaining = _C_MAX_IMAGES - _c.files.length;
+    if (remaining <= 0) { showToast(`Max ${_C_MAX_IMAGES} images`); return; }
+
+    for (const f of imgFiles.slice(0, remaining)) {
+      if (f.size > 20 * 1024 * 1024) { showToast('Max 20MB per image'); continue; }
+      _c.files.push({ file: f, preview: URL.createObjectURL(f) });
+    }
+
+    if (_c.files.length > 0) _cRenderImageStrip();
+    _cSync();
   });
 
-  // Focus composer textarea first to keep keyboard from hiding, then trigger
   setTimeout(() => inp.click(), 10);
+}
+
+function _cRenderImageStrip() {
+  const wrap = document.getElementById('mnc-media-wrap');
+  if (!wrap) return;
+
+  // Hide single image/video elements
+  const img = document.getElementById('mnc-img');
+  const vid = document.getElementById('mnc-vid');
+  if (img) img.style.display = 'none';
+  if (vid) vid.style.display = 'none';
+
+  let strip = document.getElementById('mnc-img-strip');
+  if (!strip) {
+    strip = document.createElement('div');
+    strip.id        = 'mnc-img-strip';
+    strip.className = 'mnc-img-strip';
+    wrap.appendChild(strip);
+  }
+
+  strip.innerHTML = '';
+
+  _c.files.forEach((item, i) => {
+    const thumb = document.createElement('div');
+    thumb.className = 'mnc-img-thumb';
+    thumb.innerHTML = `
+      <img src="${item.preview}" alt="">
+      <button class="mnc-img-thumb-remove" data-idx="${i}" aria-label="Remove">
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="3" stroke-linecap="round">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>`;
+    thumb.querySelector('.mnc-img-thumb-remove').addEventListener('click', e => {
+      e.stopPropagation();
+      const idx = parseInt(e.currentTarget.dataset.idx);
+      URL.revokeObjectURL(_c.files[idx].preview);
+      _c.files.splice(idx, 1);
+      if (_c.files.length === 0) {
+        strip.remove();
+        wrap.style.display = 'none';
+      } else {
+        _cRenderImageStrip();
+      }
+      _cSync();
+    });
+    strip.appendChild(thumb);
+  });
+
+  // Add more button if under limit
+  if (_c.files.length < _C_MAX_IMAGES) {
+    const addMore = document.createElement('div');
+    addMore.className = 'mnc-img-thumb mnc-img-thumb-add';
+    addMore.innerHTML = `
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+        <line x1="12" y1="5" x2="12" y2="19"/>
+        <line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+      <span>${_c.files.length}/${_C_MAX_IMAGES}</span>`;
+    addMore.addEventListener('click', _cPickFile);
+    strip.appendChild(addMore);
+  }
+
+  wrap.style.display = 'block';
+  setTimeout(() => {
+    const body = document.getElementById('mnc-body');
+    if (body) body.scrollTop = body.scrollHeight;
+  }, 80);
+}
+
+function _cRemoveMedia() {
+  if (_c.preview) { URL.revokeObjectURL(_c.preview); _c.preview = null; }
+  _c.file  = null;
+  _c.files.forEach(item => URL.revokeObjectURL(item.preview));
+  _c.files = [];
+
+  const wrap  = document.getElementById('mnc-media-wrap');
+  const img   = document.getElementById('mnc-img');
+  const vid   = document.getElementById('mnc-vid');
+  const strip = document.getElementById('mnc-img-strip');
+  if (wrap)  wrap.style.display  = 'none';
+  if (img)   { img.src = ''; img.style.display = 'none'; }
+  if (vid)   { vid.src = ''; vid.style.display = 'none'; }
+  if (strip) strip.remove();
+
+  document.getElementById('mnc-textarea')?.focus();
+  _cSync();
 }
 
 async function _cHandleFile(file) {
@@ -3106,20 +3223,6 @@ async function _cHandleFile(file) {
   _cSync();
 }
 
-function _cRemoveMedia() {
-  if (_c.preview) { URL.revokeObjectURL(_c.preview); _c.preview = null; }
-  _c.file = null;
-
-  const wrap = document.getElementById('mnc-media-wrap');
-  const img  = document.getElementById('mnc-img');
-  const vid  = document.getElementById('mnc-vid');
-  if (wrap) wrap.style.display = 'none';
-  if (img)  { img.src = ''; img.style.display = 'none'; }
-  if (vid)  { vid.src = ''; vid.style.display = 'none'; }
-
-  document.getElementById('mnc-textarea')?.focus();
-  _cSync();
-}
 
 // ── Quote / repost ─────────────────────────────────────────────
 async function _cLoadQuote(postId) {
@@ -3233,7 +3336,7 @@ function _cSync() {
   if (!ta || !btn) return;
 
   const hasText   = ta.value.trim().length > 0;
-  const hasMedia  = !!_c.file;
+  const hasMedia  = !!_c.file || _c.files.length > 0;
   const hasQuote  = !!_c.repostId;
   const underLimit = ta.value.length <= 2000;
   const ok = (hasText || hasMedia || hasQuote) && underLimit;
@@ -3253,7 +3356,7 @@ async function _cSubmit() {
   if (!ta || _c.busy || !currentUser) return;
 
   const text = ta.value.trim();
-  if (!text && !_c.file && !_c.repostId) return;
+  if (!text && !_c.file && _c.files.length === 0 && !_c.repostId) return;
   if (text.length > 2000) return;
 
   _c.busy = true;
@@ -3324,8 +3427,59 @@ async function _cSubmit() {
       }
     }
 
-    // STEP 4: Insert post row
-    console.log('[upload] inserting post...', { imageUrl, videoUrl });
+    // STEP 4: Upload multiple images if present
+    let imagesArr = [];
+    if (_c.files.length > 0) {
+      for (let i = 0; i < _c.files.length; i++) {
+        const item = _c.files[i];
+        const path = `${currentUser.id}/post_${Date.now()}_${i}.jpg`;
+        const imgEl = document.querySelectorAll('.mnc-img-thumb img')[i];
+        const blob = await new Promise((resolve, reject) => {
+          if (!imgEl || !imgEl.complete || !imgEl.naturalWidth) {
+            // fallback: read directly from file
+            const reader = new FileReader();
+            reader.onload = e => {
+              const tmp = new Image();
+              tmp.onload = () => {
+                const maxPx = 1200;
+                const scale = Math.min(1, maxPx / Math.max(tmp.naturalWidth, tmp.naturalHeight));
+                const w = Math.round(tmp.naturalWidth * scale);
+                const h = Math.round(tmp.naturalHeight * scale);
+                const cv = document.createElement('canvas');
+                cv.width = w; cv.height = h;
+                cv.getContext('2d').drawImage(tmp, 0, 0, w, h);
+                cv.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 0.82);
+              };
+              tmp.onerror = reject;
+              tmp.src = e.target.result;
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(item.file);
+            return;
+          }
+          const maxPx = 1200;
+          const scale = Math.min(1, maxPx / Math.max(imgEl.naturalWidth, imgEl.naturalHeight));
+          const w = Math.max(1, Math.round(imgEl.naturalWidth * scale));
+          const h = Math.max(1, Math.round(imgEl.naturalHeight * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) { reject(new Error('No canvas context')); return; }
+          ctx.drawImage(imgEl, 0, 0, w, h);
+          canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 0.82);
+        });
+        const { error: upErr } = await supabase.storage
+          .from('avatars').upload(path, blob, { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
+        if (upErr) throw new Error('Image ' + (i + 1) + ' upload failed: ' + upErr.message);
+        const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
+        imagesArr.push(urlData.publicUrl);
+      }
+      // First image also goes to image column for backwards compat
+      imageUrl = imagesArr[0];
+    }
+
+    // STEP 5: Insert post row
+    console.log('[upload] inserting post...', { imageUrl, videoUrl, imagesArr });
     const { data: post, error: postErr } = await supabase
       .from('posts')
       .insert({
@@ -3333,9 +3487,10 @@ async function _cSubmit() {
         content:          text || null,
         image:            imageUrl,
         video:            videoUrl,
+        images:           imagesArr.length > 1 ? imagesArr : [],
         reposted_post_id: _c.repostId || null,
       })
-      .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
+      .select(`id,content,image,video,images,created_at,like_count,repost_count,views,user_id,reposted_post_id,
                user:users(id,username,avatar,location),
                reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))`)
       .single();
@@ -3490,12 +3645,14 @@ function closeComposer() {
 
   // Revoke preview blob
   if (_c.preview) { URL.revokeObjectURL(_c.preview); _c.preview = null; }
+  _c.files.forEach(item => URL.revokeObjectURL(item.preview));
 
   setTimeout(() => {
     root.remove();
     document.body.style.overflow = '';
-    _c.busy = false;
-    _c.file = null;
+    _c.busy  = false;
+    _c.file  = null;
+    _c.files = [];
     _c.repostId  = null;
     _c.repostBtn = null;
     repostTargetId  = null;
@@ -3813,7 +3970,7 @@ async function openDetail(postId, scrollToComments = false) {
 
     const { data: p, error } = await supabase
       .from('posts')
-      .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
+      .select(`id,content,image,video,images,created_at,like_count,repost_count,views,user_id,reposted_post_id,
                user:users(id,username,avatar,location),
                reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))`)
       .eq('id', postId)
@@ -3837,7 +3994,24 @@ async function openDetail(postId, scrollToComments = false) {
 
     // ── Media ──
     let mediaHtml = '';
-    if (p.image) {
+    const allImages = (p.images && p.images.length > 1) ? p.images : (p.image ? [p.image] : []);
+    if (allImages.length > 1) {
+      // Multi-image swiper
+      mediaHtml = `
+        <div class="dp-swiper" id="dp-swiper-${p.id}">
+          <div class="dp-swiper-track" id="dp-swiper-track-${p.id}">
+            ${allImages.map((src, i) => `
+              <div class="dp-swiper-slide">
+                <img src="${escHtml(src)}" alt="" loading="${i === 0 ? 'eager' : 'lazy'}"
+                     onclick="openImageFS('${escHtml(src)}')">
+              </div>`).join('')}
+          </div>
+          <div class="dp-swiper-counter" id="dp-swiper-counter-${p.id}">1 / ${allImages.length}</div>
+          <div class="dp-swiper-dots" id="dp-swiper-dots-${p.id}">
+            ${allImages.map((_, i) => `<div class="dp-swiper-dot${i === 0 ? ' active' : ''}" data-idx="${i}"></div>`).join('')}
+          </div>
+        </div>`;
+    } else if (p.image) {
       mediaHtml = `<div class="dp-media"><img src="${p.image}" alt="" onclick="openImageFS('${p.image}')"></div>`;
     } else if (p.video) {
       mediaHtml = `<div class="dp-media"><div class="dp-video-wrap" onclick="openVideoFS('${p.video}')"><video preload="metadata"><source src="${p.video}#t=0.5" type="video/mp4"></video><div class="dp-play-overlay"><div class="dp-play-circle"><svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M5 3l14 9L5 21V3z"/></svg></div></div></div></div>`;
@@ -4028,6 +4202,9 @@ async function openDetail(postId, scrollToComments = false) {
     // Track view + load comments
     await recordView(postId);
     await syncViewCount(postId);
+
+    // Wire multi-image swiper if present
+    if (allImages.length > 1) _initDpSwiper(p.id, allImages.length);
 
     await loadComments(postId);
 
@@ -4934,4 +5111,86 @@ async function renderSuggestedForOtherProfile(userId, username) {
   list.innerHTML = '';
   users.forEach(u => list.appendChild(buildSuggestCard(u, myFollowingIds.has(u.id))));
   console.log('suggest: rendered', users.length, 'cards');
+}
+
+// ═══════════════════════════════════════════
+// DETAIL PAGE MULTI-IMAGE SWIPER
+// ═══════════════════════════════════════════
+
+function _initDpSwiper(postId, total) {
+  const swiper  = document.getElementById('dp-swiper-' + postId);
+  const track   = document.getElementById('dp-swiper-track-' + postId);
+  const counter = document.getElementById('dp-swiper-counter-' + postId);
+  const dotsWrap = document.getElementById('dp-swiper-dots-' + postId);
+  if (!swiper || !track) return;
+
+  let current   = 0;
+  let startX    = 0;
+  let startY    = 0;
+  let isDragging = false;
+  let isScrolling = null;
+
+  function goTo(idx) {
+    current = Math.max(0, Math.min(total - 1, idx));
+    track.style.transform = `translateX(${-current * 100}%)`;
+
+    if (counter) counter.textContent = `${current + 1} / ${total}`;
+
+    if (dotsWrap) {
+      dotsWrap.querySelectorAll('.dp-swiper-dot').forEach((d, i) => {
+        d.classList.toggle('active', i === current);
+      });
+    }
+  }
+
+  // Touch events
+  swiper.addEventListener('touchstart', e => {
+    startX     = e.touches[0].clientX;
+    startY     = e.touches[0].clientY;
+    isDragging = true;
+    isScrolling = null;
+    track.style.transition = 'none';
+  }, { passive: true });
+
+  swiper.addEventListener('touchmove', e => {
+    if (!isDragging) return;
+    const dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+
+    // Detect scroll vs swipe on first move
+    if (isScrolling === null) {
+      isScrolling = Math.abs(dy) > Math.abs(dx);
+    }
+
+    if (isScrolling) return; // let page scroll
+
+    e.preventDefault(); // prevent scroll during horizontal swipe
+    const offset = -current * 100 + (dx / swiper.offsetWidth) * 100;
+    track.style.transform = `translateX(${offset}%)`;
+  }, { passive: false });
+
+  swiper.addEventListener('touchend', e => {
+    if (!isDragging || isScrolling) { isDragging = false; return; }
+    isDragging = false;
+
+    const dx = e.changedTouches[0].clientX - startX;
+    track.style.transition = 'transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94)';
+
+    if (dx < -40 && current < total - 1) goTo(current + 1);
+    else if (dx > 40 && current > 0) goTo(current - 1);
+    else goTo(current); // snap back
+  }, { passive: true });
+
+  // Dot taps
+  if (dotsWrap) {
+    dotsWrap.querySelectorAll('.dp-swiper-dot').forEach((dot, i) => {
+      dot.addEventListener('click', () => {
+        track.style.transition = 'transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94)';
+        goTo(i);
+      });
+    });
+  }
+
+  // Initial transition
+  track.style.transition = 'transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94)';
 }
