@@ -1877,7 +1877,11 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
           </div>
           ${orig.content ? `<p class="quote-card-text">${escHtml(orig.content.slice(0,240))}${orig.content.length>240?'…':''}</p>` : ''}
         </div>
-        ${(orig.image || orig.images?.[0]) ? `<img class="quote-card-img" src="${orig.image || orig.images[0]}" alt="" loading="lazy">` : ''}
+        ${(orig.image || orig.images?.[0]) ? `
+          <div style="position:relative">
+            <img class="quote-card-img" src="${orig.image || orig.images[0]}" alt="" loading="lazy">
+            ${(orig.images?.length > 1) ? `<div class="post-img-badge" style="font-size:10px;padding:2px 7px;top:7px;right:7px">${1}/${orig.images.length}</div>` : ''}
+          </div>` : ''}
         ${orig.video && !orig.image ? `
           <div class="quote-card-video-wrap">
             <video class="quote-card-video" preload="metadata"><source src="${orig.video}" type="video/mp4"></video>
@@ -4094,7 +4098,11 @@ async function openDetail(postId, scrollToComments = false) {
             </div>
             ${orig.content ? `<p class="quote-card-text">${escHtml(orig.content.slice(0,240))}${orig.content.length>240?'…':''}</p>` : ''}
           </div>
-          ${(orig.image || orig.images?.[0]) ? `<img class="quote-card-img" src="${orig.image || orig.images[0]}" alt="">` : ''}
+          ${(orig.image || orig.images?.[0]) ? `
+            <div style="position:relative">
+              <img class="quote-card-img" src="${orig.image || orig.images[0]}" alt="">
+              ${(orig.images?.length > 1) ? `<div class="post-img-badge" style="font-size:10px;padding:2px 7px;top:7px;right:7px">1/${orig.images.length}</div>` : ''}
+            </div>` : ''}
           ${orig.video && !orig.image ? `
             <div class="quote-card-video-wrap">
               <video class="quote-card-video" preload="metadata"><source src="${orig.video}" type="video/mp4"></video>
