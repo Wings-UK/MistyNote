@@ -3799,7 +3799,7 @@ async function openDetail(postId, scrollToComments = false) {
       #detail-body { padding-bottom: 160px; }
 
       /* ── Post wrapper ── */
-      .dp-wrap { background: var(--bg); }
+      .dp-wrap { background: var(--surface); }
 
       /* ── Author row ── */
       .dp-author {
