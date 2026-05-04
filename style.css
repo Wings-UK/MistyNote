@@ -3293,7 +3293,7 @@
   }
   .quote-card-img {
     width: 100%; display: block;
-    max-height: 200px; object-fit: cover; object-position: top;
+    max-height: 200px; object-fit: cover; object-position: center;
   }
   .quote-card-video-wrap {
     position: relative; width: 100%;
