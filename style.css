@@ -873,8 +873,8 @@
     position: relative;
     width: 100%;
     overflow: hidden;
-    border-radius: 14px;
     background: var(--bg2);
+    margin-top: 14px;
     margin-bottom: 4px;
     touch-action: pan-y;
   }
