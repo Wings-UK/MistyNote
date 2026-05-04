@@ -3239,6 +3239,7 @@
   #detail-body {
     padding-bottom: 100px;
   }
+  #page-detail { background: var(--surface) !important; }
   .detail-post {
     padding: 16px;
     border-bottom: 1px solid var(--border);
