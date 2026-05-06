@@ -10,7 +10,7 @@
   <title>MistyNote</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,300;0,400;0,500;0,700;0,900;1,400&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
   <!-- OneSignal Push Notifications -->
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
@@ -2016,6 +2016,139 @@
     </div>
   </div>
 
+    <!-- ══════════════════════════════════════════
+         PAGE: VIDEO PLAYER (full screen)
+         Modes: video | video_product | live_commerce
+    ══════════════════════════════════════════ -->
+    <section class="page slide-page no-header-page" id="page-video">
+
+      <!-- Full screen video -->
+      <video id="vp-video" class="vp-video" playsinline loop></video>
+
+      <!-- Gradient overlays -->
+      <div class="vp-gradient-top"></div>
+      <div class="vp-gradient-bottom"></div>
+
+      <!-- ── TOP BAR ── -->
+      <div class="vp-topbar">
+        <button class="vp-back" onclick="closeVideoPlayer()">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <path d="M19 12H5M12 5l-7 7 7 7" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+
+        <div class="vp-creator" id="vp-creator">
+          <div class="vp-creator-av-wrap" id="vp-creator-av-wrap">
+            <img class="vp-creator-av" id="vp-creator-av" src="" alt="">
+          </div>
+          <div class="vp-creator-info">
+            <span class="vp-creator-name" id="vp-creator-name"></span>
+            <!-- Live badge — mode 3 only -->
+            <div class="vp-live-badge" id="vp-live-badge" style="display:none">
+              <span class="vp-live-dot"></span>LIVE
+            </div>
+            <!-- Viewer count — mode 3 only -->
+            <span class="vp-viewer-count" id="vp-viewer-count" style="display:none"></span>
+          </div>
+        </div>
+
+        <div class="vp-topbar-actions">
+          <!-- Bell — mode 3 only -->
+          <button class="vp-topbar-btn" id="vp-bell-btn" style="display:none" onclick="showToast('Live alerts coming soon 🔔')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" stroke="white" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button class="vp-topbar-btn" onclick="closeVideoPlayer()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M18 6L6 18M6 6l12 12" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── RIGHT SIDE ACTIONS ── -->
+      <div class="vp-actions" id="vp-actions">
+
+        <!-- Like -->
+        <div class="vp-action-item">
+          <button class="vp-action-btn" id="vp-like-btn" onclick="vpToggleLike()">
+            <svg class="vp-heart-svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+              <path class="vp-heart-path" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+            </svg>
+          </button>
+          <span class="vp-action-count" id="vp-like-count"></span>
+        </div>
+
+        <!-- Comment -->
+        <div class="vp-action-item">
+          <button class="vp-action-btn" onclick="vpOpenComments()">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
+              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+            </svg>
+          </button>
+          <span class="vp-action-count" id="vp-comment-count"></span>
+        </div>
+
+        <!-- Share -->
+        <div class="vp-action-item">
+          <button class="vp-action-btn" onclick="vpShare()">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
+              <polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 014-4h12"/>
+            </svg>
+          </button>
+          <span class="vp-action-count"></span>
+        </div>
+
+        <!-- Floating hearts — mode 3 only -->
+        <div class="vp-float-hearts" id="vp-float-hearts"></div>
+
+      </div>
+
+      <!-- ── BOTTOM SECTION ── -->
+      <div class="vp-bottom" id="vp-bottom">
+
+        <!-- Caption -->
+        <div class="vp-caption" id="vp-caption"></div>
+
+        <!-- Product card — modes 2 & 3 -->
+        <div class="vp-product-card" id="vp-product-card" style="display:none">
+          <div class="vp-product-img-wrap">
+            <div class="vp-product-img-placeholder">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.5">
+                <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/>
+              </svg>
+            </div>
+            <img class="vp-product-img" id="vp-product-img" src="" alt="" style="display:none">
+          </div>
+          <div class="vp-product-info">
+            <span class="vp-product-label">Featured Product</span>
+            <span class="vp-product-name" id="vp-product-name">Ankara Midi Dress</span>
+            <span class="vp-product-price" id="vp-product-price">₦13,750</span>
+          </div>
+          <button class="vp-product-cta" onclick="showToast('Shop feature coming soon 🛍️')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+              <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 001.95-1.57l1.65-7.43H6"/>
+            </svg>
+            Buy Now
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Tap to play/pause overlay -->
+      <div class="vp-tap-overlay" id="vp-tap-overlay" onclick="vpTogglePlay()"></div>
+
+      <!-- Play/pause indicator -->
+      <div class="vp-play-indicator" id="vp-play-indicator">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="white">
+          <path id="vp-play-indicator-icon" d="M5 3l14 9L5 21V3z"/>
+        </svg>
+      </div>
+
+    </section>
+
   </div><!-- /app -->
 
   <!-- ══════════════════════════════════════════
@@ -2044,7 +2177,7 @@
           rows="3"
           autocapitalize="sentences"
           autocorrect="on"></textarea>
-        <div class="composer-char-count" id="composer-char-count">2000</div>
+        <div class="composer-char-count" id="composer-char-count">280</div>
       </div>
 
       <!-- Toolbar -->
@@ -2435,7 +2568,7 @@
             </div>
             <div class="legal-subsection">
               <div class="legal-subsection-title">Content &amp; Social Interactions</div>
-              <p class="legal-p">We collect your notes, loves, reposts, comments, searches, and interaction patterns to power content recommendations. Adjust personalisation at <strong>Me → Settings → Privacy → Personalisation Options</strong>. Saved content is private by default.</p>
+              <p class="legal-p">We collect your posts, likes, reposts, comments, searches, and interaction patterns to power content recommendations. Adjust personalisation at <strong>Me → Settings → Privacy → Personalisation Options</strong>. Saved content is private by default.</p>
             </div>
             <div class="legal-subsection">
               <div class="legal-subsection-title">Location</div>
@@ -2488,7 +2621,7 @@
           <div class="legal-section" id="priv-s4">
             <div class="legal-section-title"><span class="legal-section-num" style="font-size:11px">IV</span>Managing Your Information</div>
             <p class="legal-p">Update most personal information directly through your profile and account settings. For a full export of your personal data, contact <strong>privacy@mistynote.com</strong>.</p>
-            <p class="legal-p">Privacy controls at <strong>Me → Settings → Privacy</strong>: who can see your notes and Moments; personalised content on/off; location shown on profile; notification preferences; read receipts in DMs; discoverability by contacts.</p>
+            <p class="legal-p">Privacy controls at <strong>Me → Settings → Privacy</strong>: who can see your posts and Moments; personalised content on/off; location shown on profile; notification preferences; read receipts in DMs; discoverability by contacts.</p>
             <p class="legal-p">For automated decisions significantly affecting your rights (account suspension, seller tier demotion), you may request a human review at <strong>privacy@mistynote.com</strong>.</p>
           </div>
 
@@ -2554,6 +2687,7 @@
   <script src="/app-notif.js"></script>
   <script src="/app-discover.js"></script>
   <script src="/app-referral.js"></script>
+  <script src="/app-video.js"></script>
 </body>
 
 </html>
