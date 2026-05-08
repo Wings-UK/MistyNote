@@ -3130,24 +3130,58 @@ async function _cSubmit() {
       const _ext = (_c.file.name || '').split('.').pop().toLowerCase();
       const _videoExts = ['mp4','mov','m4v','webm','mkv','avi','3gp','ogv'];
       const isVid = _c.file.type.startsWith('video/') || _videoExts.includes(_ext);
-      console.log(`[MistyNote] uploading ${isVid ? 'video' : 'image'}:`, _c.file.name, _c.file.type);
+      console.log('[MistyNote] uploading', isVid ? 'video' : 'image', _c.file.name, _c.file.type, (_c.file.size/1024/1024).toFixed(1)+'MB');
 
       if (isVid) {
-        // Map extension → safe mime type — never trust Android file.type
-        const rawExt = _ext;
-        const safeExt = (rawExt && rawExt.length >= 2 && rawExt.length <= 5) ? rawExt : 'mp4';
-        const mimeMap = {
-          mp4: 'video/mp4', mov: 'video/mp4', m4v: 'video/mp4',
-          webm: 'video/webm', mkv: 'video/mp4', avi: 'video/mp4',
-          '3gp': 'video/3gpp', ogv: 'video/ogg',
-        };
+        const rawExt   = _ext;
+        const safeExt  = (rawExt && rawExt.length >= 2 && rawExt.length <= 5) ? rawExt : 'mp4';
+        const mimeMap  = { mp4:'video/mp4', mov:'video/mp4', m4v:'video/mp4', webm:'video/webm', mkv:'video/mp4', avi:'video/mp4', '3gp':'video/3gpp', ogv:'video/ogg' };
         const safeMime = mimeMap[safeExt] || 'video/mp4';
-        const path = `${currentUser.id}/post_${Date.now()}.${safeExt}`;
-        console.log(`[MistyNote] uploading video as ${safeMime}, ext: .${safeExt}`);
-        const { error: upErr } = await supabase.storage
-          .from('videos')
-          .upload(path, _c.file, { upsert: true, contentType: safeMime, cacheControl: '3600' });
-        if (upErr) throw new Error('Video upload failed: ' + upErr.message);
+        const path     = currentUser.id + '/post_' + Date.now() + '.' + safeExt;
+        console.log('[MistyNote] video path:', path, 'mime:', safeMime);
+
+        // Direct fetch — streams body without loading whole file into RAM.
+        // Bypasses Supabase JS client to avoid "Failed to fetch" issues on mobile.
+        const session    = (await supabase.auth.getSession()).data?.session;
+        const authToken  = session?.access_token || window._SUPA_KEY;
+        const storageUrl = window._SUPA_URL + '/storage/v1';
+
+        let uploadResp;
+        try {
+          uploadResp = await fetch(storageUrl + '/object/videos/' + path, {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + authToken,
+              'apikey': window._SUPA_KEY,
+              'Content-Type': safeMime,
+              'Cache-Control': '3600',
+              'x-upsert': 'true',
+            },
+            body: _c.file,
+          });
+        } catch (fetchErr) {
+          // Network-level failure — retry once after 1 second
+          console.warn('[MistyNote] fetch failed, retrying...', fetchErr.message);
+          await new Promise(r => setTimeout(r, 1000));
+          uploadResp = await fetch(storageUrl + '/object/videos/' + path, {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + authToken,
+              'apikey': window._SUPA_KEY,
+              'Content-Type': safeMime,
+              'Cache-Control': '3600',
+              'x-upsert': 'true',
+            },
+            body: _c.file,
+          });
+        }
+
+        if (!uploadResp.ok) {
+          const errText = await uploadResp.text().catch(() => String(uploadResp.status));
+          console.error('[MistyNote] video upload HTTP error:', uploadResp.status, errText);
+          throw new Error('Video upload failed (' + uploadResp.status + '): ' + errText);
+        }
+
         const { data: urlData } = supabase.storage.from('videos').getPublicUrl(path);
         videoUrl = urlData.publicUrl;
         console.log('[MistyNote] ✅ video uploaded:', videoUrl);
