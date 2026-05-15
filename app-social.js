@@ -1725,7 +1725,7 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
       ${p.video && !p.image ? `
         <div class="video-container laptop1" data-post-id="${p.id}">
           <video class="video-thumbnail" preload="metadata">
-            <source src="${p.video}" type="video/mp4">
+            <source src="${p.video}#t=0.1" type="video/mp4">
           </video>
           <div class="video-overlay">
             <div class="play-button">
