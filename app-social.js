@@ -66,6 +66,8 @@ function navTo(pageId) {
     const feedList = document.getElementById('feed-list');
     const hasPosts = feedList && feedList.querySelector('.poster');
     if (!hasPosts && !feedLoading) loadFeed();
+    // Reset header + nav position when returning to feed
+    document.dispatchEvent(new Event('feedTabActivated'));
   }
 }
 
@@ -117,13 +119,13 @@ function slideTo(pageId, setupFn) {
   });
 
   // Deactivate any currently active slide page so they don't stack visually
-  const slidePages = ['detail','user-profile','settings','wallet','storefront','messages','chat','legal-terms','legal-privacy','video'];
+  const slidePages = ['detail','user-profile','settings','wallet','storefront','messages','chat','legal-terms','legal-privacy'];
   slidePages.forEach(id => {
     if (id !== pageId) document.getElementById('page-' + id)?.classList.remove('active');
   });
 
   // Hide bottom nav for slide pages that need full screen
-  if (['messages','chat','video'].includes(pageId)) {
+  if (['messages','chat'].includes(pageId)) {
     document.getElementById('bottom-nav').style.display = 'none';
   }
 
@@ -479,6 +481,7 @@ function injectProfileStyles() {
     .prf-masonry-col { flex:1; display:flex; flex-direction:column; gap:8px; }
     .prf-masonry-tile { border-radius:12px; overflow:hidden; cursor:pointer; background:var(--surface); transition:transform .18s; box-shadow:0 1px 4px rgba(0,0,0,.08); }
     .prf-masonry-tile:active { transform:scale(.97); }
+    .prf-masonry-repost-badge { position:absolute; top:7px; right:7px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; color:#fff; pointer-events:none; }
     .prf-masonry-img { width:100%; display:block; object-fit:cover; }
     .prf-masonry-text-tile { width:100%; min-height:120px; display:flex; align-items:center; justify-content:center; padding:16px 12px; }
     .prf-masonry-text-tile p { font-size:13px; color:#fff; line-height:1.45; text-align:center; font-weight:600; margin:0; }
@@ -521,22 +524,22 @@ async function renderMyProfile() {
 
   const [postsRes, likedRes, savedRes] = await Promise.all([
     supabase.from('posts')
-      .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
+      .select(`id,content,image,video,images,created_at,like_count,repost_count,views,user_id,reposted_post_id,
                user:users(id,username,avatar,location),
-               reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))`)
+               reposted_post:reposted_post_id(id,content,image,video,images,created_at,user_id,user:users(id,username,avatar,location))`)
       .eq('user_id', currentUser.id)
       .order('created_at', { ascending: false })
       .limit(60),
     supabase.from('likes')
-      .select(`post:posts(id,content,image,video,created_at,like_count,repost_count,views,user_id,
+      .select(`post:posts(id,content,image,video,images,created_at,like_count,repost_count,views,user_id,
                user:users(id,username,avatar))`)
       .eq('user_id', currentUser.id)
       .order('created_at', { ascending: false })
       .limit(60),
     supabase.from('saved_posts')
-      .select(`post:posts(id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
+      .select(`post:posts(id,content,image,video,images,created_at,like_count,repost_count,views,user_id,reposted_post_id,
                user:users(id,username,avatar),
-               reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar)))`)
+               reposted_post:reposted_post_id(id,content,image,video,images,created_at,user_id,user:users(id,username,avatar)))`)
       .eq('user_id', currentUser.id)
       .order('created_at', { ascending: false })
       .limit(60)
@@ -545,7 +548,13 @@ async function renderMyProfile() {
   const posts         = postsRes.data || [];
   const likedPostsArr = (likedRes.data || []).map(r => r.post).filter(Boolean);
   const savedPostsArr = (savedRes.data || []).map(r => r.post).filter(Boolean);
-  const mediaPosts    = posts.filter(p => (p.image || p.video) && !p.reposted_post_id);
+  const mediaPosts = posts.filter(p => {
+    if (p.reposted_post_id) {
+      // Include repost only if the ORIGINAL post has an image/video
+      return !!(p.reposted_post?.image || p.reposted_post?.video);
+    }
+    return !!(p.image || p.video);
+  });
   const totalViews    = posts.reduce((s, p) => s + (p.views || 0), 0);
   const totalLikes    = posts.reduce((s, p) => s + (p.like_count || 0), 0);
 
@@ -615,7 +624,7 @@ async function renderMyProfile() {
         </div>
         <div class="prf-stat-card">
           <span class="prf-stat-n">${fmtNum(totalLikes)}</span>
-          <span class="prf-stat-l">Likes</span>
+          <span class="prf-stat-l">Hearts</span>
         </div>
       </div>
 
@@ -779,7 +788,7 @@ function renderPrfPosts(posts, containerId, isOwn, isProfilePage = false, viewin
   const container = document.getElementById(containerId);
   if (!container) return;
   if (!posts.length) {
-    container.innerHTML = `<div class="prf-empty"><div class="prf-empty-icon">${isOwn ? '✍️' : '❤️'}</div><p>${isOwn ? 'No posts yet' : 'No likes yet'}</p>${isOwn ? '<span>Share your first thought</span>' : ''}</div>`;
+    container.innerHTML = `<div class="prf-empty"><div class="prf-empty-icon">${isOwn ? '✍️' : '❤️'}</div><p>${isOwn ? 'No notes yet' : 'No hearts yet'}</p>${isOwn ? '<span>Share your first thought</span>' : ''}</div>`;
     return;
   }
   container.innerHTML = '';
@@ -788,7 +797,6 @@ function renderPrfPosts(posts, containerId, isOwn, isProfilePage = false, viewin
     if (el) {
       container.appendChild(el); // DOM exists now — seed and paint correctly
       observePost(el);
-      _wireVideoThumb(el, p);
       if (p?.id) {
         const isLiked = likedPosts.has(p.id);
         LikeStore.seed(p.id, p.like_count || 0, isLiked);
@@ -800,9 +808,14 @@ function renderPrfPosts(posts, containerId, isOwn, isProfilePage = false, viewin
 function renderPrfMasonry(posts, containerId, mediaOnly = false) {
   const container = document.getElementById(containerId);
   if (!container) return;
-  const items = mediaOnly ? posts.filter(p => (p.image || p.video) && !p.reposted_post_id) : posts;
+
+  const items = mediaOnly ? posts.filter(p => {
+    if (p.reposted_post_id) return !!(p.reposted_post?.image || p.reposted_post?.video);
+    return !!(p.image || p.video);
+  }) : posts;
+
   if (!items.length) {
-    container.innerHTML = `<div class="prf-empty"><div class="prf-empty-icon">✍️</div><p>No posts yet</p><span>Start sharing your world</span></div>`;
+    container.innerHTML = `<div class="prf-empty"><div class="prf-empty-icon">✍️</div><p>No notes yet</p><span>Start sharing your world</span></div>`;
     return;
   }
   const wrap = document.createElement('div');
@@ -813,38 +826,64 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false) {
   right.className = 'prf-masonry-col';
 
   items.forEach((post, i) => {
-    const img    = post.image || post.reposted_post?.image || '';
-    const text   = post.content || post.reposted_post?.content || '';
-    const user   = post.user || post.reposted_post?.user || {};
+    const isRepost = !!post.reposted_post_id && !!post.reposted_post;
+    const orig     = isRepost ? post.reposted_post : null;
+
+    // Repost tile shows original post's content
+    const img    = isRepost ? (orig.image || '') : (post.image || '');
+    const text   = isRepost ? (orig.content || '') : (post.content || '');
+    const user   = isRepost ? (orig.user || {}) : (post.user || {});
     const avatar = user.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${user.username}`;
     const uname  = user.username || '';
-    const liked  = likedPosts.has(post.id);
-    const likes  = post.like_count || 0;
-    // Seed store so masonry taps have correct base count
-    LikeStore.seed(post.id, likes, liked);
+
+    // Hearts always from original post if repost
+    const likePostId = isRepost ? orig.id : post.id;
+    const liked  = likedPosts.has(likePostId);
+    const likes  = isRepost ? (orig.like_count || 0) : (post.like_count || 0);
+    LikeStore.seed(likePostId, likes, liked);
+
+    // Tap always opens this user's post (repost or not)
+    const openId = post.id;
 
     const tile = document.createElement('div');
     tile.className = 'prf-masonry-tile';
     tile.innerHTML = `
-      ${img
-        ? `<img src="${escHtml(img)}" alt="" loading="lazy" class="prf-masonry-img">`
-        : `<div class="prf-masonry-text-tile" style="background:${gradientFor(post.id)}"><p>${escHtml(text.slice(0,120))}</p></div>`
-      }
+      <div style="position:relative">
+        ${img
+          ? `<img src="${escHtml(img)}" alt="" loading="lazy" class="prf-masonry-img">`
+          : `<div class="prf-masonry-text-tile" style="background:${gradientFor(post.id)}"><p>${escHtml(text.slice(0,120))}</p></div>`
+        }
+        ${isRepost ? `
+          <div class="prf-masonry-repost-badge">
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="17 1 21 5 17 9"/>
+              <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+              <polyline points="7 23 3 19 7 15"/>
+              <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+            </svg>
+          </div>` : ''}
+      </div>
       ${text && img ? `<div class="prf-masonry-caption">${escHtml(text.slice(0,80))}${text.length > 80 ? '…' : ''}</div>` : ''}
       <div class="prf-masonry-footer">
         <div class="prf-masonry-author">
-          <img class="prf-masonry-avatar" src="${escHtml(avatar)}" onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(uname)}'">
+          <img class="prf-masonry-avatar" src="${escHtml(avatar)}"
+               onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(uname)}'">
           <span class="prf-masonry-username">${escHtml(uname)}</span>
         </div>
-        <button class="prf-masonry-like ${liked ? 'liked' : ''}" data-post-id="${post.id}" data-liked="${liked ? 'true' : 'false'}" onclick="event.stopPropagation(); toggleMasonryLike(this, '${post.id}')">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <button class="prf-masonry-like ${liked ? 'liked' : ''}"
+                data-post-id="${likePostId}"
+                data-liked="${liked ? 'true' : 'false'}"
+                onclick="event.stopPropagation(); toggleMasonryLike(this, '${likePostId}')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="none"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path class="heart-path" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
           </svg>
           <span class="prf-masonry-like-count">${likes > 0 ? fmtNum(likes) : ''}</span>
         </button>
       </div>`;
 
-    tile.addEventListener('click', () => openDetail(post.id));
+    tile.addEventListener('click', () => openDetail(openId));
     if (i % 2 === 0) left.appendChild(tile);
     else             right.appendChild(tile);
   });
@@ -929,7 +968,7 @@ async function renderPrfSaved(containerId) {
   if (!c) return;
   if (!currentUser) { c.innerHTML = '<div class="prf-empty"><p>Sign in to see saved posts</p></div>'; return; }
   const { data, error } = await supabase.from('saved_posts')
-    .select(`post:posts(id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,user:users(id,username,avatar),reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar)))`)
+    .select(`post:posts(id,content,image,video,images,created_at,like_count,repost_count,views,user_id,reposted_post_id,user:users(id,username,avatar),reposted_post:reposted_post_id(id,content,image,video,images,created_at,user_id,user:users(id,username,avatar)))`)
     .eq('user_id', currentUser.id)
     .order('created_at', { ascending: false })
     .limit(60);
@@ -988,9 +1027,9 @@ async function showUserProfile(userId, tapEl) {
     pushRoute('/profile/' + profile.username);
 
     const { data: posts } = await supabase.from('posts')
-      .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
+      .select(`id,content,image,video,images,created_at,like_count,repost_count,views,user_id,reposted_post_id,
                user:users(id,username,avatar,location),
-               reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))`)
+               reposted_post:reposted_post_id(id,content,image,video,images,created_at,user_id,user:users(id,username,avatar,location))`)
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(60);
@@ -1366,9 +1405,9 @@ async function loadFollowingFeed(list, PER_PAGE) {
 
     const { data: posts, error } = await supabase
       .from('posts')
-      .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
+      .select(`id,content,image,video,images,created_at,like_count,repost_count,views,user_id,reposted_post_id,
                user:users(id,username,avatar),
-               reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar)),
+               reposted_post:reposted_post_id(id,content,image,video,images,created_at,user_id,user:users(id,username,avatar)),
                comments(count)`)
       .in('user_id', followingIds)
       .neq('user_id', currentUser.id)
@@ -1391,9 +1430,9 @@ async function loadFollowingFeed(list, PER_PAGE) {
 // ── EXPLORE / FOR YOU FEED ── more like X For You (2025 style)
 async function loadExploreFeed(list, PER_PAGE) {
   try {
-    const SELECT = `id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
+    const SELECT = `id,content,image,video,images,created_at,like_count,repost_count,views,user_id,reposted_post_id,
       user:users(id,username,avatar,location),
-      reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar)),
+      reposted_post:reposted_post_id(id,content,image,video,images,created_at,user_id,user:users(id,username,avatar)),
       comments(count)`;
 
     // ── Time windows ────────────────────────────────────────
@@ -1614,7 +1653,6 @@ function renderFeedPosts(list, posts, PER_PAGE) {
     if (el) {
       list.appendChild(el); // DOM exists — seed immediately after
       observePost(el);
-      _wireVideoThumb(el, p);
       LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id));
     }
   }
@@ -1642,6 +1680,146 @@ function setFeedTab(tab, btn) {
 function initFeedTabBar() {
   // tab bar removed
 }
+
+// ═══════════════════════════════════════════
+// FEED SCROLL — hide header up, nav down
+// World-class: velocity-aware, spring-like,
+// only on feed page, resets on tab switch
+// ═══════════════════════════════════════════
+
+(function initFeedScrollBehaviour() {
+  const HEADER_H    = 56;   // px — matches .feed-header height
+  const NAV_H       = 60;   // px — matches --nav-h
+  const THRESHOLD   = 6;    // px scrolled before we react
+  const SHOW_ZONE   = 80;   // px from top — always show chrome
+
+  let lastY         = 0;
+  let headerOffset  = 0;   // 0 = fully visible, HEADER_H = fully hidden
+  let navOffset     = 0;   // 0 = fully visible, NAV_H    = fully hidden
+  let ticking       = false;
+  let wired         = false;
+
+  function clamp(val, min, max) {
+    return Math.min(Math.max(val, min), max);
+  }
+
+  function applyOffsets() {
+    const header = document.querySelector('.feed-header');
+    const nav    = document.getElementById('bottom-nav');
+    if (header) {
+      header.style.transform  = `translateY(${-headerOffset}px)`;
+      // Fade slightly as it hides — premium feel
+      header.style.opacity    = String(1 - (headerOffset / HEADER_H) * 0.35);
+    }
+    if (nav) {
+      nav.style.transform     = `translateY(${navOffset}px)`;
+      nav.style.opacity       = String(1 - (navOffset / NAV_H) * 0.4);
+    }
+  }
+
+  function onScroll() {
+    if (!ticking) {
+      requestAnimationFrame(() => {
+        const page   = document.getElementById('page-feed');
+        if (!page || !page.classList.contains('active')) {
+          ticking = false;
+          return;
+        }
+
+        const currentY = page.scrollTop;
+        const delta    = currentY - lastY;
+
+        // Always show chrome near top of feed
+        if (currentY <= SHOW_ZONE) {
+          headerOffset = 0;
+          navOffset    = 0;
+          applyOffsets();
+          lastY   = currentY;
+          ticking = false;
+          return;
+        }
+
+        // Only react to intentional scrolls past threshold
+        if (Math.abs(delta) > THRESHOLD) {
+          if (delta > 0) {
+            // Scrolling DOWN — hide chrome proportionally
+            headerOffset = clamp(headerOffset + delta * 0.85, 0, HEADER_H);
+            navOffset    = clamp(navOffset    + delta * 0.85, 0, NAV_H);
+          } else {
+            // Scrolling UP — reveal chrome snappily
+            headerOffset = clamp(headerOffset + delta * 1.4, 0, HEADER_H);
+            navOffset    = clamp(navOffset    + delta * 1.4, 0, NAV_H);
+          }
+          applyOffsets();
+        }
+
+        lastY   = currentY;
+        ticking = false;
+      });
+      ticking = true;
+    }
+  }
+
+  function resetChrome() {
+    headerOffset = 0;
+    navOffset    = 0;
+    applyOffsets();
+
+    // Ensure transitions are smooth on reset
+    const header = document.querySelector('.feed-header');
+    const nav    = document.getElementById('bottom-nav');
+    if (header) header.style.transition = 'transform 0.32s cubic-bezier(0.25,0.46,0.45,0.94), opacity 0.32s ease';
+    if (nav)    nav.style.transition    = 'transform 0.32s cubic-bezier(0.25,0.46,0.45,0.94), opacity 0.32s ease';
+    setTimeout(() => {
+      if (header) header.style.transition = '';
+      if (nav)    nav.style.transition    = '';
+    }, 340);
+  }
+
+  function wire() {
+    if (wired) return;
+    const page = document.getElementById('page-feed');
+    if (!page) return;
+
+    // Inject CSS transitions onto header and nav
+    const style = document.createElement('style');
+    style.id    = 'feed-scroll-style';
+    style.textContent = `
+      .feed-header {
+        will-change: transform, opacity;
+        transition: none;
+        transform-origin: top center;
+      }
+      #bottom-nav {
+        will-change: transform, opacity;
+        transition: none;
+        transform-origin: bottom center;
+      }
+    `;
+    if (!document.getElementById('feed-scroll-style')) {
+      document.head.appendChild(style);
+    }
+
+    page.addEventListener('scroll', onScroll, { passive: true });
+    wired = true;
+  }
+
+  // Wire on DOMContentLoaded or immediately if already ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', wire);
+  } else {
+    // Defer slightly so page DOM is fully rendered
+    setTimeout(wire, 400);
+  }
+
+  // Reset chrome whenever user navigates back to feed tab
+  const _origNavTo = window.navTo;
+  window._feedScrollReset = resetChrome;
+
+  // Expose reset so navTo can call it
+  document.addEventListener('feedTabActivated', resetChrome);
+
+})();
 
 function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
   // NOTE: do NOT seed LikeStore here — the DOM element doesn't exist yet.
@@ -1681,6 +1859,15 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
     mainContentHTML = `
       ${text ? `<div class="tir repost-commentary"><p class="tired">${displayText}</p></div>` : ''}
 
+      ${p.image ? `
+        <div class="laptop1" style="position:relative">
+          <img src="${p.image}" class="laptop" alt="" loading="lazy">
+          ${(p.images && p.images.length > 1) ? `
+            <div class="post-img-badge" onclick="event.stopPropagation(); openDetail('${p.id}')">
+              1/${p.images.length}
+            </div>` : ''}
+        </div>` : ''}
+
       <div class="quote-card" data-original-id="${orig.id}" onclick="openDetail('${orig.id}');event.stopPropagation()">
         <div class="quote-card-inner">
           <div class="quote-card-header">
@@ -1690,7 +1877,11 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
           </div>
           ${orig.content ? `<p class="quote-card-text">${escHtml(orig.content.slice(0,240))}${orig.content.length>240?'…':''}</p>` : ''}
         </div>
-        ${orig.image ? `<img class="quote-card-img" src="${orig.image}" alt="" loading="lazy">` : ''}
+        ${(orig.image || orig.images?.[0]) ? `
+          <div style="position:relative">
+            <img class="quote-card-img" src="${orig.image || orig.images[0]}" alt="" loading="lazy">
+            ${(orig.images?.length > 1) ? `<div class="post-img-badge" style="font-size:10px;padding:2px 7px;top:7px;right:7px">${1}/${orig.images.length}</div>` : ''}
+          </div>` : ''}
         ${orig.video && !orig.image ? `
           <div class="quote-card-video-wrap">
             <video class="quote-card-video" preload="metadata"><source src="${orig.video}" type="video/mp4"></video>
@@ -1732,10 +1923,27 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
       ${p.image ? `
         <div class="laptop1" style="position:relative">
           <img src="${p.image}" class="laptop" alt="" loading="lazy">
-          ${(p.images && p.images.length > 1) ? `<div class="post-img-badge" onclick="event.stopPropagation();openDetail('${p.id}')">1/${p.images.length}</div>` : ''}
+          ${(p.images && p.images.length > 1) ? `
+            <div class="post-img-badge" onclick="event.stopPropagation(); openDetail('${p.id}')">
+              1/${p.images.length}
+            </div>` : ''}
         </div>` : ''}
 
-      ${p.video && !p.image ? `<div class="feed-video-thumb-placeholder" data-post-id="${p.id}" data-video-type="${p.video_type||'video'}"></div>` : ''}
+      ${p.video && !p.image ? `
+        <div class="video-container laptop1" data-post-id="${p.id}">
+          <video class="video-thumbnail" preload="metadata">
+            <source src="${p.video}" type="video/mp4">
+          </video>
+          <div class="video-overlay">
+            <div class="play-button">
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                <circle cx="24" cy="24" r="22" fill="rgba(244,7,82,0.5)" stroke="white" stroke-width="3"/>
+                <path d="M34 24L18 34V14L34 24Z" fill="white"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+      ` : ''}
 
       ${urlPreviewHtml}
 
@@ -1886,11 +2094,6 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
       openDetail(e.target.closest('[data-original-id]')?.dataset.originalId || orig?.id);
       return;
     }
-    // Video-only posts → open full screen player
-    if (p.video && !p.image && typeof openVideoPlayer === 'function') {
-      openVideoPlayer(postId, p.video_type || 'video');
-      return;
-    }
     openDetail(postId);
   });
 
@@ -1995,7 +2198,7 @@ function injectFeedPostStyles() {
     .tir {
       padding: 10px 5px 8px;
     }
-    .tired { width: 100%; font-size: 16px; white-space: pre-wrap; word-break: break-word; color: var(--text); }
+    .tired { width: 100%; font-size: 16px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; color: var(--text); }
     .reer { color: rgba(244,7,82,0.7); cursor: pointer; }
 
     .laptop1 { max-width: 100%; margin-top: 10px; padding: 0; overflow: hidden; border-radius: 14px; background: #f4f3f0; max-height: 400px; display: flex; align-items: center; justify-content: center; }
@@ -2693,12 +2896,15 @@ async function undoRepost(postId, btn) {
 
 // ── State ──────────────────────────────────────────────────────
 const _c = {
-  file: null,         // selected File object
-  preview: null,      // object URL for preview
+  file: null,         // selected File object (single, kept for video)
+  preview: null,      // object URL for preview (single video)
+  files: [],          // array of { file, preview } for multi-image (max 6)
   repostId: null,     // post id being quoted
   repostBtn: null,    // the repost button el
   busy: false,        // upload in progress
 };
+
+const _C_MAX_IMAGES = 6;
 
 // ── Open ───────────────────────────────────────────────────────
 function openComposer() {
@@ -2726,8 +2932,8 @@ function openComposer() {
         <textarea
           class="mnc-textarea"
           id="mnc-textarea"
-          placeholder="What's happening?"
-          maxlength="280"
+          placeholder="What's on your mind?"
+          maxlength="2000"
           autocomplete="off"
           autocorrect="on"
           spellcheck="true"
@@ -2899,7 +3105,7 @@ function _cPickFile() {
   inp.id = 'mnc-file-input';
   inp.type = 'file';
   inp.accept = 'image/*,video/*';
-  // NO capture attribute — always gallery
+  inp.multiple = true;
   Object.assign(inp.style, {
     position: 'fixed', top: '0', left: '0',
     width: '1px', height: '1px',
@@ -2908,22 +3114,126 @@ function _cPickFile() {
   document.body.appendChild(inp);
 
   inp.addEventListener('change', async () => {
-    const file = inp.files[0];
+    const files = Array.from(inp.files || []);
     inp.remove();
-    if (!file) return;
-    await _cHandleFile(file);
+    if (!files.length) return;
+
+    // If first file is video — single video, existing flow
+    if (files[0].type.startsWith('video/')) {
+      await _cHandleFile(files[0]);
+      return;
+    }
+
+    // Images — multi-image flow
+    const imgFiles = files.filter(f => f.type.startsWith('image/'));
+    if (!imgFiles.length) { showToast('Please select images'); return; }
+
+    const remaining = _C_MAX_IMAGES - _c.files.length;
+    if (remaining <= 0) { showToast(`Max ${_C_MAX_IMAGES} images`); return; }
+
+    for (const f of imgFiles.slice(0, remaining)) {
+      if (f.size > 20 * 1024 * 1024) { showToast('Max 20MB per image'); continue; }
+      _c.files.push({ file: f, preview: URL.createObjectURL(f) });
+    }
+
+    if (_c.files.length > 0) _cRenderImageStrip();
+    _cSync();
   });
 
-  // Focus composer textarea first to keep keyboard from hiding, then trigger
   setTimeout(() => inp.click(), 10);
 }
 
+function _cRenderImageStrip() {
+  const wrap = document.getElementById('mnc-media-wrap');
+  if (!wrap) return;
+
+  // Hide single image/video elements
+  const img = document.getElementById('mnc-img');
+  const vid = document.getElementById('mnc-vid');
+  if (img) img.style.display = 'none';
+  if (vid) vid.style.display = 'none';
+
+  let strip = document.getElementById('mnc-img-strip');
+  if (!strip) {
+    strip = document.createElement('div');
+    strip.id        = 'mnc-img-strip';
+    strip.className = 'mnc-img-strip';
+    wrap.appendChild(strip);
+  }
+
+  strip.innerHTML = '';
+
+  _c.files.forEach((item, i) => {
+    const thumb = document.createElement('div');
+    thumb.className = 'mnc-img-thumb';
+    thumb.innerHTML = `
+      <img src="${item.preview}" alt="">
+      <button class="mnc-img-thumb-remove" data-idx="${i}" aria-label="Remove">
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="3" stroke-linecap="round">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>`;
+    thumb.querySelector('.mnc-img-thumb-remove').addEventListener('click', e => {
+      e.stopPropagation();
+      const idx = parseInt(e.currentTarget.dataset.idx);
+      URL.revokeObjectURL(_c.files[idx].preview);
+      _c.files.splice(idx, 1);
+      if (_c.files.length === 0) {
+        strip.remove();
+        wrap.style.display = 'none';
+      } else {
+        _cRenderImageStrip();
+      }
+      _cSync();
+    });
+    strip.appendChild(thumb);
+  });
+
+  // Add more button if under limit
+  if (_c.files.length < _C_MAX_IMAGES) {
+    const addMore = document.createElement('div');
+    addMore.className = 'mnc-img-thumb mnc-img-thumb-add';
+    addMore.innerHTML = `
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+        <line x1="12" y1="5" x2="12" y2="19"/>
+        <line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+      <span>${_c.files.length}/${_C_MAX_IMAGES}</span>`;
+    addMore.addEventListener('click', _cPickFile);
+    strip.appendChild(addMore);
+  }
+
+  wrap.style.display = 'block';
+  setTimeout(() => {
+    const body = document.getElementById('mnc-body');
+    if (body) body.scrollTop = body.scrollHeight;
+  }, 80);
+}
+
+function _cRemoveMedia() {
+  if (_c.preview) { URL.revokeObjectURL(_c.preview); _c.preview = null; }
+  _c.file  = null;
+  _c.files.forEach(item => URL.revokeObjectURL(item.preview));
+  _c.files = [];
+
+  const wrap  = document.getElementById('mnc-media-wrap');
+  const img   = document.getElementById('mnc-img');
+  const vid   = document.getElementById('mnc-vid');
+  const strip = document.getElementById('mnc-img-strip');
+  if (wrap)  wrap.style.display  = 'none';
+  if (img)   { img.src = ''; img.style.display = 'none'; }
+  if (vid)   { vid.src = ''; vid.style.display = 'none'; }
+  if (strip) strip.remove();
+
+  document.getElementById('mnc-textarea')?.focus();
+  _cSync();
+}
+
 async function _cHandleFile(file) {
-  // Android often returns '' or 'application/octet-stream' for videos — use extension as fallback
-  const ext = (file.name || '').split('.').pop().toLowerCase();
-  const videoExts = ['mp4','mov','m4v','webm','mkv','avi','3gp','ogv'];
-  const isVid = file.type.startsWith('video/') || videoExts.includes(ext);
-  const isImg = file.type.startsWith('image/') && !isVid;
+  const isImg = file.type.startsWith('image/');
+  const isVid = file.type.startsWith('video/');
   if (!isImg && !isVid) { showToast('Please select an image or video'); return; }
 
   const maxMB = isVid ? 100 : 20;
@@ -2964,20 +3274,6 @@ async function _cHandleFile(file) {
   _cSync();
 }
 
-function _cRemoveMedia() {
-  if (_c.preview) { URL.revokeObjectURL(_c.preview); _c.preview = null; }
-  _c.file = null;
-
-  const wrap = document.getElementById('mnc-media-wrap');
-  const img  = document.getElementById('mnc-img');
-  const vid  = document.getElementById('mnc-vid');
-  if (wrap) wrap.style.display = 'none';
-  if (img)  { img.src = ''; img.style.display = 'none'; }
-  if (vid)  { vid.src = ''; vid.style.display = 'none'; }
-
-  document.getElementById('mnc-textarea')?.focus();
-  _cSync();
-}
 
 // ── Quote / repost ─────────────────────────────────────────────
 async function _cLoadQuote(postId) {
@@ -3061,7 +3357,7 @@ function _cToggleEmoji() {
 
 // ── Ring + sync ────────────────────────────────────────────────
 function _cUpdateRing(len) {
-  const MAX = 280;
+  const MAX = 2000;
   const ring    = document.getElementById('mnc-ring');
   const numEl   = document.getElementById('mnc-char-num');
   if (!ring || !numEl) return;
@@ -3071,10 +3367,10 @@ function _cUpdateRing(len) {
   ring.style.strokeDashoffset = String(circ * (1 - pct));
 
   const rem = MAX - len;
-  if (rem <= 30) {
+  if (rem <= 200) {
     numEl.textContent = String(rem);
     numEl.style.display = '';
-    ring.style.stroke = rem < 0 ? '#ff3b5c' : rem <= 10 ? '#ff3b5c' : '#f59e0b';
+    ring.style.stroke = rem < 0 ? '#ff3b5c' : rem <= 50 ? '#ff3b5c' : '#f59e0b';
     numEl.style.color = ring.style.stroke;
   } else {
     numEl.textContent = '';
@@ -3091,9 +3387,9 @@ function _cSync() {
   if (!ta || !btn) return;
 
   const hasText   = ta.value.trim().length > 0;
-  const hasMedia  = !!_c.file;
+  const hasMedia  = !!_c.file || _c.files.length > 0;
   const hasQuote  = !!_c.repostId;
-  const underLimit = ta.value.length <= 280;
+  const underLimit = ta.value.length <= 2000;
   const ok = (hasText || hasMedia || hasQuote) && underLimit;
 
   btn.disabled = !ok;
@@ -3111,8 +3407,8 @@ async function _cSubmit() {
   if (!ta || _c.busy || !currentUser) return;
 
   const text = ta.value.trim();
-  if (!text && !_c.file && !_c.repostId) return;
-  if (text.length > 280) return;
+  if (!text && !_c.file && _c.files.length === 0 && !_c.repostId) return;
+  if (text.length > 2000) return;
 
   _c.busy = true;
   const btn = document.getElementById('mnc-post-btn');
@@ -3126,63 +3422,19 @@ async function _cSubmit() {
     let videoUrl = null;
 
     if (_c.file) {
-      // Android can return '' or 'application/octet-stream' for videos — use extension as fallback
-      const _ext = (_c.file.name || '').split('.').pop().toLowerCase();
-      const _videoExts = ['mp4','mov','m4v','webm','mkv','avi','3gp','ogv'];
-      const isVid = _c.file.type.startsWith('video/') || _videoExts.includes(_ext);
-      console.log('[MistyNote] uploading', isVid ? 'video' : 'image', _c.file.name, _c.file.type, (_c.file.size/1024/1024).toFixed(1)+'MB');
+      const isVid = _c.file.type.startsWith('video/');
+      console.log(`[MistyNote] uploading ${isVid ? 'video' : 'image'}:`, _c.file.name, _c.file.type);
 
       if (isVid) {
-        const rawExt   = _ext;
-        const safeExt  = (rawExt && rawExt.length >= 2 && rawExt.length <= 5) ? rawExt : 'mp4';
-        const mimeMap  = { mp4:'video/mp4', mov:'video/mp4', m4v:'video/mp4', webm:'video/webm', mkv:'video/mp4', avi:'video/mp4', '3gp':'video/3gpp', ogv:'video/ogg' };
-        const safeMime = mimeMap[safeExt] || 'video/mp4';
-        const path     = currentUser.id + '/post_' + Date.now() + '.' + safeExt;
-        console.log('[MistyNote] video path:', path, 'mime:', safeMime);
-
-        // Direct fetch — streams body without loading whole file into RAM.
-        // Bypasses Supabase JS client to avoid "Failed to fetch" issues on mobile.
-        const session    = (await supabase.auth.getSession()).data?.session;
-        const authToken  = session?.access_token || window._SUPA_KEY;
-        const storageUrl = window._SUPA_URL + '/storage/v1';
-
-        let uploadResp;
-        try {
-          uploadResp = await fetch(storageUrl + '/object/videos/' + path, {
-            method: 'POST',
-            headers: {
-              'Authorization': 'Bearer ' + authToken,
-              'apikey': window._SUPA_KEY,
-              'Content-Type': safeMime,
-              'Cache-Control': '3600',
-              'x-upsert': 'true',
-            },
-            body: _c.file,
-          });
-        } catch (fetchErr) {
-          // Network-level failure — retry once after 1 second
-          console.warn('[MistyNote] fetch failed, retrying...', fetchErr.message);
-          await new Promise(r => setTimeout(r, 1000));
-          uploadResp = await fetch(storageUrl + '/object/videos/' + path, {
-            method: 'POST',
-            headers: {
-              'Authorization': 'Bearer ' + authToken,
-              'apikey': window._SUPA_KEY,
-              'Content-Type': safeMime,
-              'Cache-Control': '3600',
-              'x-upsert': 'true',
-            },
-            body: _c.file,
-          });
-        }
-
-        if (!uploadResp.ok) {
-          const errText = await uploadResp.text().catch(() => String(uploadResp.status));
-          console.error('[MistyNote] video upload HTTP error:', uploadResp.status, errText);
-          throw new Error('Video upload failed (' + uploadResp.status + '): ' + errText);
-        }
-
-        const { data: urlData } = supabase.storage.from('videos').getPublicUrl(path);
+        // Video: upload raw to avatars bucket under posts/ subfolder
+        const rawExt = (_c.file.name || '').split('.').pop().toLowerCase();
+        const safeExt = (rawExt && rawExt.length >= 2 && rawExt.length <= 5) ? rawExt : 'mp4';
+        const path = `${currentUser.id}/post_${Date.now()}.${safeExt}`;
+        const { error: upErr } = await supabase.storage
+          .from('avatars')
+          .upload(path, _c.file, { upsert: true, contentType: _c.file.type || 'video/mp4', cacheControl: '3600' });
+        if (upErr) throw new Error('Video upload failed: ' + upErr.message);
+        const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
         videoUrl = urlData.publicUrl;
         console.log('[MistyNote] ✅ video uploaded:', videoUrl);
       } else {
@@ -3226,8 +3478,59 @@ async function _cSubmit() {
       }
     }
 
-    // STEP 4: Insert post row
-    console.log('[upload] inserting post...', { imageUrl, videoUrl });
+    // STEP 4: Upload multiple images if present
+    let imagesArr = [];
+    if (_c.files.length > 0) {
+      for (let i = 0; i < _c.files.length; i++) {
+        const item = _c.files[i];
+        const path = `${currentUser.id}/post_${Date.now()}_${i}.jpg`;
+        const imgEl = document.querySelectorAll('.mnc-img-thumb img')[i];
+        const blob = await new Promise((resolve, reject) => {
+          if (!imgEl || !imgEl.complete || !imgEl.naturalWidth) {
+            // fallback: read directly from file
+            const reader = new FileReader();
+            reader.onload = e => {
+              const tmp = new Image();
+              tmp.onload = () => {
+                const maxPx = 1200;
+                const scale = Math.min(1, maxPx / Math.max(tmp.naturalWidth, tmp.naturalHeight));
+                const w = Math.round(tmp.naturalWidth * scale);
+                const h = Math.round(tmp.naturalHeight * scale);
+                const cv = document.createElement('canvas');
+                cv.width = w; cv.height = h;
+                cv.getContext('2d').drawImage(tmp, 0, 0, w, h);
+                cv.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 0.82);
+              };
+              tmp.onerror = reject;
+              tmp.src = e.target.result;
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(item.file);
+            return;
+          }
+          const maxPx = 1200;
+          const scale = Math.min(1, maxPx / Math.max(imgEl.naturalWidth, imgEl.naturalHeight));
+          const w = Math.max(1, Math.round(imgEl.naturalWidth * scale));
+          const h = Math.max(1, Math.round(imgEl.naturalHeight * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) { reject(new Error('No canvas context')); return; }
+          ctx.drawImage(imgEl, 0, 0, w, h);
+          canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 0.82);
+        });
+        const { error: upErr } = await supabase.storage
+          .from('avatars').upload(path, blob, { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
+        if (upErr) throw new Error('Image ' + (i + 1) + ' upload failed: ' + upErr.message);
+        const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
+        imagesArr.push(urlData.publicUrl);
+      }
+      // First image also goes to image column for backwards compat
+      imageUrl = imagesArr[0];
+    }
+
+    // STEP 5: Insert post row
+    console.log('[upload] inserting post...', { imageUrl, videoUrl, imagesArr });
     const { data: post, error: postErr } = await supabase
       .from('posts')
       .insert({
@@ -3235,11 +3538,12 @@ async function _cSubmit() {
         content:          text || null,
         image:            imageUrl,
         video:            videoUrl,
+        images:           imagesArr.length > 1 ? imagesArr : [],
         reposted_post_id: _c.repostId || null,
       })
-      .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
+      .select(`id,content,image,video,images,created_at,like_count,repost_count,views,user_id,reposted_post_id,
                user:users(id,username,avatar,location),
-               reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))`)
+               reposted_post:reposted_post_id(id,content,image,video,images,created_at,user_id,user:users(id,username,avatar,location))`)
       .single();
 
     if (postErr) {
@@ -3392,12 +3696,14 @@ function closeComposer() {
 
   // Revoke preview blob
   if (_c.preview) { URL.revokeObjectURL(_c.preview); _c.preview = null; }
+  _c.files.forEach(item => URL.revokeObjectURL(item.preview));
 
   setTimeout(() => {
     root.remove();
     document.body.style.overflow = '';
-    _c.busy = false;
-    _c.file = null;
+    _c.busy  = false;
+    _c.file  = null;
+    _c.files = [];
     _c.repostId  = null;
     _c.repostBtn = null;
     repostTargetId  = null;
@@ -3422,36 +3728,6 @@ function handleRepost(postId, btn, postUserId) {
   openComposer();
 }
 
-// ── Wire video thumbnail after post is in DOM ──────────────────
-function _wireVideoThumb(postEl, p) {
-  if (!p.video || p.image) return;
-  const placeholder = postEl.querySelector('.feed-video-thumb-placeholder');
-  if (!placeholder) return;
-  if (typeof createFeedVideoThumb === 'function') {
-    const thumb = createFeedVideoThumb(p);
-    placeholder.replaceWith(thumb);
-  } else {
-    // app-video.js not loaded yet — basic fallback
-    const div = document.createElement('div');
-    div.className = 'video-container laptop1';
-    div.style.cursor = 'pointer';
-    div.onclick = (e) => { e.stopPropagation(); if (typeof openVideoPlayer === 'function') openVideoPlayer(p.id, p.video_type || 'video'); };
-    div.innerHTML = `
-      <video class="video-thumbnail" preload="metadata" muted>
-        <source src="${p.video}#t=0.5" type="video/mp4">
-      </video>
-      <div class="video-overlay">
-        <div class="play-button">
-          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-            <circle cx="24" cy="24" r="22" fill="rgba(0,0,0,0.45)" stroke="white" stroke-width="3"/>
-            <path d="M34 24L18 34V14L34 24Z" fill="white"/>
-          </svg>
-        </div>
-      </div>`;
-    placeholder.replaceWith(div);
-  }
-}
-
 // ── Feed prepend ───────────────────────────────────────────────
 function prependPostToFeed(newPost) {
   if (!newPost) return;
@@ -3468,7 +3744,6 @@ function prependPostToFeed(newPost) {
   LikeStore.seed(newPost.id, 0, false);
   el.classList.add('fade-up');
   observePost(el);
-  _wireVideoThumb(el, newPost);
 
   if (newPost.reposted_post_id) {
     repostedPosts.set(newPost.reposted_post_id, newPost.id);
@@ -3524,7 +3799,7 @@ async function openDetail(postId, scrollToComments = false) {
       #detail-body { padding-bottom: 160px; }
 
       /* ── Post wrapper ── */
-      .dp-wrap { background: var(--bg); }
+      .dp-wrap { background: var(--surface); }
 
       /* ── Author row ── */
       .dp-author {
@@ -3583,7 +3858,7 @@ async function openDetail(postId, scrollToComments = false) {
 
       /* ── Content text ── */
       .dp-text {
-        font-size: 17px; line-height: 1.65; color: var(--text);
+        font-size: 18px; line-height: 1.5; color: var(--text);
         padding: 14px 16px 4px; margin: 0;
         white-space: pre-wrap; word-break: break-word;
       }
@@ -3746,9 +4021,9 @@ async function openDetail(postId, scrollToComments = false) {
 
     const { data: p, error } = await supabase
       .from('posts')
-      .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
+      .select(`id,content,image,video,images,created_at,like_count,repost_count,views,user_id,reposted_post_id,
                user:users(id,username,avatar,location),
-               reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar,location))`)
+               reposted_post:reposted_post_id(id,content,image,video,images,created_at,user_id,user:users(id,username,avatar,location))`)
       .eq('id', postId)
       .single();
 
@@ -3770,10 +4045,27 @@ async function openDetail(postId, scrollToComments = false) {
 
     // ── Media ──
     let mediaHtml = '';
-    if (p.image) {
+    const allImages = (p.images && p.images.length > 1) ? p.images : (p.image ? [p.image] : []);
+    if (allImages.length > 1) {
+      // Multi-image swiper
+      mediaHtml = `
+        <div class="dp-swiper" id="dp-swiper-${p.id}">
+          <div class="dp-swiper-track" id="dp-swiper-track-${p.id}">
+            ${allImages.map((src, i) => `
+              <div class="dp-swiper-slide">
+                <img src="${escHtml(src)}" alt="" loading="${i === 0 ? 'eager' : 'lazy'}"
+                     onclick="openImageFS('${escHtml(src)}')">
+              </div>`).join('')}
+          </div>
+          <div class="dp-swiper-counter" id="dp-swiper-counter-${p.id}">1 / ${allImages.length}</div>
+          <div class="dp-swiper-dots" id="dp-swiper-dots-${p.id}">
+            ${allImages.map((_, i) => `<div class="dp-swiper-dot${i === 0 ? ' active' : ''}" data-idx="${i}"></div>`).join('')}
+          </div>
+        </div>`;
+    } else if (p.image) {
       mediaHtml = `<div class="dp-media"><img src="${p.image}" alt="" onclick="openImageFS('${p.image}')"></div>`;
     } else if (p.video) {
-      mediaHtml = `<div class="dp-media"><div class="dp-video-wrap" onclick="openVideoPlayer('${p.id}','${p.video_type||'video'}')"><video preload="metadata"><source src="${p.video}#t=0.5" type="video/mp4"></video><div class="dp-play-overlay"><div class="dp-play-circle"><svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M5 3l14 9L5 21V3z"/></svg></div></div></div></div>`;
+      mediaHtml = `<div class="dp-media"><div class="dp-video-wrap" onclick="openVideoFS('${p.video}')"><video preload="metadata"><source src="${p.video}#t=0.5" type="video/mp4"></video><div class="dp-play-overlay"><div class="dp-play-circle"><svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M5 3l14 9L5 21V3z"/></svg></div></div></div></div>`;
     } else if (p.content) {
       // URL preview — same as feed
       const dpUrl = extractFirstUrl(p.content);
@@ -3806,7 +4098,11 @@ async function openDetail(postId, scrollToComments = false) {
             </div>
             ${orig.content ? `<p class="quote-card-text">${escHtml(orig.content.slice(0,240))}${orig.content.length>240?'…':''}</p>` : ''}
           </div>
-          ${orig.image ? `<img class="quote-card-img" src="${orig.image}" alt="">` : ''}
+          ${(orig.image || orig.images?.[0]) ? `
+            <div style="position:relative">
+              <img class="quote-card-img" src="${orig.image || orig.images[0]}" alt="">
+              ${(orig.images?.length > 1) ? `<div class="post-img-badge" style="font-size:10px;padding:2px 7px;top:7px;right:7px">1/${orig.images.length}</div>` : ''}
+            </div>` : ''}
           ${orig.video && !orig.image ? `
             <div class="quote-card-video-wrap">
               <video class="quote-card-video" preload="metadata"><source src="${orig.video}" type="video/mp4"></video>
@@ -3858,7 +4154,7 @@ async function openDetail(postId, scrollToComments = false) {
         <div class="dp-stats">
           <div class="dp-stat">
             <span class="dp-stat-n detail-stat-n" data-type="likes">${fmtNum(p.like_count||0)}</span>
-            <span class="dp-stat-l">Likes</span>
+            <span class="dp-stat-l">Hearts</span>
           </div>
           <div class="dp-stat">
             <span class="dp-stat-n repost-count-display">${fmtNum(p.repost_count||0)}</span>
@@ -3882,8 +4178,19 @@ async function openDetail(postId, scrollToComments = false) {
       <div id="comments-container"></div>
     `;
 
-    // Share btn (header)
-    document.getElementById('detail-share-btn').onclick = () => sharePost(p);
+    // Header right buttons — dots for own post, share arrow for others
+    const detailShareBtn = document.getElementById('detail-share-btn');
+    const detailMoreBtn  = document.getElementById('detail-more-btn');
+    if (isOwn) {
+      if (detailShareBtn) detailShareBtn.style.display = 'none';
+      if (detailMoreBtn)  {
+        detailMoreBtn.style.display = '';
+        detailMoreBtn.onclick = () => showPostMenu(p, null, detailMoreBtn);
+      }
+    } else {
+      if (detailShareBtn) { detailShareBtn.style.display = ''; detailShareBtn.onclick = () => sharePost(p); }
+      if (detailMoreBtn)  detailMoreBtn.style.display = 'none';
+    }
 
     // ── Mini identity in detail header (fades in when author avatar scrolls out) ──
     const dpHeaderIdentity = document.getElementById('dp-header-identity');
@@ -3950,6 +4257,9 @@ async function openDetail(postId, scrollToComments = false) {
     // Track view + load comments
     await recordView(postId);
     await syncViewCount(postId);
+
+    // Wire multi-image swiper if present
+    if (allImages.length > 1) _initDpSwiper(p.id, allImages.length);
 
     await loadComments(postId);
 
@@ -4648,501 +4958,6 @@ function closeReplyComposer(commentId) {
 }
 
 // ══════════════════════════════════════════
-// DISCOVER
-// ══════════════════════════════════════════
-
-// ══════════════════════════════════════════
-// DISCOVER — full rebuild
-// ══════════════════════════════════════════
-
-// ── State ──
-const DISC_RECENT_KEY = 'disc_recent_v1';
-const DISC_SOCIAL_PROOF = [
-  '🔥 Trending now',
-  '⭐ Highly rated',
-  '🛒 Added to cart by many',
-  '💬 Lots of buzz',
-  '✅ Frequently repurchased',
-  '⚡ Flash deal',
-];
-
-let discCurrentTab   = 'posts';
-let discCurrentQuery = '';
-let discForYouLoaded = false;
-
-function discGetRecent() {
-  try { return JSON.parse(localStorage.getItem(DISC_RECENT_KEY) || '[]'); }
-  catch { return []; }
-}
-function discSaveRecent(arr) {
-  localStorage.setItem(DISC_RECENT_KEY, JSON.stringify(arr.slice(0,12)));
-}
-function discAddRecent(term) {
-  const arr = discGetRecent().filter(x => x.toLowerCase() !== term.toLowerCase());
-  arr.unshift(term);
-  discSaveRecent(arr);
-}
-
-function discRenderRecent() {
-  const arr  = discGetRecent();
-  const wrap = document.getElementById('disc-recent-section');
-  const box  = document.getElementById('disc-recent-pills');
-  if (!wrap || !box) return;
-  if (!arr.length) { wrap.style.display = 'none'; return; }
-  wrap.style.display = '';
-  box.innerHTML = arr.map(t => `
-    <div class="disc-recent-pill" onclick="discRunSearch('${escHtml(t)}')">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-        <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-      </svg>
-      ${escHtml(t)}
-      <span class="disc-recent-pill-x" onclick="event.stopPropagation();discRemoveRecent('${escHtml(t)}')">×</span>
-    </div>`).join('');
-}
-
-function discRemoveRecent(term) {
-  discSaveRecent(discGetRecent().filter(x => x !== term));
-  discRenderRecent();
-}
-
-function discClearAllRecent() {
-  discSaveRecent([]);
-  discRenderRecent();
-}
-
-// ── For You grid ──
-async function discLoadForYou() {
-  if (discForYouLoaded) return;
-  discForYouLoaded = true;
-  const grid = document.getElementById('disc-foryou-grid');
-  if (!grid) return;
-
-  const { data: posts } = await supabase
-    .from('posts')
-    .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
-             user:users(id,username,avatar),
-             reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar)),
-             comments(count)`)
-    .order('like_count', { ascending: false })
-    .limit(20);
-
-  grid.innerHTML = '';
-
-  if (!posts?.length) {
-    grid.innerHTML = '<p class="disc-no-results"><strong>Nothing yet</strong>Posts will appear here as people share</p>';
-    return;
-  }
-
-  (posts || []).forEach(p => {
-    const el = createFeedPost(p, false);
-    if (el) {
-      el.classList.add('fade-in');
-      grid.appendChild(el);
-      observePost(el);
-      LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id));
-    }
-  });
-
-  const ids = posts.map(p => p.id);
-  checkLikedPosts(ids);
-  checkRepostedPosts(ids);
-  checkSavedPosts(ids);
-}
-
-// ── Topic tap ──
-function discTopicTap(btn) {
-  const raw  = btn.textContent.trim();
-  // Strip emoji prefix (first char + space)
-  const term = raw.replace(/^\S+\s/, '');
-  discRunSearch(term);
-}
-
-// ── Run a search ──
-function discRunSearch(term) {
-  const input = document.getElementById('disc-input');
-  if (!input) return;
-  input.value = term;
-  discOnInput(term);
-}
-
-// ── Clear ──
-function discClear() {
-  const input = document.getElementById('disc-input');
-  if (input) input.value = '';
-  discOnInput('');
-  input?.focus();
-}
-
-// ── Tab switch ──
-function discTab(tab, btn) {
-  discCurrentTab = tab;
-  document.querySelectorAll('.disc-tab').forEach(t => t.classList.remove('active'));
-  btn.classList.add('active');
-  document.querySelectorAll('.disc-pane').forEach(p => p.style.display = 'none');
-  const pane = document.getElementById('disc-pane-' + tab);
-  if (pane) pane.style.display = '';
-  // If pane empty, run search again for this tab
-  if (pane && !pane.dataset.loaded) {
-    discFetchResults(discCurrentQuery, tab);
-  }
-}
-
-// ── Input handler ──
-const discOnInput = debounce(function(val) {
-  const q     = (typeof val === 'string' ? val : val?.target?.value || '').trim();
-  const xBtn  = document.getElementById('disc-x-btn');
-  const tabs  = document.getElementById('disc-tabs');
-  const home  = document.getElementById('disc-home');
-  const res   = document.getElementById('disc-results');
-
-  discCurrentQuery = q;
-
-  if (xBtn) xBtn.style.display = q ? '' : 'none';
-
-  if (!q) {
-    // Back to home state
-    if (tabs) tabs.style.display = 'none';
-    if (home) home.style.display = '';
-    if (res)  res.style.display  = 'none';
-    discRenderRecent();
-    return;
-  }
-
-  // Show results state
-  if (tabs) tabs.style.display = 'flex';
-  if (home) home.style.display = 'none';
-  if (res)  res.style.display  = '';
-
-  // Reset all panes
-  ['posts','people','products'].forEach(t => {
-    const p = document.getElementById('disc-pane-' + t);
-    if (p) { p.dataset.loaded = ''; p.style.display = t === discCurrentTab ? '' : 'none'; }
-  });
-
-  discFetchResults(q, discCurrentTab);
-}, 380);
-
-// ── Fetch results for active tab ──
-async function discFetchResults(q, tab) {
-  const pane = document.getElementById('disc-pane-' + tab);
-  if (!pane || pane.dataset.loaded === q) return;
-  pane.dataset.loaded = q;
-
-  pane.innerHTML = discLoadingHTML();
-
-  if (tab === 'posts')    await discFetchPosts(q, pane);
-  if (tab === 'people')   await discFetchPeople(q, pane);
-  if (tab === 'products') await discFetchProducts(q || '', pane);
-
-  // Save to recent after successful fetch
-  discAddRecent(q);
-}
-
-function discLoadingHTML() {
-  return `<div style="padding:16px">
-    <div style="height:14px;border-radius:8px;background:var(--bg3);margin-bottom:10px;width:60%;animation:shimmer 1.4s infinite;background-size:200% 100%;background-image:linear-gradient(90deg,var(--bg3) 25%,var(--bg2) 50%,var(--bg3) 75%)"></div>
-    <div style="height:14px;border-radius:8px;background:var(--bg3);margin-bottom:10px;width:80%;animation:shimmer 1.4s infinite;background-size:200% 100%;background-image:linear-gradient(90deg,var(--bg3) 25%,var(--bg2) 50%,var(--bg3) 75%)"></div>
-    <div style="height:14px;border-radius:8px;background:var(--bg3);width:45%;animation:shimmer 1.4s infinite;background-size:200% 100%;background-image:linear-gradient(90deg,var(--bg3) 25%,var(--bg2) 50%,var(--bg3) 75%)"></div>
-  </div>`;
-}
-
-// ── Posts results ──
-async function discFetchPosts(q, pane) {
-  const { data } = await supabase
-    .from('posts')
-    .select(`id,content,image,video,created_at,like_count,repost_count,views,user_id,reposted_post_id,
-             user:users(id,username,avatar),
-             reposted_post:reposted_post_id(id,content,image,video,created_at,user_id,user:users(id,username,avatar)),
-             comments(count)`)
-    .ilike('content', `%${q}%`)
-    .order('like_count', { ascending: false })
-    .limit(30);
-
-  if (!data?.length) {
-    pane.innerHTML = `<div class="disc-no-results"><strong>No posts found</strong>Try different words or check spelling</div>`;
-    return;
-  }
-
-  pane.innerHTML = '';
-  const list = document.createElement('div');
-  list.style.cssText = 'display:flex;flex-direction:column;gap:10px;padding:10px 0';
-
-  data.forEach(p => {
-    const el = createFeedPost(p, false);
-    if (el) { list.appendChild(el); LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id)); }
-  });
-
-  pane.appendChild(list);
-
-  const ids = data.map(p => p.id);
-  checkLikedPosts(ids);
-  checkRepostedPosts(ids);
-  checkSavedPosts(ids);
-}
-
-// ── People results ──
-async function discFetchPeople(q, pane) {
-  const { data } = await supabase
-    .from('users')
-    .select('id,username,avatar,bio,followers')
-    .or(`username.ilike.%${q}%,bio.ilike.%${q}%`)
-    .limit(20);
-
-  if (!data?.length) {
-    pane.innerHTML = `<div class="disc-no-results"><strong>No people found</strong>Try searching a username or topic</div>`;
-    return;
-  }
-
-  // Get who current user follows
-  let followingSet = new Set();
-  if (currentUser) {
-    const { data: fl } = await supabase
-      .from('follows')
-      .select('following_id')
-      .eq('follower_id', currentUser.id);
-    (fl || []).forEach(r => followingSet.add(r.following_id));
-  }
-
-  const list = document.createElement('div');
-  list.className = 'disc-people-list';
-
-  data.forEach(u => {
-    if (u.id === currentUser?.id) return; // skip self
-    const isFollowing = followingSet.has(u.id);
-    const row = document.createElement('div');
-    row.className = 'disc-person-row';
-    row.innerHTML = `
-      <img class="disc-person-av" src="${u.avatar||''}" onerror="this.src=''" alt="">
-      <div class="disc-person-info">
-        <div class="disc-person-name">${escHtml(u.username||'')}</div>
-        ${u.bio ? `<div class="disc-person-bio">${escHtml(u.bio)}</div>` : ''}
-      </div>
-      <button class="disc-follow-btn ${isFollowing ? 'following' : ''}"
-        data-uid="${u.id}"
-        onclick="event.stopPropagation(); discToggleFollow(this, '${u.id}')">
-        ${isFollowing ? 'Following' : 'Follow'}
-      </button>`;
-    row.addEventListener('click', () => showUserProfile(u.id));
-    list.appendChild(row);
-  });
-
-  pane.innerHTML = '';
-  pane.appendChild(list);
-}
-
-async function discToggleFollow(btn, uid) {
-  if (!currentUser) return;
-  const isFollowing = btn.classList.contains('following');
-  btn.disabled = true;
-  if (isFollowing) {
-    await supabase.from('follows').delete()
-      .eq('follower_id', currentUser.id).eq('following_id', uid);
-    btn.classList.remove('following');
-    btn.textContent = 'Follow';
-  } else {
-    const { error: fe } = await supabase.from('follows').insert({ follower_id: currentUser.id, following_id: uid });
-    if (!fe) {
-      btn.classList.add('following');
-      btn.textContent = 'Following';
-      if (uid !== currentUser.id) {
-        insertNotification({ user_id: uid, actor_id: currentUser.id, post_id: null, type: 'follow' });
-      }
-    }
-  }
-  btn.disabled = false;
-}
-
-// ── Products results ──
-// ── Static demo products — replace with Supabase query when products table is ready ──
-const DEMO_PRODUCTS = [
-  {
-    id: 'demo-1',
-    title: 'Ankara Tote Bag — Handmade',
-    image: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=400&q=80',
-    price: 18500,
-    currency: '₦',
-    sold_count: 342,
-    social: ['🔥 342 people bought this', '⭐ 4.9 star rating', '🛒 12 added to cart today'],
-    seller: { username: '@AdaHandcraft', avatar: 'https://i.pravatar.cc/40?img=1' },
-  },
-  {
-    id: 'demo-2',
-    title: 'Natural Shea Butter Body Cream 500ml',
-    image: 'https://images.unsplash.com/photo-1607006344380-b6775a0824a7?w=400&q=80',
-    price: 5200,
-    currency: '₦',
-    sold_count: 1289,
-    social: ['✅ 1.2K repurchased', '💬 "Best cream ever!"', '⚡ Flash sale — 20% off'],
-    seller: { username: '@GlowByNkechi', avatar: 'https://i.pravatar.cc/40?img=5' },
-  },
-  {
-    id: 'demo-3',
-    title: "Men's Agbada Set — 3 Piece Custom",
-    image: 'https://images.unsplash.com/photo-1594938298603-c8148c4b4f60?w=400&q=80',
-    price: 95000,
-    currency: '₦',
-    sold_count: 87,
-    social: ['👑 Premium quality fabric', '📦 Ships in 5 days', '🔥 Trending this week'],
-    seller: { username: '@KingsTailors_Abj', avatar: 'https://i.pravatar.cc/40?img=3' },
-  },
-  {
-    id: 'demo-4',
-    title: 'Wireless Earbuds — 48hr Battery',
-    image: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=400&q=80',
-    price: 24000,
-    currency: '₦',
-    sold_count: 673,
-    social: ['📱 Works with all phones', '⚡ Flash sale ends tonight', '🛒 2.1K added to cart'],
-    seller: { username: '@TechVaultNG', avatar: 'https://i.pravatar.cc/40?img=8' },
-  },
-  {
-    id: 'demo-5',
-    title: 'Homemade Chin Chin 1kg — Crispy',
-    image: 'https://images.unsplash.com/photo-1621939514649-280e2ee25f60?w=400&q=80',
-    price: 3500,
-    currency: '₦',
-    sold_count: 2104,
-    social: ['🍪 2.1K sold this month', '✅ Fresh baked daily', '💬 Customers keep coming back'],
-    seller: { username: '@MamaDeliNG', avatar: 'https://i.pravatar.cc/40?img=9' },
-  },
-  {
-    id: 'demo-6',
-    title: 'Luxury Wig — 26" Brazilian Body Wave',
-    image: 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=400&q=80',
-    price: 145000,
-    currency: '₦',
-    sold_count: 215,
-    social: ['💅 215 happy customers', '⭐ 5-star reviews only', '🔥 Most wished for'],
-    seller: { username: '@HairByFavour', avatar: 'https://i.pravatar.cc/40?img=47' },
-  },
-  {
-    id: 'demo-7',
-    title: 'Zobo Drink Set — 6 Bottles Premium',
-    image: 'https://images.unsplash.com/photo-1546173159-315724a31696?w=400&q=80',
-    price: 7800,
-    currency: '₦',
-    sold_count: 934,
-    social: ['🌿 No preservatives', '✅ 934 orders delivered', '⚡ Order before 12pm, ship today'],
-    seller: { username: '@ZoboQueenLagos', avatar: 'https://i.pravatar.cc/40?img=32' },
-  },
-  {
-    id: 'demo-8',
-    title: 'Afrobeats Drum Lesson — 4 Week Online',
-    image: 'https://images.unsplash.com/photo-1519892300165-cb5542fb47c7?w=400&q=80',
-    price: 35000,
-    currency: '₦',
-    sold_count: 156,
-    social: ['🎵 156 students enrolled', '📹 Lifetime video access', '🔥 Trending in Music'],
-    seller: { username: '@DrumsByEmeka', avatar: 'https://i.pravatar.cc/40?img=15' },
-  },
-];
-
-async function discFetchProducts(q, pane) {
-  // Filter demo products by query
-  const filtered = q
-    ? DEMO_PRODUCTS.filter(p =>
-        p.title.toLowerCase().includes(q.toLowerCase()) ||
-        p.seller.username.toLowerCase().includes(q.toLowerCase())
-      )
-    : DEMO_PRODUCTS;
-
-  // TODO: When products table is ready, replace above with:
-  // const { data, error } = await supabase
-  //   .from('products')
-  //   .select('id,title,image,price,currency,sold_count,user_id,user:users(id,username,avatar)')
-  //   .or(`title.ilike.%${q}%,description.ilike.%${q}%`)
-  //   .order('sold_count', { ascending: false })
-  //   .limit(20);
-  // const filtered = data || [];
-
-  if (!filtered.length) {
-    pane.innerHTML = `<div class="disc-no-results"><strong>No products found</strong>Try a different search</div>`;
-    return;
-  }
-
-  const grid = document.createElement('div');
-  grid.className = 'disc-products-grid';
-
-  filtered.forEach(prod => {
-    const card     = document.createElement('div');
-    card.className = 'disc-product-card';
-
-    const socialId  = 'sp-' + Math.random().toString(36).slice(2);
-    const price     = Number(prod.price || 0).toLocaleString();
-    const sold      = prod.sold_count ? `${Number(prod.sold_count).toLocaleString()} sold` : '';
-    const firstProof = prod.social?.[0] || DISC_SOCIAL_PROOF[0];
-
-    card.innerHTML = `
-      <div class="disc-product-img-wrap">
-        ${prod.image
-          ? `<img src="${prod.image}" alt="${escHtml(prod.title)}" loading="lazy">`
-          : `<div style="width:100%;height:100%;background:${gradientFor(prod.id)}"></div>`
-        }
-      </div>
-      <div class="disc-product-body">
-        <div class="disc-product-title">${escHtml(prod.title||'')}</div>
-        <div class="disc-product-social" id="${socialId}">${firstProof}</div>
-        <div class="disc-product-price-row">
-          <span class="disc-product-currency">${prod.currency||'₦'}</span>
-          <span class="disc-product-amount">${price}</span>
-          ${sold ? `<span class="disc-product-sold">${sold}</span>` : ''}
-        </div>
-        <div class="disc-product-seller" onclick="event.stopPropagation()">
-          <img class="disc-product-seller-av" src="${prod.seller?.avatar||''}" onerror="this.src=''" alt="">
-          <span class="disc-product-seller-name">${escHtml(prod.seller?.username||'')}</span>
-        </div>
-      </div>`;
-
-    card.addEventListener('click', () => openProduct(prod.id));
-    grid.appendChild(card);
-    discCycleSocialProof(socialId, prod.social);
-  });
-
-  pane.innerHTML = '';
-  pane.appendChild(grid);
-}
-
-// ── Social proof cycling ──
-function discCycleSocialProof(elId, customArr) {
-  const arr = customArr || DISC_SOCIAL_PROOF;
-  let idx = 0;
-  setInterval(() => {
-    const el = document.getElementById(elId);
-    if (!el) return;
-    el.style.opacity = '0';
-    setTimeout(() => {
-      idx = (idx + 1) % arr.length;
-      el.textContent = arr[idx];
-      el.style.opacity = '1';
-    }, 400);
-  }, 3000);
-}
-
-// ── openProduct placeholder ──
-function openProduct(id) {
-  // Product page — coming soon
-  showToast('Product page coming soon');
-}
-
-// ── Main init ──
-async function loadDiscover() {
-  const input = document.getElementById('disc-input');
-  if (!input) return;
-  if (input.dataset.init) return;
-  input.dataset.init = '1';
-
-  // Render recent searches
-  discRenderRecent();
-
-  // Load For You grid
-  discLoadForYou();
-
-  // Wire input
-  input.addEventListener('input', e => discOnInput(e.target.value));
-  input.addEventListener('focus', () => discRenderRecent());
-}
-
-// ══════════════════════════════════════════
 // PROFILE SUGGESTIONS
 // ══════════════════════════════════════════
 
@@ -5351,4 +5166,86 @@ async function renderSuggestedForOtherProfile(userId, username) {
   list.innerHTML = '';
   users.forEach(u => list.appendChild(buildSuggestCard(u, myFollowingIds.has(u.id))));
   console.log('suggest: rendered', users.length, 'cards');
+}
+
+// ═══════════════════════════════════════════
+// DETAIL PAGE MULTI-IMAGE SWIPER
+// ═══════════════════════════════════════════
+
+function _initDpSwiper(postId, total) {
+  const swiper  = document.getElementById('dp-swiper-' + postId);
+  const track   = document.getElementById('dp-swiper-track-' + postId);
+  const counter = document.getElementById('dp-swiper-counter-' + postId);
+  const dotsWrap = document.getElementById('dp-swiper-dots-' + postId);
+  if (!swiper || !track) return;
+
+  let current   = 0;
+  let startX    = 0;
+  let startY    = 0;
+  let isDragging = false;
+  let isScrolling = null;
+
+  function goTo(idx) {
+    current = Math.max(0, Math.min(total - 1, idx));
+    track.style.transform = `translateX(${-current * 100}%)`;
+
+    if (counter) counter.textContent = `${current + 1} / ${total}`;
+
+    if (dotsWrap) {
+      dotsWrap.querySelectorAll('.dp-swiper-dot').forEach((d, i) => {
+        d.classList.toggle('active', i === current);
+      });
+    }
+  }
+
+  // Touch events
+  swiper.addEventListener('touchstart', e => {
+    startX     = e.touches[0].clientX;
+    startY     = e.touches[0].clientY;
+    isDragging = true;
+    isScrolling = null;
+    track.style.transition = 'none';
+  }, { passive: true });
+
+  swiper.addEventListener('touchmove', e => {
+    if (!isDragging) return;
+    const dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+
+    // Detect scroll vs swipe on first move
+    if (isScrolling === null) {
+      isScrolling = Math.abs(dy) > Math.abs(dx);
+    }
+
+    if (isScrolling) return; // let page scroll
+
+    e.preventDefault(); // prevent scroll during horizontal swipe
+    const offset = -current * 100 + (dx / swiper.offsetWidth) * 100;
+    track.style.transform = `translateX(${offset}%)`;
+  }, { passive: false });
+
+  swiper.addEventListener('touchend', e => {
+    if (!isDragging || isScrolling) { isDragging = false; return; }
+    isDragging = false;
+
+    const dx = e.changedTouches[0].clientX - startX;
+    track.style.transition = 'transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94)';
+
+    if (dx < -40 && current < total - 1) goTo(current + 1);
+    else if (dx > 40 && current > 0) goTo(current - 1);
+    else goTo(current); // snap back
+  }, { passive: true });
+
+  // Dot taps
+  if (dotsWrap) {
+    dotsWrap.querySelectorAll('.dp-swiper-dot').forEach((dot, i) => {
+      dot.addEventListener('click', () => {
+        track.style.transition = 'transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94)';
+        goTo(i);
+      });
+    });
+  }
+
+  // Initial transition
+  track.style.transition = 'transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94)';
 }
