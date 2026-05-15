@@ -1844,6 +1844,10 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
       openDetail(postId, true);
       return;
     }
+    if (e.target.closest('.video-container')) {
+      openVideoFS(p.video, postId);
+      return;
+    }
     if (e.target.closest('.share-action')) {
       sharePost(p);
       return;
@@ -1971,10 +1975,10 @@ function injectFeedPostStyles() {
     .laptop { max-height: 400px; width: 100%; object-fit: contain; display: block; margin: 0; }
     /* Video */
     .video-container { position: relative; background: #000; border-radius: 14px; overflow: hidden; margin-top: 8px; }
-    .video-thumbnail { width: 100%; display: block; max-height: 480px; object-fit: cover; }
-    .video-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.12); }
-    .play-button { width: 56px; height: 56px; border-radius: 50%; background: rgba(108,71,255,0.55); border: 3px solid #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-    .play-button svg { margin-left: 3px; }
+    .video-thumbnail { width: 100%; display: block; max-height: 480px; object-fit: cover; pointer-events: none; }
+    .video-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.12); pointer-events: none; }
+    .play-button { width: 56px; height: 56px; border-radius: 50%; background: rgba(108,71,255,0.55); border: 3px solid #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; pointer-events: none; }
+    .play-button svg { margin-left: 3px; pointer-events: none; }
     .video-duration { position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.62); color: #fff; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; padding: 2px 7px; border-radius: 5px; pointer-events: none; }
     /* Stats row */
     .lefto {
@@ -3644,7 +3648,7 @@ async function openDetail(postId, scrollToComments = false) {
     } else if (p.image) {
       mediaHtml = `<div class="dp-media"><img src="${p.image}" alt="" onclick="openImageFS('${p.image}')"></div>`;
     } else if (p.video) {
-      mediaHtml = `<div class="dp-media"><div class="dp-video-wrap" onclick="openVideoFS('${p.video}')"><video preload="metadata"><source src="${p.video}#t=0.5" type="video/mp4"></video><div class="dp-play-overlay"><div class="dp-play-circle"><svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M5 3l14 9L5 21V3z"/></svg></div></div><div class="dp-video-duration" id="dpvd-${p.id}"></div></div></div>`;
+      mediaHtml = `<div class="dp-media"><div class="dp-video-wrap" onclick="openVideoFS('${p.video}','${p.id}')"><video preload="metadata"><source src="${p.video}#t=0.5" type="video/mp4"></video><div class="dp-play-overlay"><div class="dp-play-circle"><svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M5 3l14 9L5 21V3z"/></svg></div></div><div class="dp-video-duration" id="dpvd-${p.id}"></div></div></div>`;
     } else if (p.content) {
       // URL preview — same as feed
       const dpUrl = extractFirstUrl(p.content);
@@ -4679,4 +4683,295 @@ function _initDpSwiper(postId, total) {
   }
   // Initial transition
   track.style.transition = 'transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94)';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// FULL-SCREEN VIDEO PLAYER  (TikTok-style)
+// ══════════════════════════════════════════════════════════════════
+
+function openVideoFS(videoUrl, postId) {
+  // ── pull post data from LikeStore + DOM ───────────────────────
+  const likeState  = postId ? LikeStore.get(postId) : null;
+  const isLiked    = likeState?.liked  ?? false;
+  const likeCount  = likeState?.count  ?? 0;
+
+  // Grab username + avatar + comment count from the feed/detail card
+  let username = '', avatar = '', commentCount = 0;
+  if (postId) {
+    const card = document.querySelector(`[data-post-id="${postId}"]`);
+    if (card) {
+      username     = card.querySelector('.username, .post-author')?.textContent?.trim() || '';
+      avatar       = card.querySelector('.small-photo')?.src || '';
+      commentCount = parseInt(card.querySelector('.echoes-count')?.textContent) || 0;
+    }
+  }
+
+  // ── build overlay ─────────────────────────────────────────────
+  const overlay = document.createElement('div');
+  overlay.id = 'vfs-overlay';
+  overlay.innerHTML = `
+    <style>
+      #vfs-overlay {
+        position: fixed; inset: 0; z-index: 9999;
+        background: #000;
+        display: flex; align-items: center; justify-content: center;
+        touch-action: none;
+      }
+      #vfs-video {
+        position: absolute; inset: 0;
+        width: 100%; height: 100%;
+        object-fit: contain;
+        background: #000;
+      }
+      /* ── top bar ── */
+      #vfs-top {
+        position: absolute; top: 0; left: 0; right: 0;
+        padding: max(env(safe-area-inset-top, 16px), 16px) 16px 12px;
+        display: flex; align-items: center; gap: 12px;
+        background: linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, transparent 100%);
+        z-index: 2;
+      }
+      #vfs-close {
+        width: 36px; height: 36px; border-radius: 50%;
+        background: rgba(255,255,255,0.15); backdrop-filter: blur(6px);
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer; border: none; flex-shrink: 0;
+      }
+      #vfs-close svg { display: block; }
+      /* ── right action rail ── */
+      #vfs-rail {
+        position: absolute; right: 14px; bottom: max(env(safe-area-inset-bottom, 28px), 28px);
+        display: flex; flex-direction: column; align-items: center; gap: 22px;
+        z-index: 2;
+      }
+      .vfs-action {
+        display: flex; flex-direction: column; align-items: center; gap: 4px;
+        cursor: pointer; -webkit-tap-highlight-color: transparent;
+      }
+      .vfs-action-icon {
+        width: 48px; height: 48px; border-radius: 50%;
+        background: rgba(255,255,255,0.12); backdrop-filter: blur(8px);
+        display: flex; align-items: center; justify-content: center;
+        transition: background 0.15s;
+      }
+      .vfs-action:active .vfs-action-icon { background: rgba(255,255,255,0.22); }
+      .vfs-action-label {
+        font-size: 12px; font-weight: 600; color: #fff;
+        text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+        letter-spacing: 0.01em;
+      }
+      /* heart liked state */
+      #vfs-heart-icon .heart-path { transition: fill 0.15s, stroke 0.15s; }
+      /* ── bottom info bar ── */
+      #vfs-bottom {
+        position: absolute; bottom: 0; left: 0; right: 80px;
+        padding: 20px 16px max(calc(env(safe-area-inset-bottom, 20px) + 20px), 28px);
+        background: linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 100%);
+        z-index: 2;
+      }
+      #vfs-user {
+        display: flex; align-items: center; gap: 10px; margin-bottom: 10px;
+      }
+      #vfs-avatar {
+        width: 40px; height: 40px; border-radius: 50%; object-fit: cover;
+        border: 2px solid rgba(255,255,255,0.7);
+        background: #333; flex-shrink: 0;
+      }
+      #vfs-username {
+        font-weight: 700; font-size: 15px; color: #fff;
+        text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+      }
+      /* ── progress bar ── */
+      #vfs-progress-wrap {
+        position: absolute; bottom: max(env(safe-area-inset-bottom, 0px), 0px);
+        left: 0; right: 0; height: 3px;
+        background: rgba(255,255,255,0.25); cursor: pointer; z-index: 3;
+      }
+      #vfs-progress-fill {
+        height: 100%; background: #fff; width: 0%;
+        transition: width 0.25s linear; pointer-events: none;
+      }
+      /* ── play/pause tap flash ── */
+      #vfs-tap-flash {
+        position: absolute; inset: 0; display: flex;
+        align-items: center; justify-content: center;
+        pointer-events: none; z-index: 2; opacity: 0;
+        transition: opacity 0.2s;
+      }
+      #vfs-tap-flash-circle {
+        width: 64px; height: 64px; border-radius: 50%;
+        background: rgba(0,0,0,0.45);
+        display: flex; align-items: center; justify-content: center;
+      }
+    </style>
+
+    <video id="vfs-video" playsinline webkit-playsinline autoplay loop
+           src="${videoUrl}"></video>
+
+    <!-- top bar -->
+    <div id="vfs-top">
+      <button id="vfs-close" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+             stroke="white" stroke-width="2.5" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- right rail -->
+    <div id="vfs-rail">
+
+      <!-- Heart -->
+      <div class="vfs-action heart-ai" id="vfs-heart-btn"
+           data-post-id="${postId || ''}" data-liked="${isLiked ? 'true' : 'false'}">
+        <div class="vfs-action-icon" id="vfs-heart-icon-wrap">
+          <svg id="vfs-heart-icon" width="28" height="28" viewBox="0 0 24 24"
+               fill="${isLiked ? 'rgb(244,7,82)' : 'white'}"
+               stroke="${isLiked ? 'rgb(244,7,82)' : 'white'}"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path class="heart-path"
+              d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+          </svg>
+        </div>
+        <span class="vfs-action-label" id="vfs-like-count">${likeCount > 0 ? fmtNum(likeCount) : ''}</span>
+      </div>
+
+      <!-- Comment -->
+      <div class="vfs-action" id="vfs-comment-btn">
+        <div class="vfs-action-icon">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
+               stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+          </svg>
+        </div>
+        <span class="vfs-action-label">${commentCount > 0 ? commentCount : ''}</span>
+      </div>
+
+    </div>
+
+    <!-- bottom info -->
+    <div id="vfs-bottom">
+      <div id="vfs-user">
+        <img id="vfs-avatar" src="${avatar}" onerror="this.style.display='none'" alt="">
+        <span id="vfs-username">${username ? '@' + username : ''}</span>
+      </div>
+    </div>
+
+    <!-- progress bar -->
+    <div id="vfs-progress-wrap">
+      <div id="vfs-progress-fill"></div>
+    </div>
+
+    <!-- play/pause flash -->
+    <div id="vfs-tap-flash">
+      <div id="vfs-tap-flash-circle">
+        <svg id="vfs-tap-flash-icon" width="28" height="28" viewBox="0 0 24 24" fill="white">
+          <path d="M5 3l14 9L5 21V3z"/>
+        </svg>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+  document.body.style.overflow = 'hidden';
+
+  const vid        = overlay.querySelector('#vfs-video');
+  const fill       = overlay.querySelector('#vfs-progress-fill');
+  const flash      = overlay.querySelector('#vfs-tap-flash');
+  const flashIcon  = overlay.querySelector('#vfs-tap-flash-icon');
+  const heartBtn   = overlay.querySelector('#vfs-heart-btn');
+  const heartSvg   = overlay.querySelector('#vfs-heart-icon');
+  const likeCountEl = overlay.querySelector('#vfs-like-count');
+  const commentBtn = overlay.querySelector('#vfs-comment-btn');
+  const closeBtn   = overlay.querySelector('#vfs-close');
+  const progressWrap = overlay.querySelector('#vfs-progress-wrap');
+
+  // ── progress ──────────────────────────────────────────────────
+  vid.addEventListener('timeupdate', () => {
+    if (vid.duration) fill.style.width = (vid.currentTime / vid.duration * 100) + '%';
+  });
+
+  // ── seek on progress tap ──────────────────────────────────────
+  progressWrap.addEventListener('click', e => {
+    e.stopPropagation();
+    const r = progressWrap.getBoundingClientRect();
+    vid.currentTime = ((e.clientX - r.left) / r.width) * vid.duration;
+  });
+
+  // ── tap centre = play/pause ───────────────────────────────────
+  let tapTimer;
+  overlay.addEventListener('click', e => {
+    if (e.target.closest('#vfs-rail, #vfs-top, #vfs-bottom, #vfs-progress-wrap')) return;
+    clearTimeout(tapTimer);
+    tapTimer = setTimeout(() => {
+      if (vid.paused) {
+        vid.play();
+        flashIcon.setAttribute('d', 'M5 3l14 9L5 21V3z');
+      } else {
+        vid.pause();
+        flashIcon.setAttribute('d', 'M6 4h4v16H6zM14 4h4v16h-4z');
+      }
+      flash.style.opacity = '1';
+      setTimeout(() => { flash.style.opacity = '0'; }, 500);
+    }, 120);
+  });
+
+  // ── heart ─────────────────────────────────────────────────────
+  heartBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    if (!postId) return;
+    LikeStore.toggle(postId);
+    // _paint will update .heart-ai[data-post-id] including this button
+    animateHeart(heartSvg, !heartBtn.dataset.liked || heartBtn.dataset.liked === 'false');
+  });
+
+  // Hook _paint so the FS heart stays in sync with LikeStore
+  if (postId) {
+    const _origPaint = LikeStore._paint;
+    // Patch via a MutationObserver on the heart-ai element instead —
+    // watch dataset.liked which _paint sets
+    const paintObs = new MutationObserver(() => {
+      const liked = heartBtn.dataset.liked === 'true';
+      const RED = 'rgb(244,7,82)';
+      heartSvg.setAttribute('fill',   liked ? RED   : 'white');
+      heartSvg.setAttribute('stroke', liked ? RED   : 'white');
+      const s = LikeStore.get(postId);
+      if (likeCountEl) likeCountEl.textContent = s.count > 0 ? fmtNum(s.count) : '';
+    });
+    paintObs.observe(heartBtn, { attributes: true, attributeFilter: ['data-liked'] });
+
+    // ── comment ───────────────────────────────────────────────────
+    commentBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      closeVideoFS();
+      openDetail(postId, true);
+    });
+
+    // cleanup obs on close
+    overlay._paintObs = paintObs;
+  }
+
+  // ── close ─────────────────────────────────────────────────────
+  closeBtn.addEventListener('click', e => { e.stopPropagation(); closeVideoFS(); });
+
+  // back-swipe / back-gesture
+  let swipeStartY;
+  overlay.addEventListener('touchstart', e => { swipeStartY = e.touches[0].clientY; }, { passive: true });
+  overlay.addEventListener('touchend', e => {
+    if (!swipeStartY) return;
+    const dy = e.changedTouches[0].clientY - swipeStartY;
+    if (dy > 80) closeVideoFS();
+    swipeStartY = null;
+  }, { passive: true });
+}
+
+function closeVideoFS() {
+  const overlay = document.getElementById('vfs-overlay');
+  if (!overlay) return;
+  overlay._paintObs?.disconnect();
+  const vid = overlay.querySelector('#vfs-video');
+  if (vid) { vid.pause(); vid.src = ''; }
+  overlay.remove();
+  document.body.style.overflow = '';
 }
