@@ -75,12 +75,25 @@ function fmtVideoDuration(secs) {
   return `${m}:${String(s % 60).padStart(2,'0')}`;
 }
 
-function stampVideoDuration(videoEl, badgeId) {
-  if (!videoEl || !badgeId) return;
+function stampVideoDuration(videoElOrUrl, badgeId) {
+  if (!videoElOrUrl || !badgeId) return;
   const badge = document.getElementById(badgeId);
   if (!badge) return;
-  const set = () => { const t = fmtVideoDuration(videoEl.duration); if (t) badge.textContent = t; };
-  if (videoEl.readyState >= 1) { set(); } else { videoEl.addEventListener('loadedmetadata', set, { once: true }); }
+  // If passed a URL string (feed card uses img, not video) — spin up a hidden loader
+  if (typeof videoElOrUrl === 'string') {
+    const tmp = document.createElement('video');
+    tmp.preload = 'metadata';
+    tmp.src = videoElOrUrl;
+    tmp.addEventListener('loadedmetadata', () => {
+      const t = fmtVideoDuration(tmp.duration);
+      if (t) badge.textContent = t;
+      tmp.src = '';
+    }, { once: true });
+    return;
+  }
+  // Passed an actual video element (post detail)
+  const set = () => { const t = fmtVideoDuration(videoElOrUrl.duration); if (t) badge.textContent = t; };
+  if (videoElOrUrl.readyState >= 1) { set(); } else { videoElOrUrl.addEventListener('loadedmetadata', set, { once: true }); }
 }
 
 function animateCount(el, newVal) {
@@ -740,7 +753,7 @@ function renderPrfPosts(posts, containerId, isOwn, isProfilePage = false, viewin
       if (p?.id) {
         const isLiked = likedPosts.has(p.id);
         LikeStore.seed(p.id, p.like_count || 0, isLiked);
-        if (p.video && !p.image) stampVideoDuration(el.querySelector('.video-thumbnail'), `vd-${p.id}`);
+        if (p.video && !p.image) stampVideoDuration(p.video, `vd-${p.id}`);
       }
     }
   });
@@ -883,7 +896,7 @@ function renderPrfSavedSync(posts, containerId) {
   posts.forEach(p => {
     if (!p) return;
     const el = createFeedPost(p, true);
-    if (el) { c.appendChild(el); observePost(el); LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id)); if (p.video && !p.image) stampVideoDuration(el.querySelector('.video-thumbnail'), `vd-${p.id}`); }
+    if (el) { c.appendChild(el); observePost(el); LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id)); if (p.video && !p.image) stampVideoDuration(p.video, `vd-${p.id}`); }
   });
 }
 // Keep async version for invalidation/refresh after save toggle
@@ -903,7 +916,7 @@ async function renderPrfSaved(containerId) {
   c.innerHTML = '';
   data.map(r => r.post).filter(Boolean).forEach(p => {
     const el = createFeedPost(p, true);
-    if (el) { c.appendChild(el); observePost(el); LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id)); if (p.video && !p.image) stampVideoDuration(el.querySelector('.video-thumbnail'), `vd-${p.id}`); }
+    if (el) { c.appendChild(el); observePost(el); LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id)); if (p.video && !p.image) stampVideoDuration(p.video, `vd-${p.id}`); }
   });
 }
 function renderPrfStore(containerId) {
@@ -1724,9 +1737,9 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
         </div>` : ''}
       ${p.video && !p.image ? `
         <div class="video-container laptop1" data-post-id="${p.id}">
-          <video class="video-thumbnail" preload="metadata">
-            <source src="${p.video}#t=0.1" type="video/mp4">
-          </video>
+          <img class="video-thumbnail" src="${p.video}#t=0.1"
+               onerror="this.style.background='#111'"
+               alt="" draggable="false">
           <div class="video-overlay">
             <div class="play-button">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
@@ -3463,7 +3476,7 @@ async function openDetail(postId, scrollToComments = false) {
       .dp-media .dp-video-wrap {
         position: relative; background: #000; cursor: pointer; border-radius: 14px; overflow: hidden;
       }
-      .dp-media video { width: 100%; display: block; max-height: 480px; object-fit: cover; }
+      .dp-media video { width: 100%; display: block; max-height: 480px; object-fit: cover; pointer-events: none; }
       .dp-media .dp-play-overlay {
         position: absolute; inset: 0;
         display: flex; align-items: center; justify-content: center;
