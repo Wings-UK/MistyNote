@@ -35,6 +35,7 @@ async function openVideoPlayer(postId, videoType) {
 
     const vid = document.getElementById('vp-video');
     if (vid) { vid.src = p.video || ''; vid.muted = false; vid.play().catch(() => {}); }
+    _vpStartProgress();
 
     const avEl   = document.getElementById('vp-creator-av');
     const nameEl = document.getElementById('vp-creator-name');
@@ -104,8 +105,9 @@ function vpToggleLike() {
   _vp.liked     = !_vp.liked;
   _vp.likeCount = _vp.liked ? _vp.likeCount + 1 : Math.max(0, _vp.likeCount - 1);
   _vpPaintLike();
+  // Use same animateHeart animation as the feed
   const svg = document.querySelector('#vp-like-btn .vp-heart-svg');
-  if (svg) { svg.classList.remove('vp-heart-pop'); void svg.offsetWidth; svg.classList.add('vp-heart-pop'); }
+  if (svg) animateHeart(svg, _vp.liked);
   if (_vp.videoType === 'live_commerce') _vpSpawnHeart();
   LikeStore.toggle(_vp.postId);
 }
@@ -113,9 +115,18 @@ function vpToggleLike() {
 function _vpPaintLike() {
   const btn  = document.getElementById('vp-like-btn');
   const path = document.querySelector('#vp-like-btn .vp-heart-path');
+  const svg  = document.querySelector('#vp-like-btn .vp-heart-svg');
   const cnt  = document.getElementById('vp-like-count');
+  const RED  = 'rgb(244,7,82)';
   if (btn)  btn.classList.toggle('liked', _vp.liked);
-  if (path) { path.setAttribute('fill', _vp.liked ? 'rgb(244,7,82)' : 'none'); path.setAttribute('stroke', _vp.liked ? 'rgb(244,7,82)' : 'white'); }
+  if (path) {
+    path.setAttribute('fill',   _vp.liked ? RED   : 'white');
+    path.setAttribute('stroke', _vp.liked ? RED   : 'white');
+  }
+  if (svg) {
+    svg.setAttribute('fill',   _vp.liked ? RED   : 'white');
+    svg.setAttribute('stroke', _vp.liked ? RED   : 'white');
+  }
   if (cnt)  cnt.textContent = _vp.likeCount > 0 ? fmtNum(_vp.likeCount) : '';
 }
 
@@ -132,6 +143,23 @@ function vpTogglePlay() {
     if (iconPath) iconPath.setAttribute('d', 'M6 4h4v16H6zM14 4h4v16h-4z');
   }
   if (indicator) { indicator.classList.remove('show'); void indicator.offsetWidth; indicator.classList.add('show'); }
+}
+
+function vpSeek(e) {
+  const vid  = document.getElementById('vp-video');
+  const wrap = document.getElementById('vp-progress-wrap');
+  if (!vid || !wrap || !vid.duration) return;
+  const r = wrap.getBoundingClientRect();
+  vid.currentTime = ((e.clientX - r.left) / r.width) * vid.duration;
+}
+
+function _vpStartProgress() {
+  const vid  = document.getElementById('vp-video');
+  const fill = document.getElementById('vp-progress-fill');
+  if (!vid || !fill) return;
+  vid.addEventListener('timeupdate', () => {
+    if (vid.duration) fill.style.width = (vid.currentTime / vid.duration * 100) + '%';
+  });
 }
 
 function vpOpenComments() { if (_vp.postId) openDetail(_vp.postId, true); }
