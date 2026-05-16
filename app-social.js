@@ -1704,21 +1704,7 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
               1/${p.images.length}
             </div>` : ''}
         </div>` : ''}
-      ${p.video && !p.image ? `
-        <div class="video-container laptop1" data-post-id="${p.id}">
-          <video class="video-thumbnail" preload="metadata">
-            <source src="${p.video}" type="video/mp4">
-          </video>
-          <div class="video-overlay">
-            <div class="play-button">
-              <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-                <circle cx="24" cy="24" r="22" fill="rgba(244,7,82,0.5)" stroke="white" stroke-width="3"/>
-                <path d="M34 24L18 34V14L34 24Z" fill="white"/>
-              </svg>
-            </div>
-          </div>
-        </div>
-      ` : ''}
+      ${p.video && !p.image ? `<div class="feed-video-slot"></div>` : ''}
       ${urlPreviewHtml}
       ${cleanDisplay || cleanText ? `<div class="tir"><p class="tired">${cleanDisplay}</p></div>` : ''}
     `;
@@ -1780,6 +1766,13 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
   // ── Event listeners ──
   // Store post ID on element — read from DOM not closure to prevent stale ID bug
   el.dataset.postId = p.id;
+  // ── Inject video thumbnail via app-video.js ──
+  if (p.video && !p.image) {
+    const slot = el.querySelector('.feed-video-slot');
+    if (slot && typeof createFeedVideoThumb === 'function') {
+      slot.replaceWith(createFeedVideoThumb(p));
+    }
+  }
   // Fetch OG preview AFTER innerHTML is set — so el.querySelector works
   if (!p.image && !p.video && !isRepost) {
     const postUrl = extractFirstUrl(p.content || '');
@@ -3438,18 +3431,18 @@ async function openDetail(postId, scrollToComments = false) {
       }
       .dp-media .dp-video-wrap {
         position: relative; background: #000; cursor: pointer;
+        border-radius: 14px; overflow: hidden;
       }
-      .dp-media video { width: 100%; display: block; max-height: 420px; }
+      .dp-media video { width: 100%; display: block; max-height: 480px; object-fit: cover; pointer-events: none; }
       .dp-media .dp-play-overlay {
         position: absolute; inset: 0;
         display: flex; align-items: center; justify-content: center;
-        background: rgba(0,0,0,.18);
+        background: rgba(0,0,0,.12); pointer-events: none;
       }
       .dp-play-circle {
         width: 60px; height: 60px; border-radius: 50%;
-        background: rgba(0,0,0,.6); backdrop-filter: blur(10px);
+        background: rgba(108,71,255,0.55); border: 3px solid #fff;
         display: flex; align-items: center; justify-content: center;
-        box-shadow: 0 4px 20px rgba(0,0,0,.4);
       }
       /* ── Quoted / Repost card ── */
       .dp-quote-intro {
@@ -3617,7 +3610,7 @@ async function openDetail(postId, scrollToComments = false) {
     } else if (p.image) {
       mediaHtml = `<div class="dp-media"><img src="${p.image}" alt="" onclick="openImageFS('${p.image}')"></div>`;
     } else if (p.video) {
-      mediaHtml = `<div class="dp-media"><div class="dp-video-wrap" onclick="openVideoFS('${p.video}')"><video preload="metadata"><source src="${p.video}#t=0.5" type="video/mp4"></video><div class="dp-play-overlay"><div class="dp-play-circle"><svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M5 3l14 9L5 21V3z"/></svg></div></div></div></div>`;
+      mediaHtml = `<div class="dp-media"><div class="dp-video-wrap"><video preload="metadata" muted playsinline><source src="${p.video}#t=0.5" type="video/mp4"></video><div class="dp-play-overlay"><div class="dp-play-circle"><svg width="24" height="24" viewBox="0 0 24 24" fill="white" style="margin-left:3px"><path d="M5 3l14 9L5 21V3z"/></svg></div></div><div style="position:absolute;inset:0;z-index:5;cursor:pointer" onclick="openVideoPlayer('${p.id}','${p.video_type||'video'}')"></div></div></div>`;
     } else if (p.content) {
       // URL preview — same as feed
       const dpUrl = extractFirstUrl(p.content);
