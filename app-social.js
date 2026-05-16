@@ -3135,7 +3135,10 @@ async function _cSubmit() {
         });
         console.log('[MistyNote] 🚀 starting video upload via raw fetch...');
 
-        // Upload directly to Supabase Storage REST API — bypasses ESM client
+        // Read as ArrayBuffer first — Chrome Android rejects File objects as fetch body
+        const arrayBuffer = await _c.file.arrayBuffer();
+        console.log('[MistyNote] file read as ArrayBuffer, size:', arrayBuffer.byteLength);
+
         const uploadUrl = `${SUPA_URL}/storage/v1/object/videos/${path}`;
         const res = await fetch(uploadUrl, {
           method:  'POST',
@@ -3145,7 +3148,7 @@ async function _cSubmit() {
             'Content-Type':  _c.file.type || 'video/mp4',
             'x-upsert':      'true',
           },
-          body: _c.file,
+          body: arrayBuffer,
         });
 
         if (!res.ok) {
