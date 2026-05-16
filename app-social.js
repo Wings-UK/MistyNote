@@ -3466,7 +3466,7 @@ async function openDetail(postId, scrollToComments = false) {
       }
       .dp-media .dp-video-wrap {
         position: relative; background: #111; cursor: pointer;
-        border-radius: 14px; overflow: hidden; margin-bottom: 4px;
+        overflow: hidden; margin-bottom: 4px;
       }
       .dp-media video { width: 100%; display: block; max-height: 480px; object-fit: cover; pointer-events: none; }
       .dp-media .dp-play-overlay {
