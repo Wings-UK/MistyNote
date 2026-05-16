@@ -2922,8 +2922,15 @@ async function _cHandleFile(file) {
     img.src = _c.preview;
     img.style.display = 'block';
   } else {
+    console.log('[MistyNote] 🎬 video preview:', {
+      type: file.type,
+      sizeMB: (file.size / 1024 / 1024).toFixed(2) + 'MB',
+      blobUrl: _c.preview
+    });
     vid.src = _c.preview;
     vid.style.display = 'block';
+    vid.onerror = (e) => console.error('[MistyNote] ❌ video preview error:', e, vid.error?.message, vid.error?.code);
+    vid.onloadeddata = () => console.log('[MistyNote] ✅ video preview loaded ok');
   }
   wrap.style.display = 'block';
   // Scroll body down so preview is visible
@@ -3068,11 +3075,29 @@ async function _cSubmit() {
         const rawExt = (_c.file.name || '').split('.').pop().toLowerCase();
         const safeExt = (rawExt && rawExt.length >= 2 && rawExt.length <= 5) ? rawExt : 'mp4';
         const path = `${currentUser.id}/post_${Date.now()}.${safeExt}`;
-        const { error: upErr } = await supabase.storage
-          .from('avatars')
+        console.log('[MistyNote] 🎬 video details:', {
+          name: _c.file.name,
+          type: _c.file.type,
+          sizeMB: (_c.file.size / 1024 / 1024).toFixed(2) + 'MB',
+          path,
+          bucket: 'videos'
+        });
+        console.log('[MistyNote] 🚀 starting video upload...');
+        const { data: upData, error: upErr } = await supabase.storage
+          .from('videos')
           .upload(path, _c.file, { upsert: true, contentType: _c.file.type || 'video/mp4', cacheControl: '3600' });
-        if (upErr) throw new Error('Video upload failed: ' + upErr.message);
-        const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
+        if (upErr) {
+          console.error('[MistyNote] ❌ video upload error:', {
+            message: upErr.message,
+            statusCode: upErr.statusCode,
+            error: upErr.error,
+            cause: upErr.cause,
+            full: JSON.stringify(upErr)
+          });
+          throw new Error('Video upload failed: ' + upErr.message);
+        }
+        console.log('[MistyNote] ✅ video upload response:', upData);
+        const { data: urlData } = supabase.storage.from('videos').getPublicUrl(path);
         videoUrl = urlData.publicUrl;
         console.log('[MistyNote] ✅ video uploaded:', videoUrl);
       } else {
