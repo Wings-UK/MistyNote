@@ -3120,34 +3120,41 @@ async function _cSubmit() {
       const isVid = _c.file.type.startsWith('video/');
       console.log(`[MistyNote] uploading ${isVid ? 'video' : 'image'}:`, _c.file.name, _c.file.type);
       if (isVid) {
-        // Video: upload raw to avatars bucket under posts/ subfolder
-        const rawExt = (_c.file.name || '').split('.').pop().toLowerCase();
+        const rawExt  = (_c.file.name || '').split('.').pop().toLowerCase();
         const safeExt = (rawExt && rawExt.length >= 2 && rawExt.length <= 5) ? rawExt : 'mp4';
-        const path = `${currentUser.id}/post_${Date.now()}.${safeExt}`;
+        const path    = `${currentUser.id}/post_${Date.now()}.${safeExt}`;
+        const SUPA_URL = window._SUPA_URL;
+        const SUPA_KEY = window._SUPA_KEY;
+        const session  = await supabase.auth.getSession();
+        const token    = session?.data?.session?.access_token || SUPA_KEY;
+
         console.log('[MistyNote] 🎬 video details:', {
-          name: _c.file.name,
-          type: _c.file.type,
+          name: _c.file.name, type: _c.file.type,
           sizeMB: (_c.file.size / 1024 / 1024).toFixed(2) + 'MB',
-          path,
-          bucket: 'videos'
+          path, bucket: 'videos'
         });
-        console.log('[MistyNote] 🚀 starting video upload...');
-        const { data: upData, error: upErr } = await supabase.storage
-          .from('videos')
-          .upload(path, _c.file, { upsert: true, cacheControl: '3600' });
-        if (upErr) {
-          console.error('[MistyNote] ❌ video upload error:', {
-            message: upErr.message,
-            statusCode: upErr.statusCode,
-            error: upErr.error,
-            cause: upErr.cause,
-            full: JSON.stringify(upErr)
-          });
-          throw new Error('Video upload failed: ' + upErr.message);
+        console.log('[MistyNote] 🚀 starting video upload via raw fetch...');
+
+        // Upload directly to Supabase Storage REST API — bypasses ESM client
+        const uploadUrl = `${SUPA_URL}/storage/v1/object/videos/${path}`;
+        const res = await fetch(uploadUrl, {
+          method:  'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'apikey':        SUPA_KEY,
+            'Content-Type':  _c.file.type || 'video/mp4',
+            'x-upsert':      'true',
+          },
+          body: _c.file,
+        });
+
+        if (!res.ok) {
+          const errText = await res.text().catch(() => res.statusText);
+          console.error('[MistyNote] ❌ video upload failed:', res.status, errText);
+          throw new Error(`Video upload failed (${res.status}): ${errText}`);
         }
-        console.log('[MistyNote] ✅ video upload response:', upData);
-        const { data: urlData } = supabase.storage.from('videos').getPublicUrl(path);
-        videoUrl = urlData.publicUrl;
+
+        videoUrl = `${SUPA_URL}/storage/v1/object/public/videos/${path}`;
         console.log('[MistyNote] ✅ video uploaded:', videoUrl);
       } else {
         // Compress via canvas using the preview img element directly —
