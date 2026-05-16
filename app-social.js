@@ -1285,15 +1285,18 @@ async function loadExploreFeed(list, PER_PAGE) {
       comments(count)`;
     // ── Time windows ────────────────────────────────────────
     const NOW               = new Date();
-    const MAX_AGE_DAYS      = 7;                    // X shows older viral content
+    const MAX_AGE_DAYS      = 365;                  // following feed: up to a year
+    const DISCOVER_AGE_DAYS = 30;                   // discovery/trending: last 30 days
     const HIGH_VELOCITY_HRS = 36;                   // very recent → strong boost
     const MEDIUM_VELOCITY_HRS = 96;                 // still "hot" up to ~4 days
     const MAX_AGE_MS        = MAX_AGE_DAYS * 86400000;
+    const DISCOVER_AGE_MS   = DISCOVER_AGE_DAYS * 86400000;
     const HIGH_VEL_MS       = HIGH_VELOCITY_HRS * 3600000;
     const MED_VEL_MS        = MEDIUM_VELOCITY_HRS * 3600000;
     const HIGH_VEL_CUTOFF   = new Date(NOW - HIGH_VEL_MS).toISOString();
     const MED_VEL_CUTOFF    = new Date(NOW - MED_VEL_MS).toISOString();
     const MAX_AGE_CUTOFF    = new Date(NOW - MAX_AGE_MS).toISOString();
+    const DISCOVER_CUTOFF   = new Date(NOW - DISCOVER_AGE_MS).toISOString();
     // ── Get social graph ────────────────────────────────────
     let followingIds = [];
     let userCountry  = null;
@@ -1332,15 +1335,15 @@ async function loadExploreFeed(list, PER_PAGE) {
       followingIds.length > 0
         ? supabase.from('posts').select(SELECT)
             .in('user_id', followingIds)
-            .gte('created_at', MAX_AGE_CUTOFF)
+            .gte('created_at', MAX_AGE_CUTOFF)       // up to 1 year for people you follow
             .order('created_at', { ascending: false })
-            .limit(30)
+            .limit(60)
         : { data: [] },
       // 2. Friends-of-friends (social proof)
       fofIds.length > 0
         ? supabase.from('posts').select(SELECT)
             .in('user_id', fofIds)
-            .gte('created_at', MAX_AGE_CUTOFF)
+            .gte('created_at', DISCOVER_CUTOFF)      // 30 days for FoF
             .order('created_at', { ascending: false })
             .limit(25)
         : { data: [] },
@@ -1358,13 +1361,13 @@ async function loadExploreFeed(list, PER_PAGE) {
       // 5. Location-based (same country)
       userCountry
         ? supabase.from('posts').select(SELECT)
-            .gte('created_at', MAX_AGE_CUTOFF)
+            .gte('created_at', DISCOVER_CUTOFF)      // 30 days for local discovery
             .order('created_at', { ascending: false })
             .limit(60)
         : { data: [] },
       // 6. General recent content (discovery / cold-start filler)
       supabase.from('posts').select(SELECT)
-        .gte('created_at', MAX_AGE_CUTOFF)
+        .gte('created_at', DISCOVER_CUTOFF)          // 30 days for general discovery
         .order('created_at', { ascending: false })
         .limit(40),
     ]);
