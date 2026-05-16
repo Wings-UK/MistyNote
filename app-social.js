@@ -76,11 +76,40 @@ function fmtVideoDuration(secs) {
 }
 
 function stampVideoDuration(videoEl, badgeId) {
-  if (!videoEl || !badgeId) return;
+  if (!badgeId) return;
   const badge = document.getElementById(badgeId);
   if (!badge) return;
-  const set = () => { const t = fmtVideoDuration(videoEl.duration); if (t) badge.textContent = t; };
-  if (videoEl.readyState >= 1) { set(); } else { videoEl.addEventListener('loadedmetadata', set, { once: true }); }
+  const set = (v) => { const t = fmtVideoDuration(v.duration); if (t) badge.textContent = t; };
+  // If no real video element passed, spin up a hidden one just to read metadata
+  const v = videoEl || document.createElement('video');
+  if (!videoEl) {
+    // caller must set v.src after calling this — handled below via URL overload
+    return;
+  }
+  if (v.readyState >= 1) { set(v); return; }
+  v.addEventListener('loadedmetadata', () => set(v), { once: true });
+  // Fallback: some mobile browsers never fire loadedmetadata for off-screen videos.
+  // Force a load attempt.
+  if (v.networkState === 0 || v.networkState === 3) v.load();
+  // Poll fallback after 3s in case event never fires
+  setTimeout(() => {
+    if (!badge.textContent && v.duration) set(v);
+  }, 3000);
+}
+
+function stampVideoDurationFromUrl(url, badgeId) {
+  if (!url || !badgeId) return;
+  const badge = document.getElementById(badgeId);
+  if (!badge) return;
+  const tmp = document.createElement('video');
+  tmp.preload = 'metadata';
+  tmp.src = url;
+  tmp.addEventListener('loadedmetadata', () => {
+    const t = fmtVideoDuration(tmp.duration);
+    if (t) badge.textContent = t;
+    tmp.src = '';
+  }, { once: true });
+  tmp.load();
 }
 
 function animateCount(el, newVal) {
@@ -740,7 +769,7 @@ function renderPrfPosts(posts, containerId, isOwn, isProfilePage = false, viewin
       if (p?.id) {
         const isLiked = likedPosts.has(p.id);
         LikeStore.seed(p.id, p.like_count || 0, isLiked);
-        if (p.video && !p.image) stampVideoDuration(el.querySelector('.video-thumbnail'), `vd-${p.id}`);
+        if (p.video && !p.image) stampVideoDurationFromUrl(p.video, `vd-${p.id}`);
       }
     }
   });
@@ -883,7 +912,7 @@ function renderPrfSavedSync(posts, containerId) {
   posts.forEach(p => {
     if (!p) return;
     const el = createFeedPost(p, true);
-    if (el) { c.appendChild(el); observePost(el); LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id)); if (p.video && !p.image) stampVideoDuration(el.querySelector('.video-thumbnail'), `vd-${p.id}`); }
+    if (el) { c.appendChild(el); observePost(el); LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id)); if (p.video && !p.image) stampVideoDurationFromUrl(p.video, `vd-${p.id}`); }
   });
 }
 // Keep async version for invalidation/refresh after save toggle
@@ -903,7 +932,7 @@ async function renderPrfSaved(containerId) {
   c.innerHTML = '';
   data.map(r => r.post).filter(Boolean).forEach(p => {
     const el = createFeedPost(p, true);
-    if (el) { c.appendChild(el); observePost(el); LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id)); if (p.video && !p.image) stampVideoDuration(el.querySelector('.video-thumbnail'), `vd-${p.id}`); }
+    if (el) { c.appendChild(el); observePost(el); LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id)); if (p.video && !p.image) stampVideoDurationFromUrl(p.video, `vd-${p.id}`); }
   });
 }
 function renderPrfStore(containerId) {
@@ -1723,7 +1752,7 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
             </div>` : ''}
         </div>` : ''}
       ${p.video && !p.image ? `
-        <div class="video-container laptop1" data-post-id="${p.id}">
+        <div class="video-container laptop1">
           <video class="video-thumbnail" preload="metadata" muted playsinline
                  style="pointer-events:none">
             <source src="${p.video}#t=0.1" type="video/mp4">
@@ -1736,7 +1765,7 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
             </div>
           </div>
           <div class="video-duration" id="vd-${p.id}"></div>
-          <div class="video-tap-catcher"></div>
+          <div class="video-tap-catcher" onclick="event.stopPropagation();openVideoFS('${p.video}','${p.id}')"></div>
         </div>
       ` : ''}
       ${urlPreviewHtml}
