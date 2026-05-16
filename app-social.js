@@ -1945,10 +1945,45 @@ function injectFeedPostStyles() {
     .laptop1 { max-width: 100%; margin-top: 10px; padding: 0; overflow: hidden; border-radius: 14px; background: #f4f3f0; max-height: 400px; display: flex; align-items: center; justify-content: center; }
     .laptop { max-height: 400px; width: 100%; object-fit: contain; display: block; margin: 0; }
     /* Video */
-    .video-container { position: relative; background: #000; border-radius: 12px; overflow: hidden; margin-top: 10px; }
-    .video-thumbnail { width: 100%; display: block; max-height: 400px; }
-    .video-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.15); }
-    .play-button { display: flex; align-items: center; justify-content: center; }
+    .video-container { display: none; } /* legacy — replaced by feed-video-thumb */
+
+    /* ── Feed video thumbnail (new design) ── */
+    .feed-video-thumb {
+      position: relative; width: 100%; overflow: hidden;
+      border-radius: 14px; background: #111;
+      margin-top: 8px; margin-bottom: 4px; cursor: pointer;
+    }
+    .feed-video-thumb video {
+      width: 100%; display: block;
+      max-height: 480px; object-fit: cover;
+      pointer-events: none;
+    }
+    .feed-video-play-wrap {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      pointer-events: none;
+    }
+    .feed-video-play-circle {
+      width: 54px; height: 54px; border-radius: 50%;
+      background: rgba(108,71,255,0.52);
+      border: 2px solid #fff;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .feed-video-duration {
+      position: absolute; bottom: 10px; right: 10px;
+      background: rgba(0,0,0,0.60); color: #fff;
+      font-size: 12px; font-weight: 600; letter-spacing: 0.02em;
+      padding: 2px 7px; border-radius: 5px;
+      pointer-events: none;
+    }
+    .feed-video-live-badge {
+      position: absolute; top: 10px; left: 10px;
+      background: rgba(244,7,82,0.85); color: #fff;
+      font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+      padding: 2px 8px; border-radius: 5px;
+      display: flex; align-items: center;
+      pointer-events: none;
+    }
     /* Stats row */
     .lefto {
       display: flex;
@@ -3430,19 +3465,26 @@ async function openDetail(postId, scrollToComments = false) {
         background: #000; cursor: zoom-in;
       }
       .dp-media .dp-video-wrap {
-        position: relative; background: #000; cursor: pointer;
-        border-radius: 14px; overflow: hidden;
+        position: relative; background: #111; cursor: pointer;
+        border-radius: 14px; overflow: hidden; margin-bottom: 4px;
       }
       .dp-media video { width: 100%; display: block; max-height: 480px; object-fit: cover; pointer-events: none; }
       .dp-media .dp-play-overlay {
         position: absolute; inset: 0;
         display: flex; align-items: center; justify-content: center;
-        background: rgba(0,0,0,.12); pointer-events: none;
+        pointer-events: none;
       }
       .dp-play-circle {
-        width: 60px; height: 60px; border-radius: 50%;
-        background: rgba(108,71,255,0.55); border: 3px solid #fff;
+        width: 54px; height: 54px; border-radius: 50%;
+        background: rgba(108,71,255,0.52);
+        border: 2px solid #fff;
         display: flex; align-items: center; justify-content: center;
+      }
+      .dp-video-duration {
+        position: absolute; bottom: 10px; right: 10px;
+        background: rgba(0,0,0,0.60); color: #fff;
+        font-size: 12px; font-weight: 600; letter-spacing: 0.02em;
+        padding: 2px 7px; border-radius: 5px; pointer-events: none;
       }
       /* ── Quoted / Repost card ── */
       .dp-quote-intro {
@@ -3610,7 +3652,7 @@ async function openDetail(postId, scrollToComments = false) {
     } else if (p.image) {
       mediaHtml = `<div class="dp-media"><img src="${p.image}" alt="" onclick="openImageFS('${p.image}')"></div>`;
     } else if (p.video) {
-      mediaHtml = `<div class="dp-media"><div class="dp-video-wrap"><video preload="metadata" muted playsinline><source src="${p.video}#t=0.5" type="video/mp4"></video><div class="dp-play-overlay"><div class="dp-play-circle"><svg width="24" height="24" viewBox="0 0 24 24" fill="white" style="margin-left:3px"><path d="M5 3l14 9L5 21V3z"/></svg></div></div><div style="position:absolute;inset:0;z-index:5;cursor:pointer" onclick="openVideoPlayer('${p.id}','${p.video_type||'video'}')"></div></div></div>`;
+      mediaHtml = `<div class="dp-media"><div class="dp-video-wrap"><video preload="metadata" muted playsinline><source src="${p.video}#t=0.5" type="video/mp4"></video><div class="dp-play-overlay"><div class="dp-play-circle"><svg width="22" height="22" viewBox="0 0 24 24" fill="white" style="margin-left:3px"><path d="M5 3l14 9L5 21V3z"/></svg></div></div><div class="dp-video-duration" id="dpvd-${p.id}"></div><div style="position:absolute;inset:0;z-index:5;cursor:pointer" onclick="openVideoPlayer('${p.id}','${p.video_type||'video'}')"></div></div></div>`;
     } else if (p.content) {
       // URL preview — same as feed
       const dpUrl = extractFirstUrl(p.content);
@@ -3722,6 +3764,22 @@ async function openDetail(postId, scrollToComments = false) {
     } else {
       if (detailShareBtn) { detailShareBtn.style.display = ''; detailShareBtn.onclick = () => sharePost(p); }
       if (detailMoreBtn)  detailMoreBtn.style.display = 'none';
+    }
+    // ── Detail video duration badge ──
+    if (p.video && !p.image) {
+      const dpVid   = document.getElementById('detail-body')?.querySelector('.dp-video-wrap video');
+      const dpBadge = document.getElementById(`dpvd-${p.id}`);
+      if (dpVid && dpBadge) {
+        const setDur = () => {
+          if (dpVid.duration && isFinite(dpVid.duration)) {
+            const m = Math.floor(dpVid.duration / 60);
+            const s = Math.floor(dpVid.duration % 60).toString().padStart(2,'0');
+            dpBadge.textContent = m + ':' + s;
+          }
+        };
+        if (dpVid.readyState >= 1) setDur();
+        else dpVid.addEventListener('loadedmetadata', setDur, { once: true });
+      }
     }
     // ── Mini identity in detail header (fades in when author avatar scrolls out) ──
     const dpHeaderIdentity = document.getElementById('dp-header-identity');
