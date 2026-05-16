@@ -723,7 +723,6 @@ function renderPrfPosts(posts, containerId, isOwn, isProfilePage = false, viewin
       if (p?.id) {
         const isLiked = likedPosts.has(p.id);
         LikeStore.seed(p.id, p.like_count || 0, isLiked);
-        if (p.video && !p.image)
       }
     }
   });
@@ -866,7 +865,7 @@ function renderPrfSavedSync(posts, containerId) {
   posts.forEach(p => {
     if (!p) return;
     const el = createFeedPost(p, true);
-    if (el) { c.appendChild(el); observePost(el); LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id)); if (p.video && !p.image) }
+    if (el) { c.appendChild(el); observePost(el); LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id)); }
   });
 }
 // Keep async version for invalidation/refresh after save toggle
@@ -886,7 +885,7 @@ async function renderPrfSaved(containerId) {
   c.innerHTML = '';
   data.map(r => r.post).filter(Boolean).forEach(p => {
     const el = createFeedPost(p, true);
-    if (el) { c.appendChild(el); observePost(el); LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id)); if (p.video && !p.image) }
+    if (el) { c.appendChild(el); observePost(el); LikeStore.seed(p.id, p.like_count || 0, likedPosts.has(p.id)); }
   });
 }
 function renderPrfStore(containerId) {
@@ -1705,7 +1704,21 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
               1/${p.images.length}
             </div>` : ''}
         </div>` : ''}
-      ${p.video && !p.image ? `<div class="feed-video-slot"></div>` : ''}
+      ${p.video && !p.image ? `
+        <div class="video-container laptop1" data-post-id="${p.id}">
+          <video class="video-thumbnail" preload="metadata">
+            <source src="${p.video}" type="video/mp4">
+          </video>
+          <div class="video-overlay">
+            <div class="play-button">
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                <circle cx="24" cy="24" r="22" fill="rgba(244,7,82,0.5)" stroke="white" stroke-width="3"/>
+                <path d="M34 24L18 34V14L34 24Z" fill="white"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+      ` : ''}
       ${urlPreviewHtml}
       ${cleanDisplay || cleanText ? `<div class="tir"><p class="tired">${cleanDisplay}</p></div>` : ''}
     `;
@@ -1767,13 +1780,6 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
   // ── Event listeners ──
   // Store post ID on element — read from DOM not closure to prevent stale ID bug
   el.dataset.postId = p.id;
-  // ── Inject video thumb via app-video.js ──
-  if (p.video && !p.image) {
-    const slot = el.querySelector('.feed-video-slot');
-    if (slot && typeof createFeedVideoThumb === 'function') {
-      slot.replaceWith(createFeedVideoThumb(p));
-    }
-  }
   // Fetch OG preview AFTER innerHTML is set — so el.querySelector works
   if (!p.image && !p.video && !isRepost) {
     const postUrl = extractFirstUrl(p.content || '');
@@ -1818,10 +1824,6 @@ function createFeedPost(p, isProfilePage = false, viewingUserId = null) {
     }
     if (e.target.closest('.comment-btn')) {
       openDetail(postId, true);
-      return;
-    }
-    if (e.target.closest('.video-tap-catcher') || e.target.closest('.feed-video-thumb')) {
-      openVideoPlayer(postId, p.video_type || 'video');
       return;
     }
     if (e.target.closest('.share-action')) {
@@ -1950,13 +1952,10 @@ function injectFeedPostStyles() {
     .laptop1 { max-width: 100%; margin-top: 10px; padding: 0; overflow: hidden; border-radius: 14px; background: #f4f3f0; max-height: 400px; display: flex; align-items: center; justify-content: center; }
     .laptop { max-height: 400px; width: 100%; object-fit: contain; display: block; margin: 0; }
     /* Video */
-    .video-container { position: relative; background: #000; border-radius: 14px; overflow: hidden; margin-top: 8px; }
-    .video-thumbnail { width: 100%; display: block; max-height: 480px; object-fit: cover; pointer-events: none; }
-    .video-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.12); pointer-events: none; }
-    .play-button { width: 56px; height: 56px; border-radius: 50%; background: rgba(108,71,255,0.55); border: 3px solid #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; pointer-events: none; }
-    .play-button svg { margin-left: 3px; pointer-events: none; }
-    .video-duration { position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.62); color: #fff; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; padding: 2px 7px; border-radius: 5px; pointer-events: none; }
-    .video-tap-catcher { position: absolute; inset: 0; z-index: 5; cursor: pointer; }
+    .video-container { position: relative; background: #000; border-radius: 12px; overflow: hidden; margin-top: 10px; }
+    .video-thumbnail { width: 100%; display: block; max-height: 400px; }
+    .video-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.15); }
+    .play-button { display: flex; align-items: center; justify-content: center; }
     /* Stats row */
     .lefto {
       display: flex;
@@ -3438,29 +3437,19 @@ async function openDetail(postId, scrollToComments = false) {
         background: #000; cursor: zoom-in;
       }
       .dp-media .dp-video-wrap {
-        position: relative; background: #000; cursor: pointer; border-radius: 14px; overflow: hidden;
+        position: relative; background: #000; cursor: pointer;
       }
-      .dp-video-tap {
-        position: absolute; inset: 0; z-index: 5; cursor: pointer;
-      }
-      .dp-media video { width: 100%; display: block; max-height: 480px; object-fit: cover; pointer-events: none; }
+      .dp-media video { width: 100%; display: block; max-height: 420px; }
       .dp-media .dp-play-overlay {
         position: absolute; inset: 0;
         display: flex; align-items: center; justify-content: center;
-        background: rgba(0,0,0,.12);
+        background: rgba(0,0,0,.18);
       }
       .dp-play-circle {
         width: 60px; height: 60px; border-radius: 50%;
-        background: rgba(108,71,255,0.55); border: 3px solid #fff;
+        background: rgba(0,0,0,.6); backdrop-filter: blur(10px);
         display: flex; align-items: center; justify-content: center;
-        flex-shrink: 0;
-      }
-      .dp-play-circle svg { margin-left: 4px; }
-      .dp-video-duration {
-        position: absolute; bottom: 10px; right: 10px;
-        background: rgba(0,0,0,0.62); color: #fff;
-        font-size: 12px; font-weight: 600; letter-spacing: 0.02em;
-        padding: 2px 7px; border-radius: 5px; pointer-events: none;
+        box-shadow: 0 4px 20px rgba(0,0,0,.4);
       }
       /* ── Quoted / Repost card ── */
       .dp-quote-intro {
@@ -3628,7 +3617,7 @@ async function openDetail(postId, scrollToComments = false) {
     } else if (p.image) {
       mediaHtml = `<div class="dp-media"><img src="${p.image}" alt="" onclick="openImageFS('${p.image}')"></div>`;
     } else if (p.video) {
-      mediaHtml = `<div class="dp-media"><div class="dp-video-wrap"><video class="dp-video-thumb" preload="metadata" muted playsinline style="pointer-events:none;width:100%;display:block;max-height:480px;object-fit:cover"><source src="${p.video}#t=0.5" type="video/mp4"></video><div class="dp-play-overlay" style="pointer-events:none"><div class="dp-play-circle"><svg width="24" height="24" viewBox="0 0 24 24" fill="white" style="margin-left:3px"><path d="M5 3l14 9L5 21V3z"/></svg></div></div><div class="dp-video-duration" id="dpvd-${p.id}"></div><div class="dp-video-tap" onclick="openVideoPlayer('${p.id}','${p.video_type||'video'}')"></div></div></div>`;
+      mediaHtml = `<div class="dp-media"><div class="dp-video-wrap" onclick="openVideoFS('${p.video}')"><video preload="metadata"><source src="${p.video}#t=0.5" type="video/mp4"></video><div class="dp-play-overlay"><div class="dp-play-circle"><svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M5 3l14 9L5 21V3z"/></svg></div></div></div></div>`;
     } else if (p.content) {
       // URL preview — same as feed
       const dpUrl = extractFirstUrl(p.content);
