@@ -2929,7 +2929,16 @@ async function _cHandleFile(file) {
     });
     vid.src = _c.preview;
     vid.style.display = 'block';
-    vid.onerror = (e) => console.error('[MistyNote] ❌ video preview error:', e, vid.error?.message, vid.error?.code);
+    vid.onerror = () => {
+      console.error('[MistyNote] ❌ video preview error — unsupported codec (likely HEVC/H.265):', vid.error?.code, vid.error?.message);
+      vid.style.display = 'none';
+      wrap.style.display = 'none';
+      URL.revokeObjectURL(_c.preview);
+      _c.preview = null;
+      _c.file    = null;
+      showToast('Video format not supported. Please use a standard MP4 file.');
+      _cSync();
+    };
     vid.onloadeddata = () => console.log('[MistyNote] ✅ video preview loaded ok');
   }
   wrap.style.display = 'block';
@@ -3085,7 +3094,7 @@ async function _cSubmit() {
         console.log('[MistyNote] 🚀 starting video upload...');
         const { data: upData, error: upErr } = await supabase.storage
           .from('videos')
-          .upload(path, _c.file, { upsert: true, contentType: _c.file.type || 'video/mp4', cacheControl: '3600' });
+          .upload(path, _c.file, { upsert: true, cacheControl: '3600' });
         if (upErr) {
           console.error('[MistyNote] ❌ video upload error:', {
             message: upErr.message,
