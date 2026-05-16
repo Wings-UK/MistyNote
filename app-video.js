@@ -196,12 +196,14 @@ function createFeedVideoThumb(p) {
     <video preload="metadata" muted playsinline loop>
       <source src="${p.video}#t=0.5" type="video/mp4">
     </video>
-    <div class="feed-video-thumb-overlay">
-      <div class="feed-video-play-btn">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><path d="M5 3l14 9L5 21V3z"/></svg>
+    ${isLive ? `<div class="feed-video-live-badge"><span style="width:6px;height:6px;border-radius:50%;background:#fff;display:inline-block;margin-right:4px"></span>LIVE</div>` : ''}
+    <div class="feed-video-play-wrap">
+      <div class="feed-video-play-circle">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="white" style="margin-left:3px">
+          <path d="M5 3l14 9L5 21V3z"/>
+        </svg>
       </div>
     </div>
-    ${isLive ? `<div class="feed-video-live-badge"><span style="width:6px;height:6px;border-radius:50%;background:#fff;display:inline-block"></span>LIVE</div>` : ''}
     <div class="feed-video-duration" id="fvd-${p.id}"></div>
   `;
 
