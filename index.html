@@ -16,7 +16,6 @@
   <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 </head>
 <body>
-
   <!-- ══════════════════════════════════════════
        AUTH SCREEN
   ══════════════════════════════════════════ -->
@@ -53,17 +52,14 @@
     })();
   </script>
   <div id="auth-screen" class="auth-screen" style="display:var(--auth-display,flex)">
-
     <!-- Background -->
     <div class="auth-bg">
       <div class="auth-pattern"></div>
       <div class="auth-glow-1"></div>
       <div class="auth-glow-2"></div>
     </div>
-
     <!-- Landing state: Logo + tagline + CTAs -->
     <div class="auth-landing" id="auth-landing">
-
       <!-- Top wordmark -->
       <div class="auth-wordmark">
         <svg width="72" height="35" viewBox="0 0 470 230" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -78,14 +74,12 @@
         </svg>
         <span>MistyNote</span>
       </div>
-
       <!-- Hero -->
       <div class="auth-hero">
         <div class="auth-hero-badge">🌍 Made for Africa</div>
         <h1 class="auth-hero-title">Where Africans<br>buy, sell &amp;<br>connect safely.</h1>
         <p class="auth-hero-sub">Join thousands of Africans already building, selling and connecting on MistyNote.</p>
       </div>
-
       <!-- CTAs -->
       <div class="auth-ctas">
         <button class="auth-google-btn" onclick="handleGoogleAuth()">
@@ -97,26 +91,19 @@
           </svg>
           Continue with Google
         </button>
-
         <div class="auth-divider"><span>or</span></div>
-
         <button class="auth-email-btn" onclick="showEmailAuth('login')">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 7l10 7 10-7"/></svg>
           Continue with Email
         </button>
-
         <p class="auth-terms">By continuing you agree to our <a href="#" onclick="openLegalPage('terms');return false">Terms</a> and <a href="#" onclick="openLegalPage('privacy');return false">Privacy Policy</a></p>
       </div>
-
     </div>
-
     <!-- Email form state -->
     <div class="auth-email-screen hidden" id="auth-email-screen">
-
       <button class="auth-back-btn" onclick="showAuthLanding()">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
       </button>
-
       <div class="auth-form-header">
         <div class="auth-form-logo">
           <svg width="70" height="34" viewBox="0 0 470 230" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -133,19 +120,16 @@
         <h2 class="auth-form-title" id="auth-form-title">Sign in to MistyNote</h2>
         <p class="auth-form-sub" id="auth-form-sub">Welcome back. Enter your details below.</p>
       </div>
-
       <!-- Tabs -->
       <div class="auth-tabs">
         <button class="auth-tab active" id="tab-login" onclick="setAuthTab('login')">Sign In</button>
         <button class="auth-tab" id="tab-signup" onclick="setAuthTab('signup')">Sign Up</button>
       </div>
-
       <div class="auth-form">
         <div class="auth-input-wrap">
           <svg class="auth-input-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 7l10 7 10-7"/></svg>
           <input type="email" id="auth-email" placeholder="Email address" class="auth-input">
         </div>
-
         <div class="auth-input-wrap" id="username-wrap" style="display:none">
           <svg class="auth-input-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 006 0v-1a10 10 0 10-3.92 7.94"/></svg>
           <input type="text" id="auth-username" placeholder="Choose a username" class="auth-input" maxlength="15" autocomplete="off" autocapitalize="none" spellcheck="false">
@@ -163,11 +147,8 @@
           <div class="btn-loader" id="auth-loader" style="display:none"></div>
         </button>
       </div>
-
     </div>
-
   </div>
-
   <!-- ══════════════════════════════════════════
        USERNAME PICKER (Google Sign-Up)
   ══════════════════════════════════════════ -->
@@ -195,17 +176,14 @@
       </button>
     </div>
   </div>
-
   <!-- ══════════════════════════════════════════
        ONBOARDING FLOW
   ══════════════════════════════════════════ -->
   <div id="onboarding-screen" class="onboarding-screen hidden">
-
     <!-- Progress bar -->
     <div class="ob-progress-wrap">
       <div class="ob-progress-bar" id="ob-progress-bar"></div>
     </div>
-
     <!-- ── STEP 1: Welcome ── -->
     <div class="ob-step active" id="ob-step-1">
       <div class="ob-step-inner ob-welcome">
@@ -232,7 +210,6 @@
         </button>
       </div>
     </div>
-
     <!-- ── STEP 2: Profile Photo + Bio ── -->
     <div class="ob-step" id="ob-step-2">
       <div class="ob-step-inner">
@@ -240,7 +217,6 @@
           <h2 class="ob-step-title">Your profile</h2>
           <p class="ob-step-sub">Add a photo and tell people a bit about yourself.</p>
         </div>
-
         <!-- Avatar upload -->
         <div class="ob-avatar-section">
           <div class="ob-avatar-wrap" onclick="document.getElementById('ob-avatar-file').click()">
@@ -255,7 +231,6 @@
           <input type="file" id="ob-avatar-file" accept="image/*" hidden onchange="obHandleAvatar(this)">
           <p class="ob-avatar-hint">Tap to add a photo <span>(optional)</span></p>
         </div>
-
         <!-- Bio -->
         <div class="ob-bio-wrap">
           <textarea id="ob-bio-input" class="ob-bio-input"
@@ -265,7 +240,6 @@
             rows="3"></textarea>
           <span class="ob-bio-count" id="ob-bio-count">160 left</span>
         </div>
-
         <div class="ob-step-actions">
           <button class="ob-skip-btn" onclick="obNext()">Skip for now</button>
           <button class="ob-primary-btn ob-primary-btn-sm" onclick="obSaveProfile()">
@@ -275,7 +249,6 @@
         </div>
       </div>
     </div>
-
     <!-- ── STEP 3: Interests ── -->
     <div class="ob-step" id="ob-step-3">
       <div class="ob-step-inner">
@@ -293,7 +266,6 @@
         </button>
       </div>
     </div>
-
     <!-- ── STEP 4: Follow People ── -->
     <div class="ob-step" id="ob-step-4">
       <div class="ob-step-inner">
@@ -317,7 +289,6 @@
         </div>
       </div>
     </div>
-
     <!-- ── STEP 5: Celebration ── -->
     <div class="ob-step" id="ob-step-5">
       <div class="ob-step-inner ob-celebrate">
@@ -334,14 +305,11 @@
         </button>
       </div>
     </div>
-
   </div>
-
   <!-- ══════════════════════════════════════════
        MAIN APP
   ══════════════════════════════════════════ -->
   <div id="app" class="app hidden">
-
     <!-- ── BOTTOM NAV ── -->
     <nav class="bottom-nav" id="bottom-nav">
       <button class="nav-btn active" data-page="feed" onclick="navTo('feed')">
@@ -377,14 +345,11 @@
         <span>Me</span>
       </button>
     </nav>
-
-
     <!-- ══════════════════════════════════════════
          PAGE: MARKET
     ══════════════════════════════════════════ -->
     <section class="page no-header-page" id="page-market">
       <div class="mkt-page">
-
         <!-- ── STICKY HEADER ── -->
         <div class="mkt-header" id="mkt-header">
           <div class="mkt-header-top">
@@ -425,10 +390,8 @@
             <button class="mkt-cat" onclick="mktSetCat(this)">Kids</button>
           </div>
         </div>
-
         <!-- ── SCROLLABLE CONTENT ── -->
         <div class="mkt-scroll">
-
           <!-- Hero Banner -->
           <div class="mkt-hero">
             <div class="mkt-hero-slide active">
@@ -448,7 +411,6 @@
               <span class="mkt-hero-dot"></span>
             </div>
           </div>
-
           <!-- Category Shortcuts -->
           <div class="mkt-section">
             <div class="mkt-shortcuts">
@@ -486,7 +448,6 @@
               </div>
             </div>
           </div>
-
           <!-- Flash Deals -->
           <div class="mkt-section">
             <div class="mkt-section-header">
@@ -543,7 +504,6 @@
               </div>
             </div>
           </div>
-
           <!-- Trending Now -->
           <div class="mkt-section">
             <div class="mkt-section-header">
@@ -584,7 +544,6 @@
               </div>
             </div>
           </div>
-
           <!-- Featured Storefronts -->
           <div class="mkt-section">
             <div class="mkt-section-header">
@@ -618,7 +577,6 @@
               </div>
             </div>
           </div>
-
           <!-- All Products Grid -->
           <div class="mkt-section">
             <div class="mkt-section-header">
@@ -719,21 +677,17 @@
               </div>
             </div>
           </div>
-
           <!-- Bottom spacer -->
           <div style="height: 100px;"></div>
-
         </div><!-- end mkt-scroll -->
       </div><!-- end mkt-page -->
     </section>
-
     <!-- ══════════════════════════════════════════
          PAGE: FEED
     ══════════════════════════════════════════ -->
     <section class="page active" id="page-feed">
       <header class="page-header feed-header">
         <div class="feed-header-inner">
-
           <!-- Logo — far left -->
           <div class="feed-logo">
             <svg width="48" height="23" viewBox="0 0 470 230" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -747,14 +701,11 @@
               <path d="M 355,93 C 356,103 365,111 375,113 C 365,115 356,123 355,133 C 354,123 345,115 335,113 C 345,111 354,103 355,93 Z" fill="url(#fh1)"/>
             </svg>
           </div>
-
           <!-- Tabs — 30px from logo -->
           <div class="feed-tabs-group">
             <button class="feed-tab active" id="feed-tab-foryou" onclick="setFeedTab('for-you', this)">Explore</button>
             <button class="feed-tab" id="feed-tab-following" onclick="setFeedTab('following', this)">Following</button>
-
           </div>
-
           <!-- DM icon — far right -->
           <button class="feed-dm-btn" id="feed-dm-btn" onclick="openMessagesInbox()" aria-label="Messages">
             <div style="position:relative;display:flex;align-items:center;justify-content:center">
@@ -764,12 +715,9 @@
               <div class="dm-dot" id="dm-dot" style="display:none"></div>
             </div>
           </button>
-
         </div>
       </header>
-
       <div class="moments-row" id="stories-row">
-
         <!-- Add your moment -->
         <div class="moment-add" onclick="showToast('Moments coming soon ✨')">
           <div class="moment-add-plus">
@@ -777,7 +725,6 @@
           </div>
           <span>Add</span>
         </div>
-
         <!-- LIVE SALES — unseen -->
         <div class="moment-card live" onclick="showToast('Moments coming soon ✨')">
           <div class="moment-card-bg" style="background:linear-gradient(135deg,#ff3b5c,#ff6b9d)"></div>
@@ -788,7 +735,6 @@
           <div class="moment-live-pill">● LIVE</div>
           <div class="moment-card-name">AdaHandcraft</div>
         </div>
-
         <!-- Regular moment — unseen -->
         <div class="moment-card" onclick="showToast('Moments coming soon ✨')">
           <div class="moment-card-bg" style="background:linear-gradient(135deg,#6C47FF,#8b6fff)"></div>
@@ -798,7 +744,6 @@
           </div>
           <div class="moment-card-name">catherine</div>
         </div>
-
         <!-- Product moment — unseen -->
         <div class="moment-card" onclick="showToast('Moments coming soon ✨')">
           <div class="moment-card-bg" style="background:linear-gradient(135deg,#43e97b,#0ba360)"></div>
@@ -809,7 +754,6 @@
           <div class="moment-type-label">🛒</div>
           <div class="moment-card-name">ZoboQueen</div>
         </div>
-
         <!-- Seen — greyscale, pushed to end -->
         <div class="moment-card seen" onclick="showToast('Moments coming soon ✨')">
           <div class="moment-card-bg" style="background:linear-gradient(135deg,#f7971e,#ffd200)"></div>
@@ -819,7 +763,6 @@
           </div>
           <div class="moment-card-name">zara</div>
         </div>
-
         <!-- Seen — greyscale -->
         <div class="moment-card seen" onclick="showToast('Moments coming soon ✨')">
           <div class="moment-card-bg" style="background:linear-gradient(135deg,#c850c0,#4158d0)"></div>
@@ -829,15 +772,12 @@
           </div>
           <div class="moment-card-name">amara</div>
         </div>
-
       </div>
-
       <div class="feed-list" id="feed-list">
         <!-- Posts injected by JS -->
       </div>
       <div class="load-more-trigger" id="feed-load-trigger"></div>
     </section>
-
     <!-- ══════════════════════════════════════════
          PAGE: DISCOVER
     ══════════════════════════════════════════ -->
@@ -845,10 +785,8 @@
          PAGE: DISCOVER
     ══════════════════════════════════════════ -->
     <section class="page no-header-page" id="page-discover">
-
       <!-- Sticky top: search bar + tabs -->
       <div class="disc-top" id="disc-top">
-
         <div class="disc-searchbar-row">
           <div class="disc-searchbar" id="disc-searchbar">
             <svg class="disc-searchbar-icon" width="17" height="17" viewBox="0 0 24 24" fill="none">
@@ -870,7 +808,6 @@
             </button>
           </div>
         </div>
-
         <!-- Result tabs — only visible when searching -->
         <div class="disc-tabs" id="disc-tabs" style="display:none">
           <button class="disc-tab active" data-tab="posts"     onclick="discTab('posts',this)">Posts</button>
@@ -878,15 +815,11 @@
           <button class="disc-tab"        data-tab="products"  onclick="discTab('products',this)">Products</button>
           <div class="disc-tab-ink" id="disc-tab-ink"></div>
         </div>
-
       </div><!-- /disc-top -->
-
       <!-- Scrollable body -->
       <div class="disc-body" id="disc-body">
-
         <!-- ── HOME STATE ── -->
         <div id="disc-home">
-
           <!-- Recent searches -->
           <div id="disc-recent-section" style="display:none">
             <div class="disc-row-header">
@@ -895,7 +828,6 @@
             </div>
             <div class="disc-recent-pills" id="disc-recent-pills"></div>
           </div>
-
           <!-- Trending topics -->
           <div class="disc-row-header" style="margin-top:4px">
             <span class="disc-label">Trending Topics</span>
@@ -924,7 +856,6 @@
               <button class="disc-topic" onclick="discTopicTap(this)">🎵 Music</button>
             </div>
           </div>
-
           <!-- For You — trending posts grid -->
           <div class="disc-row-header" style="margin-top:20px">
             <span class="disc-label">For You</span>
@@ -935,24 +866,19 @@
             <div class="disc-skeleton"></div>
             <div class="disc-skeleton"></div>
           </div>
-
         </div><!-- /disc-home -->
-
         <!-- ── RESULTS STATE ── -->
         <div id="disc-results" style="display:none">
           <div id="disc-pane-posts"    class="disc-pane"></div>
           <div id="disc-pane-people"   class="disc-pane" style="display:none"></div>
           <div id="disc-pane-products" class="disc-pane" style="display:none"></div>
         </div>
-
       </div><!-- /disc-body -->
     </section>
-
     <!-- ══════════════════════════════════════════
          PAGE: MESSAGES — INBOX
     ══════════════════════════════════════════ -->
     <section class="page no-header-page" id="page-messages">
-
       <!-- Sticky header -->
       <div class="msg-inbox-header">
         <div class="msg-inbox-title-row">
@@ -971,7 +897,6 @@
           <input type="text" id="msg-search-input" class="msg-search-input" placeholder="Search messages…" oninput="msgSearch(this.value)">
         </div>
       </div>
-
       <!-- Requests banner -->
       <div class="msg-requests-banner" id="msg-requests-banner" style="display:none" onclick="msgShowRequests()">
         <div class="msg-requests-icon">💌</div>
@@ -981,7 +906,6 @@
         </div>
         <div class="msg-requests-badge" id="msg-requests-badge">0</div>
       </div>
-
       <!-- Conversation list -->
       <div class="msg-inbox-list" id="msg-inbox-list">
         <div class="msg-inbox-empty" id="msg-inbox-empty" style="display:none">
@@ -990,14 +914,11 @@
           <span>Start a conversation with someone you follow</span>
         </div>
       </div>
-
     </section>
-
     <!-- ══════════════════════════════════════════
          PAGE: CHAT VIEW (slide panel)
     ══════════════════════════════════════════ -->
     <section class="page slide-page no-header-page" id="page-chat">
-
       <!-- Top bar -->
       <div class="chat-topbar" id="chat-topbar">
         <button class="chat-back-btn" onclick="closeChat()">
@@ -1022,13 +943,11 @@
           </button>
         </div>
       </div>
-
       <!-- Business hours notice -->
       <div class="chat-biz-hours" id="chat-biz-hours" style="display:none">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         <span id="chat-biz-hours-text"></span>
       </div>
-
       <!-- Messages area -->
       <div class="chat-messages" id="chat-messages">
         <div class="chat-loading" id="chat-loading">
@@ -1037,7 +956,6 @@
           <div class="chat-loading-dot"></div>
         </div>
       </div>
-
       <!-- Typing indicator -->
       <div class="chat-typing-row" id="chat-typing-row" style="display:none">
         <div class="chat-typing-bubble">
@@ -1047,7 +965,6 @@
         </div>
         <span class="chat-typing-label" id="chat-typing-label"></span>
       </div>
-
       <!-- Quick actions tray -->
       <div class="chat-extras-tray" id="chat-extras-tray">
         <button class="chat-extra-chip highlight" onclick="chatSendMP()">🎁 Send MP</button>
@@ -1056,10 +973,8 @@
         <button class="chat-extra-chip" onclick="chatSendInvoice()">🧾 Invoice</button>
         <button class="chat-extra-chip" onclick="chatRecordVoice()">🎙 Voice</button>
       </div>
-
       <!-- Input bar -->
       <div class="chat-input-bar" id="chat-input-bar">
-
         <!-- Reply preview banner (hidden by default) -->
         <div class="chat-reply-bar" id="chat-reply-bar" style="display:none">
           <div class="chat-reply-bar-accent"></div>
@@ -1071,7 +986,6 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
           </button>
         </div>
-
         <!-- Image preview strip (hidden by default) -->
         <div class="chat-img-preview-bar" id="chat-img-preview-bar" style="display:none">
           <div class="chat-img-preview-wrap">
@@ -1081,7 +995,6 @@
             </button>
           </div>
         </div>
-
         <div class="chat-input-bar-row">
           <!-- Hidden file input for image attach -->
           <input type="file" id="chat-img-input" accept="image/*" style="display:none" onchange="chatImageSelected(this)">
@@ -1103,9 +1016,7 @@
           </button>
         </div>
       </div>
-
     </section>
-
     <!-- ══════════════════════════════════════════
          PAGE: NOTIFICATIONS
     ══════════════════════════════════════════ -->
@@ -1124,7 +1035,6 @@
         </div>
       </div>
     </section>
-
     <!-- ══════════════════════════════════════════
          PAGE: MY PROFILE
     ══════════════════════════════════════════ -->
@@ -1140,13 +1050,11 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 014-4h12"/></svg>
       </button>
     </header>
-
     <section class="page no-header-page" id="page-profile">
       <div id="my-profile-content">
         <div class="loading-pulse" style="height:300px"></div>
       </div>
     </section>
-
     <!-- ══════════════════════════════════════════
          PAGE: OTHER USER PROFILE  
     ══════════════════════════════════════════ -->
@@ -1172,7 +1080,6 @@
         </button>
       </div>
     </header>
-
     <!-- ══════════════════════════════════════════
          PAGE: INVITE & EARN
     ══════════════════════════════════════════ -->
@@ -1188,11 +1095,9 @@
       </header>
       <div id="invite-page-body" style="overflow-y:auto;height:100%;padding-bottom:40px;"></div>
     </section>
-
     <section class="page slide-page no-header-page" id="page-user-profile">
       <div id="user-profile-body"></div>
     </section>
-
     <!-- ══════════════════════════════════════════
          PAGE: POST DETAIL
     ══════════════════════════════════════════ -->
@@ -1216,21 +1121,14 @@
       </header>
       <div id="detail-body"></div>
     </section>
-
-
-
     <!-- ══════════════════════════════════════════
          PAGE: MISTYNOTE WALLET — MistyPoints
     ══════════════════════════════════════════ -->
-
 <section class="page slide-page no-header-page" id="page-wallet">
-
   <div class="wlt-scroll" id="wlt-scroll">
-
     <!-- ── HERO ── -->
     <div class="wlt-hero ca-hero">
       <div class="ca-hero-glow"></div>
-
       <!-- Topbar -->
       <div class="wlt-topbar ca-topbar">
         <button class="wlt-back-btn ca-back-btn" onclick="slideBack()">
@@ -1254,7 +1152,6 @@
           <span class="wlt-notif-dot"></span>
         </button>
       </div>
-
       <!-- Balance -->
       <div class="wlt-balance-block ca-balance-block">
         <div class="ca-balance-label">MistyPoints Balance</div>
@@ -1280,7 +1177,6 @@
           <span class="wlt-sub-item" id="wlt-escrow-subrow" style="color:rgba(255,255,255,0.45);font-size:12px;">No pending balance</span>
         </div>
       </div>
-
       <!-- 3-button action row: Add · Gift · Earnings -->
       <div class="wlt-primary-actions ca-actions ca-actions-3">
         <button class="wlt-act wlt-act-add ca-act" onclick="openWalletSheet('add')">
@@ -1315,8 +1211,6 @@
         </button>
       </div>
     </div><!-- /ca-hero -->
-
-
     <!-- ── QUICK GIFT SCROLL ── -->
     <div class="wlt-section ca-section">
       <div class="wlt-section-header">
@@ -1335,8 +1229,6 @@
         <div id="wlt-people-dynamic"></div>
       </div>
     </div>
-
-
     <!-- ── PAY BILLS SHORTCUTS ── -->
     <div class="wlt-section ca-section">
       <div class="wlt-section-header">
@@ -1382,8 +1274,6 @@
         </button>
       </div>
     </div>
-
-
     <!-- ── SPLIT BILL ── -->
     <div class="wlt-split-card ca-split-card" onclick="openWalletSheet('split')">
       <div class="wlt-split-left">
@@ -1401,8 +1291,6 @@
         <path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
       </svg>
     </div>
-
-
     <!-- ── PENDING REQUESTS ── -->
     <div class="wlt-section ca-section" id="wlt-pending-section">
       <div class="wlt-section-header">
@@ -1436,8 +1324,6 @@
         </div>
       </div>
     </div>
-
-
     <!-- ── ACTIVITY ── -->
     <div class="wlt-section ca-section">
       <div class="wlt-section-header">
@@ -1560,15 +1446,11 @@
         </div>
       </div><!-- /ca-txn-list -->
     </div>
-
     <div style="height:40px"></div>
   </div><!-- /wlt-scroll -->
-
-
   <!-- ══════════════════════════════════════════
        SHEETS
   ══════════════════════════════════════════ -->
-
   <!-- SHEET: GIFT POINTS (was: Send Points) -->
   <div class="wlt-sheet hidden" id="sheet-gift" role="dialog" aria-label="Gift MistyPoints">
     <div class="wlt-sheet-backdrop" onclick="closeWalletSheet('gift')"></div>
@@ -1613,7 +1495,6 @@
       </div>
     </div>
   </div>
-
   <!-- SHEET: BUY POINTS (Squad by GTC) -->
   <div class="wlt-sheet hidden" id="sheet-add" role="dialog" aria-label="Buy MistyPoints">
     <div class="wlt-sheet-backdrop" onclick="closeWalletSheet('add')"></div>
@@ -1671,7 +1552,6 @@
       </div>
     </div>
   </div>
-
   <!-- SHEET: PAY BILLS (CheapData) -->
   <div class="wlt-sheet hidden" id="sheet-bills" role="dialog" aria-label="Pay Bills">
     <div class="wlt-sheet-backdrop" onclick="closeWalletSheet('bills')"></div>
@@ -1721,7 +1601,6 @@
       </div>
     </div>
   </div>
-
   <!-- SHEET: QR CODE -->
   <div class="wlt-sheet hidden" id="sheet-qr" role="dialog" aria-label="QR Code">
     <div class="wlt-sheet-backdrop" onclick="closeWalletSheet('qr')"></div>
@@ -1746,7 +1625,6 @@
       </div>
     </div>
   </div>
-
   <!-- SHEET: EARNINGS (auto Friday payout — no manual withdraw) -->
   <div class="wlt-sheet hidden" id="sheet-earnings" role="dialog" aria-label="Earnings & Payout">
     <div class="wlt-sheet-backdrop" onclick="closeWalletSheet('earnings')"></div>
@@ -1761,7 +1639,6 @@
         <h2 class="wlt-sheet-title">Earnings</h2>
         <div style="width:36px"></div>
       </div>
-
       <!-- Payout summary card -->
       <div class="earn-summary-card">
         <div class="earn-summary-row">
@@ -1779,7 +1656,6 @@
         </div>
         <div class="earn-status-note" id="earnings-status">Minimum MP 1 required for payout.</div>
       </div>
-
       <!-- How it works -->
       <div class="earn-info-block">
         <div class="earn-info-row">
@@ -1791,11 +1667,9 @@
           <span>A 1% settlement fee applies. Balances below MP 1 roll over to the following Friday.</span>
         </div>
       </div>
-
       <!-- Bank account section -->
       <p class="wlt-sheet-sublabel">Payout account</p>
       <div id="earnings-bank-info"></div>
-
       <!-- Bank setup form (hidden until triggered) -->
       <div class="earn-bank-form hidden" id="earnings-bank-form">
         <select class="earn-input" id="bank-name-input">
@@ -1827,7 +1701,6 @@
         <input class="earn-input" id="bank-acct-name" type="text" placeholder="Account name">
         <button class="wlt-confirm-btn earn-save-btn" onclick="saveBankAccount()">Save bank account</button>
       </div>
-
       <div class="wlt-security-note" style="margin-top:20px;">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="2"/></svg>
         Payouts secured by Squad · Automatic every Friday 3 PM
@@ -1838,7 +1711,6 @@
       </button>
     </div>
   </div>
-
   <!-- FLOATING QR -->
   <button class="wlt-qr-fab hidden" onclick="openWalletSheet('qr')" aria-label="QR code">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -1848,13 +1720,11 @@
       <path d="M14 14h.01M18 14h3M14 18v3M18 18h3v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
     </svg>
   </button>
-
   <!-- SHEET: WALLET PIN -->
   <div class="wlt-sheet hidden" id="sheet-wallet-pin" role="dialog" aria-label="Wallet PIN" data-mode="verify">
     <div class="wlt-sheet-backdrop" onclick="closePinSheet(true)"></div>
     <div class="wlt-sheet-body pin-sheet-body">
       <div class="wlt-sheet-handle"></div>
-
       <!-- Lock icon -->
       <div class="pin-lock-icon">
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
@@ -1862,10 +1732,8 @@
           <path d="M7 11V7a5 5 0 0110 0v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         </svg>
       </div>
-
       <h2 class="pin-sheet-title" id="pin-sheet-title">Enter Wallet PIN</h2>
       <p class="pin-sheet-sub" id="pin-sheet-sub">Required to complete this action</p>
-
       <!-- 4 dot indicators -->
       <div class="pin-dots">
         <div class="pin-dot"></div>
@@ -1873,7 +1741,6 @@
         <div class="pin-dot"></div>
         <div class="pin-dot"></div>
       </div>
-
       <!-- Number pad -->
       <div class="pin-pad">
         <button class="pin-key" onclick="pinPad('1')">1</button>
@@ -1895,21 +1762,14 @@
           </svg>
         </button>
       </div>
-
       <button class="pin-cancel-btn" onclick="closePinSheet(true)">Cancel</button>
     </div>
   </div>
-
 </section>
-
-
 <!-- ── CSS ADDITIONS for 3-button layout and gift button ───────────────────
      Add these to your existing wallet CSS (file 3):
-
 </section>
     <!-- /WALLET PAGE -->
-
-
     <!-- ══════════════════════════════════════════
          PAGE: SETTINGS
     ══════════════════════════════════════════ -->
@@ -1968,7 +1828,6 @@
         <p class="settings-version">© 2026 Uwana Limited · MistyNote</p>
       </div>
     </section>
-
     <!-- Comment bar — MUST be direct child of #app, NOT inside slide-page
          (position:fixed breaks when parent has transform) -->
     <div class="comment-bar" id="comment-bar">
@@ -2001,29 +1860,24 @@
         </div>
       </div>
     </div>
-
   <!-- ══════════════════════════════════════════
        MENTION AUTOCOMPLETE TRAY
   ══════════════════════════════════════════ -->
   <div class="mention-tray hidden" id="mention-tray">
     <div class="mention-tray-list" id="mention-tray-list"></div>
   </div>
-
   <!-- Sticker / Emoji Picker Tray -->
   <div class="sticker-picker hidden" id="sticker-picker">
     <div class="sticker-picker-body">
       <div class="emoji-grid" id="sp-emoji-grid"></div>
     </div>
   </div>
-
     <!-- ══════════════════════════════════════════
          PAGE: VIDEO PLAYER (full screen)
          Modes: video | video_product | live_commerce
     ══════════════════════════════════════════ -->
     <section class="page slide-page no-header-page" id="page-video">
-
       <video id="vp-video" class="vp-video" playsinline loop></video>
-
       <div class="vp-gradient-top"></div>
       <div class="vp-gradient-bottom"></div>
 
@@ -2060,27 +1914,35 @@
         </div>
       </div>
 
-      <!-- RIGHT ACTIONS -->
+      <!-- RIGHT ACTIONS — platform icons, filled white, red when liked -->
       <div class="vp-actions" id="vp-actions">
+        <!-- Heart — platform path, filled white by default -->
         <div class="vp-action-item">
           <button class="vp-action-btn" id="vp-like-btn" onclick="vpToggleLike()">
-            <svg class="vp-heart-svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+            <svg class="vp-heart-svg" width="32" height="32" viewBox="0 0 24 24"
+                 fill="white" stroke="white" stroke-width="1.5"
+                 stroke-linecap="round" stroke-linejoin="round">
               <path class="vp-heart-path" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
             </svg>
           </button>
           <span class="vp-action-count" id="vp-like-count"></span>
         </div>
+        <!-- Comment — platform bubble icon -->
         <div class="vp-action-item">
           <button class="vp-action-btn" onclick="vpOpenComments()">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
-              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none"
+                 stroke="white" stroke-width="1.8"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
             </svg>
           </button>
           <span class="vp-action-count" id="vp-comment-count"></span>
         </div>
+        <!-- Share -->
         <div class="vp-action-item">
           <button class="vp-action-btn" onclick="vpShare()">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none"
+                 stroke="white" stroke-width="1.8" stroke-linecap="round">
               <polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 014-4h12"/>
             </svg>
           </button>
@@ -2088,7 +1950,7 @@
         <div class="vp-float-hearts" id="vp-float-hearts"></div>
       </div>
 
-      <!-- BOTTOM -->
+      <!-- BOTTOM — username + caption + product card -->
       <div class="vp-bottom" id="vp-bottom">
         <div class="vp-caption" id="vp-caption"></div>
         <div class="vp-product-card" id="vp-product-card" style="display:none">
@@ -2115,37 +1977,36 @@
         </div>
       </div>
 
-      <!-- Tap overlay + play indicator -->
+      <!-- Progress bar -->
+      <div class="vp-progress-wrap" id="vp-progress-wrap" onclick="vpSeek(event)">
+        <div class="vp-progress-fill" id="vp-progress-fill"></div>
+      </div>
+
+      <!-- Tap overlay + play/pause indicator -->
       <div class="vp-tap-overlay" id="vp-tap-overlay" onclick="vpTogglePlay()"></div>
       <div class="vp-play-indicator" id="vp-play-indicator">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="white">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="white">
           <path id="vp-play-indicator-icon" d="M5 3l14 9L5 21V3z"/>
         </svg>
       </div>
-
     </section>
-
   </div><!-- /app -->
-
   <!-- ══════════════════════════════════════════
        COMPOSER MODAL
   ══════════════════════════════════════════ -->
   <div class="composer-overlay hidden" id="composer-overlay">
     <div class="composer-sheet" id="composer-sheet">
-
       <!-- Top bar -->
       <div class="composer-top">
         <button class="composer-cancel" onclick="closeComposer()">Cancel</button>
         <img id="composer-avatar" class="composer-user-avatar" src="">
         <button class="composer-post-btn" id="composer-post-btn" onclick="submitPost()" disabled>Post</button>
       </div>
-
       <!-- Previews — scrollable, sits above textarea -->
       <div class="composer-previews" id="composer-previews">
         <div id="composer-repost-preview"></div>
         <div id="composer-media-preview"></div>
       </div>
-
       <!-- Textarea — pinned above toolbar, always visible -->
       <div class="composer-input-wrap">
         <textarea class="composer-textarea" id="composer-textarea"
@@ -2155,7 +2016,6 @@
           autocorrect="on"></textarea>
         <div class="composer-char-count" id="composer-char-count">280</div>
       </div>
-
       <!-- Toolbar -->
       <div class="composer-toolbar">
         <div class="composer-tools">
@@ -2171,10 +2031,8 @@
           </button>
         </div>
       </div>
-
     </div>
   </div>
-
   <!-- ══════════════════════════════════════════
        EDIT PROFILE MODAL
   ══════════════════════════════════════════ -->
@@ -2220,17 +2078,14 @@
             </label>
             <textarea id="edit-bio" class="edit-input edit-textarea" placeholder="Tell the world about yourself..." rows="3" maxlength="100"></textarea>
           </div>
-
         </div>
       </div>
     </div>
   </div>
-
   <!-- ══════════════════════════════════════════
        TOAST
   ══════════════════════════════════════════ -->
   <div class="toast" id="toast"></div>
-
   <!-- ══════════════════════════════════════════
        VIDEO FULLSCREEN
   ══════════════════════════════════════════ -->
@@ -2240,7 +2095,6 @@
     </button>
     <video id="video-fs-player" controls playsinline></video>
   </div>
-
   <!-- Profile Share Sheet -->
   <div class="share-overlay hidden" id="profile-share-overlay" onclick="closeProfileShare(event)">
     <div class="share-sheet" id="profile-share-sheet">
@@ -2251,7 +2105,6 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         </button>
       </div>
-
       <!-- Section 1: Top followers -->
       <div class="share-section">
         <div class="share-section-label">Send to</div>
@@ -2264,9 +2117,7 @@
           <div class="share-person-skeleton"></div>
         </div>
       </div>
-
       <div class="share-divider"></div>
-
       <!-- Section 2: Social apps -->
       <div class="share-section">
         <div class="share-section-label">Share to</div>
@@ -2303,9 +2154,7 @@
           </button>
         </div>
       </div>
-
       <div class="share-divider"></div>
-
       <!-- Section 3: Actions -->
       <div class="share-section share-actions-section">
         <button class="share-action-row" onclick="copyProfileLink()">
@@ -2327,11 +2176,9 @@
           <span class="share-action-label share-action-danger-text">Block</span>
         </button>
       </div>
-
       <div style="height: calc(16px + var(--safe-bottom));"></div>
     </div>
   </div>
-
     <!-- ══════════════════════════════════════════
            LEGAL — TERMS OF SERVICE (slide page)
       ══════════════════════════════════════════ -->
@@ -2381,7 +2228,6 @@
               <p class="legal-p">These Terms govern your use of the Platform and incorporate all supplemental policies including the Privacy Policy, Community Guidelines, Seller Terms, Live Shopping Rules, and Wallet Terms.</p>
             </div>
           </div>
-
           <div class="legal-section" id="terms-s2">
             <div class="legal-section-title"><span class="legal-section-num">2</span>Account Management</div>
             <div class="legal-subsection">
@@ -2397,7 +2243,6 @@
               <p class="legal-p">You may close your account through Settings. Content, credits, and saved data will be permanently deleted and cannot be recovered. We may suspend or close accounts that breach these Terms without notice. Inactive accounts with no pending balances or orders may be revoked after extended inactivity.</p>
             </div>
           </div>
-
           <div class="legal-section" id="terms-s3">
             <div class="legal-section-title"><span class="legal-section-num">3</span>Platform Services</div>
             <div class="legal-subsection">
@@ -2423,7 +2268,6 @@
               <p class="legal-p">All purchases are processed through the MistyNote Wallet and escrow. Funds are held until the Buyer confirms delivery or the automatic confirmation period elapses. Disputed funds are held pending resolution. The escrow fee is included in the platform transaction fee — no separate charge to Buyers.</p>
             </div>
           </div>
-
           <div class="legal-section" id="terms-s4">
             <div class="legal-section-title"><span class="legal-section-num">4</span>MistyNote Wallet</div>
             <p class="legal-p">The Wallet is a closed-loop digital wallet operated in partnership with CBN-licensed payment providers. Funds deposited are used exclusively within the MistyNote ecosystem.</p>
@@ -2435,7 +2279,6 @@
               <li>Withdraw all Wallet funds before closing your account.</li>
             </ul>
           </div>
-
           <div class="legal-section" id="terms-s5">
             <div class="legal-section-title"><span class="legal-section-num">5</span>Rights &amp; Licences</div>
             <div class="legal-subsection">
@@ -2457,38 +2300,32 @@
               </ul>
             </div>
           </div>
-
           <div class="legal-section" id="terms-s6">
             <div class="legal-section-title"><span class="legal-section-num">6</span>Commercial Conduct &amp; Fraud Prevention</div>
             <p class="legal-p">Sellers must not list counterfeit, prohibited, or misleading products, and must not conduct transactions outside the MistyNote Platform to circumvent fees. Buyers must not make fraudulent purchases or file false dispute claims.</p>
             <p class="legal-p">MistyNote is not responsible for losses from transactions conducted outside the Platform. Report suspected fraud to <strong>support@mistynote.com</strong> immediately. MistyNote may investigate suspicious activity, freeze accounts, reverse transactions, and report fraud to Nigerian authorities.</p>
           </div>
-
           <div class="legal-section" id="terms-s7">
             <div class="legal-section-title"><span class="legal-section-num">7</span>Liabilities &amp; Enforcement</div>
             <p class="legal-p">If you violate these Terms, MistyNote may restrict your account, remove content, suspend or close your account, freeze Wallet balances, cancel transactions, or report your conduct to Nigerian regulatory or law enforcement authorities.</p>
             <div class="legal-warning">You are solely responsible for all losses and consequences arising from your breach of these Terms, including any content deleted, features disabled, or account privileges revoked.</div>
           </div>
-
           <div class="legal-section" id="terms-s8">
             <div class="legal-section-title"><span class="legal-section-num">8</span>Limitations of Liability</div>
             <p class="legal-p caps">THE MISTYNOTE PLATFORM IS PROVIDED "AS IS" WITHOUT WARRANTIES OF ANY KIND. WE DO NOT WARRANT THE PLATFORM WILL BE UNINTERRUPTED OR ERROR-FREE.</p>
             <p class="legal-p caps">TO THE MAXIMUM EXTENT PERMITTED BY LAW, UWANA LIMITED SHALL NOT BE LIABLE FOR INDIRECT, INCIDENTAL, OR CONSEQUENTIAL DAMAGES. OUR TOTAL LIABILITY SHALL NOT EXCEED FEES PAID BY YOU IN THE SIX MONTHS PRECEDING THE CLAIM.</p>
             <p class="legal-p">You agree to indemnify Uwana Limited from claims, liabilities, and expenses arising from your use of the Platform, your published content, or your breach of these Terms.</p>
           </div>
-
           <div class="legal-section" id="terms-s9">
             <div class="legal-section-title"><span class="legal-section-num">9</span>Seller Verification &amp; Disputes</div>
             <p class="legal-p">Verified Seller status requires accurate identity and business information plus an active subscription. Providing false information is a serious breach and may result in immediate suspension and referral to authorities.</p>
             <p class="legal-p">Disputes should first be resolved directly between Buyer and Seller. If unresolved, either party may raise a formal dispute through the Platform. MistyNote's decisions are final subject to your rights under Nigerian consumer protection law. We do not intervene in disputes from transactions outside the Platform.</p>
           </div>
-
           <div class="legal-section" id="terms-s12">
             <div class="legal-section-title"><span class="legal-section-num">12</span>Governing Law</div>
             <p class="legal-p">These Terms are governed by the laws of the Federal Republic of Nigeria. Disputes are subject to good-faith negotiation first — contact <strong>legal@mistynote.com</strong>. If unresolved within 60 days, disputes are submitted to the exclusive jurisdiction of Nigerian courts. Place of execution: Lagos State, Nigeria.</p>
             <p class="legal-p">If you access MistyNote from outside Nigeria, you do so at your own initiative and are responsible for compliance with local laws. Nigerian law governs these Terms regardless of where you access the Platform.</p>
           </div>
-
           <div class="legal-section">
             <div class="legal-section-title"><span class="legal-section-num" style="background:var(--green)">✉</span>Contact</div>
             <div class="legal-contacts">
@@ -2501,7 +2338,6 @@
       </div>
     </div>
   </section>
-
   <!-- ══════════════════════════════════════════
        LEGAL — PRIVACY POLICY (slide page)
   ══════════════════════════════════════════ -->
@@ -2523,7 +2359,6 @@
         <div class="legal-body">
           <div class="legal-notice">This Policy explains how MistyNote collects, uses, shares, stores, and protects your personal information in accordance with Nigerian law and international best practices. By using MistyNote, you agree to this Policy.</div>
           <div class="legal-warning">⚠️ MistyNote is not intended for use by persons under 18. If you are a parent and believe your child has registered, contact privacy@mistynote.com immediately.</div>
-
           <div class="legal-toc">
             <div class="legal-toc-header">Contents</div>
             <div class="legal-toc-item" onclick="legalScrollTo('priv-s1','privacy')"><span class="legal-toc-num">I</span><span class="legal-toc-label">How We Collect &amp; Use Your Information</span><svg class="legal-toc-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
@@ -2535,7 +2370,6 @@
             <div class="legal-toc-item" onclick="legalScrollTo('priv-s7','privacy')"><span class="legal-toc-num">VII</span><span class="legal-toc-label">Cookies</span><svg class="legal-toc-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
             <div class="legal-toc-item" onclick="legalScrollTo('priv-s10','privacy')"><span class="legal-toc-num">X</span><span class="legal-toc-label">Contact Us</span><svg class="legal-toc-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div>
           </div>
-
           <div class="legal-section" id="priv-s1">
             <div class="legal-section-title"><span class="legal-section-num" style="font-size:11px">I</span>How We Collect &amp; Use Your Information</div>
             <div class="legal-subsection">
@@ -2567,7 +2401,6 @@
               <p class="legal-p"><strong>MistyNote does not run third-party advertising and does not share your data with external ad networks.</strong> Promoted listings in the Market are from Sellers who paid for featured placement and are clearly labelled as such.</p>
             </div>
           </div>
-
           <div class="legal-section" id="priv-s2">
             <div class="legal-section-title"><span class="legal-section-num" style="font-size:11px">II</span>How We Share Your Information</div>
             <p class="legal-p"><strong>We do not sell your personal information to any third party.</strong> We share your data only in these limited circumstances:</p>
@@ -2580,7 +2413,6 @@
               <li><strong>Business Transfer:</strong> In a merger or acquisition, your data may transfer to the successor entity. We will notify you before any transfer takes effect.</li>
             </ul>
           </div>
-
           <div class="legal-section" id="priv-s3">
             <div class="legal-section-title"><span class="legal-section-num" style="font-size:11px">III</span>Storage &amp; Security</div>
             <p class="legal-p">Your data is stored on secure servers in Nigeria or jurisdictions with equivalent data protection standards. We retain data while your account is active, plus additional periods required by Nigerian law.</p>
@@ -2593,20 +2425,17 @@
             </ul>
             <p class="legal-p">If a security breach occurs that is likely to affect your rights, we will notify you and relevant Nigerian authorities as required by law.</p>
           </div>
-
           <div class="legal-section" id="priv-s4">
             <div class="legal-section-title"><span class="legal-section-num" style="font-size:11px">IV</span>Managing Your Information</div>
             <p class="legal-p">Update most personal information directly through your profile and account settings. For a full export of your personal data, contact <strong>privacy@mistynote.com</strong>.</p>
             <p class="legal-p">Privacy controls at <strong>Me → Settings → Privacy</strong>: who can see your posts and Moments; personalised content on/off; location shown on profile; notification preferences; read receipts in DMs; discoverability by contacts.</p>
             <p class="legal-p">For automated decisions significantly affecting your rights (account suspension, seller tier demotion), you may request a human review at <strong>privacy@mistynote.com</strong>.</p>
           </div>
-
           <div class="legal-section" id="priv-s5">
             <div class="legal-section-title"><span class="legal-section-num" style="font-size:11px">V</span>Account Closure &amp; Data Deletion</div>
             <p class="legal-p">Close your account at any time via <strong>Me → Settings → Account → Close Account</strong>. Before closing: withdraw any Wallet balance; ensure all orders are fulfilled or cancelled; resolve any pending disputes.</p>
             <p class="legal-p">Upon closure, your public profile and posts are removed. Private data (messages, order history, Wallet records) is retained for the period required by Nigerian law — typically 5–7 years for financial records — then permanently deleted. Closed accounts cannot be recovered.</p>
           </div>
-
           <div class="legal-section" id="priv-s6">
             <div class="legal-section-title"><span class="legal-section-num" style="font-size:11px">VI</span>Third-Party Services</div>
             <p class="legal-p">Key integrations:</p>
@@ -2619,12 +2448,10 @@
             </ul>
             <p class="legal-p">All providers sign data processing agreements limiting their use of your data to the specific service they provide.</p>
           </div>
-
           <div class="legal-section" id="priv-s7">
             <div class="legal-section-title"><span class="legal-section-num" style="font-size:11px">VII</span>Cookies &amp; Similar Technologies</div>
             <p class="legal-p">We use essential cookies (login sessions, security tokens), preference cookies (your settings), and anonymised analytics cookies to understand Platform usage. We do not use cookies for third-party advertising. Disabling cookies through your browser may prevent login or access to some features.</p>
           </div>
-
           <div class="legal-section" id="priv-s10">
             <div class="legal-section-title"><span class="legal-section-num" style="background:var(--green);font-size:11px">✉</span>Contact Us</div>
             <p class="legal-p">We respond to privacy requests within 30 days (up to 60 for complex requests, with notification within the initial 30-day window).</p>
@@ -2639,14 +2466,12 @@
       </div>
     </div>
   </section>
-
   <!-- ══════════════════════════════════════════
        LEGAL OVERLAY — auth screen (pre-login)
   ══════════════════════════════════════════ -->
   <div id="legal-overlay" class="legal-overlay hidden">
     <div class="legal-overlay-inner" id="legal-overlay-inner"></div>
   </div>
-
   <!-- Scripts -->
   <script type="module">
     import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
@@ -2665,8 +2490,6 @@
   <script src="/app-notif.js"></script>
   <script src="/app-discover.js"></script>
   <script src="/app-referral.js"></script>
-
   <script src="/app-video.js"></script>
 </body>
-
 </html>
