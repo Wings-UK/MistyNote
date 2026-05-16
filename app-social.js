@@ -2886,7 +2886,8 @@ function _cRenderImageStrip() {
 }
 function _cRemoveMedia() {
   if (_c.preview) { URL.revokeObjectURL(_c.preview); _c.preview = null; }
-  _c.file  = null;
+  _c.file         = null;
+  _c.thumbDataUrl = null;
   _c.files.forEach(item => URL.revokeObjectURL(item.preview));
   _c.files = [];
   const wrap  = document.getElementById('mnc-media-wrap');
@@ -2904,50 +2905,89 @@ async function _cHandleFile(file) {
   const isImg = file.type.startsWith('image/');
   const isVid = file.type.startsWith('video/');
   if (!isImg && !isVid) { showToast('Please select an image or video'); return; }
-  const maxMB = isVid ? 100 : 20;
+  const maxMB = isVid ? 200 : 20;
   if (file.size > maxMB * 1024 * 1024) {
     showToast(`Max ${maxMB}MB for ${isVid ? 'videos' : 'images'}`);
     return;
   }
-  // Revoke old preview URL
+
   if (_c.preview) URL.revokeObjectURL(_c.preview);
-  _c.file = file;
+  _c.file    = file;
   _c.preview = URL.createObjectURL(file);
+
   const wrap = document.getElementById('mnc-media-wrap');
   const img  = document.getElementById('mnc-img');
   const vid  = document.getElementById('mnc-vid');
   img.style.display = 'none';
   vid.style.display = 'none';
+
   if (isImg) {
     img.src = _c.preview;
     img.style.display = 'block';
   } else {
-    console.log('[MistyNote] 🎬 video preview:', {
-      type: file.type,
-      sizeMB: (file.size / 1024 / 1024).toFixed(2) + 'MB',
-      blobUrl: _c.preview
-    });
-    vid.src = _c.preview;
-    vid.style.display = 'block';
-    vid.onerror = () => {
-      console.error('[MistyNote] ❌ video preview error — unsupported codec (likely HEVC/H.265):', vid.error?.code, vid.error?.message);
-      vid.style.display = 'none';
-      wrap.style.display = 'none';
-      URL.revokeObjectURL(_c.preview);
-      _c.preview = null;
-      _c.file    = null;
-      showToast('Video format not supported. Please use a standard MP4 file.');
-      _cSync();
-    };
-    vid.onloadeddata = () => console.log('[MistyNote] ✅ video preview loaded ok');
+    // Always show a static thumbnail for video — no codec issues, no playback needed
+    const thumb = await _cExtractVideoThumb(file, _c.preview);
+    if (thumb) {
+      // Show thumbnail image as preview — clean, works on all browsers/codecs
+      img.src = thumb;
+      img.style.display = 'block';
+      _c.thumbDataUrl = thumb; // stored for upload
+      console.log('[MistyNote] ✅ video thumbnail extracted');
+    } else {
+      // Extraction failed (HEVC on Chrome can't decode even for canvas)
+      // Show a placeholder — upload still works fine
+      img.src = '';
+      img.style.display = 'block';
+      img.style.minHeight = '120px';
+      img.style.background = '#111';
+      img.alt = '🎬 Video ready to post';
+      _c.thumbDataUrl = null;
+      console.warn('[MistyNote] ⚠️ could not extract thumbnail — proceeding without');
+      showToast('Video selected — preview unavailable on this browser but it will post fine ✓');
+    }
   }
+
   wrap.style.display = 'block';
-  // Scroll body down so preview is visible
   setTimeout(() => {
     const body = document.getElementById('mnc-body');
     if (body) body.scrollTop = body.scrollHeight;
   }, 80);
   _cSync();
+}
+
+// ── Extract first frame of video as a data URL using canvas ──────────────────
+function _cExtractVideoThumb(file, blobUrl) {
+  return new Promise(resolve => {
+    const video  = document.createElement('video');
+    const canvas = document.createElement('canvas');
+    video.muted       = true;
+    video.playsInline = true;
+    video.src         = blobUrl;
+    video.currentTime = 0.5; // seek slightly in to avoid black frame
+
+    const cleanup = () => { video.src = ''; };
+
+    video.onerror = () => { cleanup(); resolve(null); };
+
+    video.onseeked = () => {
+      try {
+        canvas.width  = video.videoWidth  || 640;
+        canvas.height = video.videoHeight || 360;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        cleanup();
+        resolve(dataUrl);
+      } catch (e) {
+        console.error('[MistyNote] canvas draw failed:', e);
+        cleanup();
+        resolve(null);
+      }
+    };
+
+    // Fallback if seeked never fires (codec unsupported)
+    setTimeout(() => { cleanup(); resolve(null); }, 4000);
+  });
 }
 // ── Quote / repost ─────────────────────────────────────────────
 async function _cLoadQuote(postId) {
@@ -3350,8 +3390,9 @@ function closeComposer() {
   setTimeout(() => {
     root.remove();
     document.body.style.overflow = '';
-    _c.busy  = false;
-    _c.file  = null;
+    _c.busy         = false;
+    _c.file         = null;
+    _c.thumbDataUrl = null;
     _c.files = [];
     _c.repostId  = null;
     _c.repostBtn = null;
