@@ -193,7 +193,7 @@ function createFeedVideoThumb(p) {
   wrap.dataset.postId = p.id;
 
   wrap.innerHTML = `
-    <video preload="metadata" muted playsinline loop>
+    <video preload="metadata" muted playsinline>
       <source src="${p.video}#t=0.5" type="video/mp4">
     </video>
     ${isLive ? `<div class="feed-video-live-badge"><span style="width:6px;height:6px;border-radius:50%;background:#fff;display:inline-block;margin-right:4px"></span>LIVE</div>` : ''}
@@ -224,19 +224,6 @@ function createFeedVideoThumb(p) {
     e.stopPropagation();
     openVideoPlayer(p.id, p.video_type || 'video');
   });
-
-  const obs = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (!videoEl) return;
-      if (entry.isIntersecting && entry.intersectionRatio > 0.5) {
-        videoEl.muted = true;
-        videoEl.play().catch(() => {});
-      } else {
-        videoEl.pause();
-      }
-    });
-  }, { threshold: 0.5 });
-  obs.observe(wrap);
 
   return wrap;
 }
