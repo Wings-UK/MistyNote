@@ -2886,7 +2886,11 @@ function _cRenderImageStrip() {
 }
 function _cRemoveMedia() {
   if (_c.preview) { URL.revokeObjectURL(_c.preview); _c.preview = null; }
-  _c.file  = null;
+  _c.file         = null;
+  _c.fileBuffer   = null;
+  _c.fileType     = null;
+  _c.fileName     = null;
+  _c.thumbDataUrl = null;
   _c.files.forEach(item => URL.revokeObjectURL(item.preview));
   _c.files = [];
   const wrap  = document.getElementById('mnc-media-wrap');
@@ -2904,35 +2908,57 @@ async function _cHandleFile(file) {
   const isImg = file.type.startsWith('image/');
   const isVid = file.type.startsWith('video/');
   if (!isImg && !isVid) { showToast('Please select an image or video'); return; }
-  const maxMB = isVid ? 100 : 20;
+  const maxMB = isVid ? 200 : 20;
   if (file.size > maxMB * 1024 * 1024) {
     showToast(`Max ${maxMB}MB for ${isVid ? 'videos' : 'images'}`);
     return;
   }
-  // Revoke old preview URL
+
   if (_c.preview) URL.revokeObjectURL(_c.preview);
-  _c.file = file;
+
+  // Buffer video bytes immediately before any async gap invalidates the File ref
+  if (isVid) {
+    try {
+      _c.fileBuffer = await file.arrayBuffer();
+      _c.fileType   = file.type || 'video/mp4';
+      _c.fileName   = file.name || 'video.mp4';
+      console.log('[MistyNote] ✅ video buffered:', (_c.fileBuffer.byteLength / 1024 / 1024).toFixed(2) + 'MB');
+    } catch (e) {
+      console.error('[MistyNote] ❌ could not buffer video:', e);
+      showToast('Could not read video file. Please try again.');
+      return;
+    }
+  }
+
+  _c.file    = file;
   _c.preview = URL.createObjectURL(file);
+
   const wrap = document.getElementById('mnc-media-wrap');
   const img  = document.getElementById('mnc-img');
   const vid  = document.getElementById('mnc-vid');
   img.style.display = 'none';
   vid.style.display = 'none';
+
   if (isImg) {
     img.src = _c.preview;
     img.style.display = 'block';
   } else {
+    // Restore original video element preview
     vid.src = _c.preview;
     vid.style.display = 'block';
+    vid.onloadeddata = () => console.log('[MistyNote] ✅ video preview loaded');
+    vid.onerror = () => console.warn('[MistyNote] ⚠️ video preview failed, codec may be unsupported');
   }
+
   wrap.style.display = 'block';
-  // Scroll body down so preview is visible
   setTimeout(() => {
     const body = document.getElementById('mnc-body');
     if (body) body.scrollTop = body.scrollHeight;
   }, 80);
   _cSync();
 }
+
+// ── Extract first frame of video as a data URL using canvas ──────────────────
 // ── Quote / repost ─────────────────────────────────────────────
 async function _cLoadQuote(postId) {
   try {
@@ -3064,16 +3090,45 @@ async function _cSubmit() {
       const isVid = _c.file.type.startsWith('video/');
       console.log(`[MistyNote] uploading ${isVid ? 'video' : 'image'}:`, _c.file.name, _c.file.type);
       if (isVid) {
-        // Video: upload raw to avatars bucket under posts/ subfolder
-        const rawExt = (_c.file.name || '').split('.').pop().toLowerCase();
+        const rawExt  = (_c.fileName || _c.file.name || '').split('.').pop().toLowerCase();
         const safeExt = (rawExt && rawExt.length >= 2 && rawExt.length <= 5) ? rawExt : 'mp4';
-        const path = `${currentUser.id}/post_${Date.now()}.${safeExt}`;
-        const { error: upErr } = await supabase.storage
-          .from('avatars')
-          .upload(path, _c.file, { upsert: true, contentType: _c.file.type || 'video/mp4', cacheControl: '3600' });
-        if (upErr) throw new Error('Video upload failed: ' + upErr.message);
-        const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-        videoUrl = urlData.publicUrl;
+        const path    = `${currentUser.id}/post_${Date.now()}.${safeExt}`;
+        const SUPA_URL = window._SUPA_URL;
+        const SUPA_KEY = window._SUPA_KEY;
+        const session  = await supabase.auth.getSession();
+        const token    = session?.data?.session?.access_token || SUPA_KEY;
+
+        console.log('[MistyNote] 🎬 video details:', {
+          name: _c.fileName, type: _c.fileType,
+          sizeMB: ((_c.fileBuffer?.byteLength || 0) / 1024 / 1024).toFixed(2) + 'MB',
+          path, bucket: 'videos'
+        });
+        console.log('[MistyNote] 🚀 starting video upload via raw fetch...');
+
+        // Use the pre-buffered ArrayBuffer — file reference may be stale by now
+        const buffer = _c.fileBuffer;
+        if (!buffer) throw new Error('Video buffer lost — please try again');
+        console.log('[MistyNote] using buffered video, size:', (buffer.byteLength / 1024 / 1024).toFixed(2) + 'MB');
+
+        const uploadUrl = `${SUPA_URL}/storage/v1/object/videos/${path}`;
+        const res = await fetch(uploadUrl, {
+          method:  'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'apikey':        SUPA_KEY,
+            'Content-Type':  _c.fileType || 'video/mp4',
+            'x-upsert':      'true',
+          },
+          body: buffer,
+        });
+
+        if (!res.ok) {
+          const errText = await res.text().catch(() => res.statusText);
+          console.error('[MistyNote] ❌ video upload failed:', res.status, errText);
+          throw new Error(`Video upload failed (${res.status}): ${errText}`);
+        }
+
+        videoUrl = `${SUPA_URL}/storage/v1/object/public/videos/${path}`;
         console.log('[MistyNote] ✅ video uploaded:', videoUrl);
       } else {
         // Compress via canvas using the preview img element directly —
@@ -3316,8 +3371,12 @@ function closeComposer() {
   setTimeout(() => {
     root.remove();
     document.body.style.overflow = '';
-    _c.busy  = false;
-    _c.file  = null;
+    _c.busy         = false;
+    _c.file         = null;
+    _c.fileBuffer   = null;
+    _c.fileType     = null;
+    _c.fileName     = null;
+    _c.thumbDataUrl = null;
     _c.files = [];
     _c.repostId  = null;
     _c.repostBtn = null;
