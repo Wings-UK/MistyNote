@@ -13497,3 +13497,63 @@
 }
 
 .post-img-badge:active { opacity: .7; }
+
+/* ═══════════════════════════════════════════════════════
+   VIDEO PLAYER — PROGRESS BAR
+   ═══════════════════════════════════════════════════════ */
+
+.vp-progress-wrap {
+
+  position: absolute; left: 0; right: 0;
+
+  bottom: calc(var(--safe-bottom) + 0px);
+
+  height: 28px; z-index: 20; cursor: pointer;
+
+  display: flex; align-items: flex-end;
+
+  padding-bottom: 6px; box-sizing: border-box;
+
+}
+
+.vp-progress-wrap::before {
+
+  content: ''; position: absolute;
+
+  left: 0; right: 0; bottom: 6px;
+
+  height: 3px; background: rgba(255,255,255,0.25);
+
+  border-radius: 2px;
+
+}
+
+.vp-progress-fill {
+
+  position: absolute; left: 0; bottom: 6px;
+
+  width: 0%; height: 3px;
+
+  background: white; border-radius: 2px;
+
+  transition: width 0.25s linear;
+
+  pointer-events: none;
+
+}
+
+/* Thumb dot at end of fill */
+
+.vp-progress-fill::after {
+
+  content: ''; position: absolute;
+
+  right: -4px; top: 50%; transform: translateY(-50%);
+
+  width: 10px; height: 10px; border-radius: 50%;
+
+  background: white;
+
+  box-shadow: 0 0 4px rgba(0,0,0,0.4);
+
+}
