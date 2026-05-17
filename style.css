@@ -13571,9 +13571,11 @@
 
   right: 16px;
 
-  width: 120px;
+  /* width/height set by JS based on video aspect ratio */
 
-  height: 200px;
+  width: 140px;
+
+  height: 235px;
 
   border-radius: 14px;
 
@@ -13583,13 +13585,17 @@
 
   box-shadow: 0 8px 32px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.3);
 
-  cursor: pointer;
+  cursor: grab;
 
   -webkit-tap-highlight-color: transparent;
 
   animation: vpPiPIn 0.32s cubic-bezier(0.34,1.56,0.64,1) forwards;
 
+  touch-action: none;
+
 }
+
+#vp-pip-bubble:active { cursor: grabbing; }
 
 @keyframes vpPiPIn {
 
