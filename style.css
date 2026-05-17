@@ -12964,17 +12964,7 @@
 
   padding: 0 !important;
 
-  /* Break out of the fixed app container to use true screen height.
-     position:fixed + dvh fills the real viewport including areas revealed
-     when Chrome's address bar hides. Falls back to 100vh for older browsers. */
-
-  position: fixed !important;
-
-  top: 0; left: 0; right: 0; bottom: 0;
-
-  height: 100vh;   /* fallback */
-
-  height: 100dvh;  /* dynamic viewport — Chrome 108+, Firefox 101+, Safari 15.4+ */
+  top: 0 !important;
 
 }
 
@@ -12988,34 +12978,23 @@
 
 }
 
-/* Top gradient — covers status bar area and creator info */
-
 .vp-gradient-top {
 
   position: absolute; top: 0; left: 0; right: 0; height: 180px;
 
-  background: linear-gradient(to bottom, rgba(0,0,0,0.72) 0%, transparent 100%);
+  background: linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent 100%);
 
   z-index: 1; pointer-events: none;
 
 }
 
-/* Bottom gradient — thicker, covers progress bar, caption, action counts.
-   Makes all overlay elements crisp against any video content. */
+/* Deep shadow starting 5px from bottom edge — covers the black bar */
 
 .vp-gradient-bottom {
 
-  position: absolute; bottom: 0; left: 0; right: 0; height: 380px;
+  position: absolute; bottom: 0; left: 0; right: 0; height: 320px;
 
-  background: linear-gradient(to top,
-
-    rgba(0,0,0,0.88) 0%,
-
-    rgba(0,0,0,0.55) 35%,
-
-    rgba(0,0,0,0.2)  65%,
-
-    transparent      100%);
+  background: linear-gradient(to top, rgba(0,0,0,0.95) 5px, rgba(0,0,0,0.75) 20%, rgba(0,0,0,0.4) 50%, transparent 100%);
 
   z-index: 1; pointer-events: none;
 
