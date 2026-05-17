@@ -312,6 +312,10 @@ function slideBack() {
 
     document.getElementById('comment-bar').style.display = 'none';
 
+    // Remove video PiP bubble if it exists
+
+    if (typeof _vpRemovePiP === 'function') _vpRemovePiP();
+
   }
 
   // Clean up wallet when navigating away
