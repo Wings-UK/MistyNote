@@ -22,7 +22,7 @@ let _vp = {
 /* ──────────────────────────────────────────────
    OPEN
 ────────────────────────────────────────────── */
-async function openVideoPlayer(postId, videoType) {
+async function openVideoPlayer(postId, videoType, resumeTime) {
   _vp.postId     = postId;
   _vp.videoType  = videoType || 'video';
   _vp.liked      = likedPosts.has(postId);
@@ -49,7 +49,14 @@ async function openVideoPlayer(postId, videoType) {
     _vp.postUser     = user;
 
     const vid = document.getElementById('vp-video');
-    if (vid) { vid.src = p.video || ''; vid.muted = false; vid.play().catch(() => {}); }
+    if (vid) {
+      vid.src = p.video || '';
+      vid.muted = false;
+      if (resumeTime) {
+        vid.addEventListener('loadedmetadata', () => { vid.currentTime = resumeTime; }, { once: true });
+      }
+      vid.play().catch(() => {});
+    }
 
     _vpStartProgress();
 
@@ -241,13 +248,12 @@ function vpOpenComments() {
 }
 
 function _vpInjectPiP(src, startTime, postId, videoType) {
-  // Remove any existing PiP
   _vpRemovePiP();
 
   const pip = document.createElement('div');
   pip.id = 'vp-pip-bubble';
   pip.innerHTML = `
-    <video id="vp-pip-vid" playsinline loop muted
+    <video id="vp-pip-vid" playsinline loop
       style="width:100%;height:100%;object-fit:cover;display:block;border-radius:14px"></video>
     <button id="vp-pip-close" onclick="event.stopPropagation();_vpRemovePiP()" aria-label="Close">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.8" stroke-linecap="round">
@@ -259,13 +265,16 @@ function _vpInjectPiP(src, startTime, postId, videoType) {
     </div>
   `;
 
-  // Tap bubble → return to full screen video
+  // Tap bubble → return to full screen, resuming from PiP current time
   pip.addEventListener('click', () => {
+    const pipVid = document.getElementById('vp-pip-vid');
+    const resumeTime = pipVid?.currentTime || 0;
     _vpRemovePiP();
-    openVideoPlayer(postId, videoType || 'video');
+    openVideoPlayer(postId, videoType || 'video', resumeTime);
   });
 
-  document.getElementById('page-detail')?.appendChild(pip);
+  // Append to body so position:fixed works correctly — not inside the scrolling page
+  document.body.appendChild(pip);
 
   const vid = document.getElementById('vp-pip-vid');
   if (vid) {
