@@ -13106,47 +13106,31 @@
 
 .vp-action-btn {
 
-  width: auto; height: auto;
+  width: auto; height: auto; border-radius: 0;
 
-  border-radius: 0;
+  background: none; backdrop-filter: none; -webkit-backdrop-filter: none;
 
-  background: none;
-
-  backdrop-filter: none;
-
-  -webkit-backdrop-filter: none;
-
-  border: none; cursor: pointer;
+  border: none; cursor: pointer; padding: 4px;
 
   display: flex; align-items: center; justify-content: center;
 
   transition: transform 0.15s; -webkit-tap-highlight-color: transparent;
 
-  padding: 4px;
-
 }
 
 .vp-action-btn:active { transform: scale(0.84); }
 
-/* Drop-shadow on icons — replaces the circle */
+/* Subtle drop-shadow — just enough to read against any background */
 
-.vp-btn-shadow svg,
+.vp-btn-shadow svg {
 
-.vp-btn-shadow .vp-heart-svg,
-
-.vp-btn-shadow .vp-bookmark-svg,
-
-.vp-btn-shadow .vp-repost-svg {
-
-  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.6)) drop-shadow(0 1px 2px rgba(0,0,0,0.4));
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.35));
 
 }
 
 .vp-action-count {
 
-  font-size: 12px; font-weight: 700;
-
-  color: white;
+  font-size: 12px; font-weight: 700; color: white;
 
   text-shadow: 0 1px 4px rgba(0,0,0,0.65), 0 0 8px rgba(0,0,0,0.3);
 
@@ -13184,53 +13168,19 @@
 
 /* Bookmark */
 
-.vp-bookmark-path { transition: fill 0.2s, stroke 0.2s, filter 0.2s; }
+.vp-bookmark-path { transition: fill 0.2s; }
 
 #vp-bookmark-btn.bookmarked .vp-bookmark-path {
 
   fill: #6C47FF !important;
 
-  stroke: #6C47FF !important;
-
   filter: drop-shadow(0 0 5px rgba(108,71,255,0.55));
 
 }
 
-@keyframes vpBookmarkPop {
+/* Repost — outline only, turns purple when reposted (matches feed .reposted color) */
 
-  0%   { transform: scale(1) translateY(0); }
-
-  40%  { transform: scale(1.45) translateY(-4px); }
-
-  70%  { transform: scale(1.15) translateY(-1px); }
-
-  100% { transform: scale(1) translateY(0); }
-
-}
-
-.vp-bookmark-pop { animation: vpBookmarkPop 0.38s cubic-bezier(0.34,1.56,0.64,1) forwards; }
-
-/* Repost */
-
-#vp-repost-btn.reposted .vp-repost-svg {
-
-  stroke: #22c55e;
-
-  filter: drop-shadow(0 0 5px rgba(34,197,94,0.5));
-
-}
-
-@keyframes vpRepostSpin {
-
-  0%   { transform: rotate(0deg) scale(1); }
-
-  50%  { transform: rotate(180deg) scale(1.2); }
-
-  100% { transform: rotate(360deg) scale(1); }
-
-}
-
-.vp-repost-spin { animation: vpRepostSpin 0.45s cubic-bezier(0.4,0,0.2,1) forwards; }
+#vp-repost-btn.reposted .vp-repost-svg { stroke: #6C47FF; }
 
 /* Floating hearts (live_commerce) */
 
@@ -13547,259 +13497,3 @@
 }
 
 .post-img-badge:active { opacity: .7; }
-
-/* ═══════════════════════════════════════════════════════
-   VIDEO PLAYER — COMMENT SHEET
-   ═══════════════════════════════════════════════════════ */
-
-.vp-comment-sheet {
-
-  position: absolute; inset: 0; z-index: 40;
-
-  display: flex; flex-direction: column;
-
-  pointer-events: none;
-
-  transform: translateY(100%);
-
-  transition: transform 0.42s cubic-bezier(0.32, 0.72, 0, 1);
-
-}
-
-.vp-comment-sheet.open { transform: translateY(0); pointer-events: all; }
-
-.vp-comment-sheet-pip-wrap {
-
-  flex-shrink: 0; height: 36%; position: relative;
-
-  background: #000; overflow: hidden;
-
-}
-
-.vp-pip-video { width: 100%; height: 100%; object-fit: cover; display: block; }
-
-.vp-comment-sheet-pip-wrap::after {
-
-  content: ''; position: absolute; inset: 0; pointer-events: none;
-
-  background: linear-gradient(to bottom, transparent 40%, rgba(15,15,15,0.85) 100%);
-
-}
-
-.vp-pip-overlay { position: absolute; inset: 0; z-index: 1; }
-
-.vp-pip-close {
-
-  position: absolute; top: 14px; right: 14px; z-index: 2;
-
-  width: 30px; height: 30px; border-radius: 50%;
-
-  background: rgba(0,0,0,0.55); border: none;
-
-  display: flex; align-items: center; justify-content: center;
-
-  cursor: pointer; -webkit-tap-highlight-color: transparent;
-
-}
-
-.vp-comment-sheet-body {
-
-  flex: 1; background: #0f0f0f;
-
-  overflow: hidden; display: flex; flex-direction: column;
-
-}
-
-.vp-comment-sheet-handle {
-
-  width: 36px; height: 4px; border-radius: 2px;
-
-  background: rgba(255,255,255,0.2); margin: 10px auto 0; flex-shrink: 0;
-
-}
-
-.vp-comment-sheet-title {
-
-  font-size: 14px; font-weight: 700; color: rgba(255,255,255,0.9);
-
-  text-align: center; padding: 10px 0 8px;
-
-  border-bottom: 1px solid rgba(255,255,255,0.08); flex-shrink: 0;
-
-}
-
-.vp-comment-sheet-list {
-
-  flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
-
-  padding: 12px 16px 80px;
-
-}
-
-.vp-comment-sheet-loading {
-
-  text-align: center; color: rgba(255,255,255,0.4);
-
-  font-size: 13px; padding: 32px 0;
-
-}
-
-/* ═══════════════════════════════════════════════════════
-   VIDEO PLAYER — REPOST SHEET
-   ═══════════════════════════════════════════════════════ */
-
-.vp-repost-backdrop {
-
-  position: absolute; inset: 0; z-index: 50;
-
-  background: rgba(0,0,0,0); pointer-events: none;
-
-  transition: background 0.3s;
-
-}
-
-.vp-repost-backdrop.open { background: rgba(0,0,0,0.5); pointer-events: all; }
-
-.vp-repost-sheet {
-
-  position: absolute; left: 0; right: 0; bottom: 0; z-index: 51;
-
-  background: #1a1a1a; border-radius: 20px 20px 0 0;
-
-  padding: 0 0 calc(var(--safe-bottom, 0px) + 16px);
-
-  transform: translateY(100%);
-
-  transition: transform 0.38s cubic-bezier(0.32, 0.72, 0, 1);
-
-}
-
-.vp-repost-sheet.open { transform: translateY(0); }
-
-.vp-repost-sheet-handle {
-
-  width: 36px; height: 4px; border-radius: 2px;
-
-  background: rgba(255,255,255,0.2); margin: 12px auto 0;
-
-}
-
-.vp-repost-sheet-title {
-
-  font-size: 15px; font-weight: 700; color: white;
-
-  text-align: center; padding: 12px 16px 8px;
-
-}
-
-.vp-repost-card {
-
-  margin: 0 16px 12px;
-
-  border: 1px solid rgba(255,255,255,0.12); border-radius: 14px;
-
-  padding: 12px; background: rgba(255,255,255,0.05);
-
-  display: flex; gap: 10px; align-items: flex-start;
-
-}
-
-.vp-repost-card-thumb {
-
-  width: 52px; height: 52px; border-radius: 10px;
-
-  object-fit: cover; flex-shrink: 0; background: #333;
-
-}
-
-.vp-repost-card-thumb-placeholder {
-
-  width: 52px; height: 52px; border-radius: 10px;
-
-  background: #2a2a2a; display: flex; align-items: center;
-
-  justify-content: center; flex-shrink: 0;
-
-}
-
-.vp-repost-card-info { flex: 1; min-width: 0; }
-
-.vp-repost-card-user {
-
-  font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.85);
-
-  margin-bottom: 4px; white-space: nowrap;
-
-  overflow: hidden; text-overflow: ellipsis;
-
-}
-
-.vp-repost-card-caption {
-
-  font-size: 12px; color: rgba(255,255,255,0.5);
-
-  display: -webkit-box; -webkit-line-clamp: 2;
-
-  -webkit-box-orient: vertical; overflow: hidden;
-
-}
-
-.vp-repost-card-video-icon {
-
-  display: inline-flex; align-items: center; gap: 4px;
-
-  font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 4px;
-
-}
-
-.vp-repost-textarea {
-
-  display: block; width: calc(100% - 32px); margin: 0 16px 12px;
-
-  background: rgba(255,255,255,0.06);
-
-  border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
-
-  padding: 10px 14px; color: white; font-size: 14px;
-
-  font-family: 'Roboto', sans-serif; resize: none; outline: none;
-
-  box-sizing: border-box;
-
-}
-
-.vp-repost-textarea::placeholder { color: rgba(255,255,255,0.3); }
-
-.vp-repost-textarea:focus { border-color: rgba(108,71,255,0.6); }
-
-.vp-repost-sheet-actions { display: flex; gap: 10px; padding: 0 16px; }
-
-.vp-repost-cancel {
-
-  flex: 1; height: 46px; border-radius: 23px;
-
-  border: 1px solid rgba(255,255,255,0.15); background: transparent;
-
-  color: rgba(255,255,255,0.7); font-size: 14px; font-weight: 600;
-
-  cursor: pointer; font-family: 'Roboto', sans-serif;
-
-  -webkit-tap-highlight-color: transparent;
-
-}
-
-.vp-repost-submit {
-
-  flex: 2; height: 46px; border-radius: 23px; border: none;
-
-  background: #6C47FF; color: white; font-size: 14px; font-weight: 700;
-
-  cursor: pointer; font-family: 'Roboto', sans-serif;
-
-  -webkit-tap-highlight-color: transparent; transition: opacity 0.2s;
-
-}
-
-.vp-repost-submit:active { opacity: 0.8; }
-
-.vp-repost-submit:disabled { opacity: 0.5; }
