@@ -13557,3 +13557,88 @@
   box-shadow: 0 0 4px rgba(0,0,0,0.4);
 
 }
+
+
+/* ═══════════════════════════════════════════════════════
+   VIDEO PiP BUBBLE (shown on detail page after tapping comment)
+   ═══════════════════════════════════════════════════════ */
+
+#vp-pip-bubble {
+
+  position: fixed;
+
+  bottom: calc(var(--safe-bottom) + 80px);
+
+  right: 16px;
+
+  width: 120px;
+
+  height: 200px;
+
+  border-radius: 14px;
+
+  overflow: hidden;
+
+  z-index: 999;
+
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.3);
+
+  cursor: pointer;
+
+  -webkit-tap-highlight-color: transparent;
+
+  animation: vpPiPIn 0.32s cubic-bezier(0.34,1.56,0.64,1) forwards;
+
+}
+
+@keyframes vpPiPIn {
+
+  from { transform: scale(0.6) translateY(40px); opacity: 0; }
+
+  to   { transform: scale(1)   translateY(0);    opacity: 1; }
+
+}
+
+#vp-pip-close {
+
+  position: absolute;
+
+  top: 6px; right: 6px;
+
+  width: 22px; height: 22px;
+
+  border-radius: 50%;
+
+  background: rgba(0,0,0,0.6);
+
+  border: none;
+
+  display: flex; align-items: center; justify-content: center;
+
+  cursor: pointer;
+
+  z-index: 2;
+
+  -webkit-tap-highlight-color: transparent;
+
+}
+
+#vp-pip-play-hint {
+
+  position: absolute;
+
+  inset: 0;
+
+  display: flex; align-items: center; justify-content: center;
+
+  background: rgba(0,0,0,0.18);
+
+  pointer-events: none;
+
+  opacity: 0;
+
+  transition: opacity 0.2s;
+
+}
+
+#vp-pip-bubble:active #vp-pip-play-hint { opacity: 1; }
