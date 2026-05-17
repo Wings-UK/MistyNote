@@ -461,13 +461,16 @@ function _vpReset() {
 
 function closeVideoPlayer() {
   _vpReset();
-  // Check what we're returning to before slideBack pops the stack
+  // Check destination before slideBack pops the stack
   const returningToDetail = slideStack[slideStack.length - 2] === 'detail';
   slideBack();
-  // Restore nav only when NOT returning to detail (detail hides it via its own logic)
-  if (!returningToDetail) {
-    const bottomNav = document.getElementById('bottom-nav');
-    if (bottomNav) bottomNav.style.display = '';
+  if (returningToDetail) {
+    // Re-entering detail — keep nav hidden, restore comment bar
+    document.getElementById('bottom-nav').style.display = 'none';
+    document.getElementById('comment-bar').style.display = 'flex';
+  } else {
+    // Returning to a main page — restore nav
+    document.getElementById('bottom-nav').style.display = '';
   }
 }
 
