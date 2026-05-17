@@ -2887,6 +2887,9 @@ function _cRenderImageStrip() {
 function _cRemoveMedia() {
   if (_c.preview) { URL.revokeObjectURL(_c.preview); _c.preview = null; }
   _c.file         = null;
+  _c.fileBuffer   = null;
+  _c.fileType     = null;
+  _c.fileName     = null;
   _c.thumbDataUrl = null;
   _c.files.forEach(item => URL.revokeObjectURL(item.preview));
   _c.files = [];
@@ -2912,6 +2915,24 @@ async function _cHandleFile(file) {
   }
 
   if (_c.preview) URL.revokeObjectURL(_c.preview);
+
+  // ── Read into ArrayBuffer immediately before anything else touches the file ──
+  // Android Chrome invalidates the File reference after async gaps or after
+  // another read (e.g. thumbnail extraction). Lock in the bytes right now.
+  if (isVid) {
+    try {
+      console.log('[MistyNote] 📦 buffering video...');
+      _c.fileBuffer = await file.arrayBuffer();
+      _c.fileType   = file.type || 'video/mp4';
+      _c.fileName   = file.name || 'video.mp4';
+      console.log('[MistyNote] ✅ buffered:', (_c.fileBuffer.byteLength / 1024 / 1024).toFixed(2) + 'MB');
+    } catch (e) {
+      console.error('[MistyNote] ❌ could not buffer video:', e);
+      showToast('Could not read video file. Please try again.');
+      return;
+    }
+  }
+
   _c.file    = file;
   _c.preview = URL.createObjectURL(file);
 
@@ -3120,7 +3141,7 @@ async function _cSubmit() {
       const isVid = _c.file.type.startsWith('video/');
       console.log(`[MistyNote] uploading ${isVid ? 'video' : 'image'}:`, _c.file.name, _c.file.type);
       if (isVid) {
-        const rawExt  = (_c.file.name || '').split('.').pop().toLowerCase();
+        const rawExt  = (_c.fileName || _c.file.name || '').split('.').pop().toLowerCase();
         const safeExt = (rawExt && rawExt.length >= 2 && rawExt.length <= 5) ? rawExt : 'mp4';
         const path    = `${currentUser.id}/post_${Date.now()}.${safeExt}`;
         const SUPA_URL = window._SUPA_URL;
@@ -3129,15 +3150,16 @@ async function _cSubmit() {
         const token    = session?.data?.session?.access_token || SUPA_KEY;
 
         console.log('[MistyNote] 🎬 video details:', {
-          name: _c.file.name, type: _c.file.type,
-          sizeMB: (_c.file.size / 1024 / 1024).toFixed(2) + 'MB',
+          name: _c.fileName, type: _c.fileType,
+          sizeMB: ((_c.fileBuffer?.byteLength || 0) / 1024 / 1024).toFixed(2) + 'MB',
           path, bucket: 'videos'
         });
         console.log('[MistyNote] 🚀 starting video upload via raw fetch...');
 
-        // Read as ArrayBuffer first — Chrome Android rejects File objects as fetch body
-        const arrayBuffer = await _c.file.arrayBuffer();
-        console.log('[MistyNote] file read as ArrayBuffer, size:', arrayBuffer.byteLength);
+        // Use the pre-buffered ArrayBuffer — file reference may be stale by now
+        const buffer = _c.fileBuffer;
+        if (!buffer) throw new Error('Video buffer lost — please try again');
+        console.log('[MistyNote] using buffered video, size:', (buffer.byteLength / 1024 / 1024).toFixed(2) + 'MB');
 
         const uploadUrl = `${SUPA_URL}/storage/v1/object/videos/${path}`;
         const res = await fetch(uploadUrl, {
@@ -3145,10 +3167,10 @@ async function _cSubmit() {
           headers: {
             'Authorization': `Bearer ${token}`,
             'apikey':        SUPA_KEY,
-            'Content-Type':  _c.file.type || 'video/mp4',
+            'Content-Type':  _c.fileType || 'video/mp4',
             'x-upsert':      'true',
           },
-          body: arrayBuffer,
+          body: buffer,
         });
 
         if (!res.ok) {
@@ -3402,6 +3424,9 @@ function closeComposer() {
     document.body.style.overflow = '';
     _c.busy         = false;
     _c.file         = null;
+    _c.fileBuffer   = null;
+    _c.fileType     = null;
+    _c.fileName     = null;
     _c.thumbDataUrl = null;
     _c.files = [];
     _c.repostId  = null;
