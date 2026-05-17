@@ -2916,16 +2916,13 @@ async function _cHandleFile(file) {
 
   if (_c.preview) URL.revokeObjectURL(_c.preview);
 
-  // ── Read into ArrayBuffer immediately before anything else touches the file ──
-  // Android Chrome invalidates the File reference after async gaps or after
-  // another read (e.g. thumbnail extraction). Lock in the bytes right now.
+  // Buffer video bytes immediately before any async gap invalidates the File ref
   if (isVid) {
     try {
-      console.log('[MistyNote] 📦 buffering video...');
       _c.fileBuffer = await file.arrayBuffer();
       _c.fileType   = file.type || 'video/mp4';
       _c.fileName   = file.name || 'video.mp4';
-      console.log('[MistyNote] ✅ buffered:', (_c.fileBuffer.byteLength / 1024 / 1024).toFixed(2) + 'MB');
+      console.log('[MistyNote] ✅ video buffered:', (_c.fileBuffer.byteLength / 1024 / 1024).toFixed(2) + 'MB');
     } catch (e) {
       console.error('[MistyNote] ❌ could not buffer video:', e);
       showToast('Could not read video file. Please try again.');
@@ -2946,26 +2943,11 @@ async function _cHandleFile(file) {
     img.src = _c.preview;
     img.style.display = 'block';
   } else {
-    // Always show a static thumbnail for video — no codec issues, no playback needed
-    const thumb = await _cExtractVideoThumb(file, _c.preview);
-    if (thumb) {
-      // Show thumbnail image as preview — clean, works on all browsers/codecs
-      img.src = thumb;
-      img.style.display = 'block';
-      _c.thumbDataUrl = thumb; // stored for upload
-      console.log('[MistyNote] ✅ video thumbnail extracted');
-    } else {
-      // Extraction failed (HEVC on Chrome can't decode even for canvas)
-      // Show a placeholder — upload still works fine
-      img.src = '';
-      img.style.display = 'block';
-      img.style.minHeight = '120px';
-      img.style.background = '#111';
-      img.alt = '🎬 Video ready to post';
-      _c.thumbDataUrl = null;
-      console.warn('[MistyNote] ⚠️ could not extract thumbnail — proceeding without');
-      showToast('Video selected — preview unavailable on this browser but it will post fine ✓');
-    }
+    // Restore original video element preview
+    vid.src = _c.preview;
+    vid.style.display = 'block';
+    vid.onloadeddata = () => console.log('[MistyNote] ✅ video preview loaded');
+    vid.onerror = () => console.warn('[MistyNote] ⚠️ video preview failed, codec may be unsupported');
   }
 
   wrap.style.display = 'block';
@@ -2977,39 +2959,6 @@ async function _cHandleFile(file) {
 }
 
 // ── Extract first frame of video as a data URL using canvas ──────────────────
-function _cExtractVideoThumb(file, blobUrl) {
-  return new Promise(resolve => {
-    const video  = document.createElement('video');
-    const canvas = document.createElement('canvas');
-    video.muted       = true;
-    video.playsInline = true;
-    video.src         = blobUrl;
-    video.currentTime = 0.5; // seek slightly in to avoid black frame
-
-    const cleanup = () => { video.src = ''; };
-
-    video.onerror = () => { cleanup(); resolve(null); };
-
-    video.onseeked = () => {
-      try {
-        canvas.width  = video.videoWidth  || 640;
-        canvas.height = video.videoHeight || 360;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-        cleanup();
-        resolve(dataUrl);
-      } catch (e) {
-        console.error('[MistyNote] canvas draw failed:', e);
-        cleanup();
-        resolve(null);
-      }
-    };
-
-    // Fallback if seeked never fires (codec unsupported)
-    setTimeout(() => { cleanup(); resolve(null); }, 4000);
-  });
-}
 // ── Quote / repost ─────────────────────────────────────────────
 async function _cLoadQuote(postId) {
   try {
