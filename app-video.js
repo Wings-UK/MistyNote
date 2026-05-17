@@ -197,7 +197,11 @@ function vpRepost() {
 function _vpPaintRepost() {
   const btn = document.getElementById('vp-repost-btn');
   const svg = btn?.querySelector('.vp-repost-svg');
-  if (btn) btn.classList.toggle('reposted', _vp.reposted);
+  if (btn) {
+    btn.classList.toggle('reposted', _vp.reposted);
+    // Must match how feed sets this — handleRepost reads dataset.reposted to decide undo vs repost
+    btn.dataset.reposted = _vp.reposted ? 'true' : 'false';
+  }
   if (svg) svg.style.stroke = _vp.reposted ? '#6C47FF' : 'white';
 }
 
@@ -284,7 +288,7 @@ function _vpReset() {
 
   const rBtn = document.getElementById('vp-repost-btn');
   const rSvg = rBtn?.querySelector('.vp-repost-svg');
-  if (rBtn) rBtn.classList.remove('reposted');
+  if (rBtn) { rBtn.classList.remove('reposted'); rBtn.dataset.reposted = 'false'; }
   if (rSvg) rSvg.style.stroke = 'white';
 
   ['vp-like-count', 'vp-comment-count', 'vp-repost-count', 'vp-caption'].forEach(id => {
