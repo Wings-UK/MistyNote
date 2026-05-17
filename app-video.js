@@ -216,10 +216,70 @@ function _vpPaintRepost() {
 }
 
 /* ──────────────────────────────────────────────
-   COMMENT — delegates to openDetail() from app-social.js
+   COMMENT — slides back to detail page with PiP bubble
 ────────────────────────────────────────────── */
 function vpOpenComments() {
-  if (_vp.postId) openDetail(_vp.postId, true);
+  if (!_vp.postId) return;
+
+  const mainVid = document.getElementById('vp-video');
+  const savedSrc  = mainVid?.src  || '';
+  const savedTime = mainVid?.currentTime || 0;
+  const savedPostId = _vp.postId;
+  const savedType   = _vp.videoType;
+
+  // Pause main video before leaving (no audio bleed)
+  if (mainVid) { mainVid.pause(); }
+
+  // Go back then open detail at comments
+  slideBack();
+  openDetail(savedPostId, true);
+
+  // Inject PiP after detail page has rendered
+  setTimeout(() => {
+    _vpInjectPiP(savedSrc, savedTime, savedPostId, savedType);
+  }, 380);
+}
+
+function _vpInjectPiP(src, startTime, postId, videoType) {
+  // Remove any existing PiP
+  _vpRemovePiP();
+
+  const pip = document.createElement('div');
+  pip.id = 'vp-pip-bubble';
+  pip.innerHTML = `
+    <video id="vp-pip-vid" playsinline loop muted
+      style="width:100%;height:100%;object-fit:cover;display:block;border-radius:14px"></video>
+    <button id="vp-pip-close" onclick="event.stopPropagation();_vpRemovePiP()" aria-label="Close">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.8" stroke-linecap="round">
+        <path d="M18 6L6 18M6 6l12 12"/>
+      </svg>
+    </button>
+    <div id="vp-pip-play-hint">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M5 3l14 9L5 21V3z"/></svg>
+    </div>
+  `;
+
+  // Tap bubble → return to full screen video
+  pip.addEventListener('click', () => {
+    _vpRemovePiP();
+    openVideoPlayer(postId, videoType || 'video');
+  });
+
+  document.getElementById('page-detail')?.appendChild(pip);
+
+  const vid = document.getElementById('vp-pip-vid');
+  if (vid) {
+    vid.src = src;
+    vid.currentTime = startTime;
+    vid.play().catch(() => {});
+  }
+}
+
+function _vpRemovePiP() {
+  const pip = document.getElementById('vp-pip-bubble');
+  if (pip) pip.remove();
+  const pipVid = document.getElementById('vp-pip-vid');
+  if (pipVid) { pipVid.pause(); pipVid.src = ''; pipVid.load(); }
 }
 
 /* ──────────────────────────────────────────────
@@ -275,6 +335,7 @@ function vpShare() { if (_vp.postId) sharePost({ id: _vp.postId, content: _vp.po
 ────────────────────────────────────────────── */
 function _vpReset() {
   if (_vp.floatTimer) { clearInterval(_vp.floatTimer); _vp.floatTimer = null; }
+  _vpRemovePiP();
 
   const vid = document.getElementById('vp-video');
   if (vid) {
