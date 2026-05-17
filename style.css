@@ -13567,7 +13567,7 @@
 
   position: fixed;
 
-  bottom: calc(var(--safe-bottom) + 80px);
+  top: 100px;
 
   right: 16px;
 
