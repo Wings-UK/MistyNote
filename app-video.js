@@ -68,9 +68,9 @@ async function openVideoPlayer(postId, videoType) {
     const lc = document.getElementById('vp-like-count');
     const cc = document.getElementById('vp-comment-count');
     const rc = document.getElementById('vp-repost-count');
-    if (lc) lc.textContent = _vp.likeCount   > 0 ? fmtNum(_vp.likeCount)   : '';
-    if (cc) cc.textContent = p.comment_count > 0 ? fmtNum(p.comment_count) : '';
-    if (rc) rc.textContent = _vp.repostCount > 0 ? fmtNum(_vp.repostCount) : '';
+    if (lc) lc.textContent = _vp.likeCount        > 0 ? fmtNum(_vp.likeCount)        : '';
+    if (cc) cc.textContent = (p.comment_count || 0) > 0 ? fmtNum(p.comment_count)    : '';
+    if (rc) rc.textContent = _vp.repostCount       > 0 ? fmtNum(_vp.repostCount)     : '';
 
     _vpApplyMode(_vp.videoType);
     recordView(postId);
@@ -172,7 +172,6 @@ function vpToggleBookmark() {
   if (!currentUser) { showToast('Sign in to save this'); return; }
   const btn = document.getElementById('vp-bookmark-btn');
   toggleSave(_vp.postId, btn);
-  // toggleSave updates savedPosts and calls setSaveBtnState — mirror state after
   setTimeout(() => {
     _vp.bookmarked = savedPosts.has(_vp.postId);
     _vpPaintBookmark();
@@ -184,9 +183,7 @@ function _vpPaintBookmark() {
   const path = document.querySelector('#vp-bookmark-btn .vp-bookmark-path');
   const PURPLE = '#6C47FF';
   if (btn)  btn.classList.toggle('bookmarked', _vp.bookmarked);
-  if (path) {
-    path.setAttribute('fill', _vp.bookmarked ? PURPLE : 'white');
-  }
+  if (path) path.setAttribute('fill', _vp.bookmarked ? PURPLE : 'white');
 }
 
 /* ──────────────────────────────────────────────
@@ -248,21 +245,32 @@ function _vpStartProgress() {
   const vid  = document.getElementById('vp-video');
   const fill = document.getElementById('vp-progress-fill');
   if (!vid || !fill) return;
-  vid.addEventListener('timeupdate', () => {
+  // Remove any old listener to avoid stacking on re-open
+  vid.ontimeupdate = null;
+  vid.ontimeupdate = () => {
     if (vid.duration) fill.style.width = (vid.currentTime / vid.duration * 100) + '%';
-  });
+  };
 }
 
 function vpShare() { if (_vp.postId) sharePost({ id: _vp.postId, content: _vp.postContent || '' }); }
 
 /* ──────────────────────────────────────────────
    RESET / CLOSE
+   Hard-stops video and aborts any pending network
+   request so audio never bleeds into background.
 ────────────────────────────────────────────── */
 function _vpReset() {
   if (_vp.floatTimer) { clearInterval(_vp.floatTimer); _vp.floatTimer = null; }
 
   const vid = document.getElementById('vp-video');
-  if (vid) { vid.pause(); vid.src = ''; }
+  if (vid) {
+    vid.ontimeupdate = null;   // remove progress listener
+    vid.pause();
+    vid.src = '';              // detach source
+    vid.load();                // abort any pending network fetch — kills buffering audio
+    const fill = document.getElementById('vp-progress-fill');
+    if (fill) fill.style.width = '0%';
+  }
 
   const btn  = document.getElementById('vp-like-btn');
   const path = document.querySelector('#vp-like-btn .vp-heart-path');
