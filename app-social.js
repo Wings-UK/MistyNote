@@ -8842,6 +8842,20 @@ function updateCommentCountDelta(delta) {
 
   }
 
+  // Update video full-screen comment count in real time
+
+  const vpCount = document.getElementById('vp-comment-count');
+
+  if (vpCount) {
+
+    const v = parseInt(vpCount.textContent.replace(/[^0-9]/g,'')) || 0;
+
+    const newVal = Math.max(0, v + delta);
+
+    vpCount.textContent = newVal > 0 ? fmtNum(newVal) : '';
+
+  }
+
 }
 
 async function toggleCommentLike(commentId, btn) {
