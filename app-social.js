@@ -231,6 +231,7 @@ function slideTo(pageId, setupFn) {
   }
 
   // If leaving detail, hide comment bar and restore bottom nav
+  // But never restore nav when going to video — video always hides it
 
   if (slideStack[slideStack.length - 2] === 'detail' || document.getElementById('comment-bar')?.style.display === 'flex') {
 
@@ -238,7 +239,11 @@ function slideTo(pageId, setupFn) {
 
       document.getElementById('comment-bar').style.display = 'none';
 
-      document.getElementById('bottom-nav').style.display = '';
+      if (pageId !== 'video') {
+
+        document.getElementById('bottom-nav').style.display = '';
+
+      }
 
     }
 
