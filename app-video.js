@@ -265,23 +265,98 @@ function _vpInjectPiP(src, startTime, postId, videoType) {
     </div>
   `;
 
-  // Tap bubble → return to full screen, resuming from PiP current time
+  document.body.appendChild(pip);
+
+  // ── Aspect-ratio shaping ──────────────────────────────
+  const vid = document.getElementById('vp-pip-vid');
+  if (vid) {
+    vid.src = src;
+    vid.currentTime = startTime;
+    vid.addEventListener('loadedmetadata', () => {
+      const isLandscape = vid.videoWidth > vid.videoHeight;
+      if (isLandscape) {
+        pip.style.width  = '220px';
+        pip.style.height = '124px';
+      } else {
+        pip.style.width  = '140px';
+        pip.style.height = '235px';
+      }
+      _vpMakeDraggable(pip);
+    }, { once: true });
+    vid.play().catch(() => {});
+  }
+
+  // ── Tap to return to full screen ──────────────────────
   pip.addEventListener('click', () => {
     const pipVid = document.getElementById('vp-pip-vid');
     const resumeTime = pipVid?.currentTime || 0;
     _vpRemovePiP();
     openVideoPlayer(postId, videoType || 'video', resumeTime);
   });
+}
 
-  // Append to body so position:fixed works correctly — not inside the scrolling page
-  document.body.appendChild(pip);
+function _vpMakeDraggable(pip) {
+  let startX, startY, startLeft, startTop, dragging = false, moved = false;
 
-  const vid = document.getElementById('vp-pip-vid');
-  if (vid) {
-    vid.src = src;
-    vid.currentTime = startTime;
-    vid.play().catch(() => {});
-  }
+  pip.addEventListener('touchstart', e => {
+    // Only drag from the bubble itself, not the close button
+    if (e.target.closest('#vp-pip-close')) return;
+    const t = e.touches[0];
+    const rect = pip.getBoundingClientRect();
+    startX    = t.clientX;
+    startY    = t.clientY;
+    startLeft = rect.left;
+    startTop  = rect.top;
+    dragging  = true;
+    moved     = false;
+    pip.style.transition = 'none';
+  }, { passive: true });
+
+  pip.addEventListener('touchmove', e => {
+    if (!dragging) return;
+    const t = e.touches[0];
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
+    if (!moved) return;
+
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    const pw = pip.offsetWidth;
+    const ph = pip.offsetHeight;
+
+    const newLeft = Math.min(Math.max(0, startLeft + dx), W - pw);
+    const newTop  = Math.min(Math.max(0, startTop  + dy), H - ph);
+
+    pip.style.left = newLeft + 'px';
+    pip.style.top  = newTop  + 'px';
+    pip.style.right = 'auto';
+  }, { passive: true });
+
+  pip.addEventListener('touchend', e => {
+    if (!dragging) return;
+    dragging = false;
+    if (!moved) return; // was a tap — let click handler fire
+
+    // Snap to nearest edge (left or right)
+    const W    = window.innerWidth;
+    const pw   = pip.offsetWidth;
+    const curL = pip.getBoundingClientRect().left;
+    const snapLeft = curL + pw / 2 < W / 2 ? 16 : W - pw - 16;
+
+    pip.style.transition = 'left 0.25s cubic-bezier(0.25,0.46,0.45,0.94), top 0.25s cubic-bezier(0.25,0.46,0.45,0.94)';
+    pip.style.left = snapLeft + 'px';
+    pip.style.right = 'auto';
+
+    // Block the subsequent click so it doesn't trigger open-fullscreen
+    pip._blockNextClick = true;
+    setTimeout(() => { pip._blockNextClick = false; }, 350);
+  });
+
+  // Guard click after drag
+  pip.addEventListener('click', e => {
+    if (pip._blockNextClick) { e.stopImmediatePropagation(); }
+  }, true);
 }
 
 function _vpRemovePiP() {
