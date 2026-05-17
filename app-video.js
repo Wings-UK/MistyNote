@@ -68,9 +68,19 @@ async function openVideoPlayer(postId, videoType) {
     const lc = document.getElementById('vp-like-count');
     const cc = document.getElementById('vp-comment-count');
     const rc = document.getElementById('vp-repost-count');
-    if (lc) lc.textContent = _vp.likeCount        > 0 ? fmtNum(_vp.likeCount)        : '';
-    if (cc) cc.textContent = (p.comment_count || 0) > 0 ? fmtNum(p.comment_count)    : '';
-    if (rc) rc.textContent = _vp.repostCount       > 0 ? fmtNum(_vp.repostCount)     : '';
+    if (lc) lc.textContent = _vp.likeCount   > 0 ? fmtNum(_vp.likeCount)   : '';
+    if (rc) rc.textContent = _vp.repostCount > 0 ? fmtNum(_vp.repostCount) : '';
+
+    // Fetch live comment count straight from comments table — same as detail page does
+    supabase
+      .from('comments')
+      .select('*', { count: 'exact', head: true })
+      .eq('post_id', postId)
+      .is('parent_id', null)
+      .then(({ count }) => {
+        const live = count || 0;
+        if (cc) cc.textContent = live > 0 ? fmtNum(live) : '';
+      });
 
     _vpApplyMode(_vp.videoType);
     recordView(postId);
