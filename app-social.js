@@ -3478,9 +3478,9 @@ async function openDetail(postId, scrollToComments = false) {
         pointer-events: none;
       }
       .dp-play-circle {
-        width: 54px; height: 54px; border-radius: 50%;
+        width: 44px; height: 44px; border-radius: 50%;
         background: rgba(108,71,255,0.52);
-        border: 2px solid #fff;
+        border: 3px solid #fff;
         display: flex; align-items: center; justify-content: center;
       }
       .dp-video-duration {
