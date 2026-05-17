@@ -30,6 +30,10 @@ async function openVideoPlayer(postId, videoType, resumeTime) {
   _vp.reposted   = repostedPosts.has(postId);
   _vp.likeCount  = 0;
 
+  // Always hide bottom nav on video — regardless of where we came from
+  const bottomNav = document.getElementById('bottom-nav');
+  if (bottomNav) bottomNav.style.display = 'none';
+
   slideTo('video', async () => {
     _vpReset();
 
@@ -455,7 +459,17 @@ function _vpReset() {
   if (fh) fh.innerHTML = '';
 }
 
-function closeVideoPlayer() { _vpReset(); slideBack(); }
+function closeVideoPlayer() {
+  _vpReset();
+  // Check what we're returning to before slideBack pops the stack
+  const returningToDetail = slideStack[slideStack.length - 2] === 'detail';
+  slideBack();
+  // Restore nav only when NOT returning to detail (detail hides it via its own logic)
+  if (!returningToDetail) {
+    const bottomNav = document.getElementById('bottom-nav');
+    if (bottomNav) bottomNav.style.display = '';
+  }
+}
 
 /* ──────────────────────────────────────────────
    FEED VIDEO THUMBNAIL
