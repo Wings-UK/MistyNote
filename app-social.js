@@ -1597,7 +1597,7 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false) {
 
       </div>
 
-      ${text && img ? `<div class="prf-masonry-caption">${escHtml(text.slice(0,80))}${text.length > 80 ? '…' : ''}</div>` : ''}
+      ${text && (img || isVideo) ? `<div class="prf-masonry-caption">${escHtml(text.slice(0,80))}${text.length > 80 ? '…' : ''}</div>` : ''}
 
       <div class="prf-masonry-footer">
 
