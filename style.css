@@ -12978,6 +12978,14 @@
 
 }
 
+/* Creator row — tappable, opens profile */
+
+#vp-creator { -webkit-tap-highlight-color: transparent; }
+
+#vp-creator:active { opacity: 0.75; }
+
+.vp-creator-name { text-decoration: underline; text-decoration-color: rgba(255,255,255,0.4); text-underline-offset: 3px; }
+
 .vp-gradient-top {
 
   position: absolute; top: 0; left: 0; right: 0; height: 180px;
