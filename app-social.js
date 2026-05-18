@@ -877,9 +877,11 @@ function injectProfileStyles() {
 
     .prf-masonry-repost-badge { position:absolute; top:7px; right:7px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; color:#fff; pointer-events:none; }
 
-    .prf-masonry-video-badge { position:absolute; top:7px; right:7px; width:26px; height:26px; border-radius:50%; background:rgba(0,0,0,0.55); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; pointer-events:none; }
+    .prf-masonry-video-badge { position:absolute; top:7px; right:7px; width:26px; height:26px; border-radius:50%; background:rgba(0,0,0,0.28); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; pointer-events:none; }
 
     .prf-masonry-video-thumb { width:100%; display:block; object-fit:cover; background:#000; }
+
+    .prf-masonry-views-pill { position:absolute; bottom:7px; left:7px; display:flex; align-items:center; gap:4px; background:rgba(0,0,0,0.45); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); border-radius:20px; padding:3px 8px 3px 6px; font-size:11px; font-weight:600; color:white; pointer-events:none; }
 
     .prf-masonry-img { width:100%; display:block; object-fit:cover; }
 
@@ -1397,7 +1399,7 @@ function switchPrfTab(tab, el) {
 
   if (tab === 'list')  renderPrfPosts(posts || [],    'prf-panel-list',  true, true);
 
-  if (tab === 'media') renderPrfMasonry(mediaPosts || [], 'prf-panel-media', true);
+  if (tab === 'media') renderPrfMasonry(mediaPosts || [], 'prf-panel-media', true, true);
 
   if (tab === 'likes') {
 
@@ -1469,7 +1471,7 @@ function renderPrfPosts(posts, containerId, isOwn, isProfilePage = false, viewin
 
 }
 
-function renderPrfMasonry(posts, containerId, mediaOnly = false) {
+function renderPrfMasonry(posts, containerId, mediaOnly = false, isOwnProfile = false) {
 
   const container = document.getElementById(containerId);
 
@@ -1567,7 +1569,7 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false) {
 
           <div class="prf-masonry-video-badge">
 
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="white">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
 
               <path d="M5 3l14 9L5 21V3z"/>
 
@@ -1592,6 +1594,22 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false) {
               <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
 
             </svg>
+
+          </div>` : ''}
+
+        ${isOwnProfile && (img || isVideo) ? `
+
+          <div class="prf-masonry-views-pill">
+
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+
+              <circle cx="12" cy="12" r="3"/>
+
+            </svg>
+
+            ${fmtNum(isRepost ? (orig.views || 0) : (post.views || 0))}
 
           </div>` : ''}
 
