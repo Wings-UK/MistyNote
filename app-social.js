@@ -877,6 +877,10 @@ function injectProfileStyles() {
 
     .prf-masonry-repost-badge { position:absolute; top:7px; right:7px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; color:#fff; pointer-events:none; }
 
+    .prf-masonry-video-badge { position:absolute; top:7px; right:7px; width:26px; height:26px; border-radius:50%; background:rgba(0,0,0,0.55); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; pointer-events:none; }
+
+    .prf-masonry-video-thumb { width:100%; display:block; object-fit:cover; background:#000; }
+
     .prf-masonry-img { width:100%; display:block; object-fit:cover; }
 
     .prf-masonry-text-tile { width:100%; min-height:120px; display:flex; align-items:center; justify-content:center; padding:16px 12px; }
@@ -1509,6 +1513,10 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false) {
 
     const img    = isRepost ? (orig.image || '') : (post.image || '');
 
+    const vid    = isRepost ? (orig.video || '') : (post.video || '');
+
+    const isVideo = !!vid && !img;
+
     const text   = isRepost ? (orig.content || '') : (post.content || '');
 
     const user   = isRepost ? (orig.user || {}) : (post.user || {});
@@ -1524,6 +1532,10 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false) {
     const liked  = likedPosts.has(likePostId);
 
     const likes  = isRepost ? (orig.like_count || 0) : (post.like_count || 0);
+
+    const videoType = isRepost ? (orig.video_type || 'video') : (post.video_type || 'video');
+
+    const videoPostId = isRepost ? orig.id : post.id;
 
     LikeStore.seed(likePostId, likes, liked);
 
@@ -1543,9 +1555,25 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false) {
 
           ? `<img src="${escHtml(img)}" alt="" loading="lazy" class="prf-masonry-img">`
 
-          : `<div class="prf-masonry-text-tile" style="background:${gradientFor(post.id)}"><p>${escHtml(text.slice(0,120))}</p></div>`
+          : isVideo
+
+            ? `<video src="${escHtml(vid)}#t=0.5" class="prf-masonry-video-thumb" preload="metadata" muted playsinline></video>`
+
+            : `<div class="prf-masonry-text-tile" style="background:${gradientFor(post.id)}"><p>${escHtml(text.slice(0,120))}</p></div>`
 
         }
+
+        ${isVideo ? `
+
+          <div class="prf-masonry-video-badge">
+
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="white">
+
+              <path d="M5 3l14 9L5 21V3z"/>
+
+            </svg>
+
+          </div>` : ''}
 
         ${isRepost ? `
 
@@ -1605,7 +1633,13 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false) {
 
       </div>`;
 
-    tile.addEventListener('click', () => openDetail(openId));
+    tile.addEventListener('click', () => {
+
+      if (isVideo) openVideoPlayer(videoPostId, videoType);
+
+      else         openDetail(openId);
+
+    });
 
     if (i % 2 === 0) left.appendChild(tile);
 
