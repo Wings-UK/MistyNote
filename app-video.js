@@ -417,6 +417,15 @@ function _vpStartProgress() {
 function vpShare() { if (_vp.postId) sharePost({ id: _vp.postId, content: _vp.postContent || '' }); }
 
 /* ──────────────────────────────────────────────
+   CREATOR PROFILE — same as tapping username on feed
+────────────────────────────────────────────── */
+function vpOpenCreatorProfile() {
+  if (!_vp.postUserId) return;
+  const el = document.getElementById('vp-creator');
+  showUserProfile(_vp.postUserId, el);
+}
+
+/* ──────────────────────────────────────────────
    RESET / CLOSE
    Hard-stops video and aborts any pending network
    request so audio never bleeds into background.
