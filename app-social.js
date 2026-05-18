@@ -961,7 +961,7 @@ async function renderMyProfile() {
 
                user:users(id,username,avatar,location),
 
-               reposted_post:reposted_post_id(id,content,image,video,images,created_at,user_id,user:users(id,username,avatar,location))`)
+               reposted_post:reposted_post_id(id,content,image,video,images,created_at,views,user_id,user:users(id,username,avatar,location))`)
 
       .eq('user_id', currentUser.id)
 
