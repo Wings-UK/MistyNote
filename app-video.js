@@ -417,12 +417,13 @@ function _vpStartProgress() {
 function vpShare() { if (_vp.postId) sharePost({ id: _vp.postId, content: _vp.postContent || '' }); }
 
 /* ──────────────────────────────────────────────
-   CREATOR PROFILE — same as tapping username on feed
+   CREATOR PROFILE — close video then open profile
 ────────────────────────────────────────────── */
 function vpOpenCreatorProfile() {
   if (!_vp.postUserId) return;
-  const el = document.getElementById('vp-creator');
-  showUserProfile(_vp.postUserId, el);
+  const userId = _vp.postUserId;
+  closeVideoPlayer();
+  showUserProfile(userId, null);
 }
 
 /* ──────────────────────────────────────────────
