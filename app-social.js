@@ -973,7 +973,9 @@ async function renderMyProfile() {
 
       .select(`post:posts(id,content,image,video,images,created_at,like_count,repost_count,views,user_id,
 
-               user:users(id,username,avatar))`)
+               user:users(id,username,avatar),
+
+               comments(count))`)
 
       .eq('user_id', currentUser.id)
 
