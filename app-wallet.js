@@ -1654,7 +1654,7 @@ function updateBuyPointsPreview(val) {
 
 // Inline modal — user never leaves the page.
 
-const FLW_PUBLIC_KEY = 'FLWPUBK_TEST-3bec06b315ffc24a1de1acaf04ebfab0-X';
+const FLW_PUBLIC_KEY = 'FLWPUBK-7bcaf5697d2ee4a2a4437f3ec59cbe22-X';
 
 function initiateBuyPoints() {
 
