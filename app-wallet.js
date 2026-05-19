@@ -1732,9 +1732,16 @@ function runFlutterwavePayment(points, ngnAmount) {
 
     callback: async function(response) {
 
-      // response.status === 'successful' when payment completes
+      // Log response for debugging
+      console.log('Flutterwave callback response:', JSON.stringify(response));
 
-      if (response.status === 'successful' || response.status === 'completed') {
+      // Flutterwave returns status as 'successful', 'completed', or transaction_id present
+      var isSuccess = response.status === 'successful'
+        || response.status === 'completed'
+        || response.status === 'success'
+        || (response.transaction_id && response.transaction_id > 0);
+
+      if (isSuccess) {
 
         closeWalletSheet('add');
 
@@ -1752,7 +1759,7 @@ function runFlutterwavePayment(points, ngnAmount) {
 
         } catch (e) {
 
-          // Payment went through — points will reflect shortly via webhook
+          console.error('creditPointsFlutterwave error:', e);
 
           showToast('Payment received — points will reflect shortly');
 
@@ -1760,7 +1767,9 @@ function runFlutterwavePayment(points, ngnAmount) {
 
       } else {
 
-        showToast('Payment was not completed');
+        console.warn('Flutterwave non-success status:', response.status);
+
+        showToast('Payment was not completed — status: ' + response.status);
 
       }
 
