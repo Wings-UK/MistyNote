@@ -874,7 +874,7 @@ function toggleDarkMode(isDark) {
 
 // Fallback if API unreachable: 4400
 
-const BUY_FEE    = 0.01;
+const BUY_FEE    = 0.04;
 
 const PAYOUT_FEE = 0.01;
 
