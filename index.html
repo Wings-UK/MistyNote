@@ -736,7 +736,7 @@
 
             <div class="mkt-header-actions">
 
-              <button class="mkt-icon-btn" onclick="showToast('Cart coming soon')">
+              <button class="mkt-icon-btn" onclick="openSidePanel('cart')">
 
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
 
@@ -750,7 +750,7 @@
 
           <!-- Search bar -->
 
-          <div class="mkt-search-wrap" onclick="showToast('Search coming soon')">
+          <div class="mkt-search-wrap" onclick="openMktSearch()">
 
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
 
@@ -2103,6 +2103,10 @@
     </header>
 
     <section class="page no-header-page" id="page-profile">
+
+      <!-- Storefront banner — shown if user has a store -->
+
+      <div id="prf-storefront-banner" style="display:none"></div>
 
       <div id="my-profile-content">
 
@@ -4991,6 +4995,668 @@
   <script src="/app-referral.js"></script>
 
   <script src="/app-video.js"></script>
+
+    <!-- ══════════════════════════════════════════
+         SIDEPANE — Commerce Hub
+    ══════════════════════════════════════════ -->
+
+    <div class="sidepane-backdrop" id="sidepane-backdrop" onclick="closeSidePanel()"></div>
+
+    <div class="sidepane" id="sidepane">
+
+      <div class="sidepane-header">
+
+        <div class="sidepane-user" id="sidepane-user">
+
+          <img class="sidepane-avatar" id="sidepane-avatar" src="" alt="">
+
+          <div class="sidepane-user-info">
+
+            <div class="sidepane-username" id="sidepane-username"></div>
+
+            <div class="sidepane-store-name" id="sidepane-store-name" style="display:none"></div>
+
+          </div>
+
+        </div>
+
+        <button class="sidepane-close" onclick="closeSidePanel()">
+
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+
+        </button>
+
+      </div>
+
+      <div class="sidepane-body" id="sidepane-body">
+
+        <!-- Merchant section — only shown if user has a storefront -->
+
+        <div class="sidepane-section" id="sidepane-merchant-section" style="display:none">
+
+          <div class="sidepane-section-label">My Store</div>
+
+          <button class="sidepane-item" onclick="closeSidePanel();openMyStorefront()">
+
+            <div class="sidepane-item-icon" style="background:#f5f0ff">
+
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6C47FF" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+
+            </div>
+
+            <span>My Storefront</span>
+
+            <svg class="sidepane-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+
+          </button>
+
+          <button class="sidepane-item" onclick="closeSidePanel();openMyProducts()">
+
+            <div class="sidepane-item-icon" style="background:#fff0f0">
+
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff3b5c" stroke-width="2" stroke-linecap="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+
+            </div>
+
+            <span>My Products</span>
+
+            <svg class="sidepane-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+
+          </button>
+
+          <button class="sidepane-item" onclick="closeSidePanel();openShopOrders()">
+
+            <div class="sidepane-item-icon" style="background:#fff8f0">
+
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+
+            </div>
+
+            <span>Shop Orders</span>
+
+            <span class="sidepane-badge" id="sidepane-orders-badge" style="display:none">0</span>
+
+            <svg class="sidepane-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+
+          </button>
+
+          <button class="sidepane-item" onclick="closeSidePanel();openMerchantDashboard()">
+
+            <div class="sidepane-item-icon" style="background:#f0fff4">
+
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00c48c" stroke-width="2" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+
+            </div>
+
+            <span>Analytics</span>
+
+            <svg class="sidepane-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+
+          </button>
+
+          <button class="sidepane-item" onclick="closeSidePanel();openDiscountCodes()">
+
+            <div class="sidepane-item-icon" style="background:#f0f7ff">
+
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#007aff" stroke-width="2" stroke-linecap="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+
+            </div>
+
+            <span>Discount Codes</span>
+
+            <svg class="sidepane-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+
+          </button>
+
+        </div>
+
+        <!-- Buyer section -->
+
+        <div class="sidepane-section">
+
+          <div class="sidepane-section-label">Shopping</div>
+
+          <button class="sidepane-item" onclick="closeSidePanel();openSidePaneSection('cart')">
+
+            <div class="sidepane-item-icon" style="background:#fff0f8">
+
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff3b5c" stroke-width="2" stroke-linecap="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+
+            </div>
+
+            <span>Cart</span>
+
+            <span class="sidepane-badge" id="sidepane-cart-badge" style="display:none">0</span>
+
+            <svg class="sidepane-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+
+          </button>
+
+          <button class="sidepane-item" onclick="closeSidePanel();openMyBag()">
+
+            <div class="sidepane-item-icon" style="background:#f5f0ff">
+
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6C47FF" stroke-width="2" stroke-linecap="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+
+            </div>
+
+            <span>My Bag</span>
+
+            <svg class="sidepane-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+
+          </button>
+
+        </div>
+
+        <!-- Wallet section -->
+
+        <div class="sidepane-section">
+
+          <div class="sidepane-section-label">Finance</div>
+
+          <button class="sidepane-item" onclick="closeSidePanel();openWallet()">
+
+            <div class="sidepane-item-icon" style="background:#f5f0ff">
+
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6C47FF" stroke-width="2" stroke-linecap="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+
+            </div>
+
+            <span>Wallet</span>
+
+            <svg class="sidepane-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+
+          </button>
+
+        </div>
+
+        <!-- Open store CTA — only shown if no storefront yet -->
+
+        <div class="sidepane-section" id="sidepane-open-store-section">
+
+          <button class="sidepane-open-store-btn" onclick="closeSidePanel();openCreateStorefront()">
+
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+
+            Open a Store on MistyNote
+
+          </button>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ══════════════════════════════════════════
+         PAGE: CREATE STOREFRONT
+    ══════════════════════════════════════════ -->
+
+    <section class="page slide-page no-header-page" id="page-create-storefront">
+
+      <header class="page-header">
+
+        <button class="back-btn" onclick="slideBack()">
+
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M12 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+
+        </button>
+
+        <h1 class="page-title">Open Your Store</h1>
+
+      </header>
+
+      <div class="csf-body">
+
+        <!-- Logo upload -->
+
+        <div class="csf-logo-wrap">
+
+          <div class="csf-logo-preview" id="csf-logo-preview" onclick="document.getElementById('csf-logo-input').click()">
+
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="rgba(108,71,255,0.5)" stroke-width="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+
+            <span class="csf-logo-hint">Tap to add logo</span>
+
+          </div>
+
+          <input type="file" id="csf-logo-input" accept="image/*" style="display:none" onchange="csfPreviewLogo(this)">
+
+        </div>
+
+        <!-- Banner upload -->
+
+        <div class="csf-banner-wrap" id="csf-banner-wrap" onclick="document.getElementById('csf-banner-input').click()">
+
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="rgba(108,71,255,0.4)" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+
+          <span style="font-size:13px;color:var(--text3);margin-top:6px">Tap to add store banner</span>
+
+          <input type="file" id="csf-banner-input" accept="image/*" style="display:none" onchange="csfPreviewBanner(this)">
+
+        </div>
+
+        <!-- Store name -->
+
+        <div class="csf-field">
+
+          <label class="csf-label">Store Name <span class="csf-required">*</span></label>
+
+          <div class="csf-input-wrap" id="csf-name-wrap">
+
+            <input type="text" class="csf-input" id="csf-store-name" placeholder="e.g. Adaeze Fashion House" maxlength="40" oninput="csfValidateName(this)">
+
+          </div>
+
+          <div class="csf-field-hint" id="csf-name-hint">This will be your brand name on MistyNote</div>
+
+          <div class="csf-field-error hidden" id="csf-name-error"></div>
+
+        </div>
+
+        <!-- Description -->
+
+        <div class="csf-field">
+
+          <label class="csf-label">Store Description</label>
+
+          <textarea class="csf-textarea" id="csf-description" placeholder="Tell customers what you sell…" maxlength="200" rows="3"></textarea>
+
+        </div>
+
+        <!-- Category -->
+
+        <div class="csf-field">
+
+          <label class="csf-label">Business Category <span class="csf-required">*</span></label>
+
+          <select class="csf-select" id="csf-category">
+
+            <option value="">Select category…</option>
+
+            <option>Fashion & Clothing</option>
+
+            <option>Beauty & Skincare</option>
+
+            <option>Food & Beverages</option>
+
+            <option>Electronics & Gadgets</option>
+
+            <option>Home & Living</option>
+
+            <option>Health & Wellness</option>
+
+            <option>Kids & Baby</option>
+
+            <option>Sports & Fitness</option>
+
+            <option>Art & Crafts</option>
+
+            <option>Books & Education</option>
+
+            <option>Automotive</option>
+
+            <option>Agriculture & Farm</option>
+
+            <option>Services</option>
+
+            <option>Other</option>
+
+          </select>
+
+        </div>
+
+        <!-- Phone -->
+
+        <div class="csf-field">
+
+          <label class="csf-label">Business Phone <span class="csf-required">*</span></label>
+
+          <input type="tel" class="csf-input" id="csf-phone" placeholder="08012345678" maxlength="14">
+
+        </div>
+
+        <!-- State -->
+
+        <div class="csf-field">
+
+          <label class="csf-label">State <span class="csf-required">*</span></label>
+
+          <select class="csf-select" id="csf-state">
+
+            <option value="">Select your state…</option>
+
+            <option>Abia</option><option>Adamawa</option><option>Akwa Ibom</option>
+
+            <option>Anambra</option><option>Bauchi</option><option>Bayelsa</option>
+
+            <option>Benue</option><option>Borno</option><option>Cross River</option>
+
+            <option>Delta</option><option>Ebonyi</option><option>Edo</option>
+
+            <option>Ekiti</option><option>Enugu</option><option>FCT - Abuja</option>
+
+            <option>Gombe</option><option>Imo</option><option>Jigawa</option>
+
+            <option>Kaduna</option><option>Kano</option><option>Katsina</option>
+
+            <option>Kebbi</option><option>Kogi</option><option>Kwara</option>
+
+            <option>Lagos</option><option>Nasarawa</option><option>Niger</option>
+
+            <option>Ogun</option><option>Ondo</option><option>Osun</option>
+
+            <option>Oyo</option><option>Plateau</option><option>Rivers</option>
+
+            <option>Sokoto</option><option>Taraba</option><option>Yobe</option>
+
+            <option>Zamfara</option>
+
+          </select>
+
+        </div>
+
+        <!-- Plan info -->
+
+        <div class="csf-plan-card">
+
+          <div class="csf-plan-header">
+
+            <span class="csf-plan-name">Basic Plan</span>
+
+            <span class="csf-plan-price">MP 1 <span style="font-weight:400;font-size:13px;opacity:0.7">/ month</span></span>
+
+          </div>
+
+          <div class="csf-plan-features">
+
+            <div class="csf-plan-feature">✓ Unlimited product listings</div>
+
+            <div class="csf-plan-feature">✓ Full storefront page</div>
+
+            <div class="csf-plan-feature">✓ Order management</div>
+
+            <div class="csf-plan-feature">✓ Analytics dashboard</div>
+
+            <div class="csf-plan-feature">✓ Discount codes</div>
+
+            <div class="csf-plan-feature">✓ Verified store badge after review</div>
+
+          </div>
+
+        </div>
+
+        <button class="csf-submit-btn" id="csf-submit-btn" onclick="submitCreateStorefront()">
+
+          Open My Store — MP 1/month
+
+        </button>
+
+        <p class="csf-terms">By opening a store you agree to MistyNote's Seller Terms. First month free.</p>
+
+      </div>
+
+    </section>
+
+    <!-- ══════════════════════════════════════════
+         PAGE: MY STOREFRONT (Merchant view)
+    ══════════════════════════════════════════ -->
+
+    <section class="page slide-page no-header-page" id="page-my-storefront">
+
+      <div id="my-storefront-content">
+
+        <div class="loading-pulse" style="height:300px"></div>
+
+      </div>
+
+    </section>
+
+    <!-- ══════════════════════════════════════════
+         PAGE: STOREFRONT (Public view)
+    ══════════════════════════════════════════ -->
+
+    <section class="page slide-page no-header-page" id="page-storefront">
+
+      <div id="storefront-content">
+
+        <div class="loading-pulse" style="height:300px"></div>
+
+      </div>
+
+    </section>
+
+    <!-- ══════════════════════════════════════════
+         PAGE: PRODUCT DETAIL
+    ══════════════════════════════════════════ -->
+
+    <section class="page slide-page no-header-page" id="page-product">
+
+      <div id="product-content">
+
+        <div class="loading-pulse" style="height:300px"></div>
+
+      </div>
+
+    </section>
+
+    <!-- ══════════════════════════════════════════
+         PAGE: ADD / EDIT PRODUCT
+    ══════════════════════════════════════════ -->
+
+    <section class="page slide-page no-header-page" id="page-add-product">
+
+      <header class="page-header">
+
+        <button class="back-btn" onclick="slideBack()">
+
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M12 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+
+        </button>
+
+        <h1 class="page-title" id="add-product-title">Add Product</h1>
+
+        <button class="page-header-action" id="add-product-save-btn" onclick="saveProduct()">Save</button>
+
+      </header>
+
+      <div id="add-product-content">
+
+        <div class="loading-pulse" style="height:300px"></div>
+
+      </div>
+
+    </section>
+
+    <!-- ══════════════════════════════════════════
+         PAGE: MY BAG (Buyer orders)
+    ══════════════════════════════════════════ -->
+
+    <section class="page slide-page no-header-page" id="page-my-bag">
+
+      <header class="page-header">
+
+        <button class="back-btn" onclick="slideBack()">
+
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M12 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+
+        </button>
+
+        <h1 class="page-title">My Bag</h1>
+
+      </header>
+
+      <div id="my-bag-content">
+
+        <div class="loading-pulse" style="height:300px"></div>
+
+      </div>
+
+    </section>
+
+    <!-- ══════════════════════════════════════════
+         PAGE: SHOP ORDERS (Seller incoming orders)
+    ══════════════════════════════════════════ -->
+
+    <section class="page slide-page no-header-page" id="page-shop-orders">
+
+      <header class="page-header">
+
+        <button class="back-btn" onclick="slideBack()">
+
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M12 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+
+        </button>
+
+        <h1 class="page-title">Shop Orders</h1>
+
+      </header>
+
+      <div id="shop-orders-content">
+
+        <div class="loading-pulse" style="height:300px"></div>
+
+      </div>
+
+    </section>
+
+    <!-- ══════════════════════════════════════════
+         PAGE: MERCHANT ANALYTICS
+    ══════════════════════════════════════════ -->
+
+    <section class="page slide-page no-header-page" id="page-merchant-dashboard">
+
+      <header class="page-header">
+
+        <button class="back-btn" onclick="slideBack()">
+
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M12 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+
+        </button>
+
+        <h1 class="page-title">Analytics</h1>
+
+      </header>
+
+      <div id="merchant-dashboard-content">
+
+        <div class="loading-pulse" style="height:300px"></div>
+
+      </div>
+
+    </section>
+
+    <!-- ══════════════════════════════════════════
+         PAGE: DISCOUNT CODES
+    ══════════════════════════════════════════ -->
+
+    <section class="page slide-page no-header-page" id="page-discount-codes">
+
+      <header class="page-header">
+
+        <button class="back-btn" onclick="slideBack()">
+
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M12 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+
+        </button>
+
+        <h1 class="page-title">Discount Codes</h1>
+
+        <button class="page-header-action" onclick="openCreateDiscountCode()">+ New</button>
+
+      </header>
+
+      <div id="discount-codes-content">
+
+        <div class="loading-pulse" style="height:300px"></div>
+
+      </div>
+
+    </section>
+
+    <!-- ══════════════════════════════════════════
+         PAGE: CART
+    ══════════════════════════════════════════ -->
+
+    <section class="page slide-page no-header-page" id="page-cart">
+
+      <header class="page-header">
+
+        <button class="back-btn" onclick="slideBack()">
+
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M12 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+
+        </button>
+
+        <h1 class="page-title">Cart</h1>
+
+        <button class="page-header-action" id="cart-clear-btn" onclick="clearCart()" style="color:var(--red)">Clear</button>
+
+      </header>
+
+      <div id="cart-content">
+
+        <div class="loading-pulse" style="height:300px"></div>
+
+      </div>
+
+    </section>
+
+    <!-- ══════════════════════════════════════════
+         PAGE: CHECKOUT
+    ══════════════════════════════════════════ -->
+
+    <section class="page slide-page no-header-page" id="page-checkout">
+
+      <header class="page-header">
+
+        <button class="back-btn" onclick="slideBack()">
+
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M12 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+
+        </button>
+
+        <h1 class="page-title">Checkout</h1>
+
+      </header>
+
+      <div id="checkout-content">
+
+        <div class="loading-pulse" style="height:300px"></div>
+
+      </div>
+
+    </section>
+
+    <!-- ══════════════════════════════════════════
+         PAGE: MY PRODUCTS
+    ══════════════════════════════════════════ -->
+
+    <section class="page slide-page no-header-page" id="page-my-products">
+
+      <header class="page-header">
+
+        <button class="back-btn" onclick="slideBack()">
+
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M12 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+
+        </button>
+
+        <h1 class="page-title">My Products</h1>
+
+        <button class="page-header-action" onclick="slideTo('add-product', buildAddProductForm)">+ Add</button>
+
+      </header>
+
+      <div id="my-products-content">
+
+        <div class="loading-pulse" style="height:300px"></div>
+
+      </div>
+
+    </section>
+
+    <script src="app-commerce.js"></script>
 
 </body>
 
