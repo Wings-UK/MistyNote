@@ -224,14 +224,13 @@ function slideTo(pageId, setupFn) {
 
   // Hide bottom nav for slide pages that need full screen
 
-  if (['messages','chat','video'].includes(pageId)) {
+  if (['messages','chat'].includes(pageId)) {
 
     document.getElementById('bottom-nav').style.display = 'none';
 
   }
 
   // If leaving detail, hide comment bar and restore bottom nav
-  // But never restore nav when going to video — video always hides it
 
   if (slideStack[slideStack.length - 2] === 'detail' || document.getElementById('comment-bar')?.style.display === 'flex') {
 
@@ -239,11 +238,7 @@ function slideTo(pageId, setupFn) {
 
       document.getElementById('comment-bar').style.display = 'none';
 
-      if (pageId !== 'video') {
-
-        document.getElementById('bottom-nav').style.display = '';
-
-      }
+      document.getElementById('bottom-nav').style.display = '';
 
     }
 
@@ -316,10 +311,6 @@ function slideBack() {
   if (pageId === 'detail') {
 
     document.getElementById('comment-bar').style.display = 'none';
-
-    // Remove video PiP bubble if it exists
-
-    if (typeof _vpRemovePiP === 'function') _vpRemovePiP();
 
   }
 
@@ -877,12 +868,6 @@ function injectProfileStyles() {
 
     .prf-masonry-repost-badge { position:absolute; top:7px; right:7px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; color:#fff; pointer-events:none; }
 
-    .prf-masonry-video-badge { position:absolute; top:7px; right:7px; width:26px; height:26px; border-radius:50%; background:rgba(0,0,0,0.28); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; pointer-events:none; }
-
-    .prf-masonry-video-thumb { width:100%; display:block; object-fit:cover; background:#000; }
-
-    .prf-masonry-views-pill { position:absolute; bottom:7px; left:7px; display:flex; align-items:center; gap:4px; background:rgba(0,0,0,0.45); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); border-radius:20px; padding:3px 8px 3px 6px; font-size:11px; font-weight:400; color:white; pointer-events:none; }
-
     .prf-masonry-img { width:100%; display:block; object-fit:cover; }
 
     .prf-masonry-text-tile { width:100%; min-height:120px; display:flex; align-items:center; justify-content:center; padding:16px 12px; }
@@ -961,7 +946,7 @@ async function renderMyProfile() {
 
                user:users(id,username,avatar,location),
 
-               reposted_post:reposted_post_id(id,content,image,video,images,created_at,like_count,repost_count,views,user_id,user:users(id,username,avatar,location))`)
+               reposted_post:reposted_post_id(id,content,image,video,images,created_at,user_id,user:users(id,username,avatar,location))`)
 
       .eq('user_id', currentUser.id)
 
@@ -973,9 +958,7 @@ async function renderMyProfile() {
 
       .select(`post:posts(id,content,image,video,images,created_at,like_count,repost_count,views,user_id,
 
-               user:users(id,username,avatar),
-
-               comments(count))`)
+               user:users(id,username,avatar))`)
 
       .eq('user_id', currentUser.id)
 
@@ -1153,19 +1136,19 @@ async function renderMyProfile() {
 
       <!-- STOREFRONT -->
 
-      <div class="prf-storefront-banner" onclick="showToast('Storefronts coming soon 🛍️')">
+      <div class="prf-storefront-banner" id="prf-storefront-banner-own" onclick="handleStorefrontBannerTap()">
 
-        <div class="prf-storefront-icon">🛍️</div>
+        <div class="prf-storefront-icon" id="prf-storefront-banner-icon">🛍️</div>
 
         <div class="prf-storefront-text">
 
-          <div class="prf-storefront-title">Open your storefront</div>
+          <div class="prf-storefront-title" id="prf-storefront-banner-title">Open your storefront</div>
 
-          <div class="prf-storefront-sub">Sell anything. Get paid safely.</div>
+          <div class="prf-storefront-sub" id="prf-storefront-banner-sub">Sell anything. Get paid safely.</div>
 
         </div>
 
-        <span class="prf-storefront-pill">Soon</span>
+        <span class="prf-storefront-pill" id="prf-storefront-banner-pill">Open</span>
 
       </div>
 
@@ -1401,7 +1384,7 @@ function switchPrfTab(tab, el) {
 
   if (tab === 'list')  renderPrfPosts(posts || [],    'prf-panel-list',  true, true);
 
-  if (tab === 'media') renderPrfMasonry(mediaPosts || [], 'prf-panel-media', true, true);
+  if (tab === 'media') renderPrfMasonry(mediaPosts || [], 'prf-panel-media', true);
 
   if (tab === 'likes') {
 
@@ -1473,7 +1456,7 @@ function renderPrfPosts(posts, containerId, isOwn, isProfilePage = false, viewin
 
 }
 
-function renderPrfMasonry(posts, containerId, mediaOnly = false, isOwnProfile = false) {
+function renderPrfMasonry(posts, containerId, mediaOnly = false) {
 
   const container = document.getElementById(containerId);
 
@@ -1517,10 +1500,6 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false, isOwnProfile = 
 
     const img    = isRepost ? (orig.image || '') : (post.image || '');
 
-    const vid    = isRepost ? (orig.video || '') : (post.video || '');
-
-    const isVideo = !!vid && !img;
-
     const text   = isRepost ? (orig.content || '') : (post.content || '');
 
     const user   = isRepost ? (orig.user || {}) : (post.user || {});
@@ -1536,10 +1515,6 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false, isOwnProfile = 
     const liked  = likedPosts.has(likePostId);
 
     const likes  = isRepost ? (orig.like_count || 0) : (post.like_count || 0);
-
-    const videoType = isRepost ? (orig.video_type || 'video') : (post.video_type || 'video');
-
-    const videoPostId = isRepost ? orig.id : post.id;
 
     LikeStore.seed(likePostId, likes, liked);
 
@@ -1559,25 +1534,9 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false, isOwnProfile = 
 
           ? `<img src="${escHtml(img)}" alt="" loading="lazy" class="prf-masonry-img">`
 
-          : isVideo
-
-            ? `<video src="${escHtml(vid)}#t=0.5" class="prf-masonry-video-thumb" preload="metadata" muted playsinline></video>`
-
-            : `<div class="prf-masonry-text-tile" style="background:${gradientFor(post.id)}"><p>${escHtml(text.slice(0,120))}</p></div>`
+          : `<div class="prf-masonry-text-tile" style="background:${gradientFor(post.id)}"><p>${escHtml(text.slice(0,120))}</p></div>`
 
         }
-
-        ${isVideo ? `
-
-          <div class="prf-masonry-video-badge">
-
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-
-              <path d="M5 3l14 9L5 21V3z"/>
-
-            </svg>
-
-          </div>` : ''}
 
         ${isRepost ? `
 
@@ -1599,23 +1558,9 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false, isOwnProfile = 
 
           </div>` : ''}
 
-        ${isOwnProfile && (img || isVideo) ? `
-
-          <div class="prf-masonry-views-pill">
-
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="white" stroke="none">
-
-              <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zm0 12.5c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
-
-            </svg>
-
-            ${fmtNum(isRepost ? (orig.views || 0) : (post.views || 0))}
-
-          </div>` : ''}
-
       </div>
 
-      ${text && (img || isVideo) ? `<div class="prf-masonry-caption">${escHtml(text.slice(0,80))}${text.length > 80 ? '…' : ''}</div>` : ''}
+      ${text && img ? `<div class="prf-masonry-caption">${escHtml(text.slice(0,80))}${text.length > 80 ? '…' : ''}</div>` : ''}
 
       <div class="prf-masonry-footer">
 
@@ -1651,13 +1596,7 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false, isOwnProfile = 
 
       </div>`;
 
-    tile.addEventListener('click', () => {
-
-      if (isVideo) openVideoPlayer(videoPostId, videoType);
-
-      else         openDetail(openId);
-
-    });
+    tile.addEventListener('click', () => openDetail(openId));
 
     if (i % 2 === 0) left.appendChild(tile);
 
@@ -2043,7 +1982,9 @@ async function showUserProfile(userId, tapEl) {
 
         <!-- CREATOR STOREFRONT BANNER -->
 
-        <div class="prf-storefront-banner" onclick="showToast('Creator storefronts coming soon 🛍️')">
+        <div class="prf-storefront-banner" id="uprf-storefront-banner-${userId}" style="display:none"
+
+          onclick="openStorefrontByUserId('${userId}')">
 
           <div class="prf-storefront-icon">🛍️</div>
 
@@ -2055,7 +1996,7 @@ async function showUserProfile(userId, tapEl) {
 
           </div>
 
-          <span class="prf-storefront-pill">Soon</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
 
         </div>
 
@@ -2092,6 +2033,15 @@ async function showUserProfile(userId, tapEl) {
     body._uprfData = { posts: allPosts, mediaPosts, likedPosts };
 
     renderPrfPosts(allPosts, `uprf-list-${userId}`, false, true, userId);
+
+    // Check if this user has a storefront — show/hide banner accordingly
+    supabase.from('storefronts').select('id').eq('user_id', userId).eq('is_active', true).maybeSingle().then(({ data: sf }) => {
+
+      const banner = document.getElementById(`uprf-storefront-banner-${userId}`);
+
+      if (banner) banner.style.display = sf ? 'flex' : 'none';
+
+    });
 
     document.getElementById(`uprf-list-${userId}`)._loaded = true;
 
@@ -8900,20 +8850,6 @@ function updateCommentCountDelta(delta) {
       feedSpan.textContent = newVal > 0 ? fmtNum(newVal) : '';
 
     }
-
-  }
-
-  // Update video full-screen comment count in real time
-
-  const vpCount = document.getElementById('vp-comment-count');
-
-  if (vpCount) {
-
-    const v = parseInt(vpCount.textContent.replace(/[^0-9]/g,'')) || 0;
-
-    const newVal = Math.max(0, v + delta);
-
-    vpCount.textContent = newVal > 0 ? fmtNum(newVal) : '';
 
   }
 
