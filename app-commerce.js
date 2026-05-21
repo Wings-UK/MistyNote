@@ -67,26 +67,46 @@ async function loadMyStorefrontState() {
 }
 
 function renderStorefrontBanner() {
-  const bannerEl = document.getElementById('prf-storefront-banner');
-  if (!bannerEl) return;
+  // Update the existing beautiful banner in app-social.js — don't replace it
+  const icon  = document.getElementById('prf-storefront-banner-icon');
+  const title = document.getElementById('prf-storefront-banner-title');
+  const sub   = document.getElementById('prf-storefront-banner-sub');
+  const pill  = document.getElementById('prf-storefront-banner-pill');
+
   if (currentStorefront) {
-    bannerEl.innerHTML = `
-      <div class="prf-store-banner-inner" onclick="openMyStorefront()">
-        <img class="prf-store-banner-logo" src="${currentStorefront.logo_url || ''}" onerror="this.style.display='none'" alt="">
-        <div class="prf-store-banner-info">
-          <div class="prf-store-banner-name">${escHtml(currentStorefront.store_name)}</div>
-          <div class="prf-store-banner-cat">${escHtml(currentStorefront.category)}</div>
-        </div>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
-      </div>`;
-    bannerEl.style.display = 'block';
+    if (icon)  icon.textContent  = '🏪';
+    if (title) title.textContent = currentStorefront.store_name;
+    if (sub)   sub.textContent   = currentStorefront.category + ' · Tap to manage';
+    if (pill)  { pill.textContent = 'Dashboard'; pill.style.background = 'var(--accent)'; pill.style.color = 'white'; }
   } else {
-    bannerEl.innerHTML = `
-      <div class="prf-store-banner-cta" onclick="openCreateStorefront()">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-        Open a store on MistyNote
-      </div>`;
-    bannerEl.style.display = 'block';
+    if (icon)  icon.textContent  = '🛍️';
+    if (title) title.textContent = 'Open your storefront';
+    if (sub)   sub.textContent   = 'Sell anything. Get paid safely.';
+    if (pill)  { pill.textContent = 'Open'; pill.style.background = ''; pill.style.color = ''; }
+  }
+}
+
+// Called when logged-in user taps their own storefront banner
+function handleStorefrontBannerTap() {
+  if (currentStorefront) {
+    openMyStorefront();
+  } else {
+    openCreateStorefront();
+  }
+}
+
+// Called when viewing another user's profile and tapping their store banner
+async function openStorefrontByUserId(userId) {
+  const { data: sf } = await supabase
+    .from('storefronts')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('is_active', true)
+    .maybeSingle();
+  if (sf) {
+    openStorefront(sf.id);
+  } else {
+    showToast('This user has no active store');
   }
 }
 
