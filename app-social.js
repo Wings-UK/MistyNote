@@ -224,7 +224,7 @@ function slideTo(pageId, setupFn) {
 
   // Hide bottom nav for slide pages that need full screen
 
-  if (['messages','chat'].includes(pageId)) {
+  if (['messages','chat','video'].includes(pageId)) {
 
     document.getElementById('bottom-nav').style.display = 'none';
 
@@ -238,7 +238,11 @@ function slideTo(pageId, setupFn) {
 
       document.getElementById('comment-bar').style.display = 'none';
 
-      document.getElementById('bottom-nav').style.display = '';
+      if (pageId !== 'video') {
+
+        document.getElementById('bottom-nav').style.display = '';
+
+      }
 
     }
 
@@ -311,6 +315,8 @@ function slideBack() {
   if (pageId === 'detail') {
 
     document.getElementById('comment-bar').style.display = 'none';
+
+    if (typeof _vpRemovePiP === 'function') _vpRemovePiP();
 
   }
 
@@ -867,6 +873,9 @@ function injectProfileStyles() {
     .prf-masonry-tile:active { transform:scale(.97); }
 
     .prf-masonry-repost-badge { position:absolute; top:7px; right:7px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; color:#fff; pointer-events:none; }
+    .prf-masonry-video-badge { position:absolute; top:7px; right:7px; width:26px; height:26px; border-radius:50%; background:rgba(0,0,0,0.28); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; pointer-events:none; }
+    .prf-masonry-video-thumb { width:100%; display:block; object-fit:cover; background:#000; }
+    .prf-masonry-views-pill { position:absolute; bottom:7px; left:7px; display:flex; align-items:center; gap:4px; background:rgba(0,0,0,0.45); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); border-radius:20px; padding:3px 8px 3px 6px; font-size:11px; font-weight:400; color:white; pointer-events:none; }
 
     .prf-masonry-img { width:100%; display:block; object-fit:cover; }
 
@@ -946,7 +955,7 @@ async function renderMyProfile() {
 
                user:users(id,username,avatar,location),
 
-               reposted_post:reposted_post_id(id,content,image,video,images,created_at,user_id,user:users(id,username,avatar,location))`)
+               reposted_post:reposted_post_id(id,content,image,video,images,created_at,like_count,repost_count,views,user_id,user:users(id,username,avatar,location))`)
 
       .eq('user_id', currentUser.id)
 
@@ -958,7 +967,9 @@ async function renderMyProfile() {
 
       .select(`post:posts(id,content,image,video,images,created_at,like_count,repost_count,views,user_id,
 
-               user:users(id,username,avatar))`)
+               user:users(id,username,avatar),
+
+               comments(count))`)
 
       .eq('user_id', currentUser.id)
 
@@ -1384,7 +1395,7 @@ function switchPrfTab(tab, el) {
 
   if (tab === 'list')  renderPrfPosts(posts || [],    'prf-panel-list',  true, true);
 
-  if (tab === 'media') renderPrfMasonry(mediaPosts || [], 'prf-panel-media', true);
+  if (tab === 'media') renderPrfMasonry(mediaPosts || [], 'prf-panel-media', true, true);
 
   if (tab === 'likes') {
 
@@ -1456,7 +1467,7 @@ function renderPrfPosts(posts, containerId, isOwn, isProfilePage = false, viewin
 
 }
 
-function renderPrfMasonry(posts, containerId, mediaOnly = false) {
+function renderPrfMasonry(posts, containerId, mediaOnly = false, isOwnProfile = false) {
 
   const container = document.getElementById(containerId);
 
@@ -1500,6 +1511,10 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false) {
 
     const img    = isRepost ? (orig.image || '') : (post.image || '');
 
+    const vid    = isRepost ? (orig.video || '') : (post.video || '');
+
+    const isVideo = !!vid && !img;
+
     const text   = isRepost ? (orig.content || '') : (post.content || '');
 
     const user   = isRepost ? (orig.user || {}) : (post.user || {});
@@ -1515,6 +1530,10 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false) {
     const liked  = likedPosts.has(likePostId);
 
     const likes  = isRepost ? (orig.like_count || 0) : (post.like_count || 0);
+
+    const videoType = isRepost ? (orig.video_type || 'video') : (post.video_type || 'video');
+
+    const videoPostId = isRepost ? orig.id : post.id;
 
     LikeStore.seed(likePostId, likes, liked);
 
@@ -1534,9 +1553,25 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false) {
 
           ? `<img src="${escHtml(img)}" alt="" loading="lazy" class="prf-masonry-img">`
 
-          : `<div class="prf-masonry-text-tile" style="background:${gradientFor(post.id)}"><p>${escHtml(text.slice(0,120))}</p></div>`
+          : isVideo
+
+            ? `<video src="${escHtml(vid)}#t=0.5" class="prf-masonry-video-thumb" preload="metadata" muted playsinline></video>`
+
+            : `<div class="prf-masonry-text-tile" style="background:${gradientFor(post.id)}"><p>${escHtml(text.slice(0,120))}</p></div>`
 
         }
+
+        ${isVideo ? `
+
+          <div class="prf-masonry-video-badge">
+
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+
+              <path d="M5 3l14 9L5 21V3z"/>
+
+            </svg>
+
+          </div>` : ''}
 
         ${isRepost ? `
 
@@ -1558,9 +1593,23 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false) {
 
           </div>` : ''}
 
+        ${isOwnProfile && (img || isVideo) ? `
+
+          <div class="prf-masonry-views-pill">
+
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="white" stroke="none">
+
+              <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zm0 12.5c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+
+            </svg>
+
+            ${fmtNum(isRepost ? (orig.views || 0) : (post.views || 0))}
+
+          </div>` : ''}
+
       </div>
 
-      ${text && img ? `<div class="prf-masonry-caption">${escHtml(text.slice(0,80))}${text.length > 80 ? '…' : ''}</div>` : ''}
+      ${text && (img || isVideo) ? `<div class="prf-masonry-caption">${escHtml(text.slice(0,80))}${text.length > 80 ? '…' : ''}</div>` : ''}
 
       <div class="prf-masonry-footer">
 
@@ -1596,7 +1645,13 @@ function renderPrfMasonry(posts, containerId, mediaOnly = false) {
 
       </div>`;
 
-    tile.addEventListener('click', () => openDetail(openId));
+    tile.addEventListener('click', () => {
+
+      if (isVideo) openVideoPlayer(videoPostId, videoType);
+
+      else         openDetail(openId);
+
+    });
 
     if (i % 2 === 0) left.appendChild(tile);
 
@@ -8850,6 +8905,20 @@ function updateCommentCountDelta(delta) {
       feedSpan.textContent = newVal > 0 ? fmtNum(newVal) : '';
 
     }
+
+  }
+
+  // Update video full-screen comment count in real time
+
+  const vpCount = document.getElementById('vp-comment-count');
+
+  if (vpCount) {
+
+    const v = parseInt(vpCount.textContent.replace(/[^0-9]/g,'')) || 0;
+
+    const newVal = Math.max(0, v + delta);
+
+    vpCount.textContent = newVal > 0 ? fmtNum(newVal) : '';
 
   }
 
