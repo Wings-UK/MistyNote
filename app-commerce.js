@@ -101,7 +101,6 @@ async function openStorefrontByUserId(userId) {
     .from('storefronts')
     .select('id')
     .eq('user_id', userId)
-    .eq('is_active', true)
     .maybeSingle();
   if (sf) {
     openStorefront(sf.id);
@@ -241,7 +240,7 @@ async function renderMyStorefront() {
   if (!el) return;
   el.innerHTML = `<div class="loading-pulse" style="height:300px"></div>`;
   const [sfRes, productsRes, ordersRes] = await Promise.all([
-    supabase.from('storefronts').select('*').eq('id', currentStorefront.id).single(),
+    supabase.from('storefronts').select('*').eq('id', currentStorefront.id).maybeSingle(),
     supabase.from('products').select('id', { count: 'exact', head: true }).eq('storefront_id', currentStorefront.id).neq('status', 'archived'),
     supabase.from('orders').select('id', { count: 'exact', head: true }).eq('storefront_id', currentStorefront.id).eq('status', 'paid'),
   ]);
@@ -339,16 +338,22 @@ async function renderStorefront(storefrontId) {
   if (!el) return;
   el.innerHTML = `<div class="loading-pulse" style="height:400px"></div>`;
   const [sfRes, productsRes, reviewsRes] = await Promise.all([
-    supabase.from('storefronts').select('*, user:users(id,username,avatar,followers)').eq('id', storefrontId).single(),
+    supabase.from('storefronts').select('*').eq('id', storefrontId).single(),
     supabase.from('products').select('*').eq('storefront_id', storefrontId).eq('status','active').order('created_at', { ascending: false }).limit(30),
     supabase.from('product_reviews').select('*, reviewer:users(username,avatar)').eq('storefront_id', storefrontId).order('created_at', { ascending: false }).limit(5),
   ]);
-  const sf       = sfRes.data;
+  const sf = sfRes.data;
+  // Fetch store owner profile separately — avoids foreign key join issues
+  let sfUser = {};
+  if (sf?.user_id) {
+    const { data: u } = await supabase.from('users').select('id,username,avatar,followers').eq('id', sf.user_id).maybeSingle();
+    sfUser = u || {};
+  }
   const products = productsRes.data || [];
   const reviews  = reviewsRes.data || [];
   if (!sf) { el.innerHTML = `<div class="empty-state"><p>Store not found</p></div>`; return; }
   const isOwner   = currentUser && sf.user_id === currentUser.id;
-  const followers = sf.user?.followers || 0;
+  const followers = sfUser.followers || 0;
   el.innerHTML = `
     <div class="sf-banner-wrap">
       ${sf.banner_url ? `<img src="${sf.banner_url}" class="sf-banner-img" alt="">` : `<div class="sf-banner-placeholder" style="background:${gradientFor(sf.id)}"></div>`}
