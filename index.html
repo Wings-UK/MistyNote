@@ -3761,7 +3761,6 @@
       <div class="vp-gradient-top"></div>
 
       <div class="vp-gradient-bottom"></div>
-
       <!-- TOP BAR -->
 
       <div class="vp-topbar">
@@ -3776,29 +3775,7 @@
 
         </button>
 
-        <div class="vp-creator" id="vp-creator" onclick="vpOpenCreatorProfile()">
-
-          <div class="vp-creator-av-wrap">
-
-            <img class="vp-creator-av" id="vp-creator-av" src="" alt="">
-
-          </div>
-
-          <div class="vp-creator-info">
-
-            <span class="vp-creator-name" id="vp-creator-name"></span>
-
-            <div class="vp-live-badge" id="vp-live-badge" style="display:none">
-
-              <span class="vp-live-dot"></span>LIVE
-
-            </div>
-
-            <span class="vp-viewer-count" id="vp-viewer-count" style="display:none"></span>
-
-          </div>
-
-        </div>
+        <div style="flex:1"></div>
 
         <div class="vp-topbar-actions">
 
@@ -3826,9 +3803,44 @@
 
       </div>
 
-      <!-- RIGHT ACTIONS — no background, drop shadow only -->
+      <span class="vp-viewer-count" id="vp-viewer-count" style="display:none"></span>
+
+      <div class="vp-live-badge" id="vp-live-badge" style="display:none">
+
+        <span class="vp-live-dot"></span>LIVE
+
+      </div>
+
+      <!-- RIGHT ACTIONS -->
+
 
       <div class="vp-actions" id="vp-actions">
+
+        <!-- TikTok-style creator avatar -->
+
+        <div class="vp-action-item vp-avatar-item">
+
+          <button class="vp-avatar-btn" id="vp-creator" onclick="vpOpenCreatorProfile()">
+
+            <div class="vp-avatar-ring">
+
+              <img class="vp-creator-av" id="vp-creator-av" src="" alt="">
+
+            </div>
+
+            <div class="vp-avatar-plus">
+
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+
+                <path d="M5 2v6M2 5h6" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+
+              </svg>
+
+            </div>
+
+          </button>
+
+        </div>
 
         <!-- Heart / Like -->
 
@@ -3917,6 +3929,8 @@
       <!-- BOTTOM — username + caption + product card -->
 
       <div class="vp-bottom" id="vp-bottom">
+
+        <span class="vp-creator-name-bottom" id="vp-creator-name" onclick="vpOpenCreatorProfile()"></span>
 
         <div class="vp-caption" id="vp-caption"></div>
 
