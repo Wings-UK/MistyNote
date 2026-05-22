@@ -454,14 +454,27 @@ async function renderProductPage(productId) {
   const el = document.getElementById('product-content');
   if (!el) return;
   el.innerHTML = `<div class="loading-pulse" style="height:400px"></div>`;
-  const { data: p } = await supabase.from('products')
-    .select('*, storefront:storefronts(*), variants:product_variants(*), reviews:product_reviews(*, reviewer:users(username,avatar))')
-    .eq('id', productId).single();
+
+  // Fetch all separately to avoid foreign key join issues
+  const [pRes, variantsRes, reviewsRes] = await Promise.all([
+    supabase.from('products').select('*').eq('id', productId).maybeSingle(),
+    supabase.from('product_variants').select('*').eq('product_id', productId),
+    supabase.from('product_reviews').select('*, reviewer:users(username,avatar)').eq('product_id', productId).order('created_at', { ascending: false }).limit(10),
+  ]);
+
+  const p = pRes.data;
   if (!p) { el.innerHTML = `<div class="empty-state"><p>Product not found</p></div>`; return; }
-  const sf       = p.storefront || {};
+
+  // Fetch storefront separately
+  let sf = {};
+  if (p.storefront_id) {
+    const { data: sfData } = await supabase.from('storefronts').select('*').eq('id', p.storefront_id).maybeSingle();
+    sf = sfData || {};
+  }
+
   const images   = p.images || [];
-  const variants = p.variants || [];
-  const reviews  = p.reviews || [];
+  const variants = variantsRes.data || [];
+  const reviews  = reviewsRes.data || [];
   const discount = p.compare_price_ngn > p.price_ngn ? Math.round((1 - p.price_ngn / p.compare_price_ngn) * 100) : 0;
   pdpCurrentImage = 0;
   el.innerHTML = `
