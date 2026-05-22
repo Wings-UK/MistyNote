@@ -2035,7 +2035,7 @@ async function showUserProfile(userId, tapEl) {
     renderPrfPosts(allPosts, `uprf-list-${userId}`, false, true, userId);
 
     // Check if this user has a storefront — show/hide banner accordingly
-    supabase.from('storefronts').select('id').eq('user_id', userId).eq('is_active', true).maybeSingle().then(({ data: sf }) => {
+    supabase.from('storefronts').select('id').eq('user_id', userId).maybeSingle().then(({ data: sf }) => {
 
       const banner = document.getElementById(`uprf-storefront-banner-${userId}`);
 
