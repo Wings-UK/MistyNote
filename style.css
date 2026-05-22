@@ -13082,8 +13082,7 @@
 
 }
 
-
-.vp-topbar-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+.vp-topbar-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; padding-right: 4px; }
 
 .vp-topbar-btn {
 
@@ -13319,7 +13318,7 @@
 
 /* Tap overlay */
 
-.vp-tap-overlay { position: absolute; inset: 0; z-index: 5; -webkit-tap-highlight-color: transparent; }
+.vp-tap-overlay { position: absolute; inset: 0; z-index: 2; -webkit-tap-highlight-color: transparent; }
 
 /* Play indicator */
 
@@ -13666,7 +13665,9 @@
 #vp-pip-bubble:active #vp-pip-play-hint { opacity: 1; }
 
 /* ═══════════════════════════════════════════════════════
+
    SIDEPANE — Commerce Hub
+
    ═══════════════════════════════════════════════════════ */
 
 .sidepane-backdrop {
@@ -13854,7 +13855,9 @@
 .sidepane-open-store-btn:active { opacity: 0.85; }
 
 /* ═══════════════════════════════════════════════════════
+
    CREATE STOREFRONT PAGE
+
    ═══════════════════════════════════════════════════════ */
 
 .csf-body {
@@ -14018,7 +14021,9 @@
 }
 
 /* ═══════════════════════════════════════════════════════
+
    PAGE HEADER ACTION BUTTON
+
    ═══════════════════════════════════════════════════════ */
 
 .page-header-action {
@@ -14036,7 +14041,9 @@
 }
 
 /* ═══════════════════════════════════════════════════════
+
    STOREFRONT — Square avatar for merchants
+
    ═══════════════════════════════════════════════════════ */
 
 .merchant-avatar {
@@ -14045,10 +14052,10 @@
 
 }
 
-
-
 /* ═══════════════════════════════════════════════════════
+
    STOREFRONT BANNER ON PROFILE
+
    ═══════════════════════════════════════════════════════ */
 
 #prf-storefront-banner { display:none; margin:0 16px 12px; }
@@ -14096,7 +14103,9 @@
 }
 
 /* ═══════════════════════════════════════════════════════
+
    MY STOREFRONT PAGE
+
    ═══════════════════════════════════════════════════════ */
 
 .msf-banner-wrap { position:relative; height:180px; overflow:hidden; background:var(--bg2); }
@@ -14286,7 +14295,9 @@
 }
 
 /* ═══════════════════════════════════════════════════════
+
    PUBLIC STOREFRONT PAGE
+
    ═══════════════════════════════════════════════════════ */
 
 .sf-banner-wrap { position:relative; height:200px; overflow:hidden; }
@@ -14392,7 +14403,9 @@
 .sf-review-text  { font-size:13px; color:var(--text2); line-height:1.4; }
 
 /* ═══════════════════════════════════════════════════════
+
    PRODUCT CARDS
+
    ═══════════════════════════════════════════════════════ */
 
 .prd-card {
@@ -14448,7 +14461,9 @@
 .prd-card-rating { font-size:11px; color:#f59e0b; margin-top:3px; }
 
 /* ═══════════════════════════════════════════════════════
+
    PRODUCT DETAIL PAGE
+
    ═══════════════════════════════════════════════════════ */
 
 .pdp-images { position:relative; height:320px; overflow:hidden; background:var(--bg2); }
@@ -14632,7 +14647,9 @@
 }
 
 /* ═══════════════════════════════════════════════════════
+
    CART PAGE
+
    ═══════════════════════════════════════════════════════ */
 
 .cart-body { padding:0 0 32px; }
@@ -14694,7 +14711,9 @@
 .cart-checkout-btn { width:100%; height:52px; border-radius:26px; border:none; background:var(--accent); color:white; font-size:15px; font-weight:700; cursor:pointer; font-family:'Roboto',sans-serif; }
 
 /* ═══════════════════════════════════════════════════════
+
    CHECKOUT PAGE
+
    ═══════════════════════════════════════════════════════ */
 
 .co-body { padding:16px 16px 32px; }
@@ -14768,7 +14787,9 @@
 .co-place-order-btn:disabled { opacity:0.5; }
 
 /* ═══════════════════════════════════════════════════════
+
    MY BAG PAGE
+
    ═══════════════════════════════════════════════════════ */
 
 .bag-list { display:flex; flex-direction:column; gap:0; }
@@ -14798,7 +14819,9 @@
 .bag-confirm-btn  { padding:6px 12px; border-radius:14px; border:none; background:#00c48c; color:white; font-size:11px; font-weight:700; cursor:pointer; font-family:'Roboto',sans-serif; margin-top:4px; }
 
 /* ═══════════════════════════════════════════════════════
+
    SHOP ORDERS PAGE
+
    ═══════════════════════════════════════════════════════ */
 
 .so-tabs { display:flex; overflow-x:auto; -webkit-overflow-scrolling:touch; padding:12px 16px; gap:8px; border-bottom:1px solid var(--border); }
@@ -14842,7 +14865,9 @@
 .so-ship-btn    { flex:2; height:36px; border-radius:18px; border:none; background:var(--accent); color:white; font-size:12px; font-weight:700; cursor:pointer; font-family:'Roboto',sans-serif; }
 
 /* ═══════════════════════════════════════════════════════
+
    MY PRODUCTS PAGE
+
    ═══════════════════════════════════════════════════════ */
 
 .mp-list { display:flex; flex-direction:column; }
@@ -14874,7 +14899,9 @@
 .mp-product-stat { font-size:11px; color:var(--text3); }
 
 /* ═══════════════════════════════════════════════════════
+
    ADD/EDIT PRODUCT PAGE
+
    ═══════════════════════════════════════════════════════ */
 
 .ap-body { padding:16px 16px 80px; }
@@ -14924,7 +14951,9 @@
 .ap-delete-btn { width:100%; height:46px; border-radius:23px; border:1.5px solid var(--red,#ff3b5c); background:none; color:var(--red,#ff3b5c); font-size:14px; font-weight:700; cursor:pointer; font-family:'Roboto',sans-serif; margin-bottom:16px; }
 
 /* ═══════════════════════════════════════════════════════
+
    MERCHANT ANALYTICS
+
    ═══════════════════════════════════════════════════════ */
 
 .dash-body { padding:16px 16px 32px; }
@@ -14978,7 +15007,9 @@
 .dash-product-stat { font-size:11px; color:var(--text3); }
 
 /* ═══════════════════════════════════════════════════════
+
    DISCOUNT CODES PAGE
+
    ═══════════════════════════════════════════════════════ */
 
 .dc-list { padding:12px 16px; display:flex; flex-direction:column; gap:12px; }
