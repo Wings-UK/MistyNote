@@ -3766,43 +3766,47 @@
 
       <!-- TOP BAR -->
 
-      <div class="vp-topbar">
+      <!-- BACK button -->
 
-        <button class="vp-back" onclick="closeVideoPlayer()">
+      <button class="vp-back" onclick="closeVideoPlayer()">
 
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
 
-            <path d="M19 12H5M12 5l-7 7 7 7" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M19 12H5M12 5l-7 7 7 7" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
 
-          </svg>
+        </svg>
 
-        </button>
+      </button>
 
-        <div style="flex:1"></div>
+      <!-- BELL button for live (hidden by default) -->
 
-        <div class="vp-topbar-actions">
+      <button class="vp-topbar-btn" id="vp-bell-btn" style="display:none" onclick="showToast('Live alerts coming soon 🔔')">
 
-          <button class="vp-topbar-btn" id="vp-bell-btn" style="display:none" onclick="showToast('Live alerts coming soon 🔔')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
 
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" stroke="white" stroke-width="2" stroke-linecap="round"/>
 
-              <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        </svg>
 
-            </svg>
+      </button>
 
-          </button>
+      <!-- X CLOSE — standalone, always on top, z-index 30 -->
 
-          <button class="vp-topbar-btn" onclick="closeVideoPlayer()">
+      <button class="vp-close-btn" onclick="closeVideoPlayer()">
 
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
 
-              <path d="M18 6L6 18M6 6l12 12" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
+          <path d="M18 6L6 18M6 6l12 12" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
 
-            </svg>
+        </svg>
 
-          </button>
+      </button>
 
-        </div>
+      <span class="vp-viewer-count" id="vp-viewer-count" style="display:none"></span>
+
+      <div class="vp-live-badge" id="vp-live-badge" style="display:none">
+
+        <span class="vp-live-dot"></span>LIVE
 
       </div>
 
