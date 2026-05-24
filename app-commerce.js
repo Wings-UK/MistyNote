@@ -931,9 +931,9 @@ async function renderProductPage(productId) {
       <div class="pdp-rating-row">
         <span class="pdp-star">★</span>
         <span class="pdp-rating-score">${Number(p.rating).toFixed(2)}</span>
-        <span class="pdp-rating-recent">(최근 6개월 ${Number(p.rating).toFixed(2)})</span>
+        <span class="pdp-rating-recent">(last 6 months ${Number(p.rating).toFixed(2)})</span>
         <span class="pdp-rating-pipe">|</span>
-        <span class="pdp-rating-link">${p.review_count || 0}건 리뷰</span>
+        <span class="pdp-rating-link">${p.review_count || 0} reviews</span>
       </div>` : ''}
 
       <!-- Discount % + strikethrough original price -->
@@ -949,7 +949,7 @@ async function renderProductPage(productId) {
       <!-- Free delivery row -->
       <div class="pdp-free-delivery">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-        무료배송
+        Free delivery
       </div>
 
     </div><!-- /pdp-info-block -->
@@ -959,10 +959,10 @@ async function renderProductPage(productId) {
 
       <!-- Points row -->
       <div class="pdp-info-row">
-        <span class="pdp-row-label">적립</span>
+        <span class="pdp-row-label">Earn</span>
         <div class="pdp-row-content">
           <div class="pdp-points-amount" onclick="this.closest('.pdp-info-row').querySelector('.pdp-points-card').style.display=this.closest('.pdp-info-row').querySelector('.pdp-points-card').style.display==='none'?'block':'none'">
-            최대 적립 포인트 ${fmtPts(mktNgnToMp(p.price_ngn))}
+            Up to ${fmtPts(mktNgnToMp(p.price_ngn))} MistyPoints
             <span class="pdp-points-chevron">
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
             </span>
@@ -971,11 +971,11 @@ async function renderProductPage(productId) {
           <div class="pdp-points-card" style="display:none">
             <div class="pdp-points-card-top">
               <span class="pdp-points-badge">M+</span>
-              <span class="pdp-points-card-desc">최대 5% 추가 적립</span>
+              <span class="pdp-points-card-desc">Up to 5% extra MP back</span>
               <span class="pdp-points-card-val">${fmtPts(Math.round(mktNgnToMp(p.price_ngn)*0.05))}</span>
             </div>
             <button class="pdp-points-card-btn">
-              MP로 결제하고 최대 적립 받기
+              Pay with MP and earn more
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
             </button>
           </div>
@@ -984,14 +984,14 @@ async function renderProductPage(productId) {
 
       <!-- Benefits row -->
       <div class="pdp-info-row">
-        <span class="pdp-row-label">혜택</span>
+        <span class="pdp-row-label">Perks</span>
         <div class="pdp-row-content">
           <div class="pdp-benefit-line">
-            <span>MP 결제 시 최대 ${fmtPts(Math.round(mktNgnToMp(p.price_ngn)*0.02))} 추가 적립(2%)</span>
+            <span>Pay with MP · earn up to ${fmtPts(Math.round(mktNgnToMp(p.price_ngn)*0.02))} back (2%)</span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
           </div>
           <div class="pdp-benefit-line">
-            <span>최대 12개월 할부 · 에스크로 보호</span>
+            <span>Instalment available · Escrow protected</span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
           </div>
         </div>
@@ -999,15 +999,15 @@ async function renderProductPage(productId) {
 
       <!-- Shipping row -->
       <div class="pdp-info-row">
-        <span class="pdp-row-label">배송</span>
+        <span class="pdp-row-label">Delivery</span>
         <div class="pdp-row-content">
           <div class="pdp-ship-detail">
-            <strong>오늘출발 가능</strong><span class="pdp-ship-dot">·</span>도착 예정일 확인<br>
-            지금 결제 시 빠른 발송 예정<br>
-            무료배송
+            <strong>Ships today</strong><span class="pdp-ship-dot">·</span>estimated delivery date available<br>
+            Order now for fastest dispatch<br>
+            Free delivery
           </div>
           <div class="pdp-ship-more">
-            자세히 보기
+            See more
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
           </div>
         </div>
@@ -1019,7 +1019,7 @@ async function renderProductPage(productId) {
     ${reviews.length > 0 || (p.review_count > 0) ? `
     <div class="pdp-review-summary">
       <div class="pdp-review-summary-title">
-        4점 이상 리뷰가 <span>94%</span>예요
+        <span>94%</span> of reviews are 4 stars or above
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:middle;margin-left:4px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
       </div>
       <div class="pdp-review-cards">
@@ -1030,7 +1030,7 @@ async function renderProductPage(productId) {
               <div class="pdp-review-card-top">
                 <span class="pdp-review-card-star">★</span>
                 <span class="pdp-review-card-score">${r.rating}</span>
-                <span class="pdp-review-card-tag">정사이즈</span>
+                <span class="pdp-review-card-tag">True to size</span>
               </div>
               <div class="pdp-review-card-text">${escHtml(r.review||'')}</div>
             </div>
@@ -1039,8 +1039,8 @@ async function renderProductPage(productId) {
           <div class="pdp-review-card">
             <div class="pdp-review-card-img" style="background:var(--bg3)"></div>
             <div class="pdp-review-card-body">
-              <div class="pdp-review-card-top"><span class="pdp-review-card-star">★</span><span class="pdp-review-card-score">5</span><span class="pdp-review-card-tag">정사이즈</span></div>
-              <div class="pdp-review-card-text">편하고 예뻐요. 여름에 샌들에 신어도 잘어울리...</div>
+              <div class="pdp-review-card-top"><span class="pdp-review-card-star">★</span><span class="pdp-review-card-score">5</span><span class="pdp-review-card-tag">True to size</span></div>
+              <div class="pdp-review-card-text">Great quality, looks exactly as shown. Highly recommend!</div>
             </div>
           </div>` : ''}
       </div>
@@ -1049,10 +1049,9 @@ async function renderProductPage(productId) {
     <!-- RELATED PRODUCTS -->
     <div class="pdp-related-section">
       <div class="pdp-related-header">
-        <div class="pdp-related-title">다른 컬러&amp;디자인 상품</div>
+        <div class="pdp-related-title">More colours &amp; styles</div>
       </div>
       <div class="pdp-related-scroll" id="pdp-related-scroll">
-        <!-- Static placeholders; populate dynamically later -->
         <div class="pdp-related-card">
           <div class="pdp-related-img-wrap">
             <div class="pdp-related-img" style="background:var(--bg2)"></div>
@@ -1062,24 +1061,24 @@ async function renderProductPage(productId) {
           </div>
           <button class="pdp-related-add-btn">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/></svg>
-            담기
+            Add
           </button>
-          <div class="pdp-related-name">관련 상품</div>
+          <div class="pdp-related-name">Related item</div>
           <div class="pdp-related-price-row">
             <span class="pdp-related-price">${mktFmtNgn(p.price_ngn)}</span>
           </div>
-          <div class="pdp-related-ship">무료배송</div>
+          <div class="pdp-related-ship">Free delivery</div>
         </div>
       </div>
     </div>
 
     <!-- TAB BAR -->
     <div class="pdp-tab-bar" id="pdp-tab-bar">
-      <button class="pdp-tab-btn active" onclick="pdpSwitchTab('details',this)">상세정보</button>
-      <button class="pdp-tab-btn" onclick="pdpSwitchTab('reviews',this)">리뷰 ${p.review_count||0}</button>
+      <button class="pdp-tab-btn active" onclick="pdpSwitchTab('details',this)">Details</button>
+      <button class="pdp-tab-btn" onclick="pdpSwitchTab('reviews',this)">Reviews ${p.review_count||0}</button>
       <button class="pdp-tab-btn" onclick="pdpSwitchTab('qa',this)">Q&amp;A</button>
-      <button class="pdp-tab-btn" onclick="pdpSwitchTab('seller',this)">판매자정보</button>
-      <button class="pdp-tab-btn" onclick="pdpSwitchTab('related',this)">추천</button>
+      <button class="pdp-tab-btn" onclick="pdpSwitchTab('seller',this)">Seller Info</button>
+      <button class="pdp-tab-btn" onclick="pdpSwitchTab('related',this)">Recommended</button>
     </div>
 
     <!-- TAB: DETAILS (default active) -->
@@ -1104,7 +1103,7 @@ async function renderProductPage(productId) {
         </div>` : ''}
 
         <div class="pdp-qty-row">
-          <span class="pdp-qty-label">수량</span>
+          <span class="pdp-qty-label">Quantity</span>
           <div class="pdp-qty-ctrl">
             <button class="pdp-qty-btn" onclick="pdpChangeQty(-1)">−</button>
             <span class="pdp-qty-val" id="pdp-qty">1</span>
@@ -1114,15 +1113,15 @@ async function renderProductPage(productId) {
         </div>
 
         ${p.description ? `
-        <div class="pdp-detail-section-title">상품 설명</div>
+        <div class="pdp-detail-section-title">Description</div>
         <div class="pdp-description">${escHtml(p.description)}</div>` : ''}
 
-        <div class="pdp-detail-section-title">상품 정보</div>
+        <div class="pdp-detail-section-title">Product Info</div>
         <div class="pdp-details">
-          <div class="pdp-detail-row"><span>상태</span><span>${p.condition||'—'}</span></div>
+          <div class="pdp-detail-row"><span>Condition</span><span>${p.condition||'—'}</span></div>
           ${p.sku ? `<div class="pdp-detail-row"><span>SKU</span><span>${escHtml(p.sku)}</span></div>` : ''}
-          ${p.weight_kg ? `<div class="pdp-detail-row"><span>무게</span><span>${p.weight_kg}kg</span></div>` : ''}
-          <div class="pdp-detail-row"><span>카테고리</span><span>${escHtml(p.category||'—')}</span></div>
+          ${p.weight_kg ? `<div class="pdp-detail-row"><span>Weight</span><span>${p.weight_kg}kg</span></div>` : ''}
+          <div class="pdp-detail-row"><span>Category</span><span>${escHtml(p.category||'—')}</span></div>
         </div>
 
       </div>
@@ -1131,8 +1130,8 @@ async function renderProductPage(productId) {
       <div class="pdp-safety-card">
         <svg class="pdp-safety-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10" fill="#ff3b5c" opacity="0.15"/><circle cx="12" cy="12" r="10" fill="none" stroke="#ff3b5c" stroke-width="2"/><line x1="12" y1="8" x2="12" y2="12" stroke="#ff3b5c" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16" r="1" fill="#ff3b5c"/></svg>
         <div class="pdp-safety-text">
-          판매자가 타 사이트 안내 및 현금 결제, 개인정보 유시
-          <a>결제/입력하지 마시고</a> 즉시 <a>고객센터로 신고</a>해주세요.
+          If a seller directs you to pay outside MistyNote or asks for personal details via external links,
+          <a>do not pay</a> and report them immediately via <a>Help &amp; Support</a>.
         </div>
       </div>
     </div>
@@ -1141,7 +1140,7 @@ async function renderProductPage(productId) {
     <div class="pdp-tab-panel" id="pdp-panel-reviews">
       <div class="pdp-reviews-panel">
         ${reviews.length > 0
-          ? `<div class="pdp-reviews-top">4점 이상 리뷰가 <span>94%</span>예요</div>
+          ? `<div class="pdp-reviews-top"><span>94%</span> of reviews are 4 stars or above</div>
              ${reviews.map(r => `
                <div class="sf-review">
                  <div class="sf-review-header">
@@ -1154,13 +1153,13 @@ async function renderProductPage(productId) {
                  </div>
                  ${r.review ? `<div class="sf-review-text">${escHtml(r.review)}</div>` : ''}
                </div>`).join('')}`
-          : `<div style="padding:40px 0;text-align:center;color:var(--text3);font-size:14px;">아직 리뷰가 없어요</div>`}
+          : `<div style="padding:40px 0;text-align:center;color:var(--text3);font-size:14px;">No reviews yet — be the first!</div>`}
       </div>
     </div>
 
     <!-- TAB: Q&A -->
     <div class="pdp-tab-panel" id="pdp-panel-qa">
-      <div style="padding:40px 16px;text-align:center;color:var(--text3);font-size:14px;">Q&amp;A 준비 중입니다</div>
+      <div style="padding:40px 16px;text-align:center;color:var(--text3);font-size:14px;">Q&amp;A coming soon</div>
     </div>
 
     <!-- TAB: SELLER INFO -->
@@ -1170,15 +1169,15 @@ async function renderProductPage(productId) {
         <img style="width:48px;height:48px;border-radius:10px;object-fit:cover;background:var(--bg2)" src="${sf.logo_url||''}" onerror="this.style.background='var(--bg2)'" alt="">
         <div style="flex:1">
           <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:2px">${escHtml(sf.store_name||'')}</div>
-          <div style="font-size:12px;color:var(--text3)">${escHtml(sf.category||'')} · 스토어 방문</div>
+          <div style="font-size:12px;color:var(--text3)">${escHtml(sf.category||'')} · Visit store</div>
         </div>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-      </div>` : `<div style="padding:40px 16px;text-align:center;color:var(--text3);font-size:14px;">판매자 정보 없음</div>`}
+      </div>` : `<div style="padding:40px 16px;text-align:center;color:var(--text3);font-size:14px;">No seller info available</div>`}
     </div>
 
     <!-- TAB: RECOMMENDED -->
     <div class="pdp-tab-panel" id="pdp-panel-related">
-      <div style="padding:40px 16px;text-align:center;color:var(--text3);font-size:14px;">추천 상품 준비 중입니다</div>
+      <div style="padding:40px 16px;text-align:center;color:var(--text3);font-size:14px;">Recommended products coming soon</div>
     </div>
 
     <!-- Bottom spacer so last content clears fixed CTA -->
