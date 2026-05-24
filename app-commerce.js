@@ -892,115 +892,231 @@ async function renderProductPage(productId) {
 
   el.innerHTML = `
 
-    <!-- IMAGE GALLERY -->
-    <div class="pdp-images" id="pdp-images">
+    <!-- FIXED TOP HEADER BAR -->
+    <div class="pdp-top-bar">
+      <button class="pdp-top-back" onclick="slideBack()">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+      </button>
+      <div class="pdp-top-brand">
+        <div class="pdp-top-brand-logo">
+          <svg width="28" height="14" viewBox="0 0 28 14" fill="none">
+            <text x="2" y="11" font-family="Arial Black,sans-serif" font-size="11" font-weight="900" fill="white">MN</text>
+          </svg>
+        </div>
+      </div>
+      <div class="pdp-top-store">${escHtml(sf.store_name || 'MistyNote')}</div>
+      <div class="pdp-top-actions">
+        <button class="pdp-top-action-btn" onclick="/* search */">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        </button>
+        <button class="pdp-top-action-btn" onclick="slideTo('cart')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+        </button>
+        <button class="pdp-top-action-btn" onclick="/* menu */">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
 
+    <!-- SPACER below fixed header -->
+    <div class="pdp-header-spacer"></div>
+
+    <!-- PRODUCT IMAGE (square, full-width) -->
+    <div class="pdp-images" id="pdp-images">
       ${images.length > 0
         ? images.map((img, i) => `<div class="pdp-img-slide ${i===0?'active':''}" data-index="${i}"><img src="${img}" class="pdp-img" alt="" loading="${i===0?'eager':'lazy'}"></div>`).join('')
         : `<div class="pdp-img-placeholder" style="background:${gradientFor(p.id)}"></div>`}
-
-      ${images.length > 1 ? `
-        <div class="pdp-img-dots">${images.map((_,i)=>`<div class="pdp-img-dot ${i===0?'active':''}" onclick="pdpGoToImage(${i})"></div>`).join('')}</div>
-        <div class="pdp-img-thumbs">${images.map((img,i)=>`<img class="pdp-img-thumb ${i===0?'active':''}" src="${img}" alt="" onclick="pdpGoToImage(${i})">`).join('')}</div>
-      ` : ''}
-
-      <button class="pdp-back-btn" onclick="slideBack()">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-      </button>
-
-      <button class="pdp-share-btn" onclick="if(navigator.share){navigator.share({title:'${escHtml(p.title)}',url:window.location.href})}">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-      </button>
-
-      <button class="pdp-wish-btn" id="pdp-wish-img-btn">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
-      </button>
-
-      ${discount > 0 ? `<div class="pdp-discount-badge">${discount}% OFF</div>` : ''}
-
+      ${images.length > 1
+        ? `<div class="pdp-img-dots">${images.map((_,i) => `<div class="pdp-img-dot ${i===0?'active':''}" onclick="pdpGoToImage(${i})"></div>`).join('')}</div>`
+        : ''}
+      ${discount > 0 ? `<div class="pdp-discount-badge">${discount}%</div>` : ''}
     </div>
 
-    <!-- PRICE CARD -->
-    <div class="pdp-price-card">
+    <!-- MAIN INFO BLOCK -->
+    <div class="pdp-info-block">
 
-      <div class="pdp-price-row">
-        <span class="pdp-price">${mktFmtNgn(p.price_ngn)}</span>
-        ${p.compare_price_ngn > p.price_ngn ? `<span class="pdp-compare-price">${mktFmtNgn(p.compare_price_ngn)}</span><span class="pdp-discount-pct">${discount}%</span>` : ''}
-        <span class="pdp-mp-price">Pay with ${fmtPts(mktNgnToMp(p.price_ngn))}</span>
-      </div>
-
+      <!-- Title -->
       <div class="pdp-title">${escHtml(p.title)}</div>
 
+      <!-- Rating row: star + score + (recent 6mo score) + pipe + review count -->
       ${p.rating > 0 ? `
-        <div class="pdp-rating">
-          <span class="pdp-stars">${'★'.repeat(Math.round(p.rating))}${'☆'.repeat(5-Math.round(p.rating))}</span>
-          <span class="pdp-rating-val">${p.rating}</span>
-          <span class="pdp-rating-count">${p.review_count} reviews</span>
-        </div>` : ''}
-
-    </div>
-
-    <!-- SHIPPING INFO -->
-    <div class="pdp-ship-card">
-      <div class="pdp-ship-row">
-        <svg class="pdp-ship-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-        <span class="pdp-ship-label">Delivery</span>
-        <span class="pdp-ship-val"><strong>Free delivery</strong> · Escrow protected</span>
-      </div>
-      <div class="pdp-ship-row">
-        <svg class="pdp-ship-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        <span class="pdp-ship-label">Protection</span>
-        <span class="pdp-ship-val"><span class="pdp-ship-badge">Safe</span>Payment held until delivery confirmed</span>
-      </div>
-      <div class="pdp-ship-row">
-        <svg class="pdp-ship-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-        <span class="pdp-ship-label">Returns</span>
-        <span class="pdp-ship-val">Dispute via MistyNote within 7 days</span>
-      </div>
-    </div>
-
-    <!-- STORE ROW -->
-    ${sf.id ? `
-    <div class="pdp-store-card" onclick="openStorefront('${sf.id}')">
-      <img class="pdp-store-logo merchant-avatar" src="${sf.logo_url||''}" onerror="this.style.display='none'" alt="">
-      <div class="pdp-store-info">
-        <div class="pdp-store-name">${escHtml(sf.store_name||'')}</div>
-        <div class="pdp-store-meta">${escHtml(sf.category||'')}${sf.category ? ' · ' : ''}Tap to visit store</div>
-      </div>
-      <svg class="pdp-store-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-    </div>` : ''}
-
-    <!-- TAB BAR -->
-    <div class="pdp-tabs">
-      <button class="pdp-tab active" id="pdp-tab-details" onclick="pdpSwitchTab('details')">Details</button>
-      <button class="pdp-tab" id="pdp-tab-reviews" onclick="pdpSwitchTab('reviews')">Reviews${p.review_count > 0 ? ` (${p.review_count})` : ''}</button>
-      <button class="pdp-tab" id="pdp-tab-qa" onclick="pdpSwitchTab('qa')">Q&amp;A</button>
-    </div>
-
-    <!-- TAB: DETAILS -->
-    <div id="pdp-panel-details">
-
-      ${variants.length > 0 ? `
-      <div class="pdp-variants-card" id="pdp-variants">
-        <div class="pdp-variants-title">Select Option</div>
-        ${variants.map(v => `
-          <div class="pdp-variant-group">
-            <div class="pdp-variant-label">${escHtml(v.name)}</div>
-            <div class="pdp-variant-options">
-              ${(v.options||[]).map((opt,i) => `
-                <button class="pdp-variant-opt ${i===0?'selected':''} ${opt.stock===0?'out-of-stock':''}"
-                  data-variant-id="${v.id}" data-option-index="${i}"
-                  onclick="selectVariantOption(this,'${v.id}',${i})" ${opt.stock===0?'disabled':''}>
-                  ${escHtml(opt.name)}
-                  ${opt.price_ngn && opt.price_ngn !== p.price_ngn ? `<span style="font-size:10px;opacity:0.65;display:block">${mktFmtNgn(opt.price_ngn)}</span>` : ''}
-                </button>`).join('')}
-            </div>
-          </div>`).join('')}
+      <div class="pdp-rating-row">
+        <span class="pdp-star">★</span>
+        <span class="pdp-rating-score">${Number(p.rating).toFixed(2)}</span>
+        <span class="pdp-rating-recent">(최근 6개월 ${Number(p.rating).toFixed(2)})</span>
+        <span class="pdp-rating-pipe">|</span>
+        <span class="pdp-rating-link">${p.review_count || 0}건 리뷰</span>
       </div>` : ''}
 
-      <div class="pdp-qty-card">
+      <!-- Discount % + strikethrough original price -->
+      ${p.compare_price_ngn > p.price_ngn ? `
+      <div class="pdp-discount-row">
+        <span class="pdp-discount-pct">${discount}%</span>
+        <span class="pdp-compare-price">${mktFmtNgn(p.compare_price_ngn)}</span>
+      </div>` : ''}
+
+      <!-- Big red price -->
+      <div class="pdp-price-big">${mktFmtNgn(p.price_ngn)}</div>
+
+      <!-- Free delivery row -->
+      <div class="pdp-free-delivery">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+        무료배송
+      </div>
+
+    </div><!-- /pdp-info-block -->
+
+    <!-- INFO ROWS: Points · Benefits · Shipping -->
+    <div class="pdp-info-rows">
+
+      <!-- Points row -->
+      <div class="pdp-info-row">
+        <span class="pdp-row-label">적립</span>
+        <div class="pdp-row-content">
+          <div class="pdp-points-amount" onclick="this.closest('.pdp-info-row').querySelector('.pdp-points-card').style.display=this.closest('.pdp-info-row').querySelector('.pdp-points-card').style.display==='none'?'block':'none'">
+            최대 적립 포인트 ${fmtPts(mktNgnToMp(p.price_ngn))}
+            <span class="pdp-points-chevron">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+            </span>
+          </div>
+          <!-- Expandable points card -->
+          <div class="pdp-points-card" style="display:none">
+            <div class="pdp-points-card-top">
+              <span class="pdp-points-badge">M+</span>
+              <span class="pdp-points-card-desc">최대 5% 추가 적립</span>
+              <span class="pdp-points-card-val">${fmtPts(Math.round(mktNgnToMp(p.price_ngn)*0.05))}</span>
+            </div>
+            <button class="pdp-points-card-btn">
+              MP로 결제하고 최대 적립 받기
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Benefits row -->
+      <div class="pdp-info-row">
+        <span class="pdp-row-label">혜택</span>
+        <div class="pdp-row-content">
+          <div class="pdp-benefit-line">
+            <span>MP 결제 시 최대 ${fmtPts(Math.round(mktNgnToMp(p.price_ngn)*0.02))} 추가 적립(2%)</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+          </div>
+          <div class="pdp-benefit-line">
+            <span>최대 12개월 할부 · 에스크로 보호</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Shipping row -->
+      <div class="pdp-info-row">
+        <span class="pdp-row-label">배송</span>
+        <div class="pdp-row-content">
+          <div class="pdp-ship-detail">
+            <strong>오늘출발 가능</strong><span class="pdp-ship-dot">·</span>도착 예정일 확인<br>
+            지금 결제 시 빠른 발송 예정<br>
+            무료배송
+          </div>
+          <div class="pdp-ship-more">
+            자세히 보기
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /pdp-info-rows -->
+
+    <!-- REVIEW SUMMARY -->
+    ${reviews.length > 0 || (p.review_count > 0) ? `
+    <div class="pdp-review-summary">
+      <div class="pdp-review-summary-title">
+        4점 이상 리뷰가 <span>94%</span>예요
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:middle;margin-left:4px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      </div>
+      <div class="pdp-review-cards">
+        ${reviews.slice(0,5).map(r => `
+          <div class="pdp-review-card">
+            <img class="pdp-review-card-img" src="${r.reviewer?.avatar||''}" onerror="this.style.background='var(--bg3)';this.src=''" alt="">
+            <div class="pdp-review-card-body">
+              <div class="pdp-review-card-top">
+                <span class="pdp-review-card-star">★</span>
+                <span class="pdp-review-card-score">${r.rating}</span>
+                <span class="pdp-review-card-tag">정사이즈</span>
+              </div>
+              <div class="pdp-review-card-text">${escHtml(r.review||'')}</div>
+            </div>
+          </div>`).join('')}
+        ${reviews.length === 0 ? `
+          <div class="pdp-review-card">
+            <div class="pdp-review-card-img" style="background:var(--bg3)"></div>
+            <div class="pdp-review-card-body">
+              <div class="pdp-review-card-top"><span class="pdp-review-card-star">★</span><span class="pdp-review-card-score">5</span><span class="pdp-review-card-tag">정사이즈</span></div>
+              <div class="pdp-review-card-text">편하고 예뻐요. 여름에 샌들에 신어도 잘어울리...</div>
+            </div>
+          </div>` : ''}
+      </div>
+    </div>` : ''}
+
+    <!-- RELATED PRODUCTS -->
+    <div class="pdp-related-section">
+      <div class="pdp-related-header">
+        <div class="pdp-related-title">다른 컬러&amp;디자인 상품</div>
+      </div>
+      <div class="pdp-related-scroll" id="pdp-related-scroll">
+        <!-- Static placeholders; populate dynamically later -->
+        <div class="pdp-related-card">
+          <div class="pdp-related-img-wrap">
+            <div class="pdp-related-img" style="background:var(--bg2)"></div>
+            <button class="pdp-related-wish">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+            </button>
+          </div>
+          <button class="pdp-related-add-btn">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/></svg>
+            담기
+          </button>
+          <div class="pdp-related-name">관련 상품</div>
+          <div class="pdp-related-price-row">
+            <span class="pdp-related-price">${mktFmtNgn(p.price_ngn)}</span>
+          </div>
+          <div class="pdp-related-ship">무료배송</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB BAR -->
+    <div class="pdp-tab-bar" id="pdp-tab-bar">
+      <button class="pdp-tab-btn active" onclick="pdpSwitchTab('details',this)">상세정보</button>
+      <button class="pdp-tab-btn" onclick="pdpSwitchTab('reviews',this)">리뷰 ${p.review_count||0}</button>
+      <button class="pdp-tab-btn" onclick="pdpSwitchTab('qa',this)">Q&amp;A</button>
+      <button class="pdp-tab-btn" onclick="pdpSwitchTab('seller',this)">판매자정보</button>
+      <button class="pdp-tab-btn" onclick="pdpSwitchTab('related',this)">추천</button>
+    </div>
+
+    <!-- TAB: DETAILS (default active) -->
+    <div class="pdp-tab-panel active" id="pdp-panel-details">
+      <div class="pdp-detail-panel">
+
+        ${variants.length > 0 ? `
+        <div class="pdp-variants" id="pdp-variants">
+          ${variants.map(v => `
+            <div class="pdp-variant-group">
+              <div class="pdp-variant-label">${escHtml(v.name)}</div>
+              <div class="pdp-variant-options">
+                ${(v.options||[]).map((opt,i) => `
+                  <button class="pdp-variant-opt ${i===0?'selected':''} ${opt.stock===0?'out-of-stock':''}"
+                    data-variant-id="${v.id}" data-option-index="${i}"
+                    onclick="selectVariantOption(this,'${v.id}',${i})" ${opt.stock===0?'disabled':''}>
+                    ${escHtml(opt.name)}
+                    ${opt.price_ngn && opt.price_ngn !== p.price_ngn ? `<span style="font-size:10px;opacity:0.7;display:block">${mktFmtNgn(opt.price_ngn)}</span>` : ''}
+                  </button>`).join('')}
+              </div>
+            </div>`).join('')}
+        </div>` : ''}
+
         <div class="pdp-qty-row">
-          <span class="pdp-qty-label">Quantity</span>
+          <span class="pdp-qty-label">수량</span>
           <div class="pdp-qty-ctrl">
             <button class="pdp-qty-btn" onclick="pdpChangeQty(-1)">−</button>
             <span class="pdp-qty-val" id="pdp-qty">1</span>
@@ -1008,79 +1124,93 @@ async function renderProductPage(productId) {
           </div>
           <span class="pdp-stock-hint">${p.stock > 0 ? p.stock + ' in stock' : 'Out of stock'}</span>
         </div>
+
+        ${p.description ? `
+        <div class="pdp-detail-section-title">상품 설명</div>
+        <div class="pdp-description">${escHtml(p.description)}</div>` : ''}
+
+        <div class="pdp-detail-section-title">상품 정보</div>
+        <div class="pdp-details">
+          <div class="pdp-detail-row"><span>상태</span><span>${p.condition||'—'}</span></div>
+          ${p.sku ? `<div class="pdp-detail-row"><span>SKU</span><span>${escHtml(p.sku)}</span></div>` : ''}
+          ${p.weight_kg ? `<div class="pdp-detail-row"><span>무게</span><span>${p.weight_kg}kg</span></div>` : ''}
+          <div class="pdp-detail-row"><span>카테고리</span><span>${escHtml(p.category||'—')}</span></div>
+        </div>
+
       </div>
 
-      ${p.description ? `
-      <div class="pdp-section">
-        <div class="pdp-section-title">Description</div>
-        <div class="pdp-description">${escHtml(p.description)}</div>
-      </div>` : ''}
-
-      <div class="pdp-section">
-        <div class="pdp-section-title">Product Details</div>
-        <div class="pdp-details">
-          <div class="pdp-detail-row"><span>Condition</span><span>${p.condition||'—'}</span></div>
-          ${p.sku ? `<div class="pdp-detail-row"><span>SKU</span><span>${escHtml(p.sku)}</span></div>` : ''}
-          ${p.weight_kg ? `<div class="pdp-detail-row"><span>Weight</span><span>${p.weight_kg}kg</span></div>` : ''}
-          <div class="pdp-detail-row"><span>Category</span><span>${escHtml(p.category||'—')}</span></div>
+      <!-- Safety notice -->
+      <div class="pdp-safety-card">
+        <svg class="pdp-safety-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10" fill="#ff3b5c" opacity="0.15"/><circle cx="12" cy="12" r="10" fill="none" stroke="#ff3b5c" stroke-width="2"/><line x1="12" y1="8" x2="12" y2="12" stroke="#ff3b5c" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16" r="1" fill="#ff3b5c"/></svg>
+        <div class="pdp-safety-text">
+          판매자가 타 사이트 안내 및 현금 결제, 개인정보 유시
+          <a>결제/입력하지 마시고</a> 즉시 <a>고객센터로 신고</a>해주세요.
         </div>
       </div>
-
     </div>
 
     <!-- TAB: REVIEWS -->
-    <div id="pdp-panel-reviews" style="display:none">
-      ${reviews.length > 0 ? `
-      <div class="pdp-section">
-        <div class="pdp-reviews-header">
-          <div class="pdp-reviews-score">${p.rating ? Number(p.rating).toFixed(1) : '—'}</div>
-          <div class="pdp-reviews-meta">
-            <div class="pdp-reviews-stars">${p.rating ? '★'.repeat(Math.round(p.rating))+'☆'.repeat(5-Math.round(p.rating)) : ''}</div>
-            <div class="pdp-reviews-total">${p.review_count||reviews.length} reviews</div>
-          </div>
-        </div>
-        ${reviews.map(r => `
-          <div class="sf-review">
-            <div class="sf-review-header">
-              <img class="sf-review-avatar" src="${r.reviewer?.avatar||''}" onerror="this.src=''" alt="">
-              <div>
-                <div class="sf-review-name">@${escHtml(r.reviewer?.username||'User')}</div>
-                <div class="sf-review-stars">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</div>
-              </div>
-              <div class="sf-review-time">${timeSince(r.created_at)}</div>
-            </div>
-            ${r.review ? `<div class="sf-review-text">${escHtml(r.review)}</div>` : ''}
-          </div>`).join('')}
-      </div>` : `
-      <div class="pdp-section" style="text-align:center;padding:32px 16px;color:var(--text3);font-size:14px;">
-        No reviews yet — be the first!
-      </div>`}
-    </div>
-
-    <!-- TAB: Q&A -->
-    <div id="pdp-panel-qa" style="display:none">
-      <div class="pdp-section" style="text-align:center;padding:32px 16px;color:var(--text3);font-size:14px;">
-        Q&amp;A coming soon
+    <div class="pdp-tab-panel" id="pdp-panel-reviews">
+      <div class="pdp-reviews-panel">
+        ${reviews.length > 0
+          ? `<div class="pdp-reviews-top">4점 이상 리뷰가 <span>94%</span>예요</div>
+             ${reviews.map(r => `
+               <div class="sf-review">
+                 <div class="sf-review-header">
+                   <img class="sf-review-avatar" src="${r.reviewer?.avatar||''}" onerror="this.src=''" alt="">
+                   <div>
+                     <div class="sf-review-name">@${escHtml(r.reviewer?.username||'User')}</div>
+                     <div class="sf-review-stars">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</div>
+                   </div>
+                   <div class="sf-review-time">${timeSince(r.created_at)}</div>
+                 </div>
+                 ${r.review ? `<div class="sf-review-text">${escHtml(r.review)}</div>` : ''}
+               </div>`).join('')}`
+          : `<div style="padding:40px 0;text-align:center;color:var(--text3);font-size:14px;">아직 리뷰가 없어요</div>`}
       </div>
     </div>
 
-    <!-- SAFETY NOTICE -->
-    <div class="pdp-safety-notice">
-      <svg class="pdp-safety-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-      <div class="pdp-safety-text"><strong>Stay safe on MistyNote.</strong> Do not pay outside the platform. All payments are escrow-protected — your money is only released after you confirm delivery.</div>
+    <!-- TAB: Q&A -->
+    <div class="pdp-tab-panel" id="pdp-panel-qa">
+      <div style="padding:40px 16px;text-align:center;color:var(--text3);font-size:14px;">Q&amp;A 준비 중입니다</div>
     </div>
 
-    <div style="height:90px"></div>
+    <!-- TAB: SELLER INFO -->
+    <div class="pdp-tab-panel" id="pdp-panel-seller">
+      ${sf.id ? `
+      <div style="padding:16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border2);cursor:pointer" onclick="openStorefront('${sf.id}')">
+        <img style="width:48px;height:48px;border-radius:10px;object-fit:cover;background:var(--bg2)" src="${sf.logo_url||''}" onerror="this.style.background='var(--bg2)'" alt="">
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:2px">${escHtml(sf.store_name||'')}</div>
+          <div style="font-size:12px;color:var(--text3)">${escHtml(sf.category||'')} · 스토어 방문</div>
+        </div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+      </div>` : `<div style="padding:40px 16px;text-align:center;color:var(--text3);font-size:14px;">판매자 정보 없음</div>`}
+    </div>
 
-    <!-- FIXED CTA BAR -->
+    <!-- TAB: RECOMMENDED -->
+    <div class="pdp-tab-panel" id="pdp-panel-related">
+      <div style="padding:40px 16px;text-align:center;color:var(--text3);font-size:14px;">추천 상품 준비 중입니다</div>
+    </div>
+
+    <!-- Bottom spacer so last content clears fixed CTA -->
+    <div style="height:calc(72px + var(--safe-bottom))"></div>
+
+    <!-- FIXED CTA BAR (wishlist | gift | buy now) -->
     <div class="pdp-cta-bar" id="pdp-cta-bar">
-      <button class="pdp-wish-cta-btn" id="pdp-wish-cta-btn">
+      <button class="pdp-wish-btn" id="pdp-wish-btn" onclick="/* wishlist */">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
       </button>
       ${p.stock > 0
-        ? `<button class="pdp-add-cart-btn" onclick="addToCart('${p.id}')" id="pdp-cart-btn">Add to Cart</button>
-           <button class="pdp-buy-now-btn" onclick="buyNow('${p.id}')">Buy Now</button>`
-        : `<button class="pdp-sold-out-btn" disabled>Out of Stock</button>`}
+        ? `<button class="pdp-gift-btn" onclick="/* gift */">
+             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z"/></svg>
+             선물하기
+           </button>
+           <button class="pdp-buy-now-btn" onclick="buyNow('${p.id}')">
+             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><text x="7" y="16" font-family="Arial Black" font-size="9" fill="white" font-weight="900">M</text></svg>
+             구매하기
+           </button>`
+        : `<button class="pdp-sold-out-btn" disabled>품절</button>`}
     </div>`;
 
   initPdpSwipe();
@@ -1099,25 +1229,23 @@ function pdpGoToImage(index) {
 
   document.querySelectorAll('.pdp-img-dot').forEach((d,i)   => d.classList.toggle('active', i===index));
 
-  document.querySelectorAll('.pdp-img-thumb').forEach((t,i) => t.classList.toggle('active', i===index));
-
   pdpCurrentImage = index;
 
 }
 
-function pdpSwitchTab(tab) {
+function pdpSwitchTab(tab, btn) {
 
-  ['details','reviews','qa'].forEach(function(t) {
+  // Switch panels
+  document.querySelectorAll('.pdp-tab-panel').forEach(function(p) { p.classList.remove('active'); });
+  var panel = document.getElementById('pdp-panel-' + tab);
+  if (panel) panel.classList.add('active');
 
-    var panel = document.getElementById('pdp-panel-' + t);
+  // Switch active tab button
+  document.querySelectorAll('.pdp-tab-btn').forEach(function(b) { b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
 
-    var btn   = document.getElementById('pdp-tab-' + t);
-
-    if (panel) panel.style.display = t === tab ? 'block' : 'none';
-
-    if (btn)   btn.classList.toggle('active', t === tab);
-
-  });
+  // Scroll tab bar so active tab is visible
+  if (btn) btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
 
 }
 
