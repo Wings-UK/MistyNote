@@ -832,6 +832,20 @@ async function toggleStorefrontFollow(userId, btn) {
 
 // ══════════════════════════════════════════
 
+function pdpShowBars() {
+  var t = document.getElementById('pdp-top-bar');
+  var c = document.getElementById('pdp-cta-bar');
+  if (t) t.style.display = 'flex';
+  if (c) c.style.display = 'flex';
+}
+
+function pdpHideBars() {
+  var t = document.getElementById('pdp-top-bar');
+  var c = document.getElementById('pdp-cta-bar');
+  if (t) t.style.display = 'none';
+  if (c) c.style.display = 'none';
+}
+
 async function openProductPage(productId) {
 
   currentProductId = productId;
@@ -892,33 +906,7 @@ async function renderProductPage(productId) {
 
   el.innerHTML = `
 
-    <!-- FIXED TOP HEADER BAR -->
-    <div class="pdp-top-bar">
-      <button class="pdp-top-back" onclick="slideBack()">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-      </button>
-      <div class="pdp-top-brand">
-        <div class="pdp-top-brand-logo">
-          <svg width="28" height="14" viewBox="0 0 28 14" fill="none">
-            <text x="2" y="11" font-family="Arial Black,sans-serif" font-size="11" font-weight="900" fill="white">MN</text>
-          </svg>
-        </div>
-      </div>
-      <div class="pdp-top-store">${escHtml(sf.store_name || 'MistyNote')}</div>
-      <div class="pdp-top-actions">
-        <button class="pdp-top-action-btn" onclick="/* search */">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        </button>
-        <button class="pdp-top-action-btn" onclick="slideTo('cart')">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
-        </button>
-        <button class="pdp-top-action-btn" onclick="/* menu */">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-        </button>
-      </div>
-    </div>
-
-    <!-- SPACER below fixed header -->
+    <!-- SPACER below fixed top bar (bar lives outside this scroll container) -->
     <div class="pdp-header-spacer"></div>
 
     <!-- PRODUCT IMAGE (square, full-width) -->
@@ -1194,24 +1182,37 @@ async function renderProductPage(productId) {
     </div>
 
     <!-- Bottom spacer so last content clears fixed CTA -->
-    <div style="height:calc(72px + var(--safe-bottom))"></div>
+    <div style="height:calc(72px + var(--safe-bottom))"></div>`;
 
-    <!-- FIXED CTA BAR (wishlist | gift | buy now) -->
-    <div class="pdp-cta-bar" id="pdp-cta-bar">
-      <button class="pdp-wish-btn" id="pdp-wish-btn" onclick="/* wishlist */">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
-      </button>
-      ${p.stock > 0
-        ? `<button class="pdp-gift-btn" onclick="/* gift */">
-             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z"/></svg>
-             선물하기
-           </button>
-           <button class="pdp-buy-now-btn" onclick="buyNow('${p.id}')">
-             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><text x="7" y="16" font-family="Arial Black" font-size="9" fill="white" font-weight="900">M</text></svg>
-             구매하기
-           </button>`
-        : `<button class="pdp-sold-out-btn" disabled>품절</button>`}
-    </div>`;
+  // ── Show & populate the fixed bars that live outside #page-product ──
+  var topBar   = document.getElementById('pdp-top-bar');
+  var ctaBar   = document.getElementById('pdp-cta-bar');
+  var storeName = document.getElementById('pdp-top-store-name');
+  var buyBtn   = document.getElementById('pdp-buy-now-btn');
+  var giftBtn  = document.getElementById('pdp-gift-btn');
+  var soldBtn  = document.getElementById('pdp-sold-out-btn');
+
+  // Set store name in top bar
+  if (storeName) storeName.textContent = sf.store_name || 'MistyNote';
+
+  // Wire buy button to this product
+  if (buyBtn)  buyBtn.onclick  = function() { buyNow(p.id); };
+  if (giftBtn) giftBtn.onclick = function() { /* gift flow */ };
+
+  // Show/hide sold out vs active buttons
+  if (p.stock > 0) {
+    if (giftBtn) giftBtn.style.display = '';
+    if (buyBtn)  buyBtn.style.display  = '';
+    if (soldBtn) soldBtn.style.display = 'none';
+  } else {
+    if (giftBtn) giftBtn.style.display = 'none';
+    if (buyBtn)  buyBtn.style.display  = 'none';
+    if (soldBtn) soldBtn.style.display = '';
+  }
+
+  // Show both bars
+  if (topBar) topBar.style.display = 'flex';
+  if (ctaBar) ctaBar.style.display = 'flex';
 
   initPdpSwipe();
 
