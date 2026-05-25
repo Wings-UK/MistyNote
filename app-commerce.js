@@ -1575,6 +1575,9 @@ async function loadCheckoutPage() {
 
   if (!currentUser) { el.innerHTML = `<div class="empty-state"><p>Sign in to checkout</p></div>`; return; }
 
+  // ── Sync wallet balance FIRST before rendering so the displayed balance is accurate ──
+  await syncWalletBalance();
+
   const { data: items } = await supabase.from('cart_items')
 
     .select('*, product:products(*, storefront:storefronts(id,store_name,logo_url,user_id))')
@@ -1873,17 +1876,19 @@ async function placeOrder() {
 
       const storeTotal    = storeSubtotal + storeShipping - storeDiscount;
 
-      const storeMp       = mktNgnToMp(storeTotal);
+      const storeMp       = Math.ceil(mktNgnToMp(storeTotal) * 100) / 100; // 2dp, always round up
 
       const { data: numData } = await supabase.rpc('generate_order_number');
 
       const orderNumber = numData || ('MN-' + Date.now().toString(36).toUpperCase());
 
-      await supabase.rpc('escrow_hold_points', {
+      const { error: escrowErr } = await supabase.rpc('escrow_hold_points', {
 
         buyer_id: currentUser.id, seller_id: storeData.storefront?.user_id, product_id: storeData.items[0]?.product_id, points: storeMp,
 
       });
+
+      if (escrowErr) throw new Error('Escrow failed: ' + escrowErr.message);
 
       const { data: order, error: orderErr } = await supabase.from('orders').insert({
 
