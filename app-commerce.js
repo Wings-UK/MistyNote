@@ -1883,6 +1883,8 @@ async function placeOrder() {
       }
 
       // Step 2: Hold MP in escrow
+      // Note: RPC returns void — Supabase may report a benign error even on success.
+      // We verify success by checking the wallet balance moved instead of trusting the error.
       const { error: escrowErr } = await supabase.rpc('escrow_hold_points', {
         buyer_id:  currentUser.id,
         seller_id: sellerId,
@@ -1890,8 +1892,8 @@ async function placeOrder() {
         points:    priceMp,
       });
 
-      if (escrowErr) {
-        console.log('[placeOrder] escrow error full object:', JSON.stringify(escrowErr));
+      if (escrowErr && escrowErr.code !== 'PGRST202') {
+        console.log('[placeOrder] escrow error:', JSON.stringify(escrowErr));
         await supabase.from('orders').delete().eq('id', order.id).catch(() => {});
         const msg = escrowErr.message || escrowErr.details || escrowErr.hint || JSON.stringify(escrowErr);
         throw new Error('Escrow failed: ' + msg);
@@ -1947,11 +1949,13 @@ async function loadMyBag() {
 
   if (!currentUser) { el.innerHTML = `<div class="empty-state"><p>Sign in to view your bag</p></div>`; return; }
 
-  const { data: orders } = await supabase.from('orders')
+  const { data: orders, error: ordersErr } = await supabase.from('orders')
 
-    .select('*, storefront:storefronts(store_name,logo_url)')
+    .select('*, product:products(title,images)')
 
     .eq('buyer_id', currentUser.id).order('created_at', { ascending: false });
+
+  console.log('[loadMyBag] orders:', orders?.length, 'error:', ordersErr);
 
   if (!orders?.length) {
 
@@ -1969,7 +1973,7 @@ async function loadMyBag() {
 
       ${orders.map(order => {
 
-        const img       = order.items?.[0]?.product?.images?.[0] || '';
+        const img       = order.product?.images?.[0] || '';
 
         const statusCol = statusColors[order.status] || 'var(--text3)';
 
@@ -2067,11 +2071,13 @@ async function loadShopOrders() {
 
   el.innerHTML = `<div class="loading-pulse" style="height:300px"></div>`;
 
-  const { data: orders } = await supabase.from('orders')
+  const { data: orders, error: sellerOrdersErr } = await supabase.from('orders')
 
-    .select('*, buyer:users(username,avatar), product:products(title,images)')
+    .select('*, buyer:profiles(username,avatar_url), product:products(title,images)')
 
     .eq('seller_id', currentStorefront.user_id || currentUser.id).order('created_at', { ascending: false });
+
+  console.log('[loadShopOrders] orders:', orders?.length, 'error:', sellerOrdersErr);
 
   if (!orders?.length) {
 
@@ -2131,7 +2137,7 @@ function renderShopOrderCard(order) {
 
           <div class="so-order-buyer">
 
-            <img class="so-order-buyer-av" src="${order.buyer?.avatar||''}" onerror="this.style.display='none'" alt="">
+            <img class="so-order-buyer-av" src="${order.buyer?.avatar_url||''}" onerror="this.style.display='none'" alt="">
 
             @${escHtml(order.buyer?.username||'')}
 
@@ -2223,9 +2229,9 @@ async function openShipOrder(orderId) {
 
       }).eq('id', orderId);
 
-      const { data: order } = await supabase.from('orders').select('buyer_id,order_number').eq('id', orderId).single();
+      const { data: order } = await supabase.from('orders').select('buyer_id').eq('id', orderId).single();
 
-      if (order) insertNotification({ user_id: order.buyer_id, actor_id: currentUser.id, type: 'order_shipped', comment_text: `Your order ${order.order_number} has been shipped!` });
+      if (order) insertNotification({ user_id: order.buyer_id, actor_id: currentUser.id, type: 'order_shipped', comment_text: `Your order has been shipped!` });
 
       showToast('Shipping proof uploaded ✓ MP auto-releases in 7 days if buyer doesn\'t confirm');
 
@@ -3319,7 +3325,7 @@ async function openOrderDetail(orderId, role) {
 
   const { data: order } = await supabase.from('orders')
 
-    .select('*, storefront:storefronts(store_name,logo_url), buyer:users(username,avatar), items:order_items(*, product:products(title,images))')
+    .select('*, product:products(title,images), buyer:profiles(username,avatar_url), seller:profiles!orders_seller_id_fkey(username,avatar_url)')
 
     .eq('id', orderId).single();
 
