@@ -1891,8 +1891,10 @@ async function placeOrder() {
       });
 
       if (escrowErr) {
+        console.log('[placeOrder] escrow error full object:', JSON.stringify(escrowErr));
         await supabase.from('orders').delete().eq('id', order.id).catch(() => {});
-        throw new Error('Escrow failed: ' + escrowErr.message);
+        const msg = escrowErr.message || escrowErr.details || escrowErr.hint || JSON.stringify(escrowErr);
+        throw new Error('Escrow failed: ' + msg);
       }
 
       // Step 3: Mark paid
@@ -2025,7 +2027,7 @@ async function confirmDelivery(orderId) {
 
     await supabase.from('orders').update({ status: 'delivered', confirmed_at: new Date().toISOString() }).eq('id', orderId);
 
-    await supabase.from('storefronts').update({ total_sales: supabase.raw('total_sales + 1'), total_revenue: supabase.raw(`total_revenue + ${order.price_ngn||0}`) }).eq('user_id', order.seller_id).catch(() => {});
+    await supabase.rpc('increment_storefront_stats', { p_seller_id: order.seller_id, p_revenue: order.price_ngn||0 }).catch(() => {});
 
     insertNotification({ user_id: order.seller_id, actor_id: currentUser.id, type: 'delivery_confirmed', comment_text: `Order confirmed — MP released to your wallet` });
 
