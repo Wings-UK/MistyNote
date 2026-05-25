@@ -1876,6 +1876,14 @@ async function placeOrder() {
 
       const storeTotal    = storeSubtotal + storeShipping - storeDiscount;
 
+      const sellerId  = storeData.storefront?.user_id;
+      const productId = storeData.items[0]?.product_id;
+
+      // Guard: surface missing IDs clearly before hitting the RPC
+      if (!sellerId)  throw new Error('Seller wallet not found — store may not be fully set up');
+      if (!productId) throw new Error('Product ID missing from cart item');
+      if (sellerId === currentUser.id) throw new Error('You cannot purchase your own product');
+
       const storeMp       = Math.ceil(mktNgnToMp(storeTotal) * 100) / 100; // 2dp, always round up
 
       const { data: numData } = await supabase.rpc('generate_order_number');
@@ -1884,7 +1892,7 @@ async function placeOrder() {
 
       const { error: escrowErr } = await supabase.rpc('escrow_hold_points', {
 
-        buyer_id: currentUser.id, seller_id: storeData.storefront?.user_id, product_id: storeData.items[0]?.product_id, points: storeMp,
+        buyer_id: currentUser.id, seller_id: sellerId, product_id: productId, points: storeMp,
 
       });
 
@@ -1894,7 +1902,7 @@ async function placeOrder() {
 
         order_number: orderNumber, buyer_id: currentUser.id, storefront_id: sfId,
 
-        seller_id: storeData.storefront?.user_id, status: 'paid',
+        seller_id: sellerId, status: 'paid',
 
         subtotal_ngn: storeSubtotal, shipping_ngn: storeShipping, discount_ngn: storeDiscount,
 
