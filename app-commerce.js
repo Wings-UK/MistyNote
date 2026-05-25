@@ -1247,7 +1247,17 @@ function pdpSwitchTab(tab, btn) {
   if (btn) btn.classList.add('active');
 
   // Scroll tab bar so active tab is visible
-  if (btn) btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  // Scroll the tab bar so active tab is visible — scroll the bar itself, not the page
+  if (btn) {
+    var bar = document.getElementById('pdp-tab-bar');
+    if (bar) {
+      var btnLeft   = btn.offsetLeft;
+      var btnWidth  = btn.offsetWidth;
+      var barWidth  = bar.offsetWidth;
+      var target    = btnLeft - (barWidth / 2) + (btnWidth / 2);
+      bar.scrollTo({ left: target, behavior: 'smooth' });
+    }
+  }
 
 }
 
