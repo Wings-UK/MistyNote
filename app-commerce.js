@@ -28,9 +28,11 @@ let currentStorefrontId = null;
 
 let editingProductId = null;
 
-function mktNgnToMp(ngn) { return Math.ceil((ngn / BUY_RATE) * 100) / 100; }
+// Product prices use BASE_RATE (real KWD→NGN, no fee markup).
+// BUY_RATE (BASE_RATE × 1.04) is only used in app-wallet.js for wallet top-up.
+function mktNgnToMp(ngn) { var r = (typeof BASE_RATE !== 'undefined' && BASE_RATE > 0) ? BASE_RATE : 4400; return Math.ceil((ngn / r) * 100) / 100; }
 
-function mktMpToNgn(mp)  { return Math.round(mp * BUY_RATE); }
+function mktMpToNgn(mp)  { var r = (typeof BASE_RATE !== 'undefined' && BASE_RATE > 0) ? BASE_RATE : 4400; return Math.round(mp * r); }
 
 function mktFmtNgn(n)    { return '₦' + Number(n).toLocaleString('en-NG', { minimumFractionDigits: 0, maximumFractionDigits: 0 }); }
 
