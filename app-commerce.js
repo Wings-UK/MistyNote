@@ -1890,11 +1890,23 @@ async function placeOrder() {
 
       const orderNumber = numData || ('MN-' + Date.now().toString(36).toUpperCase());
 
-      const { error: escrowErr } = await supabase.rpc('escrow_hold_points', {
+      console.log('[placeOrder] escrow_hold_points params:', {
+        buyer_id:   currentUser.id,
+        seller_id:  sellerId,
+        product_id: productId,
+        points:     storeMp,
+        storeTotal,
+        storeSubtotal,
+        storeShipping,
+      });
+
+      const { data: escrowData, error: escrowErr } = await supabase.rpc('escrow_hold_points', {
 
         buyer_id: currentUser.id, seller_id: sellerId, product_id: productId, points: storeMp,
 
       });
+
+      console.log('[placeOrder] escrow result — data:', escrowData, '| error:', escrowErr);
 
       if (escrowErr) throw new Error('Escrow failed: ' + escrowErr.message);
 
