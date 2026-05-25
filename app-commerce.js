@@ -1925,10 +1925,6 @@ async function placeOrder() {
 
   }
 
-}    btn.disabled = false; btn.textContent = 'Place Order';
-
-  }
-
 }
 
 // ══════════════════════════════════════════
