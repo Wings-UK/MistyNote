@@ -1888,20 +1888,27 @@ async function placeOrder() {
 
       const orderNumber = numData || ('MN-' + Date.now().toString(36).toUpperCase());
 
-      // ── Step 1: Insert order as 'pending' first to get the order ID ──
-      const { data: order, error: orderErr } = await supabase.from('orders').insert({
+      // Build insert payload — only include columns that exist on the orders table
+      const orderPayload = {
+        order_number:     orderNumber,
+        buyer_id:         currentUser.id,
+        storefront_id:    sfId,
+        seller_id:        sellerId,
+        status:           'pending',
+        total_ngn:        storeTotal,
+        points_amount:    storeMp,
+        shipping_state:   state,
+        shipping_address: address,
+        shipping_phone:   phone,
+        shipping_name:    name,
+      };
+      // Add optional columns only if they have a value (avoids missing-column errors)
+      if (storeSubtotal) orderPayload.subtotal_ngn  = storeSubtotal;
+      if (storeShipping) orderPayload.shipping_ngn  = storeShipping;
+      if (storeDiscount) orderPayload.discount_ngn  = storeDiscount;
+      if (_appliedDiscount?.code) orderPayload.discount_code = _appliedDiscount.code;
 
-        order_number: orderNumber, buyer_id: currentUser.id, storefront_id: sfId,
-
-        seller_id: sellerId, status: 'pending',
-
-        subtotal_ngn: storeSubtotal, shipping_ngn: storeShipping, discount_ngn: storeDiscount,
-
-        total_ngn: storeTotal, points_amount: storeMp, discount_code: _appliedDiscount?.code||null,
-
-        shipping_state: state, shipping_address: address, shipping_phone: phone, shipping_name: name,
-
-      }).select().single();
+      const { data: order, error: orderErr } = await supabase.from('orders').insert(orderPayload).select().single();
 
       if (orderErr) throw orderErr;
 
