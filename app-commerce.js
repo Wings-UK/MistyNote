@@ -1910,7 +1910,10 @@ async function placeOrder() {
 
       const { data: order, error: orderErr } = await supabase.from('orders').insert(orderPayload).select().single();
 
-      if (orderErr) throw orderErr;
+      if (orderErr) {
+        console.log('[placeOrder] order insert error:', JSON.stringify(orderErr));
+        throw new Error('Order insert failed: ' + (orderErr.message || orderErr.code));
+      }
 
       // ── Step 2: Pass order_id (not product_id) to escrow RPC ──
       console.log('[placeOrder] escrow_hold_points params:', {
