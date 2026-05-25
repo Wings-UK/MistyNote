@@ -1828,35 +1828,23 @@ async function applyDiscountCode() {
 
 async function placeOrder() {
 
-  const name    = document.getElementById('co-name')?.value.trim();
-
-  const phone   = document.getElementById('co-phone')?.value.trim();
-
-  const state   = document.getElementById('co-state')?.value;
-
   const address = document.getElementById('co-address')?.value.trim();
 
   const btn     = document.getElementById('co-place-btn');
 
-  if (!name)    { showToast('Enter recipient name'); return; }
-
-  if (!phone)   { showToast('Enter phone number'); return; }
-
-  if (!state)   { showToast('Select delivery state'); return; }
-
   if (!address) { showToast('Enter delivery address'); return; }
 
-  const subtotal = window._coSubtotal || 0;
+  const items = window._coItems || [];
 
-  const shipping = window._coShipping || 0;
+  if (!items.length) { showToast('Your cart is empty'); return; }
 
-  const discount = window._coDiscount || 0;
+  // Calculate total MP needed across all items
+  const totalMp = items.reduce((s, i) => {
+    const mp = Math.ceil(mktNgnToMp((i.product?.price_ngn||0) * i.quantity) * 100) / 100;
+    return s + mp;
+  }, 0);
 
-  const total    = subtotal + shipping - discount;
-
-  const mpNeeded = mktNgnToMp(total);
-
-  if (walletState.points < mpNeeded) { showToast('Insufficient MistyPoints — top up your wallet'); openWallet(); return; }
+  if (walletState.points < totalMp) { showToast('Insufficient MistyPoints — top up your wallet'); openWallet(); return; }
 
   const pinOk = await walletPinCheck();
 
@@ -1866,104 +1854,64 @@ async function placeOrder() {
 
   try {
 
-    for (const [sfId, storeData] of Object.entries(window._coByStore || {})) {
+    for (const item of items) {
 
-      const storeSubtotal = storeData.items.reduce((s,i) => s + (i.product?.price_ngn||0)*i.quantity, 0);
+      const sellerId  = item.product?.storefront?.user_id;
+      const productId = item.product_id;
+      const priceNgn  = (item.product?.price_ngn || 0) * item.quantity;
+      const priceMp   = Math.ceil(mktNgnToMp(priceNgn) * 100) / 100;
 
-      const storeShipping = _shippingByStore[sfId] || 0;
+      if (!sellerId) throw new Error('Seller not found for: ' + (item.product?.title || productId));
+      if (sellerId === currentUser.id) throw new Error('You cannot buy your own product');
 
-      const storeDiscount = Math.round(storeData.items.length / (window._coItems?.length||1) * discount);
-
-      const storeTotal    = storeSubtotal + storeShipping - storeDiscount;
-
-      const sellerId  = storeData.storefront?.user_id;
-
-      // Guard: surface missing IDs clearly before hitting the RPC
-      if (!sellerId)  throw new Error('Seller wallet not found — store may not be fully set up');
-      if (sellerId === currentUser.id) throw new Error('You cannot purchase your own product');
-
-      const storeMp = Math.ceil(mktNgnToMp(storeTotal) * 100) / 100;
-
-      // Build insert payload — only include columns that exist on the orders table
-      const orderPayload = {
+      // Step 1: Insert one order row per item (matches schema)
+      const { data: order, error: orderErr } = await supabase.from('orders').insert({
         buyer_id:         currentUser.id,
-        storefront_id:    sfId,
         seller_id:        sellerId,
+        product_id:       productId,
+        title:            item.product?.title || '',
+        quantity:         item.quantity,
+        price_ngn:        priceNgn,
+        price_mp:         priceMp,
         status:           'pending',
-        total_ngn:        storeTotal,
-        points_amount:    storeMp,
-        shipping_state:   state,
         shipping_address: address,
-        shipping_phone:   phone,
-        shipping_name:    name,
-      };
-      // Add optional columns only if they have a value (avoids missing-column errors)
-      if (storeSubtotal) orderPayload.subtotal_ngn  = storeSubtotal;
-      if (storeShipping) orderPayload.shipping_ngn  = storeShipping;
-      if (storeDiscount) orderPayload.discount_ngn  = storeDiscount;
-      if (_appliedDiscount?.code) orderPayload.discount_code = _appliedDiscount.code;
-
-      const { data: order, error: orderErr } = await supabase.from('orders').insert(orderPayload).select().single();
+      }).select().single();
 
       if (orderErr) {
         console.log('[placeOrder] order insert error:', JSON.stringify(orderErr));
-        throw new Error('Order insert failed: ' + (orderErr.message || orderErr.code));
+        throw new Error('Order failed: ' + orderErr.message);
       }
 
-      // ── Step 2: Pass order_id (not product_id) to escrow RPC ──
-      console.log('[placeOrder] escrow_hold_points params:', {
+      // Step 2: Hold MP in escrow
+      const { error: escrowErr } = await supabase.rpc('escrow_hold_points', {
         buyer_id:  currentUser.id,
         seller_id: sellerId,
         order_id:  order.id,
-        points:    storeMp,
+        points:    priceMp,
       });
-
-      const { data: escrowData, error: escrowErr } = await supabase.rpc('escrow_hold_points', {
-
-        buyer_id: currentUser.id, seller_id: sellerId, order_id: order.id, points: storeMp,
-
-      });
-
-      console.log('[placeOrder] escrow result — data:', escrowData, '| error:', escrowErr);
 
       if (escrowErr) {
-        // Rollback: delete the pending order so it doesn't orphan
         await supabase.from('orders').delete().eq('id', order.id).catch(() => {});
         throw new Error('Escrow failed: ' + escrowErr.message);
       }
 
-      // ── Step 3: Mark order paid now that MP is held ──
+      // Step 3: Mark paid
       await supabase.from('orders').update({ status: 'paid' }).eq('id', order.id);
 
-      await supabase.from('order_items').insert(storeData.items.map(item => ({
+      // Decrement stock
+      await supabase.rpc('decrement_stock', { p_product_id: productId, p_qty: item.quantity }).catch(() => {});
 
-        order_id: order.id, product_id: item.product_id, product_title: item.product?.title||'',
-
-        product_image: item.product?.images?.[0]||'', quantity: item.quantity, price_ngn: item.product?.price_ngn||0,
-
-      })));
-
-      for (const item of storeData.items) {
-
-        await supabase.rpc('decrement_stock', { p_product_id: item.product_id, p_qty: item.quantity }).catch(() => {});
-
-      }
-
-      if (_appliedDiscount) {
-
-        await supabase.from('discount_codes').update({ uses_count: (_appliedDiscount.uses_count||0)+1 }).eq('id', _appliedDiscount.id);
-
-      }
-
-      insertNotification({ user_id: storeData.storefront?.user_id, actor_id: currentUser.id, type: 'new_order', comment_text: `New order ${orderNumber} — ${mktFmtNgn(storeTotal)}` });
+      // Notify seller
+      insertNotification({ user_id: sellerId, actor_id: currentUser.id, type: 'new_order', comment_text: `New order — ${item.product?.title || ''} · ${mktFmtNgn(priceNgn)}` });
 
     }
 
+    // Clear cart
     await supabase.from('cart_items').delete().eq('user_id', currentUser.id);
 
     cartCount = 0; updateCartBadges(); syncWalletBalance();
 
-    showToast('Order placed successfully! 🎉');
+    showToast('Order placed! 🎉');
 
     slideBack();
 
@@ -1971,9 +1919,13 @@ async function placeOrder() {
 
   } catch(e) {
 
-    showToast('Order failed: ' + (e.message||'Try again'));
-
     btn.disabled = false; btn.textContent = 'Place Order';
+
+    showToast('Order failed: ' + (e.message || 'Please try again'));
+
+  }
+
+}    btn.disabled = false; btn.textContent = 'Place Order';
 
   }
 
@@ -1999,7 +1951,7 @@ async function loadMyBag() {
 
   const { data: orders } = await supabase.from('orders')
 
-    .select('*, storefront:storefronts(store_name,logo_url), items:order_items(*, product:products(images,title))')
+    .select('*, storefront:storefronts(store_name,logo_url)')
 
     .eq('buyer_id', currentUser.id).order('created_at', { ascending: false });
 
@@ -2035,13 +1987,13 @@ async function loadMyBag() {
 
             <div class="bag-order-info">
 
-              <div class="bag-order-number">${order.order_number}</div>
+              <div class="bag-order-number">${order.id.slice(0,8).toUpperCase()}</div>
 
-              <div class="bag-order-store">${escHtml(order.storefront?.store_name||'')}</div>
+              <div class="bag-order-store">${escHtml(order.title||'')}</div>
 
-              <div class="bag-order-items-hint">${order.items?.length||0} item${(order.items?.length||0)!==1?'s':''}</div>
+              <div class="bag-order-items-hint">Qty: ${order.quantity||1}</div>
 
-              <div class="bag-order-total">${mktFmtNgn(order.total_ngn)}</div>
+              <div class="bag-order-total">${mktFmtNgn(order.price_ngn||0)}</div>
 
             </div>
 
@@ -2073,13 +2025,13 @@ async function confirmDelivery(orderId) {
 
     if (!order) { showToast('Order not found'); return; }
 
-    await supabase.rpc('escrow_release_points', { seller_id: order.seller_id, buyer_id: order.buyer_id, product_id: order.items?.[0]?.product_id, points: order.points_amount }).catch(() => {});
+    await supabase.rpc('escrow_release_points', { seller_id: order.seller_id, buyer_id: order.buyer_id, order_id: order.id, points: order.price_mp }).catch(() => {});
 
-    await supabase.from('orders').update({ status: 'delivered', delivery_confirmed_at: new Date().toISOString() }).eq('id', orderId);
+    await supabase.from('orders').update({ status: 'delivered', confirmed_at: new Date().toISOString() }).eq('id', orderId);
 
-    await supabase.from('storefronts').update({ total_sales: supabase.raw('total_sales + 1'), total_revenue: supabase.raw(`total_revenue + ${order.total_ngn}`) }).eq('id', order.storefront_id).catch(() => {});
+    await supabase.from('storefronts').update({ total_sales: supabase.raw('total_sales + 1'), total_revenue: supabase.raw(`total_revenue + ${order.price_ngn||0}`) }).eq('user_id', order.seller_id).catch(() => {});
 
-    insertNotification({ user_id: order.seller_id, actor_id: currentUser.id, type: 'delivery_confirmed', comment_text: `Order ${order.order_number} confirmed — MP released to your wallet` });
+    insertNotification({ user_id: order.seller_id, actor_id: currentUser.id, type: 'delivery_confirmed', comment_text: `Order confirmed — MP released to your wallet` });
 
     showToast('Delivery confirmed! Payment released to seller ✓');
 
@@ -2093,9 +2045,9 @@ async function confirmDelivery(orderId) {
 
 async function promptReview(orderId) {
 
-  const { data: order } = await supabase.from('orders').select('*, items:order_items(product_id,product_title), storefront_id').eq('id', orderId).single();
+  const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
 
-  if (!order?.items?.length) return;
+  if (!order?.product_id) return;
 
   showActionSheet([{ label: '⭐ Leave a Review', action: () => openLeaveReview(order) }, { label: 'Maybe later', action: () => {} }]);
 
@@ -2119,9 +2071,9 @@ async function loadShopOrders() {
 
   const { data: orders } = await supabase.from('orders')
 
-    .select('*, buyer:users(username,avatar), items:order_items(*, product:products(title,images))')
+    .select('*, buyer:users(username,avatar), product:products(title,images)')
 
-    .eq('storefront_id', currentStorefront.id).order('created_at', { ascending: false });
+    .eq('seller_id', currentStorefront.user_id || currentUser.id).order('created_at', { ascending: false });
 
   if (!orders?.length) {
 
@@ -2151,7 +2103,7 @@ async function loadShopOrders() {
 
 function renderShopOrderCard(order) {
 
-  const img       = order.items?.[0]?.product?.images?.[0] || '';
+  const img       = order.product?.images?.[0] || '';
 
   const statusColors = { paid:'#007aff', processing:'#007aff', shipped:'#6C47FF', delivered:'#00c48c', cancelled:'var(--text3)' };
 
@@ -2163,7 +2115,7 @@ function renderShopOrderCard(order) {
 
       <div class="so-order-header">
 
-        <div class="so-order-num">${order.order_number}</div>
+        <div class="so-order-num">${order.id.slice(0,8).toUpperCase()}</div>
 
         <div class="so-order-status" style="color:${statusCol}">${order.status.replace('_',' ')}</div>
 
@@ -2187,11 +2139,11 @@ function renderShopOrderCard(order) {
 
           </div>
 
-          <div class="so-order-items">${order.items?.length||0} item${(order.items?.length||0)!==1?'s':''}</div>
+          <div class="so-order-items">${escHtml(order.title||'')} × ${order.quantity||1}</div>
 
-          <div class="so-order-total">${mktFmtNgn(order.total_ngn)} · ${fmtPts(order.points_amount)}</div>
+          <div class="so-order-total">${mktFmtNgn(order.price_ngn||0)} · ${fmtPts(order.price_mp||0)}</div>
 
-          <div class="so-order-addr">${escHtml(order.shipping_state||'')} · ${timeSince(order.created_at)}</div>
+          <div class="so-order-addr">${escHtml(order.shipping_address||'')} · ${timeSince(order.created_at)}</div>
 
         </div>
 
