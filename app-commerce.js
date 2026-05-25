@@ -1877,44 +1877,23 @@ async function placeOrder() {
       const storeTotal    = storeSubtotal + storeShipping - storeDiscount;
 
       const sellerId  = storeData.storefront?.user_id;
-      const productId = storeData.items[0]?.product_id;
 
       // Guard: surface missing IDs clearly before hitting the RPC
       if (!sellerId)  throw new Error('Seller wallet not found — store may not be fully set up');
-      if (!productId) throw new Error('Product ID missing from cart item');
       if (sellerId === currentUser.id) throw new Error('You cannot purchase your own product');
 
-      const storeMp       = Math.ceil(mktNgnToMp(storeTotal) * 100) / 100; // 2dp, always round up
+      const storeMp = Math.ceil(mktNgnToMp(storeTotal) * 100) / 100; // 2dp, always round up
 
       const { data: numData } = await supabase.rpc('generate_order_number');
 
       const orderNumber = numData || ('MN-' + Date.now().toString(36).toUpperCase());
 
-      console.log('[placeOrder] escrow_hold_points params:', {
-        buyer_id:   currentUser.id,
-        seller_id:  sellerId,
-        product_id: productId,
-        points:     storeMp,
-        storeTotal,
-        storeSubtotal,
-        storeShipping,
-      });
-
-      const { data: escrowData, error: escrowErr } = await supabase.rpc('escrow_hold_points', {
-
-        buyer_id: currentUser.id, seller_id: sellerId, product_id: productId, points: storeMp,
-
-      });
-
-      console.log('[placeOrder] escrow result — data:', escrowData, '| error:', escrowErr);
-
-      if (escrowErr) throw new Error('Escrow failed: ' + escrowErr.message);
-
+      // ── Step 1: Insert order as 'pending' first to get the order ID ──
       const { data: order, error: orderErr } = await supabase.from('orders').insert({
 
         order_number: orderNumber, buyer_id: currentUser.id, storefront_id: sfId,
 
-        seller_id: sellerId, status: 'paid',
+        seller_id: sellerId, status: 'pending',
 
         subtotal_ngn: storeSubtotal, shipping_ngn: storeShipping, discount_ngn: storeDiscount,
 
@@ -1925,6 +1904,31 @@ async function placeOrder() {
       }).select().single();
 
       if (orderErr) throw orderErr;
+
+      // ── Step 2: Pass order_id (not product_id) to escrow RPC ──
+      console.log('[placeOrder] escrow_hold_points params:', {
+        buyer_id:  currentUser.id,
+        seller_id: sellerId,
+        order_id:  order.id,
+        points:    storeMp,
+      });
+
+      const { data: escrowData, error: escrowErr } = await supabase.rpc('escrow_hold_points', {
+
+        buyer_id: currentUser.id, seller_id: sellerId, order_id: order.id, points: storeMp,
+
+      });
+
+      console.log('[placeOrder] escrow result — data:', escrowData, '| error:', escrowErr);
+
+      if (escrowErr) {
+        // Rollback: delete the pending order so it doesn't orphan
+        await supabase.from('orders').delete().eq('id', order.id).catch(() => {});
+        throw new Error('Escrow failed: ' + escrowErr.message);
+      }
+
+      // ── Step 3: Mark order paid now that MP is held ──
+      await supabase.from('orders').update({ status: 'paid' }).eq('id', order.id);
 
       await supabase.from('order_items').insert(storeData.items.map(item => ({
 
