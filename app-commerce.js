@@ -1882,15 +1882,10 @@ async function placeOrder() {
       if (!sellerId)  throw new Error('Seller wallet not found — store may not be fully set up');
       if (sellerId === currentUser.id) throw new Error('You cannot purchase your own product');
 
-      const storeMp = Math.ceil(mktNgnToMp(storeTotal) * 100) / 100; // 2dp, always round up
-
-      const { data: numData } = await supabase.rpc('generate_order_number');
-
-      const orderNumber = numData || ('MN-' + Date.now().toString(36).toUpperCase());
+      const storeMp = Math.ceil(mktNgnToMp(storeTotal) * 100) / 100;
 
       // Build insert payload — only include columns that exist on the orders table
       const orderPayload = {
-        order_number:     orderNumber,
         buyer_id:         currentUser.id,
         storefront_id:    sfId,
         seller_id:        sellerId,
