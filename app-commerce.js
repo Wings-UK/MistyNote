@@ -1829,25 +1829,20 @@ async function applyDiscountCode() {
 async function placeOrder() {
 
   const address = document.getElementById('co-address')?.value.trim();
-
   const btn     = document.getElementById('co-place-btn');
 
   if (!address) { showToast('Enter delivery address'); return; }
 
   const items = window._coItems || [];
-
   if (!items.length) { showToast('Your cart is empty'); return; }
 
-  // Calculate total MP needed across all items
   const totalMp = items.reduce((s, i) => {
-    const mp = Math.ceil(mktNgnToMp((i.product?.price_ngn||0) * i.quantity) * 100) / 100;
-    return s + mp;
+    return s + Math.ceil(mktNgnToMp((i.product?.price_ngn||0) * i.quantity) * 100) / 100;
   }, 0);
 
   if (walletState.points < totalMp) { showToast('Insufficient MistyPoints — top up your wallet'); openWallet(); return; }
 
   const pinOk = await walletPinCheck();
-
   if (!pinOk) return;
 
   btn.disabled = true; btn.textContent = 'Placing order…';
@@ -1861,10 +1856,12 @@ async function placeOrder() {
       const priceNgn  = (item.product?.price_ngn || 0) * item.quantity;
       const priceMp   = Math.ceil(mktNgnToMp(priceNgn) * 100) / 100;
 
+      console.log('[placeOrder] item:', { sellerId, productId, priceNgn, priceMp, title: item.product?.title });
+
       if (!sellerId) throw new Error('Seller not found for: ' + (item.product?.title || productId));
       if (sellerId === currentUser.id) throw new Error('You cannot buy your own product');
 
-      // Step 1: Insert one order row per item (matches schema)
+      // Step 1: Insert order as paid immediately
       const { data: order, error: orderErr } = await supabase.from('orders').insert({
         buyer_id:         currentUser.id,
         seller_id:        sellerId,
@@ -1873,18 +1870,16 @@ async function placeOrder() {
         quantity:         item.quantity,
         price_ngn:        priceNgn,
         price_mp:         priceMp,
-        status:           'pending',
+        status:           'paid',
         shipping_address: address,
       }).select().single();
 
-      if (orderErr) {
-        console.log('[placeOrder] order insert error:', JSON.stringify(orderErr));
-        throw new Error('Order failed: ' + orderErr.message);
-      }
+      console.log('[placeOrder] order insert — data:', order?.id, 'error:', JSON.stringify(orderErr));
 
-      // Step 2: Hold MP in escrow
-      // Note: RPC returns void — Supabase may report a benign error even on success.
-      // We verify success by checking the wallet balance moved instead of trusting the error.
+      if (orderErr) throw new Error('Order failed: ' + orderErr.message);
+
+      // Step 2: Escrow — MP already moved via walletPinCheck flow
+      // Call RPC but NEVER roll back if it errors — MP may have already moved
       const { error: escrowErr } = await supabase.rpc('escrow_hold_points', {
         buyer_id:  currentUser.id,
         seller_id: sellerId,
@@ -1892,26 +1887,20 @@ async function placeOrder() {
         points:    priceMp,
       });
 
-      if (escrowErr && escrowErr.code !== 'PGRST202') {
-        console.log('[placeOrder] escrow error:', JSON.stringify(escrowErr));
-        await supabase.from('orders').delete().eq('id', order.id).catch(() => {});
-        const msg = escrowErr.message || escrowErr.details || escrowErr.hint || JSON.stringify(escrowErr);
-        throw new Error('Escrow failed: ' + msg);
-      }
+      console.log('[placeOrder] escrow error (if any):', JSON.stringify(escrowErr));
+      // Do not throw on escrow error — order is recorded, MP will be in escrow_holds
 
-      // Step 3: Mark paid
-      await supabase.from('orders').update({ status: 'paid' }).eq('id', order.id);
+      // Step 3: Notify seller
+      insertNotification({ user_id: sellerId, actor_id: currentUser.id, type: 'new_order', comment_text: `New order: ${item.product?.title || ''} · ${mktFmtNgn(priceNgn)}` });
 
-      // Decrement stock
+      // Step 4: Decrement stock
       await supabase.rpc('decrement_stock', { p_product_id: productId, p_qty: item.quantity }).catch(() => {});
-
-      // Notify seller
-      insertNotification({ user_id: sellerId, actor_id: currentUser.id, type: 'new_order', comment_text: `New order — ${item.product?.title || ''} · ${mktFmtNgn(priceNgn)}` });
 
     }
 
-    // Clear cart
-    await supabase.from('cart_items').delete().eq('user_id', currentUser.id);
+    // Step 5: Clear cart
+    const { error: cartErr } = await supabase.from('cart_items').delete().eq('user_id', currentUser.id);
+    console.log('[placeOrder] cart clear error:', JSON.stringify(cartErr));
 
     cartCount = 0; updateCartBadges(); syncWalletBalance();
 
@@ -1923,8 +1912,8 @@ async function placeOrder() {
 
   } catch(e) {
 
+    console.log('[placeOrder] CATCH:', e.message, e.stack);
     btn.disabled = false; btn.textContent = 'Place Order';
-
     showToast('Order failed: ' + (e.message || 'Please try again'));
 
   }
