@@ -1932,11 +1932,15 @@ async function placeOrder() {
 
 // ══════════════════════════════════════════
 
-function openMyBag() { slideTo('my-bag', loadMyBag); }
+function openMyBag() { console.log('[openMyBag] called, currentUser:', currentUser?.id); slideTo('my-bag', loadMyBag); }
 
 async function loadMyBag() {
 
+  console.log('[loadMyBag] called, currentUser:', currentUser?.id);
+
   const el = document.getElementById('my-bag-content');
+
+  console.log('[loadMyBag] element found:', !!el);
 
   if (!el) return;
 
@@ -1950,7 +1954,9 @@ async function loadMyBag() {
 
     .eq('buyer_id', currentUser.id).order('created_at', { ascending: false });
 
-  console.log('[loadMyBag] orders:', orders?.length, 'error:', JSON.stringify(ordersErr));
+  console.log('[loadMyBag] buyer_id queried:', currentUser.id);
+  console.log('[loadMyBag] orders count:', orders?.length, '| error:', JSON.stringify(ordersErr));
+  console.log('[loadMyBag] first order raw:', JSON.stringify(orders?.[0]));
 
   if (!orders?.length) {
 
@@ -2060,19 +2066,27 @@ function openShopOrders() { slideTo('shop-orders', loadShopOrders); }
 
 async function loadShopOrders() {
 
+  console.log('[loadShopOrders] called, currentStorefront:', currentStorefront?.id, 'user_id:', currentStorefront?.user_id, 'currentUser:', currentUser?.id);
+
   const el = document.getElementById('shop-orders-content');
 
-  if (!el || !currentStorefront) return;
+  console.log('[loadShopOrders] element found:', !!el);
+
+  if (!el || !currentStorefront) { console.log('[loadShopOrders] early return — el:', !!el, 'currentStorefront:', !!currentStorefront); return; }
 
   el.innerHTML = `<div class="loading-pulse" style="height:300px"></div>`;
+
+  const sellerId = currentStorefront.user_id || currentUser.id;
+  console.log('[loadShopOrders] querying seller_id:', sellerId);
 
   const { data: orders, error: sellerOrdersErr } = await supabase.from('orders')
 
     .select('*, product:products(title,images)')
 
-    .eq('seller_id', currentStorefront.user_id || currentUser.id).order('created_at', { ascending: false });
+    .eq('seller_id', sellerId).order('created_at', { ascending: false });
 
-  console.log('[loadShopOrders] orders:', orders?.length, 'error:', JSON.stringify(sellerOrdersErr));
+  console.log('[loadShopOrders] orders count:', orders?.length, '| error:', JSON.stringify(sellerOrdersErr));
+  console.log('[loadShopOrders] first order raw:', JSON.stringify(orders?.[0]));
 
   if (!orders?.length) {
 
