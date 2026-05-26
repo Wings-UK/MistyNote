@@ -1950,11 +1950,10 @@ async function loadMyBag() {
 
   const { data: orders, error: ordersErr } = await supabase.from('orders')
 
-    .select('*, product:products(title,images,storefront:storefronts(store_name,logo_url))')
+    .select('*')
 
     .eq('buyer_id', currentUser.id).order('created_at', { ascending: false });
 
-  console.log('[loadMyBag] buyer_id queried:', currentUser.id);
   console.log('[loadMyBag] orders count:', orders?.length, '| error:', JSON.stringify(ordersErr));
   console.log('[loadMyBag] first order raw:', JSON.stringify(orders?.[0]));
 
@@ -1974,7 +1973,7 @@ async function loadMyBag() {
 
       ${orders.map(order => {
 
-        const img       = order.product?.images?.[0] || '';
+        const img       = '';
 
         const statusCol = statusColors[order.status] || 'var(--text3)';
 
@@ -2081,7 +2080,7 @@ async function loadShopOrders() {
 
   const { data: orders, error: sellerOrdersErr } = await supabase.from('orders')
 
-    .select('*, product:products(title,images)')
+    .select('*')
 
     .eq('seller_id', sellerId).order('created_at', { ascending: false });
 
@@ -2116,9 +2115,9 @@ async function loadShopOrders() {
 
 function renderShopOrderCard(order) {
 
-  const img       = order.product?.images?.[0] || '';
+  const img       = '';
 
-  const statusColors = { paid:'#007aff', processing:'#007aff', shipped:'#6C47FF', delivered:'#00c48c', cancelled:'var(--text3)' };
+  const statusColors = { paid:'#007aff', processing:'#ff9500', shipped:'#6C47FF', delivered:'#00c48c', cancelled:'var(--text3)' };
 
   const statusCol = statusColors[order.status] || 'var(--text3)';
 
@@ -3334,7 +3333,7 @@ async function openOrderDetail(orderId, role) {
 
   const { data: order } = await supabase.from('orders')
 
-    .select('*, product:products(title,images), buyer:profiles(username,avatar_url), seller:profiles!orders_seller_id_fkey(username,avatar_url)')
+    .select('*')
 
     .eq('id', orderId).single();
 
