@@ -1,3470 +1,2587 @@
 /* ═══════════════════════════════════════════
 
-   MISTYNOTE — app-commerce.js
+   MISTYNOTE — app-notif.js
 
-   Sidepane, Storefront, Products, Cart,
+   Notifications, realtime subscription,
 
-   Orders, My Bag, Merchant Dashboard,
+   banner, echoes panel, badge
 
-   Discount Codes, Reviews
-
-   Requires: app-core.js, app-wallet.js
+   Requires: app-core.js
 
 ═══════════════════════════════════════════ */
 
-'use strict';
+// ══════════════════════════════════════════
 
-// ── COMMERCE STATE ────────────────────────────────────────
-
-let currentStorefront = null;
-
-let cartCount = 0;
-
-let cartItems = [];
-
-let currentProductId = null;
-
-let currentStorefrontId = null;
-
-let editingProductId = null;
-
-// Product prices use BASE_RATE (real KWD→NGN, no fee markup).
-// BUY_RATE (BASE_RATE × 1.04) is only used in app-wallet.js for wallet top-up.
-function mktNgnToMp(ngn) { var r = (typeof BASE_RATE !== 'undefined' && BASE_RATE > 0) ? BASE_RATE : 4400; return Math.ceil((ngn / r) * 100) / 100; }
-
-function mktMpToNgn(mp)  { var r = (typeof BASE_RATE !== 'undefined' && BASE_RATE > 0) ? BASE_RATE : 4400; return Math.round(mp * r); }
-
-function mktFmtNgn(n)    { return '₦' + Number(n).toLocaleString('en-NG', { minimumFractionDigits: 0, maximumFractionDigits: 0 }); }
+// NOTIFICATIONS — PREMIUM ENGINE
 
 // ══════════════════════════════════════════
 
-// SIDEPANE
+const NOTIF_CONFIG = {
 
-// ══════════════════════════════════════════
+  GROUPING_WINDOW_MS: 24 * 60 * 60 * 1000,
 
-async function openSidePanel(section) {
+  GROUPING_THRESHOLD: 3,
 
-  if (!currentUser) { showToast('Sign in to continue'); return; }
+  BATCH_SIZE: 50,
 
-  const pane     = document.getElementById('sidepane');
+  BANNER_DURATION: 4500,
 
-  const backdrop = document.getElementById('sidepane-backdrop');
+  BANNER_SWIPE_THRESHOLD: 60,
 
-  const avEl     = document.getElementById('sidepane-avatar');
+};
 
-  const unEl     = document.getElementById('sidepane-username');
+const NOTIF_TYPES = {
 
-  const snEl     = document.getElementById('sidepane-store-name');
+  like:             { emoji: '❤️',  label: 'loved your note',           badgeClass: 'badge-like',    accentColor: '#f0385a' },
 
-  if (avEl) { avEl.src = currentProfile?.avatar || ''; avEl.className = currentStorefront ? 'sidepane-avatar square' : 'sidepane-avatar'; }
+  comment:          { emoji: '💬',  label: 'replied to your note',      badgeClass: 'badge-comment', accentColor: '#6c47ff' },
 
-  if (unEl) unEl.textContent = '@' + (currentProfile?.username || '');
+  follow:           { emoji: '👤',  label: 'started following you',     badgeClass: 'badge-follow',  accentColor: '#00b87a' },
 
-  if (snEl) { snEl.textContent = currentStorefront?.store_name || ''; snEl.style.display = currentStorefront ? 'block' : 'none'; }
+  repost:           { emoji: '🔁',  label: 'reposted your note',        badgeClass: 'badge-repost',  accentColor: '#f5a623' },
 
-  const merchantSection  = document.getElementById('sidepane-merchant-section');
+  mention:          { emoji: '📣',  label: 'mentioned you',             badgeClass: 'badge-mention', accentColor: '#00c4ff' },
 
-  const openStoreSection = document.getElementById('sidepane-open-store-section');
+  like_comment:     { emoji: '❤️',  label: 'loved your reply',          badgeClass: 'badge-like',    accentColor: '#f0385a' },
 
-  if (merchantSection)  merchantSection.style.display  = currentStorefront ? 'block' : 'none';
+  order_placed:     { emoji: '📦',  label: 'placed an order',           badgeClass: 'badge-order',   accentColor: '#ff6b35' },
 
-  if (openStoreSection) openStoreSection.style.display = currentStorefront ? 'none'  : 'block';
+  order_shipped:    { emoji: '🚚',  label: 'Your order has shipped',    badgeClass: 'badge-order',   accentColor: '#ff6b35' },
 
-  await syncCartCount();
+  order_delivered:  { emoji: '✅',  label: 'Order delivered!',          badgeClass: 'badge-order',   accentColor: '#00b87a' },
 
-  if (pane)     pane.classList.add('open');
+  new_order:        { emoji: '🛍️',  label: 'placed a new order',        badgeClass: 'badge-order',   accentColor: '#ff6b35' },
 
-  if (backdrop) backdrop.classList.add('open');
+  delivery_confirmed: { emoji: '✅', label: 'confirmed delivery',       badgeClass: 'badge-order',   accentColor: '#00b87a' },
 
-  if (section === 'cart') setTimeout(() => { closeSidePanel(); openSidePaneSection('cart'); }, 300);
+  payment_received: { emoji: '💰',  label: 'Payment received',          badgeClass: 'badge-wallet',  accentColor: '#00b87a' },
 
-}
+  wallet_credit:    { emoji: '💳',  label: 'Wallet credited',           badgeClass: 'badge-wallet',  accentColor: '#00b87a' },
 
-function closeSidePanel() {
+  mp_gift:          { emoji: '🎁',  label: 'sent you MistyPoints',       badgeClass: 'badge-wallet',  accentColor: '#6c47ff' },
 
-  document.getElementById('sidepane')?.classList.remove('open');
+  system:           { emoji: '📢',  label: '',                           badgeClass: 'badge-system',  accentColor: '#5e5e5a' },
 
-  document.getElementById('sidepane-backdrop')?.classList.remove('open');
+};
 
-}
+const NOTIF_FILTERS = [
 
-function openSidePaneSection(section) {
+  { id: 'all',      label: 'All',      types: null },
 
-  if (section === 'cart') slideTo('cart', loadCartPage);
+  { id: 'social',   label: 'Social',   types: ['like','comment','repost','mention','like_comment'] },
 
-}
+  { id: 'follows',  label: 'Follows',  types: ['follow'] },
 
-// ══════════════════════════════════════════
+  { id: 'commerce', label: 'Commerce', types: ['new_order','order_placed','order_shipped','order_delivered','delivery_confirmed','payment_received'] },
 
-// LOAD STOREFRONT STATE ON BOOT
+  { id: 'wallet',   label: 'Wallet',   types: ['payment_received','wallet_credit','mp_gift'] },
 
-// ══════════════════════════════════════════
+];
 
-async function loadMyStorefrontState() {
+let notifCurrentFilter = 'all';
+
+let notifRawData = [];
+
+let bannerQueue = [];
+
+let bannerShowing = false;
+
+let bannerTimer = null;
+
+// ── LOAD & RENDER ─────────────────────────
+
+async function loadNotifications() {
 
   if (!currentUser) return;
 
-  try {
+  const container = document.getElementById('notif-list');
 
-    const { data } = await supabase.from('storefronts').select('*').eq('user_id', currentUser.id).maybeSingle();
+  if (!container) return;
 
-    currentStorefront = data || null;
+  renderNotifSkeletons(container, 5);
 
-    renderStorefrontBanner();
+  const { data, error } = await supabase
 
-  } catch(e) { /* silent */ }
+    .from('notifications')
+
+    .select(`id,created_at,read,type,actor_id,post_id,comment_text,
+
+             actor:users!actor_id(id,username,avatar),
+
+             post:posts!fk_notifications_post_id(id,image,user_id,user:users!user_id(username,avatar))`)
+
+    .eq('user_id', currentUser.id)
+
+    .order('created_at', { ascending: false })
+
+    .limit(NOTIF_CONFIG.BATCH_SIZE);
+
+  if (error) { container.innerHTML = renderNotifEmpty('Something went wrong', 'Pull down to try again.'); return; }
+
+  notifRawData = data || [];
+
+  renderNotifList(notifCurrentFilter);
+
+  updateNotifTabCounts();
 
 }
 
-function renderStorefrontBanner() {
+function renderNotifList(filter) {
 
-  // Update the existing beautiful banner in app-social.js — don't replace it
+  const container = document.getElementById('notif-list');
 
-  const icon  = document.getElementById('prf-storefront-banner-icon');
+  if (!container) return;
 
-  const title = document.getElementById('prf-storefront-banner-title');
+  const filterDef = NOTIF_FILTERS.find(f => f.id === filter);
 
-  const sub   = document.getElementById('prf-storefront-banner-sub');
+  let items = notifRawData;
 
-  const pill  = document.getElementById('prf-storefront-banner-pill');
+  if (filterDef && filterDef.types) items = items.filter(n => filterDef.types.includes(n.type));
 
-  if (currentStorefront) {
+  if (!items.length) {
 
-    if (icon)  icon.textContent  = '🏪';
+    container.innerHTML = renderNotifEmpty(
 
-    if (title) title.textContent = currentStorefront.store_name;
+      filter === 'all' ? 'All caught up! 🎉' : `No ${filterDef?.label?.toLowerCase()} notifications`,
 
-    if (sub)   sub.textContent   = currentStorefront.category + ' · Tap to manage';
+      filter === 'all' ? "When people interact with your notes, you'll see it here." : ''
 
-    if (pill)  { pill.textContent = 'Dashboard'; pill.style.background = 'var(--accent)'; pill.style.color = 'white'; }
+    );
 
-  } else {
-
-    if (icon)  icon.textContent  = '🛍️';
-
-    if (title) title.textContent = 'Open your storefront';
-
-    if (sub)   sub.textContent   = 'Sell anything. Get paid safely.';
-
-    if (pill)  { pill.textContent = 'Open'; pill.style.background = ''; pill.style.color = ''; }
+    return;
 
   }
 
-}
+  const grouped = groupNotifications(items);
 
-// Called when logged-in user taps their own storefront banner
+  const now = Date.now();
 
-function handleStorefrontBannerTap() {
+  const sections = {
 
-  if (currentStorefront) {
+    new:     { label: 'New',        items: [] },
 
-    openMyStorefront();
+    today:   { label: 'Today',      items: [] },
 
-  } else {
+    week:    { label: 'This week',  items: [] },
 
-    openCreateStorefront();
+    earlier: { label: 'Earlier',    items: [] },
 
-  }
+  };
 
-}
+  grouped.forEach(g => {
 
-// Called when viewing another user's profile and tapping their store banner
+    const age = now - new Date(g.latestAt).getTime();
 
-async function openStorefrontByUserId(userId) {
+    if (!g.read && age < 1000 * 60 * 60 * 3) sections.new.items.push(g);
 
-  const { data: sf } = await supabase
+    else if (age < 1000 * 60 * 60 * 24) sections.today.items.push(g);
 
-    .from('storefronts')
+    else if (age < 1000 * 60 * 60 * 24 * 7) sections.week.items.push(g);
 
-    .select('id')
+    else sections.earlier.items.push(g);
 
-    .eq('user_id', userId)
+  });
 
-    .maybeSingle();
+  let html = '';
 
-  if (sf) {
+  let delay = 0;
 
-    openStorefront(sf.id);
+  Object.entries(sections).forEach(([, section]) => {
 
-  } else {
+    if (!section.items.length) return;
 
-    showToast('This user has no active store');
+    html += `<div class="notif-section-header">${section.label}</div>`;
 
-  }
+    section.items.forEach(g => { html += renderNotifItem(g, delay); delay += 25; });
 
-}
+  });
 
-// ══════════════════════════════════════════
+  container.innerHTML = html;
 
-// CREATE STOREFRONT
-
-// ══════════════════════════════════════════
-
-let csfLogoFile = null;
-
-let csfBannerFile = null;
-
-function openCreateStorefront() {
-
-  if (!currentUser) { showToast('Sign in to open a store'); return; }
-
-  if (currentStorefront) { openMyStorefront(); return; }
-
-  slideTo('create-storefront');
+  container.querySelectorAll('.notif-item').forEach(el => attachSwipeDismiss(el));
 
 }
 
-function csfPreviewLogo(input) {
+function groupNotifications(items) {
 
-  const file = input.files?.[0];
+  const groups = [];
 
-  if (!file) return;
+  const usedIds = new Set();
 
-  csfLogoFile = file;
+  items.forEach(item => {
 
-  const preview = document.getElementById('csf-logo-preview');
+    if (usedIds.has(item.id)) return;
 
-  if (preview) {
+    // Only group: same type + same post_id + DIFFERENT actors within time window
 
-    const img = document.createElement('img');
+    // One actor liking 3 different posts = 3 separate notifications (never group same actor)
 
-    img.src = URL.createObjectURL(file);
+    const canGroup = item.post_id && ['like','repost','comment'].includes(item.type);
 
-    img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:16px';
+    if (canGroup) {
 
-    preview.innerHTML = '';
+      const siblings = items.filter(s =>
 
-    preview.appendChild(img);
+        s.id !== item.id &&
 
-  }
+        !usedIds.has(s.id) &&
 
-}
+        s.type === item.type &&
 
-function csfPreviewBanner(input) {
+        s.post_id === item.post_id &&
 
-  const file = input.files?.[0];
+        // CRITICAL: only group DIFFERENT actors on the SAME post
 
-  if (!file) return;
+        s.actor_id !== item.actor_id &&
 
-  csfBannerFile = file;
+        Math.abs(new Date(s.created_at) - new Date(item.created_at)) < NOTIF_CONFIG.GROUPING_WINDOW_MS
 
-  const wrap = document.getElementById('csf-banner-wrap');
+      );
 
-  if (wrap) {
+      if (siblings.length >= NOTIF_CONFIG.GROUPING_THRESHOLD - 1) {
 
-    const img = document.createElement('img');
+        const all = [item, ...siblings];
 
-    img.src = URL.createObjectURL(file);
+        // Deduplicate actors by id — never show same username twice
 
-    img.style.cssText = 'width:100%;height:100%;object-fit:cover';
+        const seenActorIds = new Set();
 
-    wrap.innerHTML = '';
+        const uniqueActors = all
 
-    wrap.appendChild(img);
+          .map(s => s.actor)
 
-  }
+          .filter(a => {
 
-}
+            if (!a?.id || seenActorIds.has(a.id)) return false;
 
-let csfNameDebounce = null;
+            seenActorIds.add(a.id);
 
-function csfValidateName(input) {
+            return true;
 
-  const val   = input.value.trim();
+          });
 
-  const wrap  = document.getElementById('csf-name-wrap');
+        all.forEach(s => usedIds.add(s.id));
 
-  const hint  = document.getElementById('csf-name-hint');
+        groups.push({
 
-  const error = document.getElementById('csf-name-error');
+          grouped: true, type: item.type, post: item.post, post_id: item.post_id,
 
-  const btn   = document.getElementById('csf-submit-btn');
+          actors: uniqueActors,
 
-  wrap.classList.remove('error', 'valid');
+          actor_id: item.actor_id,
 
-  error.classList.add('hidden');
+          count: uniqueActors.length, read: all.every(s => s.read),
 
-  btn.disabled = true;
+          latestAt: item.created_at, ids: all.map(s => s.id),
 
-  if (!val) { if (hint) hint.textContent = 'This will be your brand name on MistyNote'; return; }
+        });
 
-  if (val.length < 2) { wrap.classList.add('error'); error.textContent = 'Store name too short'; error.classList.remove('hidden'); return; }
+        return;
 
-  if (hint) hint.textContent = 'Checking availability…';
-
-  clearTimeout(csfNameDebounce);
-
-  csfNameDebounce = setTimeout(async () => {
-
-    const { data } = await supabase.from('storefronts').select('id').ilike('store_name', val).maybeSingle();
-
-    if (data) {
-
-      wrap.classList.add('error'); error.textContent = 'Store name already taken — try another'; error.classList.remove('hidden');
-
-      if (hint) hint.textContent = '';
-
-    } else {
-
-      wrap.classList.add('valid'); if (hint) hint.textContent = 'Great name! ✓'; btn.disabled = false;
+      }
 
     }
 
-  }, 500);
+    usedIds.add(item.id);
+
+    groups.push({ grouped: false, ...item, actors: [item.actor], latestAt: item.created_at, ids: [item.id] });
+
+  });
+
+  return groups;
 
 }
 
-async function submitCreateStorefront() {
+function renderNotifItem(g, animDelay = 0) {
 
-  const storeName   = document.getElementById('csf-store-name')?.value.trim();
+  const cfg = NOTIF_TYPES[g.type] || NOTIF_TYPES.system;
 
-  const description = document.getElementById('csf-description')?.value.trim();
+  const isUnread = !g.read;
 
-  const category    = document.getElementById('csf-category')?.value;
+  let avatarHtml;
 
-  const phone       = document.getElementById('csf-phone')?.value.trim();
+  if (g.grouped && g.actors.length > 1) {
 
-  const state       = document.getElementById('csf-state')?.value;
+    const shown = g.actors.slice(0, 3);
 
-  const btn         = document.getElementById('csf-submit-btn');
+    const extra = g.count - shown.length;
 
-  if (!storeName) { showToast('Enter your store name'); return; }
+    let imgs = shown.map((a, i) => {
 
-  if (!category)  { showToast('Select a business category'); return; }
+      const src = a?.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${a?.id || i}`;
 
-  if (!phone)     { showToast('Enter your business phone'); return; }
+      return `<img src="${escHtml(src)}" onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${i}'" alt="">`;
 
-  if (!state)     { showToast('Select your state'); return; }
+    }).join('');
 
-  if (walletState.points < 1) { showToast('You need at least MP 1 to open a store'); return; }
+    if (extra > 0) imgs += `<span class="stack-more">+${extra > 99 ? '99' : extra}</span>`;
 
-  btn.disabled = true; btn.textContent = 'Opening your store…';
+    avatarHtml = `
 
-  try {
+      <div class="notif-avatar-wrap" style="width:52px;height:48px;">
 
-    let logoUrl = '';
+        <div class="notif-avatar-stack">${imgs}</div>
 
-    if (csfLogoFile) {
+        <div class="notif-type-badge ${cfg.badgeClass}">${cfg.emoji}</div>
 
-      showToast('Uploading logo…');
+      </div>`;
 
-      const path = `storefronts/${currentUser.id}/logo.jpg`;
+  } else {
 
-      const compressed = await compressImage(csfLogoFile, 400);
+    const actor = g.actors[0] || {};
 
-      await supabase.storage.from('avatars').upload(path, compressed, { upsert: true, contentType: 'image/jpeg' });
+    const src = actor.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${actor.id || 'x'}`;
 
-      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
+    avatarHtml = `
 
-      logoUrl = urlData.publicUrl + '?t=' + Date.now();
+      <div class="notif-avatar-wrap">
 
-    }
+        <img class="notif-avatar" src="${escHtml(src)}"
 
-    let bannerUrl = '';
+          onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=fallback'" alt="">
 
-    if (csfBannerFile) {
+        <div class="notif-type-badge ${cfg.badgeClass}">${cfg.emoji}</div>
 
-      showToast('Uploading banner…');
-
-      const path = `storefronts/${currentUser.id}/banner.jpg`;
-
-      const compressed = await compressImage(csfBannerFile, 1200);
-
-      await supabase.storage.from('avatars').upload(path, compressed, { upsert: true, contentType: 'image/jpeg' });
-
-      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-
-      bannerUrl = urlData.publicUrl + '?t=' + Date.now();
-
-    }
-
-    const slug = storeName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-
-    const pinOk = await walletPinCheck();
-
-    if (!pinOk) { btn.disabled = false; btn.textContent = 'Open My Store — MP 1/month'; return; }
-
-    const expiry = new Date(); expiry.setMonth(expiry.getMonth() + 1);
-
-    const { data: sf, error } = await supabase.from('storefronts').insert({
-
-      user_id: currentUser.id, store_name: storeName, slug, description, category, phone, state,
-
-      logo_url: logoUrl, banner_url: bannerUrl, subscription_expires_at: expiry.toISOString(), is_active: true,
-
-    }).select().single();
-
-    if (error) throw error;
-
-    currentStorefront = sf;
-
-    renderStorefrontBanner();
-
-    showToast('Your store is open! 🎉');
-
-    slideBack();
-
-    setTimeout(() => openMyStorefront(), 400);
-
-  } catch(e) {
-
-    showToast('Failed to create store: ' + (e.message || 'Try again'));
-
-    btn.disabled = false; btn.textContent = 'Open My Store — MP 1/month';
+      </div>`;
 
   }
 
-}
+  // Build text
 
-// ══════════════════════════════════════════
+  const actors = g.actors.filter(Boolean);
 
-// MY STOREFRONT (Merchant view)
+  let who = '';
 
-// ══════════════════════════════════════════
+  if (g.grouped && actors.length > 1) {
 
-function openMyStorefront() {
+    const names = actors.slice(0, 2).map(a => `<strong>${escHtml(a.username)}</strong>`).join(', ');
 
-  if (!currentStorefront) { openCreateStorefront(); return; }
+    const rest = g.count - 2;
 
-  slideTo('my-storefront', renderMyStorefront);
+    who = rest > 0 ? `${names} <span class="and-others">and ${fmtNum(rest)} others</span>` : names;
 
-}
+  } else if (actors[0]) {
 
-async function renderMyStorefront() {
+    who = `<strong>${escHtml(actors[0].username)}</strong>`;
 
-  const el = document.getElementById('my-storefront-content');
+  } else {
 
-  if (!el) return;
-
-  el.innerHTML = `<div class="loading-pulse" style="height:300px"></div>`;
-
-  const [sfRes, productsRes, ordersRes] = await Promise.all([
-
-    supabase.from('storefronts').select('*').eq('id', currentStorefront.id).maybeSingle(),
-
-    supabase.from('products').select('id', { count: 'exact', head: true }).eq('storefront_id', currentStorefront.id).neq('status', 'archived'),
-
-    supabase.from('orders').select('id,price_ngn', { count: 'exact' }).eq('seller_id', currentUser.id).eq('status', 'paid'),
-
-  ]);
-
-  const sf            = sfRes.data || currentStorefront;
-
-  const productCount  = productsRes.count || 0;
-
-  const paidOrders    = ordersRes.data || [];
-
-  const pendingOrders = paidOrders.length;
-
-  const totalRevenue  = paidOrders.reduce((s, o) => s + (Number(o.price_ngn) || 0), 0);
-
-  const totalSales    = pendingOrders;
-
-  const badge = document.getElementById('sidepane-orders-badge');
-
-  if (badge) { badge.textContent = pendingOrders; badge.style.display = pendingOrders > 0 ? 'flex' : 'none'; }
-
-  el.innerHTML = `
-
-    <div class="msf-banner-wrap">
-
-      ${sf.banner_url ? `<img src="${sf.banner_url}" class="msf-banner-img" alt="">` : `<div class="msf-banner-placeholder"></div>`}
-
-      <div class="msf-banner-overlay">
-
-        <button class="msf-edit-banner-btn" onclick="document.getElementById('msf-banner-input').click()">
-
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-
-          Edit Banner
-
-        </button>
-
-      </div>
-
-      <input type="file" id="msf-banner-input" accept="image/*" style="display:none" onchange="updateStorefrontBanner(this)">
-
-    </div>
-
-    <div class="msf-info-wrap">
-
-      <div class="msf-logo-wrap">
-
-        <img class="msf-logo" src="${sf.logo_url || ''}" onerror="this.style.display='none'" alt="">
-
-        <button class="msf-edit-logo-btn" onclick="document.getElementById('msf-logo-input').click()">
-
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
-
-        </button>
-
-        <input type="file" id="msf-logo-input" accept="image/*" style="display:none" onchange="updateStorefrontLogo(this)">
-
-      </div>
-
-      <div class="msf-store-details">
-
-        <div class="msf-store-name">${escHtml(sf.store_name)}</div>
-
-        <div class="msf-store-cat">${escHtml(sf.category)}</div>
-
-        ${sf.rating > 0 ? `<div class="msf-store-rating">★ ${sf.rating} · ${sf.review_count} reviews</div>` : ''}
-
-      </div>
-
-      <button class="msf-edit-btn" onclick="openEditStorefront()">Edit Store</button>
-
-    </div>
-
-    <div class="msf-stats-row">
-
-      <div class="msf-stat" onclick="openMyProducts()">
-
-        <div class="msf-stat-num">${productCount}</div>
-
-        <div class="msf-stat-label">Products</div>
-
-      </div>
-
-      <div class="msf-stat" onclick="openShopOrders()">
-
-        <div class="msf-stat-num">${totalSales}</div>
-
-        <div class="msf-stat-label">Sales</div>
-
-      </div>
-
-      <div class="msf-stat" onclick="openMerchantDashboard()">
-
-        <div class="msf-stat-num">${mktFmtNgn(totalRevenue)}</div>
-
-        <div class="msf-stat-label">Revenue</div>
-
-      </div>
-
-    </div>
-
-    ${pendingOrders > 0 ? `
-
-    <div class="msf-alert" onclick="openShopOrders()">
-
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-
-      ${pendingOrders} new order${pendingOrders > 1 ? 's' : ''} waiting · Tap to manage
-
-    </div>` : ''}
-
-    <div class="msf-actions">
-
-      <button class="msf-action-btn" onclick="slideTo('add-product', buildAddProductForm)">
-
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-
-        Add Product
-
-      </button>
-
-      <button class="msf-action-btn" onclick="openMyProducts()">
-
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-
-        My Products
-
-      </button>
-
-      <button class="msf-action-btn" onclick="openShopOrders()">
-
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-
-        Shop Orders
-
-      </button>
-
-      <button class="msf-action-btn" onclick="openMerchantDashboard()">
-
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-
-        Analytics
-
-      </button>
-
-    </div>
-
-    <div class="msf-subscription">
-
-      <div class="msf-subscription-info">
-
-        <span class="msf-subscription-label">Basic Plan</span>
-
-        <span class="msf-subscription-expiry">Renews ${new Date(sf.subscription_expires_at).toLocaleDateString('en-NG', {day:'numeric',month:'short',year:'numeric'})}</span>
-
-      </div>
-
-      <button class="msf-renew-btn" onclick="renewStorefrontSubscription()">Renew</button>
-
-    </div>
-
-    <div style="padding:0 16px 24px">
-
-      <button class="msf-view-public-btn" onclick="openStorefront('${sf.id}')">View Public Storefront</button>
-
-    </div>`;
-
-}
-
-// ══════════════════════════════════════════
-
-// PUBLIC STOREFRONT PAGE
-
-// ══════════════════════════════════════════
-
-async function openStorefront(storefrontId) {
-
-  currentStorefrontId = storefrontId;
-
-  slideTo('storefront', () => renderStorefront(storefrontId));
-
-}
-
-async function renderStorefront(storefrontId) {
-
-  const el = document.getElementById('storefront-content');
-
-  if (!el) return;
-
-  el.innerHTML = `<div class="loading-pulse" style="height:400px"></div>`;
-
-  const [sfRes, productsRes, reviewsRes] = await Promise.all([
-
-    supabase.from('storefronts').select('*').eq('id', storefrontId).single(),
-
-    supabase.from('products').select('*').eq('storefront_id', storefrontId).eq('status','active').order('created_at', { ascending: false }).limit(30),
-
-    supabase.from('product_reviews').select('*, reviewer:users(username,avatar)').eq('storefront_id', storefrontId).order('created_at', { ascending: false }).limit(5),
-
-  ]);
-
-  const sf = sfRes.data;
-
-  // Fetch store owner profile separately — avoids foreign key join issues
-
-  let sfUser = {};
-
-  if (sf?.user_id) {
-
-    const { data: u } = await supabase.from('users').select('id,username,avatar,followers').eq('id', sf.user_id).maybeSingle();
-
-    sfUser = u || {};
+    who = '<strong>Someone</strong>';
 
   }
 
-  const products = productsRes.data || [];
+  const commentPreview = (g.type === 'mp_gift' && g.comment_text)
 
-  const reviews  = reviewsRes.data || [];
+    ? `<div class="notif-comment-preview notif-mp-preview">🎁 ${escHtml(g.comment_text)}</div>`
 
-  if (!sf) { el.innerHTML = `<div class="empty-state"><p>Store not found</p></div>`; return; }
+    : (g.type === 'comment' && g.comment_text)
 
-  const isOwner   = currentUser && sf.user_id === currentUser.id;
+    ? `<div class="notif-comment-preview">"${escHtml(g.comment_text.slice(0,120))}${g.comment_text.length > 120 ? '…' : ''}"</div>`
 
-  const followers = sfUser.followers || 0;
+    : (['new_order','order_shipped','delivery_confirmed','order_placed','order_delivered'].includes(g.type) && g.comment_text)
 
-  el.innerHTML = `
+    ? `<div class="notif-comment-preview">${escHtml(g.comment_text)}</div>`
 
-    <div class="sf-banner-wrap">
+    : '';
 
-      ${sf.banner_url ? `<img src="${sf.banner_url}" class="sf-banner-img" alt="">` : `<div class="sf-banner-placeholder" style="background:${gradientFor(sf.id)}"></div>`}
+  const followBtn = (g.type === 'follow' && !g.grouped)
 
-      <div class="sf-banner-gradient"></div>
+    ? `<button class="notif-follow-btn" id="nfb-${g.actor_id}" onclick="notifFollowToggle('${g.actor_id}',this);event.stopPropagation()">Follow</button>`
 
-      <button class="sf-back-btn" onclick="slideBack()">
+    : '';
 
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+  if (g.type === 'follow' && !g.grouped) setTimeout(() => loadNotifFollowState(g.actor_id), 100);
 
-      </button>
+  const thumbHtml = (g.post?.image && g.type !== 'follow')
 
-    </div>
+    ? `<div class="notif-thumb-wrap"><img class="notif-thumb" src="${escHtml(g.post.image)}" alt=""></div>`
 
-    <div class="sf-header">
+    : '';
 
-      <img class="sf-logo merchant-avatar" src="${sf.logo_url || ''}" onerror="this.style.background='var(--bg2)';this.removeAttribute('src')" alt="">
-
-      <div class="sf-header-info">
-
-        <div class="sf-store-name">${escHtml(sf.store_name)}</div>
-
-        <div class="sf-store-meta">
-
-          ${sf.rating > 0 ? `<span>★ ${sf.rating}</span> · ` : ''}
-
-          <span>${fmtNum(followers)} followers</span> · <span>${sf.category}</span>
-
-        </div>
-
-        ${sf.description ? `<div class="sf-store-desc">${escHtml(sf.description)}</div>` : ''}
-
-      </div>
-
-      ${!isOwner ? `<button class="sf-follow-btn" id="sf-follow-btn" onclick="toggleStorefrontFollow('${sf.user_id}',this)">Follow</button>`
-
-        : `<button class="sf-follow-btn" onclick="openMyStorefront()">Manage</button>`}
-
-    </div>
-
-    <div class="sf-section">
-
-      <div class="sf-section-title">Products <span style="color:var(--text3);font-weight:400">(${products.length})</span></div>
-
-      ${products.length === 0 ? `<div class="sf-empty">No products yet</div>`
-
-        : `<div class="sf-products-grid">${products.map(p => renderProductCard(p, sf)).join('')}</div>`}
-
-    </div>
-
-    ${reviews.length > 0 ? `
-
-    <div class="sf-section">
-
-      <div class="sf-section-title">Reviews</div>
-
-      <div class="sf-reviews">
-
-        ${reviews.map(r => `
-
-          <div class="sf-review">
-
-            <div class="sf-review-header">
-
-              <img class="sf-review-avatar" src="${r.reviewer?.avatar || ''}" alt="">
-
-              <div><div class="sf-review-name">@${escHtml(r.reviewer?.username||'')}</div>
-
-              <div class="sf-review-stars">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</div></div>
-
-              <div class="sf-review-time">${timeSince(r.created_at)}</div>
-
-            </div>
-
-            ${r.review ? `<div class="sf-review-text">${escHtml(r.review)}</div>` : ''}
-
-          </div>`).join('')}
-
-      </div>
-
-    </div>` : ''}`;
-
-  if (!isOwner && currentUser) {
-
-    const { data: followData } = await supabase.from('follows').select('id')
-
-      .eq('follower_id', currentUser.id).eq('following_id', sf.user_id).maybeSingle();
-
-    const followBtn = document.getElementById('sf-follow-btn');
-
-    if (followBtn && followData) { followBtn.textContent = 'Following'; followBtn.classList.add('following'); }
-
-  }
-
-}
-
-function renderProductCard(p, sf) {
-
-  const img     = p.images?.[0] || '';
-
-  const price   = mktFmtNgn(p.price_ngn);
-
-  const mp      = fmtPts(mktNgnToMp(p.price_ngn));
-
-  const orig    = p.compare_price_ngn > p.price_ngn ? `<span class="prd-card-orig">${mktFmtNgn(p.compare_price_ngn)}</span>` : '';
-
-  const badge   = p.compare_price_ngn > p.price_ngn ? `<div class="prd-card-discount-badge">${Math.round((1-p.price_ngn/p.compare_price_ngn)*100)}% OFF</div>` : '';
+  const clickActorId = g.actor_id || (g.actors[0]?.id) || '';
 
   return `
 
-    <div class="prd-card" onclick="openProductPage('${p.id}')">
+    <div class="notif-item${isUnread ? ' unread' : ''}${g.grouped ? ' grouped' : ''}"
 
-      <div class="prd-card-img-wrap">
+         data-ids="${g.ids.join(',')}"
 
-        ${img ? `<img src="${img}" class="prd-card-img" alt="" loading="lazy">` : `<div class="prd-card-img-placeholder" style="background:${gradientFor(p.id)}"></div>`}
+         data-post-id="${g.post_id || ''}"
 
-        ${badge}
+         data-actor-id="${clickActorId}"
 
-        ${p.stock === 0 ? `<div class="prd-card-sold-out">Sold Out</div>` : ''}
+         data-type="${g.type}"
+
+         style="animation-delay:${animDelay}ms">
+
+      ${avatarHtml}
+
+      <div class="notif-body">
+
+        <p class="notif-text">${who} ${cfg.label}</p>
+
+        ${commentPreview}
+
+        ${followBtn}
+
+        <div class="notif-meta">
+
+          <span class="notif-time">${timeSince(g.latestAt)}</span>
+
+          ${isUnread ? '<span class="notif-unread-dot"></span>' : ''}
+
+        </div>
 
       </div>
 
-      <div class="prd-card-body">
-
-        <div class="prd-card-title">${escHtml(p.title)}</div>
-
-        <div class="prd-card-price-row"><span class="prd-card-price">${price}</span>${orig}</div>
-
-        <div class="prd-card-mp">${mp}</div>
-
-        ${p.rating > 0 ? `<div class="prd-card-rating">★ ${p.rating} (${p.review_count})</div>` : ''}
-
-      </div>
+      ${thumbHtml}
 
     </div>`;
 
 }
 
-async function toggleStorefrontFollow(userId, btn) {
+function renderNotifEmpty(title, sub) {
+
+  return `<div class="notif-empty">
+
+    <div class="notif-empty-icon">🔔</div>
+
+    <div class="notif-empty-title">${escHtml(title)}</div>
+
+    ${sub ? `<p class="notif-empty-sub">${escHtml(sub)}</p>` : ''}
+
+  </div>`;
+
+}
+
+function renderNotifSkeletons(container, count) {
+
+  container.innerHTML = Array.from({ length: count }, () => `
+
+    <div class="notif-skeleton">
+
+      <div class="notif-skeleton-avatar loading-pulse"></div>
+
+      <div class="notif-skeleton-body">
+
+        <div class="notif-skeleton-line w80 loading-pulse"></div>
+
+        <div class="notif-skeleton-line w55 loading-pulse"></div>
+
+      </div>
+
+    </div>`).join('');
+
+}
+
+function updateNotifTabCounts() {
+
+  NOTIF_FILTERS.forEach(f => {
+
+    const tab = document.getElementById(`ntab-${f.id}`);
+
+    const countEl = tab?.querySelector('.tab-count');
+
+    if (!countEl) return;
+
+    let items = notifRawData;
+
+    if (f.types) items = items.filter(n => f.types.includes(n.type));
+
+    const unread = items.filter(n => !n.read).length;
+
+    countEl.textContent = unread > 0 ? (unread > 99 ? '99+' : unread) : '';
+
+    countEl.style.display = unread > 0 ? '' : 'none';
+
+  });
+
+}
+
+function switchNotifFilter(filterId) {
+
+  notifCurrentFilter = filterId;
+
+  document.querySelectorAll('.notif-filter-tab').forEach(t => {
+
+    t.classList.toggle('active', t.dataset.filter === filterId);
+
+  });
+
+  renderNotifList(filterId);
+
+}
+
+async function notifItemClick(postId, actorId, idsStr, type) {
+
+  // ── Mark read (fire-and-forget, must NOT crash navigation) ──
+
+  const ids = idsStr.split(',').filter(Boolean);
+
+  if (ids.length) {
+
+    (async () => {
+
+      try { await supabase.from('notifications').update({ read: true }).in('id', ids); } catch(e) {}
+
+    })();
+
+    ids.forEach(id => {
+
+      const el = document.querySelector(`.notif-item[data-ids="${id}"], .notif-item[data-ids^="${id},"], .notif-item[data-ids*=",${id},"], .notif-item[data-ids$=",${id}"]`);
+
+      if (el) { el.classList.remove('unread'); el.querySelector('.notif-unread-dot')?.remove(); }
+
+    });
+
+    unreadCount = Math.max(0, unreadCount - ids.length);
+
+    updateNotifBadge();
+
+    updateNotifTabCounts();
+
+  }
+
+  // CRITICAL: tell slideTo we're coming from notifications
+
+  // so the back button returns here correctly
+
+  lastMainPage = 'notifications';
+
+  if (type === 'mp_gift') {
+
+    openWallet();
+
+  } else if (postId && postId !== 'null' && postId !== 'undefined') {
+
+    await openDetail(postId);
+
+  } else if (actorId && actorId !== 'null' && actorId !== 'undefined') {
+
+    await showUserProfile(actorId, null);
+
+  }
+
+}
+
+async function loadNotifFollowState(actorId) {
+
+  if (!currentUser) return;
+
+  const btn = document.getElementById(`nfb-${actorId}`);
+
+  if (!btn) return;
+
+  const { data } = await supabase.from('follows')
+
+    .select('id').eq('follower_id', currentUser.id).eq('following_id', actorId).maybeSingle();
+
+  if (data) { btn.classList.add('following'); btn.textContent = 'Following'; }
+
+}
+
+async function notifFollowToggle(actorId, btn) {
 
   if (!currentUser) { showToast('Sign in to follow'); return; }
 
   const isFollowing = btn.classList.contains('following');
 
-  btn.disabled = true;
+  btn.classList.toggle('following', !isFollowing);
+
+  btn.textContent = !isFollowing ? 'Following' : 'Follow';
 
   if (isFollowing) {
 
-    const { error } = await supabase.from('follows').delete().eq('follower_id', currentUser.id).eq('following_id', userId);
+    const { error } = await supabase.from('follows').delete().eq('follower_id', currentUser.id).eq('following_id', actorId);
 
-    if (!error) { btn.textContent = 'Follow'; btn.classList.remove('following'); }
+    if (error) { btn.classList.add('following'); btn.textContent = 'Following'; }
 
   } else {
 
-    const { error } = await supabase.from('follows').insert({ follower_id: currentUser.id, following_id: userId });
+    const { error } = await supabase.from('follows').insert({ follower_id: currentUser.id, following_id: actorId });
 
-    if (!error) { btn.textContent = 'Following'; btn.classList.add('following'); }
-
-  }
-
-  btn.disabled = false;
-
-}
-
-// ══════════════════════════════════════════
-
-// PRODUCT PAGE
-
-// ══════════════════════════════════════════
-
-function pdpShowBars() {
-  var t = document.getElementById('pdp-top-bar');
-  var c = document.getElementById('pdp-cta-bar');
-  if (t) t.style.display = 'flex';
-  if (c) c.style.display = 'flex';
-}
-
-function pdpHideBars() {
-  var t = document.getElementById('pdp-top-bar');
-  var c = document.getElementById('pdp-cta-bar');
-  if (t) t.style.display = 'none';
-  if (c) c.style.display = 'none';
-}
-
-async function openProductPage(productId) {
-
-  currentProductId = productId;
-
-  pdpQty = 1;
-
-  selectedVariants = {};
-
-  slideTo('product', () => renderProductPage(productId));
-
-}
-
-async function renderProductPage(productId) {
-
-  const el = document.getElementById('product-content');
-
-  if (!el) return;
-
-  el.innerHTML = `<div class="loading-pulse" style="height:400px"></div>`;
-
-  // Fetch all separately to avoid foreign key join issues
-
-  const [pRes, variantsRes, reviewsRes] = await Promise.all([
-
-    supabase.from('products').select('*').eq('id', productId).maybeSingle(),
-
-    supabase.from('product_variants').select('*').eq('product_id', productId),
-
-    supabase.from('product_reviews').select('*, reviewer:users(username,avatar)').eq('product_id', productId).order('created_at', { ascending: false }).limit(10),
-
-  ]);
-
-  const p = pRes.data;
-
-  if (!p) { el.innerHTML = `<div class="empty-state"><p>Product not found</p></div>`; return; }
-
-  // Fetch storefront separately
-
-  let sf = {};
-
-  if (p.storefront_id) {
-
-    const { data: sfData } = await supabase.from('storefronts').select('*').eq('id', p.storefront_id).maybeSingle();
-
-    sf = sfData || {};
+    if (error) { btn.classList.remove('following'); btn.textContent = 'Follow'; }
 
   }
 
-  const images   = p.images || [];
-
-  const variants = variantsRes.data || [];
-
-  const reviews  = reviewsRes.data || [];
-
-  const discount = p.compare_price_ngn > p.price_ngn ? Math.round((1 - p.price_ngn / p.compare_price_ngn) * 100) : 0;
-
-  pdpCurrentImage = 0;
-
-  el.innerHTML = `
-
-    <!-- SPACER below fixed top bar (bar lives outside this scroll container) -->
-    <div class="pdp-header-spacer"></div>
-
-    <!-- PRODUCT IMAGE (square, full-width) -->
-    <div class="pdp-images" id="pdp-images">
-      ${images.length > 0
-        ? images.map((img, i) => `<div class="pdp-img-slide ${i===0?'active':''}" data-index="${i}"><img src="${img}" class="pdp-img" alt="" loading="${i===0?'eager':'lazy'}"></div>`).join('')
-        : `<div class="pdp-img-placeholder" style="background:${gradientFor(p.id)}"></div>`}
-      ${images.length > 1
-        ? `<div class="pdp-img-dots">${images.map((_,i) => `<div class="pdp-img-dot ${i===0?'active':''}" onclick="pdpGoToImage(${i})"></div>`).join('')}</div>`
-        : ''}
-      ${discount > 0 ? `<div class="pdp-discount-badge">${discount}%</div>` : ''}
-    </div>
-
-    <!-- MAIN INFO BLOCK -->
-    <div class="pdp-info-block">
-
-      <!-- Title -->
-      <div class="pdp-title">${escHtml(p.title)}</div>
-
-      <!-- Rating row: star + score + (recent 6mo score) + pipe + review count -->
-      ${p.rating > 0 ? `
-      <div class="pdp-rating-row">
-        <span class="pdp-star">★</span>
-        <span class="pdp-rating-score">${Number(p.rating).toFixed(2)}</span>
-        <span class="pdp-rating-recent">(last 6 months ${Number(p.rating).toFixed(2)})</span>
-        <span class="pdp-rating-pipe">|</span>
-        <span class="pdp-rating-link">${p.review_count || 0} reviews</span>
-      </div>` : ''}
-
-      <!-- Discount % + strikethrough original price -->
-      ${p.compare_price_ngn > p.price_ngn ? `
-      <div class="pdp-discount-row">
-        <span class="pdp-discount-pct">${discount}%</span>
-        <span class="pdp-compare-price">${mktFmtNgn(p.compare_price_ngn)}</span>
-      </div>` : ''}
-
-      <!-- Big red price -->
-      <div class="pdp-price-big">${mktFmtNgn(p.price_ngn)}</div>
-
-      <!-- Free delivery row -->
-      <div class="pdp-free-delivery">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-        Free delivery
-      </div>
-
-    </div><!-- /pdp-info-block -->
-
-    <!-- INFO ROWS: Points · Benefits · Shipping -->
-    <div class="pdp-info-rows">
-
-      <!-- Points row -->
-      <div class="pdp-info-row">
-        <span class="pdp-row-label">Earn</span>
-        <div class="pdp-row-content">
-          <div class="pdp-points-amount" onclick="this.closest('.pdp-info-row').querySelector('.pdp-points-card').style.display=this.closest('.pdp-info-row').querySelector('.pdp-points-card').style.display==='none'?'block':'none'">
-            Up to ${fmtPts(mktNgnToMp(p.price_ngn))} MistyPoints
-            <span class="pdp-points-chevron">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
-            </span>
-          </div>
-          <!-- Expandable points card -->
-          <div class="pdp-points-card" style="display:none">
-            <div class="pdp-points-card-top">
-              <span class="pdp-points-badge">M+</span>
-              <span class="pdp-points-card-desc">Up to 5% extra MP back</span>
-              <span class="pdp-points-card-val">${fmtPts(Math.round(mktNgnToMp(p.price_ngn)*0.05))}</span>
-            </div>
-            <button class="pdp-points-card-btn">
-              Pay with MP and earn more
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Benefits row -->
-      <div class="pdp-info-row">
-        <span class="pdp-row-label">Perks</span>
-        <div class="pdp-row-content">
-          <div class="pdp-benefit-line">
-            <span>Pay with MP · earn up to ${fmtPts(Math.round(mktNgnToMp(p.price_ngn)*0.02))} back (2%)</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-          </div>
-          <div class="pdp-benefit-line">
-            <span>Instalment available · Escrow protected</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-          </div>
-        </div>
-      </div>
-
-      <!-- Shipping row -->
-      <div class="pdp-info-row">
-        <span class="pdp-row-label">Delivery</span>
-        <div class="pdp-row-content">
-          <div class="pdp-ship-detail">
-            <strong>Ships today</strong><span class="pdp-ship-dot">·</span>estimated delivery date available<br>
-            Order now for fastest dispatch<br>
-            Free delivery
-          </div>
-          <div class="pdp-ship-more">
-            See more
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-          </div>
-        </div>
-      </div>
-
-    </div><!-- /pdp-info-rows -->
-
-    <!-- REVIEW SUMMARY -->
-    ${reviews.length > 0 || (p.review_count > 0) ? `
-    <div class="pdp-review-summary">
-      <div class="pdp-review-summary-title">
-        <span>94%</span> of reviews are 4 stars or above
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:middle;margin-left:4px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-      </div>
-      <div class="pdp-review-cards">
-        ${reviews.slice(0,5).map(r => `
-          <div class="pdp-review-card">
-            <img class="pdp-review-card-img" src="${r.reviewer?.avatar||''}" onerror="this.style.background='var(--bg3)';this.src=''" alt="">
-            <div class="pdp-review-card-body">
-              <div class="pdp-review-card-top">
-                <span class="pdp-review-card-star">★</span>
-                <span class="pdp-review-card-score">${r.rating}</span>
-                <span class="pdp-review-card-tag">True to size</span>
-              </div>
-              <div class="pdp-review-card-text">${escHtml(r.review||'')}</div>
-            </div>
-          </div>`).join('')}
-        ${reviews.length === 0 ? `
-          <div class="pdp-review-card">
-            <div class="pdp-review-card-img" style="background:var(--bg3)"></div>
-            <div class="pdp-review-card-body">
-              <div class="pdp-review-card-top"><span class="pdp-review-card-star">★</span><span class="pdp-review-card-score">5</span><span class="pdp-review-card-tag">True to size</span></div>
-              <div class="pdp-review-card-text">Great quality, looks exactly as shown. Highly recommend!</div>
-            </div>
-          </div>` : ''}
-      </div>
-    </div>` : ''}
-
-    <!-- RELATED PRODUCTS -->
-    <div class="pdp-related-section">
-      <div class="pdp-related-header">
-        <div class="pdp-related-title">More colours &amp; styles</div>
-      </div>
-      <div class="pdp-related-scroll" id="pdp-related-scroll">
-        <div class="pdp-related-card">
-          <div class="pdp-related-img-wrap">
-            <div class="pdp-related-img" style="background:var(--bg2)"></div>
-            <button class="pdp-related-wish">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
-            </button>
-          </div>
-          <button class="pdp-related-add-btn">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/></svg>
-            Add
-          </button>
-          <div class="pdp-related-name">Related item</div>
-          <div class="pdp-related-price-row">
-            <span class="pdp-related-price">${mktFmtNgn(p.price_ngn)}</span>
-          </div>
-          <div class="pdp-related-ship">Free delivery</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB BAR -->
-    <div class="pdp-tab-bar" id="pdp-tab-bar">
-      <button class="pdp-tab-btn active" onclick="pdpSwitchTab('details',this)">Details</button>
-      <button class="pdp-tab-btn" onclick="pdpSwitchTab('reviews',this)">Reviews ${p.review_count||0}</button>
-      <button class="pdp-tab-btn" onclick="pdpSwitchTab('qa',this)">Q&amp;A</button>
-      <button class="pdp-tab-btn" onclick="pdpSwitchTab('seller',this)">Seller Info</button>
-      <button class="pdp-tab-btn" onclick="pdpSwitchTab('related',this)">Recommended</button>
-    </div>
-
-    <!-- TAB: DETAILS (default active) -->
-    <div class="pdp-tab-panel active" id="pdp-panel-details">
-      <div class="pdp-detail-panel">
-
-        ${variants.length > 0 ? `
-        <div class="pdp-variants" id="pdp-variants">
-          ${variants.map(v => `
-            <div class="pdp-variant-group">
-              <div class="pdp-variant-label">${escHtml(v.name)}</div>
-              <div class="pdp-variant-options">
-                ${(v.options||[]).map((opt,i) => `
-                  <button class="pdp-variant-opt ${i===0?'selected':''} ${opt.stock===0?'out-of-stock':''}"
-                    data-variant-id="${v.id}" data-option-index="${i}"
-                    onclick="selectVariantOption(this,'${v.id}',${i})" ${opt.stock===0?'disabled':''}>
-                    ${escHtml(opt.name)}
-                    ${opt.price_ngn && opt.price_ngn !== p.price_ngn ? `<span style="font-size:10px;opacity:0.7;display:block">${mktFmtNgn(opt.price_ngn)}</span>` : ''}
-                  </button>`).join('')}
-              </div>
-            </div>`).join('')}
-        </div>` : ''}
-
-        <div class="pdp-qty-row">
-          <span class="pdp-qty-label">Quantity</span>
-          <div class="pdp-qty-ctrl">
-            <button class="pdp-qty-btn" onclick="pdpChangeQty(-1)">−</button>
-            <span class="pdp-qty-val" id="pdp-qty">1</span>
-            <button class="pdp-qty-btn" onclick="pdpChangeQty(1)">+</button>
-          </div>
-          <span class="pdp-stock-hint">${p.stock > 0 ? p.stock + ' in stock' : 'Out of stock'}</span>
-        </div>
-
-        ${p.description ? `
-        <div class="pdp-detail-section-title">Description</div>
-        <div class="pdp-description">${escHtml(p.description)}</div>` : ''}
-
-        <div class="pdp-detail-section-title">Product Info</div>
-        <div class="pdp-details">
-          <div class="pdp-detail-row"><span>Condition</span><span>${p.condition||'—'}</span></div>
-          ${p.sku ? `<div class="pdp-detail-row"><span>SKU</span><span>${escHtml(p.sku)}</span></div>` : ''}
-          ${p.weight_kg ? `<div class="pdp-detail-row"><span>Weight</span><span>${p.weight_kg}kg</span></div>` : ''}
-          <div class="pdp-detail-row"><span>Category</span><span>${escHtml(p.category||'—')}</span></div>
-        </div>
-
-      </div>
-
-      <!-- Safety notice -->
-      <div class="pdp-safety-card">
-        <svg class="pdp-safety-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10" fill="#ff3b5c" opacity="0.15"/><circle cx="12" cy="12" r="10" fill="none" stroke="#ff3b5c" stroke-width="2"/><line x1="12" y1="8" x2="12" y2="12" stroke="#ff3b5c" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16" r="1" fill="#ff3b5c"/></svg>
-        <div class="pdp-safety-text">
-          If a seller directs you to pay outside MistyNote or asks for personal details via external links,
-          <a>do not pay</a> and report them immediately via <a>Help &amp; Support</a>.
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB: REVIEWS -->
-    <div class="pdp-tab-panel" id="pdp-panel-reviews">
-      <div class="pdp-reviews-panel">
-        ${reviews.length > 0
-          ? `<div class="pdp-reviews-top"><span>94%</span> of reviews are 4 stars or above</div>
-             ${reviews.map(r => `
-               <div class="sf-review">
-                 <div class="sf-review-header">
-                   <img class="sf-review-avatar" src="${r.reviewer?.avatar||''}" onerror="this.src=''" alt="">
-                   <div>
-                     <div class="sf-review-name">@${escHtml(r.reviewer?.username||'User')}</div>
-                     <div class="sf-review-stars">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</div>
-                   </div>
-                   <div class="sf-review-time">${timeSince(r.created_at)}</div>
-                 </div>
-                 ${r.review ? `<div class="sf-review-text">${escHtml(r.review)}</div>` : ''}
-               </div>`).join('')}`
-          : `<div style="padding:40px 0;text-align:center;color:var(--text3);font-size:14px;">No reviews yet — be the first!</div>`}
-      </div>
-    </div>
-
-    <!-- TAB: Q&A -->
-    <div class="pdp-tab-panel" id="pdp-panel-qa">
-      <div style="padding:40px 16px;text-align:center;color:var(--text3);font-size:14px;">Q&amp;A coming soon</div>
-    </div>
-
-    <!-- TAB: SELLER INFO -->
-    <div class="pdp-tab-panel" id="pdp-panel-seller">
-      ${sf.id ? `
-      <div style="padding:16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border2);cursor:pointer" onclick="openStorefront('${sf.id}')">
-        <img style="width:48px;height:48px;border-radius:10px;object-fit:cover;background:var(--bg2)" src="${sf.logo_url||''}" onerror="this.style.background='var(--bg2)'" alt="">
-        <div style="flex:1">
-          <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:2px">${escHtml(sf.store_name||'')}</div>
-          <div style="font-size:12px;color:var(--text3)">${escHtml(sf.category||'')} · Visit store</div>
-        </div>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
-      </div>` : `<div style="padding:40px 16px;text-align:center;color:var(--text3);font-size:14px;">No seller info available</div>`}
-    </div>
-
-    <!-- TAB: RECOMMENDED -->
-    <div class="pdp-tab-panel" id="pdp-panel-related">
-      <div style="padding:40px 16px;text-align:center;color:var(--text3);font-size:14px;">Recommended products coming soon</div>
-    </div>
-
-    <!-- Bottom spacer so last content clears fixed CTA -->
-    <div style="height:calc(72px + var(--safe-bottom))"></div>`;
-
-  // ── Show & populate the fixed bars that live outside #page-product ──
-  var topBar   = document.getElementById('pdp-top-bar');
-  var ctaBar   = document.getElementById('pdp-cta-bar');
-  var storeName = document.getElementById('pdp-top-store-name');
-  var buyBtn   = document.getElementById('pdp-buy-now-btn');
-  var giftBtn  = document.getElementById('pdp-gift-btn');
-  var soldBtn  = document.getElementById('pdp-sold-out-btn');
-
-  // Set store name in top bar
-  if (storeName) storeName.textContent = sf.store_name || 'MistyNote';
-
-  // Wire buy button to this product
-  if (buyBtn)  buyBtn.onclick  = function() { buyNow(p.id); };
-  if (giftBtn) giftBtn.onclick = function() { /* gift flow */ };
-
-  // Show/hide sold out vs active buttons
-  if (p.stock > 0) {
-    if (giftBtn) giftBtn.style.display = '';
-    if (buyBtn)  buyBtn.style.display  = '';
-    if (soldBtn) soldBtn.style.display = 'none';
-  } else {
-    if (giftBtn) giftBtn.style.display = 'none';
-    if (buyBtn)  buyBtn.style.display  = 'none';
-    if (soldBtn) soldBtn.style.display = '';
-  }
-
-  // Show both bars
-  if (topBar) topBar.style.display = 'flex';
-  if (ctaBar) ctaBar.style.display = 'flex';
-
-  initPdpSwipe();
-
-  // Record view
-
-  if (currentUser) { try { await supabase.rpc('record_product_view', { p_product_id: productId }); } catch(e) {} }
-
 }
 
-let pdpCurrentImage = 0;
-
-function pdpGoToImage(index) {
-
-  document.querySelectorAll('.pdp-img-slide').forEach((s,i) => s.classList.toggle('active', i===index));
-
-  document.querySelectorAll('.pdp-img-dot').forEach((d,i)   => d.classList.toggle('active', i===index));
-
-  pdpCurrentImage = index;
-
-}
-
-function pdpSwitchTab(tab, btn) {
-
-  // Switch panels
-  document.querySelectorAll('.pdp-tab-panel').forEach(function(p) { p.classList.remove('active'); });
-  var panel = document.getElementById('pdp-panel-' + tab);
-  if (panel) panel.classList.add('active');
-
-  // Switch active tab button
-  document.querySelectorAll('.pdp-tab-btn').forEach(function(b) { b.classList.remove('active'); });
-  if (btn) btn.classList.add('active');
-
-  // Scroll tab bar so active tab is visible
-  // Scroll the tab bar so active tab is visible — scroll the bar itself, not the page
-  if (btn) {
-    var bar = document.getElementById('pdp-tab-bar');
-    if (bar) {
-      var btnLeft   = btn.offsetLeft;
-      var btnWidth  = btn.offsetWidth;
-      var barWidth  = bar.offsetWidth;
-      var target    = btnLeft - (barWidth / 2) + (btnWidth / 2);
-      bar.scrollTo({ left: target, behavior: 'smooth' });
-    }
-  }
-
-}
-
-function initPdpSwipe() {
-
-  const container = document.getElementById('pdp-images');
-
-  if (!container) return;
-
-  let startX = 0;
-
-  container.addEventListener('touchstart', e => { startX = e.touches[0].clientX; }, { passive: true });
-
-  container.addEventListener('touchend', e => {
-
-    const diff  = startX - e.changedTouches[0].clientX;
-
-    const total = document.querySelectorAll('.pdp-img-slide').length;
-
-    if (Math.abs(diff) > 50) {
-
-      if (diff > 0 && pdpCurrentImage < total - 1) pdpGoToImage(pdpCurrentImage + 1);
-
-      if (diff < 0 && pdpCurrentImage > 0)         pdpGoToImage(pdpCurrentImage - 1);
-
-    }
-
-  }, { passive: true });
-
-}
-
-let pdpQty = 1;
-
-function pdpChangeQty(delta) {
-
-  pdpQty = Math.max(1, pdpQty + delta);
-
-  const el = document.getElementById('pdp-qty');
-
-  if (el) el.textContent = pdpQty;
-
-}
-
-let selectedVariants = {};
-
-function selectVariantOption(btn, variantId, optionIndex) {
-
-  document.querySelectorAll(`.pdp-variant-opt[data-variant-id="${variantId}"]`).forEach(b => b.classList.remove('selected'));
-
-  btn.classList.add('selected');
-
-  selectedVariants[variantId] = optionIndex;
-
-}
-
-// ══════════════════════════════════════════
-
-// CART
-
-// ══════════════════════════════════════════
-
-async function syncCartCount() {
+async function markAllNotifsRead() {
 
   if (!currentUser) return;
 
-  try {
+  await supabase.from('notifications').update({ read: true }).eq('user_id', currentUser.id).eq('read', false);
 
-    const { count } = await supabase.from('cart_items').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id);
+  unreadCount = 0;
 
-    cartCount = count || 0;
+  updateNotifBadge();
 
-    updateCartBadges();
+  notifRawData.forEach(n => n.read = true);
 
-  } catch(e) { /* silent */ }
+  renderNotifList(notifCurrentFilter);
 
-}
-
-function updateCartBadges() {
-
-  ['mkt-cart-badge','sidepane-cart-badge'].forEach(id => {
-
-    const el = document.getElementById(id);
-
-    if (el) { el.textContent = cartCount; el.style.display = cartCount > 0 ? 'flex' : 'none'; }
-
-  });
+  updateNotifTabCounts();
 
 }
 
-async function addToCart(productId) {
+// kept as alias so any old internal calls still work
 
-  if (!currentUser) { showToast('Sign in to add to cart'); return; }
+async function markAllRead() { return markAllNotifsRead(); }
 
-  const btn = document.getElementById('pdp-cart-btn');
+// ── BADGE ──────────────────────────────────
 
-  if (btn) btn.disabled = true;
-
-  try {
-
-    const { error } = await supabase.from('cart_items').upsert({
-
-      user_id: currentUser.id, product_id: productId, quantity: pdpQty,
-
-    }, { onConflict: 'user_id,product_id,variant_id' });
-
-    if (error) throw error;
-
-    cartCount++;
-
-    updateCartBadges();
-
-    if (btn) { btn.textContent = 'Added to Cart ✓'; btn.style.background = '#00c48c'; }
-
-    showToast('Added to cart ✓');
-
-  } catch(e) {
-
-    showToast('Failed to add to cart');
-
-    if (btn) btn.disabled = false;
-
-  }
-
-}
-
-async function loadCartPage() {
-
-  const el = document.getElementById('cart-content');
-
-  if (!el) return;
-
-  el.innerHTML = `<div class="loading-pulse" style="height:300px"></div>`;
-
-  if (!currentUser) { el.innerHTML = `<div class="empty-state"><p>Sign in to view cart</p></div>`; return; }
-
-  const { data: items } = await supabase.from('cart_items')
-
-    .select('*, product:products(*, storefront:storefronts(store_name,logo_url))')
-
-    .eq('user_id', currentUser.id).order('created_at', { ascending: false });
-
-  cartItems = items || [];
-
-  if (!cartItems.length) {
-
-    el.innerHTML = `<div class="empty-state"><div style="font-size:48px;margin-bottom:12px">🛒</div><p>Your cart is empty</p><span>Browse the market to find products</span><button class="btn-primary" style="margin-top:16px" onclick="slideBack();navTo('market')">Browse Market</button></div>`;
-
-    return;
-
-  }
-
-  const byStore = {};
-
-  cartItems.forEach(item => {
-
-    const key = item.product?.storefront?.store_name || 'Unknown Store';
-
-    if (!byStore[key]) byStore[key] = [];
-
-    byStore[key].push(item);
-
-  });
-
-  let subtotal = 0;
-
-  cartItems.forEach(item => { subtotal += (item.product?.price_ngn || 0) * item.quantity; });
-
-  el.innerHTML = `
-
-    <div class="cart-body">
-
-      ${Object.entries(byStore).map(([storeName, storeItems]) => `
-
-        <div class="cart-store-group">
-
-          <div class="cart-store-header">
-
-            <img class="cart-store-logo merchant-avatar" src="${storeItems[0].product?.storefront?.logo_url||''}" onerror="this.style.display='none'" alt="">
-
-            <span class="cart-store-name">${escHtml(storeName)}</span>
-
-          </div>
-
-          ${storeItems.map(item => `
-
-            <div class="cart-item" id="cart-item-${item.id}">
-
-              <div class="cart-item-img-wrap">
-
-                ${item.product?.images?.[0] ? `<img src="${item.product.images[0]}" class="cart-item-img" alt="">` : `<div class="cart-item-img" style="background:${gradientFor(item.product_id)}"></div>`}
-
-              </div>
-
-              <div class="cart-item-info">
-
-                <div class="cart-item-title">${escHtml(item.product?.title||'')}</div>
-
-                <div class="cart-item-price">${mktFmtNgn(item.product?.price_ngn||0)}</div>
-
-                <div class="cart-item-mp">${fmtPts(mktNgnToMp(item.product?.price_ngn||0))}</div>
-
-              </div>
-
-              <div class="cart-item-actions">
-
-                <div class="cart-qty-ctrl">
-
-                  <button class="cart-qty-btn" onclick="updateCartQty('${item.id}','${item.product_id}',-1)">−</button>
-
-                  <span class="cart-qty-val" id="cart-qty-${item.id}">${item.quantity}</span>
-
-                  <button class="cart-qty-btn" onclick="updateCartQty('${item.id}','${item.product_id}',1)">+</button>
-
-                </div>
-
-                <button class="cart-remove-btn" onclick="removeFromCart('${item.id}')">
-
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg>
-
-                </button>
-
-              </div>
-
-            </div>`).join('')}
-
-        </div>`).join('')}
-
-      <div class="cart-summary">
-
-        <div class="cart-summary-row"><span>Subtotal</span><span>${mktFmtNgn(subtotal)}</span></div>
-
-        <div class="cart-summary-row"><span>Shipping</span><span>Calculated at checkout</span></div>
-
-        <div class="cart-summary-total"><span>Total</span><span>${mktFmtNgn(subtotal)}</span></div>
-
-        <div class="cart-summary-mp">Pay with ${fmtPts(mktNgnToMp(subtotal))}</div>
-
-      </div>
-
-      <div style="padding:0 16px 32px">
-
-        <button class="cart-checkout-btn" onclick="openCheckout()">Proceed to Checkout</button>
-
-      </div>
-
-    </div>`;
-
-}
-
-async function updateCartQty(itemId, productId, delta) {
-
-  const qtyEl  = document.getElementById(`cart-qty-${itemId}`);
-
-  const newQty = Math.max(1, parseInt(qtyEl?.textContent || '1') + delta);
-
-  if (qtyEl) qtyEl.textContent = newQty;
-
-  await supabase.from('cart_items').update({ quantity: newQty }).eq('id', itemId);
-
-}
-
-async function removeFromCart(itemId) {
-
-  const el = document.getElementById(`cart-item-${itemId}`);
-
-  if (el) { el.style.opacity = '0.4'; el.style.pointerEvents = 'none'; }
-
-  await supabase.from('cart_items').delete().eq('id', itemId);
-
-  cartCount = Math.max(0, cartCount - 1);
-
-  updateCartBadges();
-
-  if (el) el.remove();
-
-}
-
-async function clearCart() {
+async function loadInitialNotifCount() {
 
   if (!currentUser) return;
 
-  showActionSheet([{ label: 'Clear Cart', danger: true, action: async () => {
+  const { count } = await supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', currentUser.id).eq('read', false);
 
-    await supabase.from('cart_items').delete().eq('user_id', currentUser.id);
+  unreadCount = count || 0;
 
-    cartCount = 0; updateCartBadges(); loadCartPage();
-
-  }}]);
+  updateNotifBadge();
 
 }
 
-async function buyNow(productId) {
+function updateNotifDot() { updateNotifBadge(); }
 
-  await addToCart(productId);
+function updateNotifBadge() {
 
-  openCheckout();
+  const dot = document.getElementById('notif-dot');
 
-}
+  if (dot) dot.style.display = unreadCount > 0 ? 'block' : 'none';
 
-// ══════════════════════════════════════════
+  const badge = document.getElementById('notif-count-badge');
 
-// CHECKOUT
+  if (badge) {
 
-// ══════════════════════════════════════════
+    if (unreadCount > 0) { badge.classList.add('visible'); badge.textContent = unreadCount > 99 ? '99+' : unreadCount; }
 
-async function openCheckout() { slideTo('checkout', loadCheckoutPage); }
-
-async function loadCheckoutPage() {
-
-  const el = document.getElementById('checkout-content');
-
-  if (!el) return;
-
-  el.innerHTML = `<div class="loading-pulse" style="height:300px"></div>`;
-
-  if (!currentUser) { el.innerHTML = `<div class="empty-state"><p>Sign in to checkout</p></div>`; return; }
-
-  // ── Sync wallet balance FIRST before rendering so the displayed balance is accurate ──
-  await syncWalletBalance();
-
-  const { data: items } = await supabase.from('cart_items')
-
-    .select('*, product:products(*, storefront:storefronts(id,store_name,logo_url,user_id))')
-
-    .eq('user_id', currentUser.id);
-
-  if (!items?.length) { slideBack(); return; }
-
-  const byStore = {};
-
-  items.forEach(item => {
-
-    const sfId = item.product?.storefront?.id;
-
-    if (!byStore[sfId]) byStore[sfId] = { storefront: item.product?.storefront, items: [] };
-
-    byStore[sfId].items.push(item);
-
-  });
-
-  const subtotal = items.reduce((s, i) => s + (i.product?.price_ngn||0) * i.quantity, 0);
-
-  const { data: states } = await supabase.from('ng_states').select('name').order('name');
-
-  el.innerHTML = `
-
-    <div class="co-body">
-
-      <div class="co-section">
-
-        <div class="co-section-title">Order Summary</div>
-
-        ${items.map(item => `
-
-          <div class="co-item">
-
-            <div class="co-item-img-wrap">
-
-              ${item.product?.images?.[0] ? `<img src="${item.product.images[0]}" class="co-item-img" alt="">` : `<div class="co-item-img" style="background:${gradientFor(item.product_id)}"></div>`}
-
-            </div>
-
-            <div class="co-item-info">
-
-              <div class="co-item-title">${escHtml(item.product?.title||'')}</div>
-
-              <div class="co-item-qty">Qty: ${item.quantity}</div>
-
-            </div>
-
-            <div class="co-item-price">${mktFmtNgn((item.product?.price_ngn||0)*item.quantity)}</div>
-
-          </div>`).join('')}
-
-      </div>
-
-      <div class="co-section">
-
-        <div class="co-section-title">Delivery Information</div>
-
-        <div class="co-field"><label class="co-label">Full Name</label><input class="co-input" id="co-name" placeholder="Recipient name" value="${currentProfile?.display_name||''}"></div>
-
-        <div class="co-field"><label class="co-label">Phone Number</label><input class="co-input" id="co-phone" type="tel" placeholder="08012345678"></div>
-
-        <div class="co-field"><label class="co-label">State</label>
-
-          <select class="co-input" id="co-state" onchange="loadShippingRates()">
-
-            <option value="">Select delivery state…</option>
-
-            ${(states||[]).map(s => `<option>${s.name}</option>`).join('')}
-
-          </select>
-
-        </div>
-
-        <div class="co-field"><label class="co-label">Delivery Address</label><textarea class="co-input" id="co-address" placeholder="Street address, area, landmark…" rows="2"></textarea></div>
-
-      </div>
-
-      <div class="co-section">
-
-        <div class="co-section-title">Discount Code</div>
-
-        <div class="co-discount-row">
-
-          <input class="co-input" id="co-discount-code" placeholder="Enter code" style="flex:1">
-
-          <button class="co-apply-btn" onclick="applyDiscountCode()">Apply</button>
-
-        </div>
-
-        <div class="co-discount-result" id="co-discount-result" style="display:none"></div>
-
-      </div>
-
-      <div class="co-section co-summary">
-
-        <div class="co-summary-row"><span>Subtotal</span><span id="co-subtotal">${mktFmtNgn(subtotal)}</span></div>
-
-        <div class="co-summary-row"><span>Shipping</span><span id="co-shipping">Select state above</span></div>
-
-        <div class="co-summary-row" id="co-discount-row" style="display:none;color:var(--red)"><span>Discount</span><span id="co-discount-amount">-₦0</span></div>
-
-        <div class="co-summary-total"><span>Total</span><span id="co-total">${mktFmtNgn(subtotal)}</span></div>
-
-        <div class="co-wallet-balance">Wallet: ${fmtPts(walletState.points)}<span id="co-balance-status" style="margin-left:8px"></span></div>
-
-      </div>
-
-      <div class="co-pin-notice">
-
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-
-        Payment secured by your Wallet PIN
-
-      </div>
-
-      <button class="co-place-order-btn" id="co-place-btn" onclick="placeOrder()">Place Order</button>
-
-      <div style="height:32px"></div>
-
-    </div>`;
-
-  window._coItems    = items;
-
-  window._coByStore  = byStore;
-
-  window._coSubtotal = subtotal;
-
-  window._coDiscount = 0;
-
-  window._coShipping = 0;
-
-}
-
-let _shippingByStore = {};
-
-async function loadShippingRates() {
-
-  const state      = document.getElementById('co-state')?.value;
-
-  const shippingEl = document.getElementById('co-shipping');
-
-  const totalEl    = document.getElementById('co-total');
-
-  const balEl      = document.getElementById('co-balance-status');
-
-  if (!state || !shippingEl) return;
-
-  shippingEl.textContent = 'Loading…';
-
-  const storeIds = Object.keys(window._coByStore || {});
-
-  let totalShipping = 0;
-
-  _shippingByStore  = {};
-
-  for (const sfId of storeIds) {
-
-    const { data: rate } = await supabase.from('shipping_rates').select('rate_ngn').eq('storefront_id', sfId).eq('state', state).maybeSingle();
-
-    const r = rate?.rate_ngn || 0;
-
-    _shippingByStore[sfId] = r;
-
-    totalShipping += r;
-
-  }
-
-  window._coShipping = totalShipping;
-
-  shippingEl.textContent = totalShipping > 0 ? mktFmtNgn(totalShipping) : 'Free';
-
-  const total  = (window._coSubtotal||0) + totalShipping - (window._coDiscount||0);
-
-  if (totalEl) totalEl.textContent = mktFmtNgn(total);
-
-  const needed = mktNgnToMp(total);
-
-  if (balEl) {
-
-    balEl.textContent = walletState.points >= needed ? '✓ Sufficient' : `Need ${fmtPts(needed - walletState.points)} more`;
-
-    balEl.style.color = walletState.points >= needed ? '#00c48c' : 'var(--red)';
+    else badge.classList.remove('visible');
 
   }
 
 }
 
-let _appliedDiscount = null;
+// ── REAL-TIME SUBSCRIPTION ────────────────
 
-async function applyDiscountCode() {
+// ── Safe notification insert — logs errors, never throws ──
 
-  const code     = document.getElementById('co-discount-code')?.value.trim().toUpperCase();
+// All notification types flow through here — push is fired automatically.
 
-  const resultEl = document.getElementById('co-discount-result');
-
-  if (!code || !resultEl) return;
-
-  const storeIds = Object.keys(window._coByStore || {});
-
-  let found = null;
-
-  for (const sfId of storeIds) {
-
-    const { data } = await supabase.from('discount_codes').select('*').eq('storefront_id', sfId).ilike('code', code).eq('is_active', true).maybeSingle();
-
-    if (data) { found = data; break; }
-
-  }
-
-  if (!found) { resultEl.style.display='block'; resultEl.style.color='var(--red)'; resultEl.textContent='Invalid or expired code'; return; }
-
-  if (found.expires_at && new Date(found.expires_at) < new Date()) { resultEl.style.display='block'; resultEl.style.color='var(--red)'; resultEl.textContent='This code has expired'; return; }
-
-  if (found.max_uses && found.uses_count >= found.max_uses) { resultEl.style.display='block'; resultEl.style.color='var(--red)'; resultEl.textContent='This code has reached its usage limit'; return; }
-
-  const subtotal = window._coSubtotal || 0;
-
-  if (subtotal < (found.min_order_ngn||0)) { resultEl.style.display='block'; resultEl.style.color='var(--red)'; resultEl.textContent=`Minimum order ${mktFmtNgn(found.min_order_ngn)} required`; return; }
-
-  const discount = found.type === 'percentage' ? Math.round(subtotal * found.value / 100) : found.value;
-
-  window._coDiscount = discount;
-
-  _appliedDiscount   = found;
-
-  const discountRow = document.getElementById('co-discount-row');
-
-  const discountAmt = document.getElementById('co-discount-amount');
-
-  if (discountRow) discountRow.style.display = 'flex';
-
-  if (discountAmt) discountAmt.textContent   = '-' + mktFmtNgn(discount);
-
-  const total   = subtotal + (window._coShipping||0) - discount;
-
-  const totalEl = document.getElementById('co-total');
-
-  if (totalEl) totalEl.textContent = mktFmtNgn(total);
-
-  resultEl.style.display='block'; resultEl.style.color='#00c48c';
-
-  resultEl.textContent = `${found.type==='percentage' ? found.value+'%' : mktFmtNgn(found.value)} discount applied ✓`;
-
-}
-
-async function placeOrder() {
-
-  const address = document.getElementById('co-address')?.value.trim();
-  const btn     = document.getElementById('co-place-btn');
-
-  if (!address) { showToast('Enter delivery address'); return; }
-
-  const items = window._coItems || [];
-  if (!items.length) { showToast('Your cart is empty'); return; }
-
-  const totalMp = items.reduce((s, i) => {
-    return s + Math.ceil(mktNgnToMp((i.product?.price_ngn||0) * i.quantity) * 100) / 100;
-  }, 0);
-
-  if (walletState.points < totalMp) { showToast('Insufficient MistyPoints — top up your wallet'); openWallet(); return; }
-
-  const pinOk = await walletPinCheck();
-  if (!pinOk) return;
-
-  btn.disabled = true; btn.textContent = 'Placing order…';
+async function insertNotification(payload) {
 
   try {
 
-    for (const item of items) {
+    const row = {
 
-      const sellerId  = item.product?.storefront?.user_id;
-      const productId = item.product_id;
-      const priceNgn  = (item.product?.price_ngn || 0) * item.quantity;
-      const priceMp   = Math.ceil(mktNgnToMp(priceNgn) * 100) / 100;
+      user_id:      payload.user_id,
 
-      console.log('[placeOrder] item:', { sellerId, productId, priceNgn, priceMp, title: item.product?.title });
+      actor_id:     payload.actor_id,
 
-      if (!sellerId) throw new Error('Seller not found for: ' + (item.product?.title || productId));
-      if (sellerId === currentUser.id) throw new Error('You cannot buy your own product');
+      type:         payload.type,
 
-      // Step 1: Insert order as paid immediately
-      const { data: order, error: orderErr } = await supabase.from('orders').insert({
-        buyer_id:         currentUser.id,
-        seller_id:        sellerId,
-        product_id:       productId,
-        title:            item.product?.title || '',
-        quantity:         item.quantity,
-        price_ngn:        priceNgn,
-        price_mp:         priceMp,
-        status:           'paid',
-        shipping_address: address,
-      }).select().single();
-
-      console.log('[placeOrder] order insert — data:', order?.id, 'error:', JSON.stringify(orderErr));
-
-      if (orderErr) throw new Error('Order failed: ' + orderErr.message);
-
-      // Step 2: Escrow — MP already moved via walletPinCheck flow
-      // Call RPC but NEVER roll back if it errors — MP may have already moved
-      const { error: escrowErr } = await supabase.rpc('escrow_hold_points', {
-        buyer_id:  currentUser.id,
-        seller_id: sellerId,
-        order_id:  order.id,
-        points:    priceMp,
-      });
-
-      console.log('[placeOrder] escrow error (if any):', JSON.stringify(escrowErr));
-      // Do not throw on escrow error — order is recorded, MP will be in escrow_holds
-
-      // Step 3: Notify seller
-      insertNotification({ user_id: sellerId, actor_id: currentUser.id, type: 'new_order', comment_text: `New order: ${item.product?.title || 'your product'} · ${mktFmtNgn(priceNgn)}` });
-
-      // Step 4: Decrement stock
-      try { await supabase.rpc('decrement_stock', { p_product_id: productId, p_qty: item.quantity }); } catch(e) {}
-
-    }
-
-    // Step 5: Clear cart
-    const { error: cartErr } = await supabase.from('cart_items').delete().eq('user_id', currentUser.id);
-    console.log('[placeOrder] cart clear error:', JSON.stringify(cartErr));
-
-    cartCount = 0; updateCartBadges(); syncWalletBalance();
-
-    showToast('Order placed! 🎉');
-
-    slideBack();
-
-    setTimeout(() => openMyBag(), 400);
-
-  } catch(e) {
-
-    console.log('[placeOrder] CATCH:', e.message, e.stack);
-    btn.disabled = false; btn.textContent = 'Place Order';
-    showToast('Order failed: ' + (e.message || 'Please try again'));
-
-  }
-
-}
-
-// ══════════════════════════════════════════
-
-// MY BAG (Buyer orders)
-
-// ══════════════════════════════════════════
-
-function openMyBag() { console.log('[openMyBag] called, currentUser:', currentUser?.id); slideTo('my-bag', loadMyBag); }
-
-async function loadMyBag() {
-
-  console.log('[loadMyBag] called, currentUser:', currentUser?.id);
-
-  const el = document.getElementById('my-bag-content');
-
-  console.log('[loadMyBag] element found:', !!el);
-
-  if (!el) return;
-
-  el.innerHTML = `<div class="loading-pulse" style="height:300px"></div>`;
-
-  if (!currentUser) { el.innerHTML = `<div class="empty-state"><p>Sign in to view your bag</p></div>`; return; }
-
-  const { data: orders, error: ordersErr } = await supabase.from('orders')
-
-    .select('*')
-
-    .eq('buyer_id', currentUser.id).order('created_at', { ascending: false });
-
-  console.log('[loadMyBag] orders count:', orders?.length, '| error:', JSON.stringify(ordersErr));
-  console.log('[loadMyBag] first order raw:', JSON.stringify(orders?.[0]));
-
-  if (!orders?.length) {
-
-    el.innerHTML = `<div class="empty-state"><div style="font-size:48px;margin-bottom:12px">🛍️</div><p>No orders yet</p><span>Your purchases will appear here</span><button class="btn-primary" style="margin-top:16px" onclick="slideBack();navTo('market')">Start Shopping</button></div>`;
-
-    return;
-
-  }
-
-  const statusColors = { pending:'#ff9500', paid:'#007aff', processing:'#007aff', shipped:'#6C47FF', delivered:'#00c48c', cancelled:'var(--text3)', refunded:'var(--text3)' };
-
-  el.innerHTML = `
-
-    <div class="bag-list">
-
-      ${orders.map(order => {
-
-        const img       = '';
-
-        const statusCol = statusColors[order.status] || 'var(--text3)';
-
-        return `
-
-          <div class="bag-order-card" onclick="openOrderDetail('${order.id}','buyer')">
-
-            <div class="bag-order-img-wrap">
-
-              ${img ? `<img src="${img}" class="bag-order-img" alt="">` : `<div class="bag-order-img" style="background:${gradientFor(order.id)}"></div>`}
-
-            </div>
-
-            <div class="bag-order-info">
-
-              <div class="bag-order-number">${order.id.slice(0,8).toUpperCase()}</div>
-
-              <div class="bag-order-store">${escHtml(order.product?.storefront?.store_name || order.title || '')}</div>
-
-              <div class="bag-order-items-hint">${escHtml(order.title||'')} · Qty ${order.quantity||1}</div>
-
-              <div class="bag-order-total">${mktFmtNgn(order.price_ngn||0)} · ${fmtPts(order.price_mp||0)}</div>
-
-            </div>
-
-            <div class="bag-order-right">
-
-              <div class="bag-order-status" style="color:${statusCol}">${order.status.replace('_',' ')}</div>
-
-              <div class="bag-order-date">${timeSince(order.created_at)}</div>
-
-              ${order.status==='shipped' ? `<button class="bag-confirm-btn" onclick="event.stopPropagation();confirmDelivery('${order.id}')">Confirm Delivery</button>` : ''}
-
-            </div>
-
-          </div>`;
-
-      }).join('')}
-
-    </div>`;
-
-}
-
-async function confirmDelivery(orderId) {
-
-  showActionSheet([{ label: 'Confirm Delivery', action: async () => {
-
-    showToast('Confirming delivery…');
-
-    const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
-
-    if (!order) { showToast('Order not found'); return; }
-
-    try { await supabase.rpc('escrow_release_points', { seller_id: order.seller_id, buyer_id: order.buyer_id, order_id: order.id, points: order.price_mp }); } catch(e) { console.log('[confirmDelivery] escrow_release error:', e.message); }
-
-    await supabase.from('orders').update({ status: 'delivered', confirmed_at: new Date().toISOString() }).eq('id', orderId);
-
-    try { await supabase.rpc('increment_storefront_stats', { p_seller_id: order.seller_id, p_revenue: order.price_ngn||0 }); } catch(e) {}
-
-    insertNotification({ user_id: order.seller_id, actor_id: currentUser.id, type: 'delivery_confirmed', comment_text: `Order confirmed — MP released to your wallet` });
-
-    showToast('Delivery confirmed! Payment released to seller ✓');
-
-    loadMyBag();
-
-    setTimeout(() => promptReview(orderId), 1000);
-
-  }}]);
-
-}
-
-async function promptReview(orderId) {
-
-  const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
-
-  if (!order?.product_id) return;
-
-  showActionSheet([{ label: '⭐ Leave a Review', action: () => openLeaveReview(order) }, { label: 'Maybe later', action: () => {} }]);
-
-}
-
-// ══════════════════════════════════════════
-
-// SHOP ORDERS (Seller incoming orders)
-
-// ══════════════════════════════════════════
-
-function openShopOrders() { slideTo('shop-orders', loadShopOrders); }
-
-async function loadShopOrders() {
-
-  console.log('[loadShopOrders] called, currentStorefront:', currentStorefront?.id, 'user_id:', currentStorefront?.user_id, 'currentUser:', currentUser?.id);
-
-  const el = document.getElementById('shop-orders-content');
-
-  console.log('[loadShopOrders] element found:', !!el);
-
-  if (!el || !currentStorefront) { console.log('[loadShopOrders] early return — el:', !!el, 'currentStorefront:', !!currentStorefront); return; }
-
-  el.innerHTML = `<div class="loading-pulse" style="height:300px"></div>`;
-
-  const sellerId = currentStorefront.user_id || currentUser.id;
-  console.log('[loadShopOrders] querying seller_id:', sellerId);
-
-  const { data: orders, error: sellerOrdersErr } = await supabase.from('orders')
-
-    .select('*')
-
-    .eq('seller_id', sellerId).order('created_at', { ascending: false });
-
-  console.log('[loadShopOrders] orders count:', orders?.length, '| error:', JSON.stringify(sellerOrdersErr));
-  console.log('[loadShopOrders] first order raw:', JSON.stringify(orders?.[0]));
-
-  if (!orders?.length) {
-
-    el.innerHTML = `<div class="empty-state"><div style="font-size:48px;margin-bottom:12px">📦</div><p>No orders yet</p><span>Orders from customers will appear here</span></div>`;
-
-    return;
-
-  }
-
-  const tabs = ['All','Paid','Processing','Shipped','Delivered'];
-
-  el.innerHTML = `
-
-    <div class="so-tabs">
-
-      ${tabs.map((t,i) => `<button class="so-tab ${i===0?'active':''}" onclick="filterShopOrders('${t.toLowerCase()}',this)">${t}</button>`).join('')}
-
-    </div>
-
-    <div class="so-list" id="so-list">
-
-      ${orders.map(order => renderShopOrderCard(order)).join('')}
-
-    </div>`;
-
-}
-
-function renderShopOrderCard(order) {
-
-  const img       = '';
-
-  const statusColors = { paid:'#007aff', processing:'#ff9500', shipped:'#6C47FF', delivered:'#00c48c', cancelled:'var(--text3)' };
-
-  const statusCol = statusColors[order.status] || 'var(--text3)';
-
-  return `
-
-    <div class="so-order-card" data-status="${order.status}" onclick="openOrderDetail('${order.id}','seller')">
-
-      <div class="so-order-header">
-
-        <div class="so-order-num">${order.id.slice(0,8).toUpperCase()}</div>
-
-        <div class="so-order-status" style="color:${statusCol}">${order.status.replace('_',' ')}</div>
-
-      </div>
-
-      <div class="so-order-body">
-
-        <div class="so-order-img-wrap">
-
-          ${img ? `<img src="${img}" class="so-order-img" alt="">` : `<div class="so-order-img" style="background:${gradientFor(order.id)}"></div>`}
-
-        </div>
-
-        <div class="so-order-info">
-
-          <div class="so-order-buyer">
-
-            <img class="so-order-buyer-av" src="" onerror="this.style.display='none'" alt="">
-
-            Order #${order.id.slice(0,8).toUpperCase()}
-
-          </div>
-
-          <div class="so-order-items">${escHtml(order.title||'')} × ${order.quantity||1}</div>
-
-          <div class="so-order-total">${mktFmtNgn(order.price_ngn||0)} · ${fmtPts(order.price_mp||0)}</div>
-
-          <div class="so-order-addr">${escHtml(order.shipping_address||'')} · ${timeSince(order.created_at)}</div>
-
-        </div>
-
-      </div>
-
-      ${order.status==='paid'||order.status==='processing' ? `
-
-      <div class="so-order-actions">
-
-        ${order.status==='paid' ? `<button class="so-process-btn" onclick="event.stopPropagation();updateOrderStatus('${order.id}','processing')">Mark Processing</button>` : ''}
-
-        <button class="so-ship-btn" onclick="event.stopPropagation();openShipOrder('${order.id}')">Upload Shipping Proof</button>
-
-      </div>` : ''}
-
-    </div>`;
-
-}
-
-function filterShopOrders(status, btn) {
-
-  document.querySelectorAll('.so-tab').forEach(t => t.classList.remove('active'));
-
-  btn.classList.add('active');
-
-  document.querySelectorAll('.so-order-card').forEach(card => {
-
-    card.style.display = (status==='all' || card.dataset.status===status) ? 'block' : 'none';
-
-  });
-
-}
-
-async function updateOrderStatus(orderId, status) {
-
-  await supabase.from('orders').update({ status, updated_at: new Date().toISOString() }).eq('id', orderId);
-
-  showToast('Order updated to ' + status);
-
-  loadShopOrders();
-
-}
-
-async function openShipOrder(orderId) {
-
-  const input    = document.createElement('input');
-
-  input.type     = 'file';
-
-  input.accept   = 'image/*';
-
-  input.onchange = async (e) => {
-
-    const file = e.target.files?.[0];
-
-    if (!file) return;
-
-    showToast('Uploading shipping proof…');
-
-    try {
-
-      const path       = `shipping/${orderId}.jpg`;
-
-      const compressed = await compressImage(file, 800);
-
-      await supabase.storage.from('avatars').upload(path, compressed, { upsert: true, contentType: 'image/jpeg' });
-
-      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-
-      const autoRelease = new Date(); autoRelease.setDate(autoRelease.getDate() + 7);
-
-      await supabase.from('orders').update({
-
-        status: 'shipped', shipping_proof_url: urlData.publicUrl,
-
-        shipping_proof_uploaded_at: new Date().toISOString(),
-
-        auto_release_at: autoRelease.toISOString(), updated_at: new Date().toISOString(),
-
-      }).eq('id', orderId);
-
-      const { data: order } = await supabase.from('orders').select('buyer_id').eq('id', orderId).single();
-
-      if (order) insertNotification({ user_id: order.buyer_id, actor_id: currentUser.id, type: 'order_shipped', comment_text: `Your order has been shipped!` });
-
-      showToast('Shipping proof uploaded ✓ MP auto-releases in 7 days if buyer doesn\'t confirm');
-
-      loadShopOrders();
-
-    } catch(e) { showToast('Upload failed — try again'); }
-
-  };
-
-  input.click();
-
-}
-
-// ══════════════════════════════════════════
-
-// MY PRODUCTS
-
-// ══════════════════════════════════════════
-
-function openMyProducts() { slideTo('my-products', loadMyProducts); }
-
-async function loadMyProducts() {
-
-  const el = document.getElementById('my-products-content');
-
-  if (!el || !currentStorefront) return;
-
-  el.innerHTML = `<div class="loading-pulse" style="height:300px"></div>`;
-
-  const { data: products } = await supabase.from('products').select('*')
-
-    .eq('storefront_id', currentStorefront.id).neq('status','archived').order('created_at', { ascending: false });
-
-  if (!products?.length) {
-
-    el.innerHTML = `<div class="empty-state"><div style="font-size:48px;margin-bottom:12px">📦</div><p>No products yet</p><span>Add your first product to start selling</span><button class="btn-primary" style="margin-top:16px" onclick="slideTo('add-product',buildAddProductForm)">Add Product</button></div>`;
-
-    return;
-
-  }
-
-  el.innerHTML = `
-
-    <div class="mp-list">
-
-      ${products.map(p => `
-
-        <div class="mp-product-row" onclick="slideTo('add-product',()=>buildAddProductForm('${p.id}'))">
-
-          <div class="mp-product-img-wrap">
-
-            ${p.images?.[0] ? `<img src="${p.images[0]}" class="mp-product-img" alt="">` : `<div class="mp-product-img" style="background:${gradientFor(p.id)}"></div>`}
-
-          </div>
-
-          <div class="mp-product-info">
-
-            <div class="mp-product-title">${escHtml(p.title)}</div>
-
-            <div class="mp-product-price">${mktFmtNgn(p.price_ngn)}</div>
-
-            <div class="mp-product-meta">
-
-              <span class="mp-product-stock ${p.stock===0?'out':''}">${p.stock} in stock</span>
-
-              <span class="mp-product-status ${p.status}">${p.status}</span>
-
-            </div>
-
-          </div>
-
-          <div class="mp-product-stats">
-
-            <div class="mp-product-stat">${p.views} views</div>
-
-            <div class="mp-product-stat">${p.sales_count} sold</div>
-
-          </div>
-
-        </div>`).join('')}
-
-    </div>`;
-
-}
-
-// ══════════════════════════════════════════
-
-// ADD / EDIT PRODUCT
-
-// ══════════════════════════════════════════
-
-let productImages  = [];
-
-let productVariants = [];
-
-async function buildAddProductForm(productId) {
-
-  editingProductId = productId || null;
-
-  const el      = document.getElementById('add-product-content');
-
-  const titleEl = document.getElementById('add-product-title');
-
-  if (titleEl) titleEl.textContent = productId ? 'Edit Product' : 'Add Product';
-
-  if (!el) return;
-
-  let p = null;
-
-  if (productId) {
-
-    const { data } = await supabase.from('products').select('*, variants:product_variants(*)').eq('id', productId).single();
-
-    p = data;
-
-  }
-
-  productImages   = p?.images || [];
-
-  productVariants = p?.variants || [];
-
-  const categories = ['Fashion & Clothing','Beauty & Skincare','Food & Beverages','Electronics & Gadgets','Home & Living','Health & Wellness','Kids & Baby','Sports & Fitness','Art & Crafts','Books & Education','Automotive','Agriculture & Farm','Services','Other'];
-
-  el.innerHTML = `
-
-    <div class="ap-body">
-
-      <div class="ap-section">
-
-        <div class="ap-section-title">Product Images <span style="color:var(--text3);font-weight:400">(up to 6)</span></div>
-
-        <div class="ap-images-grid" id="ap-images-grid">
-
-          ${productImages.map((img,i) => `<div class="ap-img-item" id="ap-img-${i}"><img src="${img}" class="ap-img-preview" alt=""><button class="ap-img-remove" onclick="removeProductImage(${i})">✕</button></div>`).join('')}
-
-          ${productImages.length < 6 ? `<div class="ap-img-add" onclick="document.getElementById('ap-img-input').click()"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 5v14M5 12h14"/></svg></div>` : ''}
-
-        </div>
-
-        <input type="file" id="ap-img-input" accept="image/*" multiple style="display:none" onchange="addProductImages(this)">
-
-      </div>
-
-      <div class="ap-section">
-
-        <div class="ap-field"><label class="ap-label">Product Title <span class="csf-required">*</span></label><input class="ap-input" id="ap-title" placeholder="e.g. Men's Leather Belt" maxlength="100" value="${escHtml(p?.title||'')}"></div>
-
-        <div class="ap-field"><label class="ap-label">Description</label><textarea class="ap-textarea" id="ap-description" placeholder="Describe your product…" rows="4" maxlength="2000">${escHtml(p?.description||'')}</textarea></div>
-
-        <div class="ap-field-row">
-
-          <div class="ap-field" style="flex:1"><label class="ap-label">Price (₦) <span class="csf-required">*</span></label><input class="ap-input" id="ap-price" type="number" placeholder="0" min="0" value="${p?.price_ngn||''}"></div>
-
-          <div class="ap-field" style="flex:1"><label class="ap-label">Compare Price (₦)</label><input class="ap-input" id="ap-compare-price" type="number" placeholder="Original price" min="0" value="${p?.compare_price_ngn||''}"></div>
-
-        </div>
-
-        <div class="ap-field-row">
-
-          <div class="ap-field" style="flex:1"><label class="ap-label">Category <span class="csf-required">*</span></label>
-
-            <select class="ap-input" id="ap-category"><option value="">Select…</option>${categories.map(c => `<option ${p?.category===c?'selected':''}>${c}</option>`).join('')}</select>
-
-          </div>
-
-          <div class="ap-field" style="flex:1"><label class="ap-label">Condition</label>
-
-            <select class="ap-input" id="ap-condition">
-
-              <option value="new" ${(!p?.condition||p?.condition==='new')?'selected':''}>New</option>
-
-              <option value="used" ${p?.condition==='used'?'selected':''}>Used</option>
-
-              <option value="refurbished" ${p?.condition==='refurbished'?'selected':''}>Refurbished</option>
-
-            </select>
-
-          </div>
-
-        </div>
-
-        <div class="ap-field-row">
-
-          <div class="ap-field" style="flex:1"><label class="ap-label">Stock Quantity</label><input class="ap-input" id="ap-stock" type="number" placeholder="0" min="0" value="${p?.stock??1}"></div>
-
-          <div class="ap-field" style="flex:1"><label class="ap-label">SKU</label><input class="ap-input" id="ap-sku" placeholder="Optional" value="${escHtml(p?.sku||'')}"></div>
-
-        </div>
-
-        <div class="ap-field"><label class="ap-label">Weight (kg)</label><input class="ap-input" id="ap-weight" type="number" placeholder="0.5" min="0" step="0.1" value="${p?.weight_kg||''}"></div>
-
-      </div>
-
-      <div class="ap-section">
-
-        <div class="ap-section-header"><div class="ap-section-title">Variants</div><button class="ap-add-variant-btn" onclick="addVariantGroup()">+ Add Variant</button></div>
-
-        <div id="ap-variants-list">${productVariants.map((v,vi) => renderVariantGroup(v,vi)).join('')}</div>
-
-      </div>
-
-      <div class="ap-section">
-
-        <div class="ap-section-title">Shipping Rates</div>
-
-        <button class="ap-shipping-btn" onclick="openShippingRates()">Manage Shipping by State →</button>
-
-      </div>
-
-      <div class="ap-section">
-
-        <div class="ap-field"><label class="ap-label">Product Status</label>
-
-          <select class="ap-input" id="ap-status">
-
-            <option value="active" ${(!p?.status||p?.status==='active')?'selected':''}>Active</option>
-
-            <option value="paused" ${p?.status==='paused'?'selected':''}>Paused</option>
-
-          </select>
-
-        </div>
-
-      </div>
-
-      ${productId ? `<button class="ap-delete-btn" onclick="archiveProduct('${productId}')">Delete Product</button>` : ''}
-
-      <div style="height:32px"></div>
-
-    </div>`;
-
-}
-
-function renderVariantGroup(v, vi) {
-
-  return `
-
-    <div class="ap-variant-group" id="ap-variant-${vi}">
-
-      <div class="ap-variant-header">
-
-        <input class="ap-input" placeholder="Variant name (e.g. Size)" value="${escHtml(v.name||'')}" id="ap-vname-${vi}">
-
-        <button class="ap-remove-variant" onclick="removeVariantGroup(${vi})">✕</button>
-
-      </div>
-
-      <div class="ap-variant-options" id="ap-vopts-${vi}">
-
-        ${(v.options||[]).map((opt,oi) => renderVariantOption(vi,oi,opt)).join('')}
-
-      </div>
-
-      <button class="ap-add-opt-btn" onclick="addVariantOption(${vi})">+ Add Option</button>
-
-    </div>`;
-
-}
-
-function renderVariantOption(vi, oi, opt) {
-
-  return `
-
-    <div class="ap-variant-opt-row" id="ap-vopt-${vi}-${oi}">
-
-      <input class="ap-input" placeholder="Option (e.g. XL)" value="${escHtml(opt?.name||'')}" style="flex:2" id="ap-vopt-name-${vi}-${oi}">
-
-      <input class="ap-input" type="number" placeholder="Price ₦" value="${opt?.price_ngn||''}" style="flex:1" id="ap-vopt-price-${vi}-${oi}">
-
-      <input class="ap-input" type="number" placeholder="Stock" value="${opt?.stock||''}" style="flex:1" id="ap-vopt-stock-${vi}-${oi}">
-
-      <button class="ap-remove-variant" onclick="removeVariantOption(${vi},${oi})">✕</button>
-
-    </div>`;
-
-}
-
-function addVariantGroup() {
-
-  const idx  = document.querySelectorAll('.ap-variant-group').length;
-
-  const list = document.getElementById('ap-variants-list');
-
-  if (list) { const div = document.createElement('div'); div.innerHTML = renderVariantGroup({name:'',options:[]},idx); list.appendChild(div.firstElementChild); }
-
-}
-
-function removeVariantGroup(vi)        { document.getElementById(`ap-variant-${vi}`)?.remove(); }
-
-function addVariantOption(vi)          { const opts = document.getElementById(`ap-vopts-${vi}`); if (!opts) return; const oi = opts.children.length; const div = document.createElement('div'); div.innerHTML = renderVariantOption(vi,oi,{}); opts.appendChild(div.firstElementChild); }
-
-function removeVariantOption(vi, oi)   { document.getElementById(`ap-vopt-${vi}-${oi}`)?.remove(); }
-
-async function addProductImages(input) {
-
-  const files = Array.from(input.files||[]);
-
-  if (!files.length) return;
-
-  if (productImages.length + files.length > 6) { showToast('Maximum 6 images'); return; }
-
-  showToast('Uploading images…');
-
-  for (const file of files) {
-
-    try {
-
-      const path = `products/${currentUser.id}/${Date.now()}.jpg`;
-
-      const compressed = await compressImage(file, 800);
-
-      await supabase.storage.from('avatars').upload(path, compressed, { upsert: false, contentType: 'image/jpeg' });
-
-      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-
-      productImages.push(urlData.publicUrl);
-
-    } catch(e) { console.warn('Image upload failed', e); }
-
-  }
-
-  refreshImagesGrid(); input.value = '';
-
-}
-
-function removeProductImage(index) { productImages.splice(index, 1); refreshImagesGrid(); }
-
-function refreshImagesGrid() {
-
-  const grid = document.getElementById('ap-images-grid');
-
-  if (!grid) return;
-
-  grid.innerHTML = productImages.map((img,i) => `<div class="ap-img-item" id="ap-img-${i}"><img src="${img}" class="ap-img-preview" alt=""><button class="ap-img-remove" onclick="removeProductImage(${i})">✕</button></div>`).join('') +
-
-    (productImages.length < 6 ? `<div class="ap-img-add" onclick="document.getElementById('ap-img-input').click()"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 5v14M5 12h14"/></svg></div>` : '');
-
-}
-
-async function saveProduct() {
-
-  const title        = document.getElementById('ap-title')?.value.trim();
-
-  const description  = document.getElementById('ap-description')?.value.trim();
-
-  const price        = parseFloat(document.getElementById('ap-price')?.value||'0');
-
-  const comparePrice = parseFloat(document.getElementById('ap-compare-price')?.value||'0');
-
-  const category     = document.getElementById('ap-category')?.value;
-
-  const condition    = document.getElementById('ap-condition')?.value||'new';
-
-  const stock        = parseInt(document.getElementById('ap-stock')?.value||'0');
-
-  const sku          = document.getElementById('ap-sku')?.value.trim();
-
-  const weight       = parseFloat(document.getElementById('ap-weight')?.value||'0');
-
-  const status       = document.getElementById('ap-status')?.value||'active';
-
-  const btn          = document.getElementById('add-product-save-btn');
-
-  if (!title)    { showToast('Enter product title'); return; }
-
-  if (!price)    { showToast('Enter product price'); return; }
-
-  if (!category) { showToast('Select a category'); return; }
-
-  if (!currentStorefront) { showToast('No storefront found'); return; }
-
-  if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
-
-  try {
-
-    const variantGroups = document.querySelectorAll('.ap-variant-group');
-
-    const variants = Array.from(variantGroups).map((group, vi) => {
-
-      const name    = document.getElementById(`ap-vname-${vi}`)?.value.trim();
-
-      const optRows = group.querySelectorAll('.ap-variant-opt-row');
-
-      const options = Array.from(optRows).map((_,oi) => ({
-
-        name:      document.getElementById(`ap-vopt-name-${vi}-${oi}`)?.value.trim(),
-
-        price_ngn: parseFloat(document.getElementById(`ap-vopt-price-${vi}-${oi}`)?.value||'0')||price,
-
-        stock:     parseInt(document.getElementById(`ap-vopt-stock-${vi}-${oi}`)?.value||'0'),
-
-      })).filter(o => o.name);
-
-      return { name, options };
-
-    }).filter(v => v.name && v.options.length);
-
-    const productData = {
-
-      storefront_id: currentStorefront.id, seller_id: currentUser.id,
-
-      title, description, category, condition, images: productImages,
-
-      price_ngn: price, compare_price_ngn: comparePrice||null,
-
-      sku: sku||null, weight_kg: weight||null, stock, has_variants: variants.length>0, status,
-
-      updated_at: new Date().toISOString(),
+      read:         false,
 
     };
 
-    let productId = editingProductId;
+    if (payload.post_id)      row.post_id      = payload.post_id;
 
-    if (editingProductId) {
+    if (payload.comment_text) row.comment_text = payload.comment_text;
 
-      await supabase.from('products').update(productData).eq('id', editingProductId);
+    const { error } = await supabase.from('notifications').insert(row);
 
-      await supabase.from('product_variants').delete().eq('product_id', editingProductId);
+    if (error) console.warn(`[notif:${payload.type}] Insert failed:`, error.message, error.details || '', error.hint || '');
 
-    } else {
+    // ── Fire push for every notification type ──
 
-      const { data: newProduct, error } = await supabase.from('products').insert(productData).select().single();
+    // Non-blocking — never delays the UI action that triggered it
 
-      if (error) throw error;
+    dispatchPush(payload).catch(e => console.warn('[push] dispatch error:', e));
 
-      productId = newProduct.id;
-
-    }
-
-    if (variants.length > 0 && productId) {
-
-      await supabase.from('product_variants').insert(variants.map(v => ({ product_id: productId, name: v.name, options: v.options })));
-
-    }
-
-    showToast(editingProductId ? 'Product updated ✓' : 'Product listed ✓');
-
-    slideBack();
+    return !error;
 
   } catch(e) {
 
-    showToast('Failed to save: ' + (e.message||'Try again'));
+    console.warn('[notif] Unexpected error:', e.message);
 
-    if (btn) { btn.textContent = 'Save'; btn.disabled = false; }
+    return false;
 
   }
 
 }
 
-async function archiveProduct(productId) {
+function subscribeToNotifs() {
 
-  showActionSheet([{ label: 'Delete Product', danger: true, action: async () => {
+  if (!currentUser || notifChannel) return;
 
-    await supabase.from('products').update({ status: 'archived' }).eq('id', productId);
+  notifChannel = supabase
 
-    showToast('Product deleted'); slideBack();
+    .channel(`notifs-${currentUser.id}`)
 
-  }}]);
+    .on('postgres_changes', {
+
+      event: 'INSERT', schema: 'public', table: 'notifications',
+
+      filter: `user_id=eq.${currentUser.id}`
+
+    }, async (payload) => {
+
+      const n = payload.new;
+
+      if (!n.read) { unreadCount++; updateNotifBadge(); }
+
+      if (navigator.vibrate) navigator.vibrate([40, 20, 40]);
+
+      // Enrich with actor and post in parallel
+
+      const [{ data: actor }, { data: postData }] = await Promise.all([
+
+        supabase.from('users').select('id,username,avatar').eq('id', n.actor_id).maybeSingle(),
+
+        n.post_id ? supabase.from('posts').select('image').eq('id', n.post_id).maybeSingle() : Promise.resolve({ data: null })
+
+      ]);
+
+      const enriched = { ...n, actor, post: postData, actors: [actor], latestAt: n.created_at, ids: [n.id] };
+
+      notifRawData.unshift(enriched);
+
+      queueNotifBanner({ type: n.type, actor, comment_text: n.comment_text, post_image: postData?.image, post_id: n.post_id, actor_id: n.actor_id, id: n.id });
+
+      const notifPage = document.getElementById('page-notifications');
+
+      if (notifPage?.classList.contains('active')) { renderNotifList(notifCurrentFilter); updateNotifTabCounts(); }
+
+    })
+
+    .subscribe((status) => {
+
+      if (status === 'CHANNEL_ERROR') {
+
+        console.warn('Notif channel error — retrying in 3s');
+
+        notifChannel = null;
+
+        setTimeout(subscribeToNotifs, 3000);
+
+      }
+
+    });
 
 }
 
-// ══════════════════════════════════════════
+// ── BANNER ────────────────────────────────
 
-// SHIPPING RATES MANAGER
+function queueNotifBanner(data) {
 
-// ══════════════════════════════════════════
+  bannerQueue.push(data);
 
-async function openShippingRates() {
+  if (!bannerShowing) showNextBanner();
 
-  if (!currentStorefront) return;
+}
 
-  const overlay = document.createElement('div');
+function showNextBanner() {
 
-  overlay.id    = 'shipping-rates-overlay';
+  if (!bannerQueue.length) { bannerShowing = false; return; }
 
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:900;background:var(--bg);overflow-y:auto;padding:0 0 80px';
+  bannerShowing = true;
 
-  const { data: rates }  = await supabase.from('shipping_rates').select('*').eq('storefront_id', currentStorefront.id);
+  showNotifBanner(bannerQueue.shift());
 
-  const { data: states } = await supabase.from('ng_states').select('name').order('name');
+}
 
-  const rateMap = {};
+function showNotifBanner(data) {
 
-  (rates||[]).forEach(r => { rateMap[r.state] = r; });
+  const cfg = NOTIF_TYPES[data.type] || NOTIF_TYPES.system;
 
-  overlay.innerHTML = `
+  const actor = data.actor || {};
 
-    <div style="padding:calc(var(--safe-top)+16px) 16px 0;display:flex;align-items:center;gap:12px;margin-bottom:16px">
+  const src = actor.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${actor.id || 'x'}`;
 
-      <button onclick="document.getElementById('shipping-rates-overlay').remove()" style="background:none;border:none;cursor:pointer">
+  const title = actor.username ? `@${actor.username}` : 'MistyNote';
 
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+  const subtitle = (data.type === 'mp_gift' && data.comment_text)
 
-      </button>
+    ? data.comment_text.slice(0, 70)
 
-      <h2 style="font-size:17px;font-weight:700;color:var(--text);margin:0">Shipping Rates</h2>
+    : (data.type === 'comment' && data.comment_text)
 
-    </div>
+    ? data.comment_text.slice(0, 60) + (data.comment_text.length > 60 ? '…' : '')
 
-    <div style="padding:0 16px 12px;font-size:13px;color:var(--text3)">Set your shipping fee per state. Leave blank or 0 for free shipping.</div>
+    : cfg.label;
 
-    <div id="sr-list">
+  const banner = document.getElementById('notif-banner');
 
-      ${(states||[]).map(s => `
+  if (!banner) return;
 
-        <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border)">
+  banner.style.setProperty('--notif-accent', cfg.accentColor);
 
-          <span style="flex:1;font-size:14px;color:var(--text)">${s.name}</span>
+  banner.innerHTML = `
 
-          <span style="font-size:13px;color:var(--text3);margin-right:4px">₦</span>
+    <div class="notif-banner-inner"
 
-          <input type="number" class="ap-input" placeholder="0 = Free" style="width:100px;padding:8px 10px;font-size:13px"
+         data-notif-type="${data.type || ''}" data-post-id="${data.post_id || ''}"
 
-            value="${rateMap[s.name]?.rate_ngn||''}" id="sr-${s.name.replace(/\s/g,'-')}">
+         data-actor-id="${data.actor_id || ''}"
 
-        </div>`).join('')}
+         data-notif-id="${data.id}">
 
-    </div>
+      <img class="notif-banner-avatar" src="${escHtml(src)}"
 
-    <div style="padding:20px 16px">
+        onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=fallback'" alt="">
 
-      <button onclick="saveShippingRates()" style="width:100%;height:48px;border-radius:24px;background:var(--accent);color:white;border:none;font-size:15px;font-weight:700;cursor:pointer">Save Shipping Rates</button>
+      <div class="notif-banner-content">
+
+        <div class="notif-banner-title">${escHtml(title)}</div>
+
+        <div class="notif-banner-subtitle">${escHtml(subtitle)}</div>
+
+      </div>
+
+      ${data.post_image ? `<img class="notif-banner-thumb" src="${escHtml(data.post_image)}" alt="">` : `<span class="notif-banner-time">now</span>`}
 
     </div>`;
 
-  document.body.appendChild(overlay);
+  const inner = banner.querySelector('.notif-banner-inner');
 
-  window._srStates = (states||[]).map(s => s.name);
+  if (inner) {
+
+    inner.addEventListener('click', () => {
+
+      notifBannerClick(inner.dataset.postId, inner.dataset.actorId, inner.dataset.notifId, inner.dataset.notifType);
+
+    }, { once: true });
+
+  }
+
+  requestAnimationFrame(() => { banner.classList.remove('hide'); banner.classList.add('show'); });
+
+  clearTimeout(bannerTimer);
+
+  bannerTimer = setTimeout(dismissNotifBanner, NOTIF_CONFIG.BANNER_DURATION);
+
+  attachBannerSwipe(banner);
 
 }
 
-async function saveShippingRates() {
+function dismissNotifBanner() {
 
-  if (!currentStorefront || !window._srStates) return;
+  const banner = document.getElementById('notif-banner');
 
-  showToast('Saving rates…');
+  if (!banner) return;
 
-  const upserts = window._srStates.map(state => ({
+  banner.classList.remove('show');
 
-    storefront_id: currentStorefront.id, state,
+  banner.classList.add('hide');
 
-    rate_ngn: parseFloat(document.getElementById('sr-'+state.replace(/\s/g,'-'))?.value||'0')||0,
+  clearTimeout(bannerTimer);
 
-  }));
+  setTimeout(showNextBanner, 400);
 
-  const { error } = await supabase.from('shipping_rates').upsert(upserts, { onConflict: 'storefront_id,state' });
+}
 
-  if (error) { showToast('Failed to save rates'); return; }
+function notifBannerClick(postId, actorId, notifId, notifType) {
 
-  showToast('Shipping rates saved ✓');
+  dismissNotifBanner();
 
-  document.getElementById('shipping-rates-overlay')?.remove();
+  if (notifType === 'mp_gift') { openWallet(); return; }
+
+  if (postId && postId !== 'null' && postId !== 'undefined') openDetail(postId);
+
+  else if (actorId && actorId !== 'null' && actorId !== 'undefined') showUserProfile(actorId, null);
+
+  if (notifId) (async () => { try { await supabase.from('notifications').update({ read: true }).eq('id', notifId); } catch(e){} })();
+
+}
+
+function attachBannerSwipe(banner) {
+
+  let startY = 0, currentY = 0, dragging = false;
+
+  banner.addEventListener('touchstart', e => { startY = e.touches[0].clientY; dragging = true; clearTimeout(bannerTimer); }, { passive: true });
+
+  banner.addEventListener('touchmove', e => {
+
+    if (!dragging) return;
+
+    currentY = e.touches[0].clientY - startY;
+
+    if (currentY < 0) { banner.style.transform = `translateY(${currentY}px)`; banner.style.opacity = String(1 + currentY / 120); }
+
+  }, { passive: true });
+
+  banner.addEventListener('touchend', () => {
+
+    dragging = false;
+
+    if (currentY < -NOTIF_CONFIG.BANNER_SWIPE_THRESHOLD) { dismissNotifBanner(); }
+
+    else { banner.style.transform = ''; banner.style.opacity = ''; bannerTimer = setTimeout(dismissNotifBanner, NOTIF_CONFIG.BANNER_DURATION); }
+
+    currentY = 0;
+
+  });
+
+}
+
+function attachSwipeDismiss(el) {
+
+  let startX = 0, currentX = 0, dragging = false;
+
+  el.addEventListener('touchstart', e => { startX = e.touches[0].clientX; dragging = true; el.classList.add('swiping'); }, { passive: true });
+
+  el.addEventListener('touchmove', e => {
+
+    if (!dragging) return;
+
+    currentX = e.touches[0].clientX - startX;
+
+    if (currentX < 0) el.style.transform = `translateX(${currentX}px)`;
+
+  }, { passive: true });
+
+  el.addEventListener('touchend', () => {
+
+    dragging = false; el.classList.remove('swiping');
+
+    if (currentX < -80) {
+
+      const ids = (el.dataset.ids || '').split(',').filter(Boolean);
+
+      el.classList.add('dismissed');
+
+      setTimeout(() => el.remove(), 300);
+
+      if (ids.length) {
+
+        (async () => { try { await supabase.from('notifications').delete().in('id', ids); } catch(e){} })();
+
+        notifRawData = notifRawData.filter(n => !ids.includes(String(n.id)));
+
+        updateNotifTabCounts();
+
+      }
+
+    } else { el.style.transform = ''; }
+
+    currentX = 0;
+
+  });
+
+}
+
+// ── PAGE ENTRY ────────────────────────────
+
+function onNotifPageOpen() {
+
+  buildNotifFilterTabs();
+
+  // ── Delegated tap handler — one listener on the static container.
+
+  // Survives innerHTML re-renders. Uses capture phase so swipe handlers can't block it.
+
+  const notifList = document.getElementById('notif-list');
+
+  if (notifList && !notifList._notifListenerAttached) {
+
+    notifList._notifListenerAttached = true;
+
+    // Record finger start position to distinguish tap from scroll
+
+    notifList.addEventListener('touchstart', e => {
+
+      const item = e.target.closest('.notif-item');
+
+      if (!item) return;
+
+      item._touchStartX = e.touches[0].clientX;
+
+      item._touchStartY = e.touches[0].clientY;
+
+    }, true);
+
+    const handleNotifTap = e => {
+
+      if (e.target.closest('.notif-follow-btn, .notif-type-badge')) return;
+
+      const item = e.target.closest('.notif-item');
+
+      if (!item) return;
+
+      // If finger moved more than 8px it's a scroll — ignore
+
+      if (e.type === 'touchend') {
+
+        const touch = e.changedTouches[0];
+
+        const dx = Math.abs(touch.clientX - (item._touchStartX || 0));
+
+        const dy = Math.abs(touch.clientY - (item._touchStartY || 0));
+
+        if (dx > 8 || dy > 8) return;
+
+      }
+
+      e.stopImmediatePropagation();
+
+      // Prevent double-fire when both touchend and click fire on same tap
+
+      if (e.type === 'click' && item._notifTapHandled) { item._notifTapHandled = false; return; }
+
+      if (e.type === 'touchend') item._notifTapHandled = true;
+
+      const postId  = item.dataset.postId  || null;
+
+      const actorId = item.dataset.actorId || null;
+
+      const idsStr  = item.dataset.ids     || '';
+
+      const type    = item.dataset.type    || '';
+
+      notifItemClick(
+
+        postId  && postId  !== 'null' && postId  !== 'undefined' ? postId  : null,
+
+        actorId && actorId !== 'null' && actorId !== 'undefined' ? actorId : null,
+
+        idsStr,
+
+        type
+
+      );
+
+    };
+
+    notifList.addEventListener('click',    handleNotifTap, true);
+
+    notifList.addEventListener('touchend', handleNotifTap, true);
+
+  }
+
+  loadNotifications();
+
+  setTimeout(async () => {
+
+    if (unreadCount > 0) {
+
+      await supabase.from('notifications').update({ read: true }).eq('user_id', currentUser.id).eq('read', false);
+
+      unreadCount = 0;
+
+      updateNotifBadge();
+
+    }
+
+  }, 1200);
+
+}
+
+function buildNotifFilterTabs() {
+
+  const wrap = document.getElementById('notif-filter-tabs');
+
+  if (!wrap || wrap.dataset.built) return;
+
+  wrap.dataset.built = '1';
+
+  wrap.innerHTML = NOTIF_FILTERS.map(f => `
+
+    <button id="ntab-${f.id}" class="notif-filter-tab${f.id === 'all' ? ' active' : ''}"
+
+      data-filter="${f.id}" onclick="switchNotifFilter('${f.id}')">
+
+      ${f.label}
+
+      <span class="tab-count" style="display:none"></span>
+
+    </button>`).join('');
+
+}
+
+// ── DEMO HELPER (remove in production) ────
+
+window.demoNotif = function(type = 'like') {
+
+  queueNotifBanner({ type, actor: { username: 'amara.lagos', avatar: `https://api.dicebear.com/7.x/adventurer/svg?seed=amara` }, comment_text: type === 'comment' ? 'This is so beautiful! 🔥' : null, post_image: null, post_id: null, actor_id: null, id: 'demo-' + Date.now() });
+
+};
+
+function subscribeToPostUpdates() {
+
+  if (postsChannel) return;
+
+  postsChannel = supabase
+
+    .channel('posts-realtime')
+
+    .on('postgres_changes', {
+
+      event: 'UPDATE',
+
+      schema: 'public',
+
+      table: 'posts'
+
+    }, (payload) => {
+
+      const post = payload.new;
+
+      if (!post?.id) return;
+
+      const postId = post.id;
+
+      const likeCount    = post.like_count    ?? 0;
+
+      const repostCount  = post.repost_count  ?? 0;
+
+      const viewCount    = post.views         ?? 0;
+
+      // ── Like count — plain update, no animation ──
+
+      document.querySelectorAll(`.heart-ai[data-post-id="${postId}"] .like-count`)
+
+        .forEach(el => { el.textContent = likeCount > 0 ? fmtNum(likeCount) : ''; });
+
+      // Detail page like stat — plain update
+
+      if (detailPostId === postId) {
+
+        const statEl = document.querySelector(`.detail-stat-n[data-type="likes"]`);
+
+        if (statEl) statEl.textContent = fmtNum(likeCount);
+
+      }
+
+      // ── Repost count ──
+
+      document.querySelectorAll(`.repost-btn[data-post-id="${postId}"] span`)
+
+        .forEach(el => {
+
+          const currentVal = parseInt(el.textContent || '0') || 0;
+
+          if (currentVal !== repostCount) {
+
+            el.textContent = repostCount > 0 ? fmtNum(repostCount) : '';
+
+          }
+
+        });
+
+      // Detail page repost stat
+
+      if (detailPostId === postId) {
+
+        document.querySelectorAll('.repost-count-display').forEach(el => {
+
+          const currentVal = parseInt(el.textContent || '0') || 0;
+
+          if (currentVal !== repostCount) animateCount(el, repostCount);
+
+        });
+
+      }
+
+      // ── View count ──
+
+      document.querySelectorAll(`.poster[data-post-id="${postId}"] .twits .viewe`)
+
+        .forEach(el => {
+
+          el.textContent = `${fmtNum(viewCount) || 0} views`;
+
+        });
+
+      if (detailPostId === postId) {
+
+        const viewEl = document.querySelector(`.detail-stat-n[data-type="views"]`);
+
+        if (viewEl) {
+
+          const currentVal = parseInt(viewEl.textContent || '0') || 0;
+
+          if (currentVal !== viewCount) animateCount(viewEl, viewCount);
+
+        }
+
+      }
+
+    })
+
+    .subscribe((status) => {
+
+      if (status === 'SUBSCRIBED') {
+
+        console.log('✓ Realtime post updates active');
+
+      }
+
+    });
 
 }
 
 // ══════════════════════════════════════════
 
-// MERCHANT ANALYTICS
+// ECHOES PANEL
 
 // ══════════════════════════════════════════
 
-function openMerchantDashboard() { slideTo('merchant-dashboard', loadMerchantDashboard); }
+function injectEchoesPanel() {
 
-async function loadMerchantDashboard() {
+  if (document.getElementById('echoes-overlay')) return;
 
-  const el = document.getElementById('merchant-dashboard-content');
+  const el = document.createElement('div');
 
-  if (!el || !currentStorefront) return;
+  el.id = 'echoes-overlay';
 
-  el.innerHTML = `<div class="loading-pulse" style="height:300px"></div>`;
-
-  const [ordersRes, productsRes] = await Promise.all([
-
-    supabase.from('orders').select('id,total_ngn,points_amount,status,created_at').eq('storefront_id', currentStorefront.id),
-
-    supabase.from('products').select('id,title,views,sales_count,price_ngn,images').eq('storefront_id', currentStorefront.id).neq('status','archived').order('sales_count', { ascending: false }).limit(5),
-
-  ]);
-
-  const orders   = ordersRes.data   || [];
-
-  const products = productsRes.data || [];
-
-  const revenue  = orders.filter(o => o.status==='delivered').reduce((s,o) => s+o.total_ngn, 0);
-
-  const totalOrders     = orders.length;
-
-  const pendingOrders   = orders.filter(o => o.status==='paid'||o.status==='processing').length;
-
-  const shippedOrders   = orders.filter(o => o.status==='shipped').length;
-
-  const deliveredOrders = orders.filter(o => o.status==='delivered').length;
-
-  const weekAgo    = new Date(Date.now() - 7*86400000);
-
-  const weekOrders = orders.filter(o => new Date(o.created_at) > weekAgo && o.status==='delivered');
-
-  const weekRevenue = weekOrders.reduce((s,o) => s+o.total_ngn, 0);
+  el.className = 'echoes-overlay';
 
   el.innerHTML = `
 
-    <div class="dash-body">
+    <div class="echoes-sheet" id="echoes-sheet">
 
-      <div class="dash-cards">
+      <div class="echoes-handle-row">
 
-        <div class="dash-card" style="background:linear-gradient(135deg,#6C47FF,#a78bfa)">
+        <span class="echoes-title">echoes</span>
 
-          <div class="dash-card-label">Total Revenue</div>
-
-          <div class="dash-card-value">${mktFmtNgn(revenue)}</div>
-
-          <div class="dash-card-sub">All time</div>
-
-        </div>
-
-        <div class="dash-card" style="background:linear-gradient(135deg,#00c48c,#34d399)">
-
-          <div class="dash-card-label">This Week</div>
-
-          <div class="dash-card-value">${mktFmtNgn(weekRevenue)}</div>
-
-          <div class="dash-card-sub">${weekOrders.length} orders</div>
-
-        </div>
+        <button class="echoes-close" onclick="closeEchoes()">✕</button>
 
       </div>
 
-      <div class="dash-order-stats">
+      <div class="echoes-tabs">
 
-        <div class="dash-order-stat"><div class="dash-order-stat-num">${totalOrders}</div><div class="dash-order-stat-label">Total</div></div>
+        <button class="echoes-tab active" data-tab="all"     onclick="switchEchoTab('all',this)">All</button>
 
-        <div class="dash-order-stat" style="color:#ff9500" onclick="openShopOrders()"><div class="dash-order-stat-num">${pendingOrders}</div><div class="dash-order-stat-label">Pending</div></div>
+        <button class="echoes-tab"        data-tab="reposts" onclick="switchEchoTab('reposts',this)">Reposts</button>
 
-        <div class="dash-order-stat" style="color:#6C47FF"><div class="dash-order-stat-num">${shippedOrders}</div><div class="dash-order-stat-label">Shipped</div></div>
-
-        <div class="dash-order-stat" style="color:#00c48c"><div class="dash-order-stat-num">${deliveredOrders}</div><div class="dash-order-stat-label">Delivered</div></div>
+        <button class="echoes-tab"        data-tab="replies" onclick="switchEchoTab('replies',this)">Replies</button>
 
       </div>
 
-      ${currentStorefront.rating > 0 ? `
+      <div class="echoes-body" id="echoes-body">
 
-      <div class="dash-section">
+        <div class="echoes-empty"><div class="echoes-empty-icon">🔇</div><p>No echoes yet</p></div>
 
-        <div class="dash-section-title">Store Rating</div>
+      </div>
 
-        <div class="dash-rating">
+    </div>
 
-          <span class="dash-rating-stars">${'★'.repeat(Math.round(currentStorefront.rating))}${'☆'.repeat(5-Math.round(currentStorefront.rating))}</span>
+  `;
 
-          <span class="dash-rating-val">${currentStorefront.rating} out of 5</span>
+  el.addEventListener('click', e => { if (e.target === el) closeEchoes(); });
 
-          <span class="dash-rating-count">(${currentStorefront.review_count} reviews)</span>
-
-        </div>
-
-      </div>` : ''}
-
-      ${products.length > 0 ? `
-
-      <div class="dash-section">
-
-        <div class="dash-section-title">Top Products</div>
-
-        ${products.map(p => `
-
-          <div class="dash-product-row" onclick="slideTo('add-product',()=>buildAddProductForm('${p.id}'))">
-
-            <div class="dash-product-img-wrap">
-
-              ${p.images?.[0] ? `<img src="${p.images[0]}" class="dash-product-img" alt="">` : `<div class="dash-product-img" style="background:${gradientFor(p.id)}"></div>`}
-
-            </div>
-
-            <div class="dash-product-info">
-
-              <div class="dash-product-title">${escHtml(p.title)}</div>
-
-              <div class="dash-product-price">${mktFmtNgn(p.price_ngn)}</div>
-
-            </div>
-
-            <div class="dash-product-stats">
-
-              <div class="dash-product-stat">${p.views} views</div>
-
-              <div class="dash-product-stat" style="color:#00c48c">${p.sales_count} sold</div>
-
-            </div>
-
-          </div>`).join('')}
-
-      </div>` : ''}
-
-      <div style="height:32px"></div>
-
-    </div>`;
+  document.body.appendChild(el);
 
 }
 
-// ══════════════════════════════════════════
+let echoesPostId   = null;
 
-// DISCOUNT CODES
+let echoesAllData  = { reposts: [], replies: [] };
 
-// ══════════════════════════════════════════
+let echoesActiveTab = 'all';
 
-function openDiscountCodes() { slideTo('discount-codes', loadDiscountCodes); }
+async function openEchoes(postId, e) {
 
-async function loadDiscountCodes() {
+  e?.stopPropagation();
 
-  const el = document.getElementById('discount-codes-content');
+  echoesPostId = postId;
 
-  if (!el || !currentStorefront) return;
+  echoesActiveTab = 'all';
 
-  el.innerHTML = `<div class="loading-pulse" style="height:300px"></div>`;
+  // Reset tabs UI
 
-  const { data: codes } = await supabase.from('discount_codes').select('*').eq('storefront_id', currentStorefront.id).order('created_at', { ascending: false });
+  document.querySelectorAll('.echoes-tab').forEach(t => t.classList.remove('active'));
 
-  if (!codes?.length) {
+  document.querySelector('.echoes-tab[data-tab="all"]')?.classList.add('active');
 
-    el.innerHTML = `<div class="empty-state"><div style="font-size:48px;margin-bottom:12px">🏷️</div><p>No discount codes yet</p><span>Create codes to reward your customers</span><button class="btn-primary" style="margin-top:16px" onclick="openCreateDiscountCode()">Create Code</button></div>`;
+  const overlay = document.getElementById('echoes-overlay');
+
+  const body    = document.getElementById('echoes-body');
+
+  overlay.classList.add('open');
+
+  // Loading state
+
+  body.innerHTML = `<div class="echoes-empty"><div class="echoes-empty-icon" style="font-size:28px;animation:spin 1s linear infinite">⟳</div><p>Loading echoes…</p></div>`;
+
+  // Fetch reposts and replies in parallel
+
+  const [repostsRes, repliesRes] = await Promise.all([
+
+    supabase
+
+      .from('posts')
+
+      .select(`id, content, created_at, like_count, repost_count, user_id,
+
+               user:users(id, username, avatar)`)
+
+      .eq('reposted_post_id', postId)
+
+      .order('created_at', { ascending: false })
+
+      .limit(50),
+
+    supabase
+
+      .from('comments')
+
+      .select(`id, content, created_at, like_count, user_id,
+
+               user:users(id, username, avatar)`)
+
+      .eq('post_id', postId)
+
+      .is('parent_id', null)
+
+      .order('created_at', { ascending: false })
+
+      .limit(50)
+
+  ]);
+
+  echoesAllData = {
+
+    reposts: repostsRes.data || [],
+
+    replies: repliesRes.data || []
+
+  };
+
+  renderEchoTab('all');
+
+}
+
+function closeEchoes() {
+
+  const overlay = document.getElementById('echoes-overlay');
+
+  overlay?.classList.remove('open');
+
+  echoesPostId = null;
+
+}
+
+function switchEchoTab(tab, btn) {
+
+  echoesActiveTab = tab;
+
+  document.querySelectorAll('.echoes-tab').forEach(t => t.classList.remove('active'));
+
+  btn.classList.add('active');
+
+  renderEchoTab(tab);
+
+}
+
+function renderEchoTab(tab) {
+
+  const body = document.getElementById('echoes-body');
+
+  const { reposts, replies } = echoesAllData;
+
+  let items = [];
+
+  if (tab === 'all') {
+
+    // Merge and sort by date
+
+    const r = reposts.map(p => ({ ...p, _type: 'repost' }));
+
+    const c = replies.map(p => ({ ...p, _type: 'reply' }));
+
+    items = [...r, ...c].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  } else if (tab === 'reposts') {
+
+    items = reposts.map(p => ({ ...p, _type: 'repost' }));
+
+  } else {
+
+    items = replies.map(p => ({ ...p, _type: 'reply' }));
+
+  }
+
+  if (!items.length) {
+
+    const labels = { all: 'No echoes yet', reposts: 'No reposts yet', replies: 'No replies yet' };
+
+    const icons  = { all: '🔇', reposts: '🔁', replies: '💬' };
+
+    body.innerHTML = `<div class="echoes-empty"><div class="echoes-empty-icon">${icons[tab]}</div><p>${labels[tab]}</p></div>`;
 
     return;
 
   }
 
-  el.innerHTML = `
+  body.innerHTML = items.map(item => {
 
-    <div class="dc-list">
+    const user    = item.user || { username: '@unknown', avatar: '' };
 
-      ${codes.map(code => `
+    const isRepost = item._type === 'repost';
 
-        <div class="dc-code-card ${!code.is_active?'inactive':''}">
+    const badge   = isRepost
 
-          <div class="dc-code-top">
+      ? `<span class="echo-type-badge echo-type-repost">🔁 Repost</span>`
 
-            <div class="dc-code-value">${escHtml(code.code)}</div>
+      : `<span class="echo-type-badge echo-type-reply">💬 Reply</span>`;
 
-            <div class="dc-code-discount">${code.type==='percentage' ? code.value+'% OFF' : mktFmtNgn(code.value)+' OFF'}</div>
+    const text    = item.content
+
+      ? `<p class="echo-text">${escHtml(item.content.slice(0, 200))}${item.content.length > 200 ? '…' : ''}</p>`
+
+      : `<p class="echo-text" style="color:var(--text2);font-style:italic">Reposted without comment</p>`;
+
+    const stats   = isRepost
+
+      ? `<span class="echo-stat">❤️ ${fmtNum(item.like_count||0)}</span><span class="echo-stat">🔁 ${fmtNum(item.repost_count||0)}</span>`
+
+      : `<span class="echo-stat">❤️ ${fmtNum(item.like_count||0)}</span>`;
+
+    return `
+
+      <div class="echo-item" onclick="${isRepost ? `openDetail('${item.id}')` : `openDetail('${echoesPostId}', true)`}; closeEchoes();">
+
+        <img class="echo-avatar" src="${escHtml(user.avatar||'')}" onerror="this.src=''" alt="">
+
+        <div class="echo-content">
+
+          <div class="echo-header">
+
+            <span class="echo-username">${escHtml(user.username)}</span>
+
+            <span class="echo-time">${timeSince(item.created_at)}</span>
+
+            ${badge}
 
           </div>
 
-          <div class="dc-code-meta">
+          ${text}
 
-            <span>${code.uses_count}${code.max_uses?'/'+code.max_uses:''} uses</span>
+          <div class="echo-stats">${stats}</div>
 
-            ${code.expires_at ? `<span>Expires ${new Date(code.expires_at).toLocaleDateString('en-NG')}</span>` : '<span>No expiry</span>'}
+        </div>
 
-            ${code.min_order_ngn > 0 ? `<span>Min ${mktFmtNgn(code.min_order_ngn)}</span>` : ''}
+      </div>
 
-          </div>
+    `;
 
-          <div class="dc-code-actions">
-
-            <button class="dc-toggle-btn" onclick="toggleDiscountCode('${code.id}',${code.is_active},this)">${code.is_active?'Deactivate':'Activate'}</button>
-
-            <button class="dc-delete-btn" onclick="deleteDiscountCode('${code.id}')">Delete</button>
-
-          </div>
-
-        </div>`).join('')}
-
-    </div>`;
+  }).join('');
 
 }
 
-function openCreateDiscountCode() {
+// ══════════════════════════════════════════
+
+// POST MENU / ACTION SHEET
+
+// ══════════════════════════════════════════
+
+// ═══════════════════════════════════════════
+
+// POST SHARE SHEET — rich 3-row menu
+
+// ═══════════════════════════════════════════
+
+const SHARE_APPS = [
+
+  { id: 'whatsapp',  label: 'WhatsApp',  color: '#25D366', icon: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.117.553 4.103 1.523 5.828L0 24l6.341-1.498A11.94 11.94 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.8 9.8 0 01-5.001-1.368l-.36-.214-3.762.888.939-3.658-.235-.374A9.787 9.787 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>` },
+
+  { id: 'telegram',  label: 'Telegram',  color: '#2AABEE', icon: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12L7.19 13.238l-2.96-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.958.321z"/></svg>` },
+
+  { id: 'twitter',   label: 'X',         color: '#000000', icon: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.742l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>` },
+
+  { id: 'facebook',  label: 'Facebook',  color: '#1877F2', icon: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>` },
+
+  { id: 'instagram', label: 'Instagram', color: '#E1306C', icon: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>` },
+
+  { id: 'copy',      label: 'Copy link', color: '#6C47FF', icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>` },
+
+];
+
+// Logo SVG for watermark
+
+const MISTYNOTE_LOGO_SVG = `<svg width="22" height="11" viewBox="0 0 470 230" fill="none" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="wm1" x1="62" y1="115" x2="408" y2="115" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#FF1080"/><stop offset="28%" stop-color="#F030B8"/><stop offset="58%" stop-color="#C040E0"/><stop offset="100%" stop-color="#7722EE"/></linearGradient></defs><path d="M 235,40 C 235,40 330,36 370,50 C 408,64 408,100 408,114 C 408,148 398,164 382,174 C 374,180 362,184 350,184 C 340,184 330,180 324,172 C 318,164 314,154 308,143 C 302,132 294,120 284,114 C 276,109 266,107 258,109 C 250,111 244,116 240,122 C 237,127 235,134 235,142 C 235,134 233,127 230,122 C 226,116 220,111 212,109 C 204,107 194,109 186,114 C 176,120 168,132 162,143 C 156,154 152,164 146,172 C 140,180 130,184 120,184 C 108,184 96,180 88,174 C 72,164 62,148 62,114 C 62,100 62,64 100,50 C 140,36 235,40 235,40 Z" fill="none" stroke="url(#wm1)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/><path d="M 355,93 C 356,103 365,111 375,113 C 365,115 356,123 355,133 C 354,123 345,115 335,113 C 345,111 354,103 355,93 Z" fill="url(#wm1)"/></svg>`;
+
+async function showPostMenu(post, el, triggerBtn, fromLongPress = false) {
+
+  const isOwn    = currentUser && post.user_id === currentUser.id;
+
+  const postUrl  = `${window.location.origin}/post/${post.id}`;
+
+  const hasImage = !!(post.image);
+
+  // ── Build overlay ──
 
   const overlay = document.createElement('div');
 
-  overlay.id    = 'create-dc-overlay';
+  overlay.className = 'psm-overlay';
 
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:900;background:rgba(0,0,0,0.5);display:flex;align-items:flex-end';
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 
-  overlay.innerHTML = `
+  const sheet = document.createElement('div');
 
-    <div style="background:var(--bg);border-radius:20px 20px 0 0;width:100%;padding:20px 16px calc(var(--safe-bottom)+24px)">
+  sheet.className = 'psm-sheet';
 
-      <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:16px">New Discount Code</div>
+  // ── Handle bar ──
 
-      <div class="csf-field"><label class="csf-label">Code <span class="csf-required">*</span></label><input class="csf-input" id="dc-code" placeholder="e.g. SAVE20" style="text-transform:uppercase"></div>
+  const handle = document.createElement('div');
 
-      <div style="display:flex;gap:10px">
+  handle.className = 'psm-handle';
 
-        <div class="csf-field" style="flex:1"><label class="csf-label">Type</label><select class="csf-select" id="dc-type"><option value="percentage">Percentage %</option><option value="fixed">Fixed ₦</option></select></div>
+  sheet.appendChild(handle);
 
-        <div class="csf-field" style="flex:1"><label class="csf-label">Value <span class="csf-required">*</span></label><input class="csf-input" id="dc-value" type="number" placeholder="20"></div>
+  // ════════════════════════════
 
-      </div>
+  // ROW 1 — People
 
-      <div style="display:flex;gap:10px">
+  // ════════════════════════════
 
-        <div class="csf-field" style="flex:1"><label class="csf-label">Min Order (₦)</label><input class="csf-input" id="dc-min" type="number" placeholder="0"></div>
+  const row1Label = document.createElement('div');
 
-        <div class="csf-field" style="flex:1"><label class="csf-label">Max Uses</label><input class="csf-input" id="dc-max-uses" type="number" placeholder="Unlimited"></div>
+  row1Label.className = 'psm-row-label';
 
-      </div>
+  row1Label.textContent = 'Send to';
 
-      <div class="csf-field"><label class="csf-label">Expiry Date</label><input class="csf-input" id="dc-expiry" type="date"></div>
+  sheet.appendChild(row1Label);
 
-      <div style="display:flex;gap:10px;margin-top:8px">
+  const row1 = document.createElement('div');
 
-        <button onclick="document.getElementById('create-dc-overlay').remove()" style="flex:1;height:46px;border-radius:23px;border:1px solid var(--border);background:none;color:var(--text);font-size:14px;font-weight:600;cursor:pointer">Cancel</button>
+  row1.className = 'psm-people-row';
 
-        <button onclick="saveDiscountCode()" style="flex:2;height:46px;border-radius:23px;border:none;background:var(--accent);color:white;font-size:14px;font-weight:700;cursor:pointer">Create Code</button>
+  // Invite Friends pill
 
-      </div>
+  const inviteBtn = document.createElement('div');
 
-    </div>`;
+  inviteBtn.className = 'psm-person-pill';
 
-  overlay.addEventListener('click', e => { if (e.target===overlay) overlay.remove(); });
+  inviteBtn.innerHTML = `
 
-  document.body.appendChild(overlay);
+    <div class="psm-person-av psm-invite-av">
 
-}
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 
-async function saveDiscountCode() {
+        <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/>
 
-  const code    = document.getElementById('dc-code')?.value.trim().toUpperCase();
+        <circle cx="9" cy="7" r="4"/>
 
-  const type    = document.getElementById('dc-type')?.value;
+        <line x1="19" y1="8" x2="19" y2="14"/>
 
-  const value   = parseFloat(document.getElementById('dc-value')?.value||'0');
+        <line x1="16" y1="11" x2="22" y2="11"/>
 
-  const min     = parseFloat(document.getElementById('dc-min')?.value||'0');
-
-  const maxUses = parseInt(document.getElementById('dc-max-uses')?.value||'0')||null;
-
-  const expiry  = document.getElementById('dc-expiry')?.value;
-
-  if (!code)  { showToast('Enter a discount code'); return; }
-
-  if (!value) { showToast('Enter a discount value'); return; }
-
-  if (type==='percentage' && value>100) { showToast('Percentage cannot exceed 100%'); return; }
-
-  const { error } = await supabase.from('discount_codes').insert({ storefront_id: currentStorefront.id, code, type, value, min_order_ngn: min, max_uses: maxUses, expires_at: expiry||null, is_active: true });
-
-  if (error) { showToast(error.code==='23505' ? 'Code already exists' : 'Failed to create code'); return; }
-
-  showToast('Discount code created ✓');
-
-  document.getElementById('create-dc-overlay')?.remove();
-
-  loadDiscountCodes();
-
-}
-
-async function toggleDiscountCode(id, isActive, btn) {
-
-  await supabase.from('discount_codes').update({ is_active: !isActive }).eq('id', id);
-
-  btn.textContent = isActive ? 'Activate' : 'Deactivate';
-
-  btn.closest('.dc-code-card').classList.toggle('inactive', isActive);
-
-  showToast(isActive ? 'Code deactivated' : 'Code activated');
-
-}
-
-async function deleteDiscountCode(id) {
-
-  showActionSheet([{ label: 'Delete Code', danger: true, action: async () => {
-
-    await supabase.from('discount_codes').delete().eq('id', id);
-
-    showToast('Code deleted'); loadDiscountCodes();
-
-  }}]);
-
-}
-
-// ══════════════════════════════════════════
-
-// REVIEWS
-
-// ══════════════════════════════════════════
-
-async function openLeaveReview(order) {
-
-  if (!order?.items?.length) return;
-
-  const product = order.items[0];
-
-  const overlay = document.createElement('div');
-
-  overlay.id    = 'leave-review-overlay';
-
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:900;background:rgba(0,0,0,0.5);display:flex;align-items:flex-end';
-
-  window._reviewRating  = 5;
-
-  overlay.innerHTML = `
-
-    <div style="background:var(--bg);border-radius:20px 20px 0 0;width:100%;padding:20px 16px calc(var(--safe-bottom)+24px)">
-
-      <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px">Leave a Review</div>
-
-      <div style="font-size:13px;color:var(--text3);margin-bottom:16px">${escHtml(product.product_title)}</div>
-
-      <div id="review-stars" style="display:flex;gap:8px;font-size:36px;margin-bottom:16px;justify-content:center">
-
-        ${[1,2,3,4,5].map(i => `<span onclick="setReviewRating(${i})" style="cursor:pointer" id="rs-${i}">★</span>`).join('')}
-
-      </div>
-
-      <textarea class="csf-textarea" id="review-text" placeholder="Share your experience…" rows="3" maxlength="500"></textarea>
-
-      <div style="display:flex;gap:10px;margin-top:12px">
-
-        <button onclick="document.getElementById('leave-review-overlay').remove()" style="flex:1;height:46px;border-radius:23px;border:1px solid var(--border);background:none;color:var(--text);font-size:14px;font-weight:600;cursor:pointer">Skip</button>
-
-        <button onclick="submitReview('${order.id}','${product.product_id}','${order.storefront_id}')" style="flex:2;height:46px;border-radius:23px;border:none;background:var(--accent);color:white;font-size:14px;font-weight:700;cursor:pointer">Submit Review</button>
-
-      </div>
-
-    </div>`;
-
-  overlay.addEventListener('click', e => { if (e.target===overlay) overlay.remove(); });
-
-  document.body.appendChild(overlay);
-
-}
-
-function setReviewRating(rating) {
-
-  window._reviewRating = rating;
-
-  [1,2,3,4,5].forEach(i => { const s = document.getElementById(`rs-${i}`); if (s) s.style.opacity = i<=rating ? '1' : '0.3'; });
-
-}
-
-async function submitReview(orderId, productId, storefrontId) {
-
-  const text   = document.getElementById('review-text')?.value.trim();
-
-  const rating = window._reviewRating || 5;
-
-  const { error } = await supabase.from('product_reviews').insert({
-
-    product_id: productId, storefront_id: storefrontId, order_id: orderId,
-
-    reviewer_id: currentUser.id, rating, review: text||null, is_verified_purchase: true,
-
-  });
-
-  if (error && error.code==='23505') { showToast('You already reviewed this product'); document.getElementById('leave-review-overlay')?.remove(); return; }
-
-  if (error) { showToast('Failed to submit review'); return; }
-
-  showToast('Review submitted ✓ Thank you!');
-
-  document.getElementById('leave-review-overlay')?.remove();
-
-}
-
-// ══════════════════════════════════════════
-
-// MARKET PAGE — load real products
-
-// ══════════════════════════════════════════
-
-async function loadMarketProducts(category) {
-
-  const grid = document.getElementById('mkt-product-grid');
-
-  if (!grid) return;
-
-  let query = supabase.from('products')
-
-    .select('*, storefront:storefronts(id,store_name,logo_url,rating)')
-
-    .eq('status','active').gt('stock',0)
-
-    .order('created_at', { ascending: false }).limit(40);
-
-  if (category && category !== 'all') query = query.eq('category', category);
-
-  const { data: products } = await query;
-
-  if (!products?.length) return;
-
-  grid.innerHTML = products.map(p => renderProductCard(p, p.storefront)).join('');
-
-}
-
-function openMktSearch() { showToast('Search coming soon ✨'); }
-
-// ══════════════════════════════════════════
-
-// STOREFRONT SUBSCRIPTION RENEWAL
-
-// ══════════════════════════════════════════
-
-async function renewStorefrontSubscription() {
-
-  if (!currentStorefront) return;
-
-  if (walletState.points < 1) { showToast('You need at least MP 1 to renew'); openWallet(); return; }
-
-  showActionSheet([{ label: 'Renew — MP 1', action: async () => {
-
-    const pinOk = await walletPinCheck();
-
-    if (!pinOk) return;
-
-    const expiry = new Date(currentStorefront.subscription_expires_at||new Date());
-
-    expiry.setMonth(expiry.getMonth()+1);
-
-    await supabase.from('storefronts').update({ subscription_expires_at: expiry.toISOString(), is_active: true }).eq('id', currentStorefront.id);
-
-    currentStorefront.subscription_expires_at = expiry.toISOString();
-
-    showToast('Subscription renewed ✓');
-
-    syncWalletBalance();
-
-  }}]);
-
-}
-
-async function openEditStorefront() { showToast('Edit storefront — coming soon ✨'); }
-
-async function updateStorefrontLogo(input) {
-
-  const file = input.files?.[0];
-
-  if (!file || !currentStorefront) return;
-
-  showToast('Uploading logo…');
-
-  try {
-
-    const path = `storefronts/${currentUser.id}/logo.jpg`;
-
-    const compressed = await compressImage(file, 400);
-
-    await supabase.storage.from('avatars').upload(path, compressed, { upsert: true, contentType: 'image/jpeg' });
-
-    const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-
-    const logoUrl = urlData.publicUrl + '?t=' + Date.now();
-
-    await supabase.from('storefronts').update({ logo_url: logoUrl }).eq('id', currentStorefront.id);
-
-    currentStorefront.logo_url = logoUrl;
-
-    showToast('Logo updated ✓'); renderMyStorefront();
-
-  } catch(e) { showToast('Upload failed'); }
-
-}
-
-async function updateStorefrontBanner(input) {
-
-  const file = input.files?.[0];
-
-  if (!file || !currentStorefront) return;
-
-  showToast('Uploading banner…');
-
-  try {
-
-    const path = `storefronts/${currentUser.id}/banner.jpg`;
-
-    const compressed = await compressImage(file, 1200);
-
-    await supabase.storage.from('avatars').upload(path, compressed, { upsert: true, contentType: 'image/jpeg' });
-
-    const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-
-    const bannerUrl = urlData.publicUrl + '?t=' + Date.now();
-
-    await supabase.from('storefronts').update({ banner_url: bannerUrl }).eq('id', currentStorefront.id);
-
-    currentStorefront.banner_url = bannerUrl;
-
-    showToast('Banner updated ✓'); renderMyStorefront();
-
-  } catch(e) { showToast('Upload failed'); }
-
-}
-
-// ══════════════════════════════════════════
-
-// ORDER DETAIL
-
-// ══════════════════════════════════════════
-
-async function openOrderDetail(orderId, role) {
-
-  const { data: order } = await supabase.from('orders')
-
-    .select('*')
-
-    .eq('id', orderId).single();
-
-  if (!order) { showToast('Order not found'); return; }
-
-  const overlay = document.createElement('div');
-
-  overlay.id    = 'order-detail-overlay';
-
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:900;background:var(--bg);overflow-y:auto;padding:0 0 80px';
-
-  const statusColors = { paid:'#007aff', processing:'#007aff', shipped:'#6C47FF', delivered:'#00c48c', cancelled:'var(--text3)' };
-
-  const statusCol = statusColors[order.status] || 'var(--text3)';
-
-  overlay.innerHTML = `
-
-    <div style="padding:calc(var(--safe-top)+16px) 16px 0;display:flex;align-items:center;gap:12px;margin-bottom:20px">
-
-      <button onclick="document.getElementById('order-detail-overlay').remove()" style="background:none;border:none;cursor:pointer">
-
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-
-      </button>
-
-      <h2 style="font-size:17px;font-weight:700;color:var(--text);margin:0">${order.order_number}</h2>
-
-      <span style="margin-left:auto;font-size:13px;font-weight:700;color:${statusCol}">${order.status.replace('_',' ')}</span>
+      </svg>
 
     </div>
 
-    <div style="padding:0 16px">
+    <span class="psm-person-name">Invite</span>`;
 
-      <div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--border)">
+  inviteBtn.addEventListener('click', () => {
 
-        <img style="width:40px;height:40px;border-radius:${role==='buyer'?'10px':'50%'};object-fit:cover;background:var(--bg2)"
+    overlay.remove();
 
-          src="${role==='buyer' ? order.storefront?.logo_url||'' : order.buyer?.avatar||''}" alt="">
+    if (typeof openInvitePage === 'function') openInvitePage();
 
-        <div>
+  });
 
-          <div style="font-size:14px;font-weight:600;color:var(--text)">${role==='buyer' ? escHtml(order.storefront?.store_name||'') : '@'+escHtml(order.buyer?.username||'')}</div>
+  row1.appendChild(inviteBtn);
 
-          <div style="font-size:12px;color:var(--text3)">${timeSince(order.created_at)}</div>
+  // Top followers (async load)
 
-        </div>
+  _psmLoadFollowers(row1, post, postUrl, overlay);
 
-      </div>
+  sheet.appendChild(row1);
 
-      <div style="padding:16px 0;border-bottom:1px solid var(--border)">
+  // ════════════════════════════
 
-        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">Items</div>
+  // ROW 2 — Apps
 
-        ${(order.items||[]).map(item => `
+  // ════════════════════════════
 
-          <div style="display:flex;gap:10px;margin-bottom:10px;align-items:center">
+  const row2Label = document.createElement('div');
 
-            ${item.product?.images?.[0] ? `<img src="${item.product.images[0]}" style="width:52px;height:52px;border-radius:10px;object-fit:cover" alt="">` : `<div style="width:52px;height:52px;border-radius:10px;background:${gradientFor(item.product_id)}"></div>`}
+  row2Label.className = 'psm-row-label';
 
-            <div style="flex:1"><div style="font-size:13px;font-weight:500;color:var(--text)">${escHtml(item.product_title)}</div><div style="font-size:12px;color:var(--text3)">Qty: ${item.quantity}</div></div>
+  row2Label.textContent = 'Share via';
 
-            <div style="font-size:13px;font-weight:600;color:var(--text)">${mktFmtNgn(item.price_ngn*item.quantity)}</div>
+  sheet.appendChild(row2Label);
 
-          </div>`).join('')}
+  const row2 = document.createElement('div');
 
-      </div>
+  row2.className = 'psm-apps-row';
 
-      <div style="padding:16px 0;border-bottom:1px solid var(--border)">
+  SHARE_APPS.forEach(app => {
 
-        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">Delivery</div>
+    const btn = document.createElement('div');
 
-        <div style="font-size:13px;color:var(--text2);line-height:1.8">
+    btn.className = 'psm-app-pill';
 
-          <div>${escHtml(order.shipping_name||'')}</div><div>${escHtml(order.shipping_phone||'')}</div>
+    btn.innerHTML = `
 
-          <div>${escHtml(order.shipping_address||'')}</div><div>${escHtml(order.shipping_state||'')}</div>
+      <div class="psm-app-icon" style="background:${app.color}20;color:${app.color}">
 
-        </div>
-
-      </div>
-
-      <div style="padding:16px 0;border-bottom:1px solid var(--border)">
-
-        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">Payment</div>
-
-        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text2);margin-bottom:6px"><span>Subtotal</span><span>${mktFmtNgn(order.subtotal_ngn)}</span></div>
-
-        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text2);margin-bottom:6px"><span>Shipping</span><span>${mktFmtNgn(order.shipping_ngn)}</span></div>
-
-        ${order.discount_ngn>0 ? `<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--red);margin-bottom:6px"><span>Discount</span><span>-${mktFmtNgn(order.discount_ngn)}</span></div>` : ''}
-
-        <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700;color:var(--text);margin-top:6px"><span>Total</span><span>${mktFmtNgn(order.total_ngn)}</span></div>
-
-        <div style="font-size:12px;color:var(--text3);margin-top:4px">Paid with ${fmtPts(order.points_amount)}</div>
+        ${app.icon}
 
       </div>
 
-      ${order.shipping_proof_url ? `
+      <span class="psm-app-name">${app.label}</span>`;
 
-      <div style="padding:16px 0">
+    btn.addEventListener('click', () => {
 
-        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">Shipping Proof</div>
+      overlay.remove();
 
-        <img src="${order.shipping_proof_url}" style="width:100%;border-radius:12px;object-fit:cover" alt="">
+      _psmShareToApp(app.id, post, postUrl);
 
-        ${order.auto_release_at ? `<div style="font-size:12px;color:var(--text3);margin-top:6px">MP auto-releases in 7 days if delivery not confirmed</div>` : ''}
+    });
 
-      </div>` : ''}
+    row2.appendChild(btn);
 
-      ${role==='buyer' && order.status==='shipped' ? `
+  });
 
-      <button onclick="confirmDelivery('${order.id}');document.getElementById('order-detail-overlay').remove()"
+  sheet.appendChild(row2);
 
-        style="width:100%;height:48px;border-radius:24px;background:#00c48c;color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px">
+  // ════════════════════════════
 
-        Confirm Delivery
+  // ROW 3 — Actions
 
-      </button>` : ''}
+  // ════════════════════════════
 
-      ${role==='seller' && (order.status==='paid'||order.status==='processing') ? `
+  const row3 = document.createElement('div');
 
-      <button onclick="openShipOrder('${order.id}');document.getElementById('order-detail-overlay').remove()"
+  row3.className = 'psm-actions-row';
 
-        style="width:100%;height:48px;border-radius:24px;background:var(--accent);color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px">
+  // Copy link — always shown
 
-        Upload Shipping Proof
+  _psmActionBtn(row3, `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`, 'Copy link', () => {
 
-      </button>` : ''}
+    overlay.remove();
 
-    </div>`;
+    navigator.clipboard?.writeText(postUrl).then(() => showToast('Link copied! 🔗'));
+
+  });
+
+  // Save image — only if post has image
+
+  if (hasImage) {
+
+    _psmActionBtn(row3, `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`, 'Save image', () => {
+
+      overlay.remove();
+
+      _psmSaveImageWithWatermark(post.image, post);
+
+    });
+
+  }
+
+  if (isOwn) {
+
+    // Edit — dormant
+
+    _psmActionBtn(row3, `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`, 'Edit', () => {
+
+      overlay.remove();
+
+      showToast('Edit post coming soon ✏️');
+
+    });
+
+    // Boost — dormant monetisation
+
+    _psmActionBtn(row3, `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>`, 'Boost post', () => {
+
+      overlay.remove();
+
+      showToast('Boost is coming soon ⚡ — stay tuned!');
+
+    }, 'psm-action-boost');
+
+    // Delete — danger
+
+    _psmActionBtn(row3, `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>`, 'Delete post', () => {
+
+      overlay.remove();
+
+      deletePost(post.id, el);
+
+    }, 'psm-action-danger');
+
+  } else {
+
+    // Dislike
+
+    _psmActionBtn(row3, `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3H10z"/><path d="M17 2h2.67A2.31 2.31 0 0122 4v7a2.31 2.31 0 01-2.33 2H17"/></svg>`, 'Dislike', () => {
+
+      overlay.remove();
+
+      showToast('Noted — you won\'t see more like this');
+
+    });
+
+    // Report
+
+    _psmActionBtn(row3, `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>`, 'Report post', () => {
+
+      overlay.remove();
+
+      showToast('Post reported 🚩');
+
+    }, 'psm-action-danger');
+
+  }
+
+  sheet.appendChild(row3);
+
+  // Cancel
+
+  const cancelBtn = document.createElement('button');
+
+  cancelBtn.className = 'psm-cancel';
+
+  cancelBtn.textContent = 'Cancel';
+
+  cancelBtn.addEventListener('click', () => overlay.remove());
+
+  sheet.appendChild(cancelBtn);
+
+  overlay.appendChild(sheet);
 
   document.body.appendChild(overlay);
+
+  // Animate in
+
+  requestAnimationFrame(() => {
+
+    requestAnimationFrame(() => sheet.classList.add('psm-sheet-open'));
+
+  });
+
+}
+
+// ── Helper: action button in row 3 ──
+
+function _psmActionBtn(container, iconSvg, label, onClick, extraClass = '') {
+
+  const btn = document.createElement('div');
+
+  btn.className = `psm-action-btn ${extraClass}`.trim();
+
+  btn.innerHTML = `<div class="psm-action-icon">${iconSvg}</div><span>${label}</span>`;
+
+  btn.addEventListener('click', onClick);
+
+  container.appendChild(btn);
+
+  return btn;
+
+}
+
+// ── Helper: load top followers async ──
+
+async function _psmLoadFollowers(row1, post, postUrl, overlay) {
+
+  if (!currentUser) return;
+
+  try {
+
+    const { data } = await supabase
+
+      .from('follows')
+
+      .select('follower_id, user:follower_id(id, username, avatar)')
+
+      .eq('following_id', currentUser.id)
+
+      .order('created_at', { ascending: false })
+
+      .limit(6);
+
+    if (!data?.length) return;
+
+    data.forEach(f => {
+
+      const u = f.user;
+
+      if (!u) return;
+
+      const pill = document.createElement('div');
+
+      pill.className = 'psm-person-pill';
+
+      pill.innerHTML = `
+
+        <img class="psm-person-av" src="${escHtml(u.avatar || '')}"
+
+             onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(u.id)}'" alt="">
+
+        <span class="psm-person-name">${escHtml((u.username || '').slice(0, 9))}</span>`;
+
+      pill.addEventListener('click', async () => {
+
+        overlay.remove();
+
+        showToast(`Sending to @${u.username}...`);
+
+        const convId = await msgGetOrCreateConversation(u.id);
+
+        if (!convId) { showToast('Could not open chat'); return; }
+
+        const postText = post.content
+
+          ? `${post.content.slice(0, 80)}${post.content.length > 80 ? '…' : ''}\n${postUrl}`
+
+          : postUrl;
+
+        await supabase.from('messages').insert({
+
+          conversation_id: convId,
+
+          sender_id: currentUser.id,
+
+          content: postText,
+
+          type: 'text',
+
+        });
+
+        showToast(`Sent to @${u.username} 📩`);
+
+        updateDmBadge();
+
+      });
+
+      row1.appendChild(pill);
+
+    });
+
+  } catch (e) {
+
+    console.warn('[PostMenu] followers load failed:', e);
+
+  }
+
+}
+
+// ── Helper: share to external app ──
+
+function _psmShareToApp(appId, post, postUrl) {
+
+  const text  = post.content ? post.content.slice(0, 100) : 'Check this out on MistyNote';
+
+  const encoded = encodeURIComponent(`${text}\n${postUrl}`);
+
+  const encodedUrl = encodeURIComponent(postUrl);
+
+  const urls = {
+
+    whatsapp:  `https://wa.me/?text=${encoded}`,
+
+    telegram:  `https://t.me/share/url?url=${encodedUrl}&text=${encodeURIComponent(text)}`,
+
+    twitter:   `https://twitter.com/intent/tweet?text=${encoded}`,
+
+    facebook:  `https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`,
+
+    instagram: null, // Instagram has no web share URL — use native share
+
+    copy:      null,
+
+  };
+
+  if (appId === 'copy') {
+
+    navigator.clipboard?.writeText(postUrl).then(() => showToast('Link copied! 🔗'));
+
+    return;
+
+  }
+
+  if (appId === 'instagram') {
+
+    // Fall back to native share for Instagram
+
+    navigator.share?.({ text: `${text}\n${postUrl}` })
+
+      .catch(() => navigator.clipboard?.writeText(postUrl).then(() => showToast('Link copied — paste into Instagram 📋')));
+
+    return;
+
+  }
+
+  const url = urls[appId];
+
+  if (url) window.open(url, '_blank', 'noopener,noreferrer');
+
+}
+
+// ── Helper: save image with watermark ──
+
+async function _psmSaveImageWithWatermark(imageUrl, post) {
+
+  showToast('Preparing image...');
+
+  try {
+
+    const img = new Image();
+
+    img.crossOrigin = 'anonymous';
+
+    await new Promise((res, rej) => {
+
+      img.onload = res;
+
+      img.onerror = rej;
+
+      img.src = imageUrl;
+
+    });
+
+    const W   = img.naturalWidth;
+
+    const H   = img.naturalHeight;
+
+    // Canvas = exact image size, no strip added
+
+    const canvas = document.createElement('canvas');
+
+    canvas.width  = W;
+
+    canvas.height = H;
+
+    const ctx = canvas.getContext('2d');
+
+    // Draw original image at full size
+
+    ctx.drawImage(img, 0, 0);
+
+    // ── Watermark sizing — scale to image width ──
+
+    const SCALE    = W / 390;                          // baseline 390px phone width
+
+    const PAD      = Math.round(12 * SCALE);           // margin from edges
+
+    const logoH    = Math.round(16 * SCALE);           // small — wallet-icon size
+
+    const logoW    = Math.round(logoH * (470 / 230));
+
+    const fontSize = Math.round(11 * SCALE);
+
+    const gap      = Math.round(5 * SCALE);            // gap between logo and text
+
+    const font     = `500 ${fontSize}px 'Inter', 'Helvetica Neue', Arial, sans-serif`;
+
+    // ── Render logo SVG in light grey ──
+
+    const svgStr = `<svg width="${logoW}" height="${logoH}" viewBox="0 0 470 230" fill="none" xmlns="http://www.w3.org/2000/svg">
+
+      <path d="M 235,40 C 235,40 330,36 370,50 C 408,64 408,100 408,114 C 408,148 398,164 382,174 C 374,180 362,184 350,184 C 340,184 330,180 324,172 C 318,164 314,154 308,143 C 302,132 294,120 284,114 C 276,109 266,107 258,109 C 250,111 244,116 240,122 C 237,127 235,134 235,142 C 235,134 233,127 230,122 C 226,116 220,111 212,109 C 204,107 194,109 186,114 C 176,120 168,132 162,143 C 156,154 152,164 146,172 C 140,180 130,184 120,184 C 108,184 96,180 88,174 C 72,164 62,148 62,114 C 62,100 62,64 100,50 C 140,36 235,40 235,40 Z"
+
+        fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+
+      <path d="M 355,93 C 356,103 365,111 375,113 C 365,115 356,123 355,133 C 354,123 345,115 335,113 C 345,111 354,103 355,93 Z"
+
+        fill="rgba(255,255,255,0.55)"/>
+
+    </svg>`;
+
+    const svgBlob = new Blob([svgStr], { type: 'image/svg+xml' });
+
+    const logoUrl = URL.createObjectURL(svgBlob);
+
+    const logoImg = new Image();
+
+    await new Promise((res, rej) => { logoImg.onload = res; logoImg.onerror = rej; logoImg.src = logoUrl; });
+
+    URL.revokeObjectURL(logoUrl);
+
+    // ── Measure text width ──
+
+    ctx.font = font;
+
+    const textW = ctx.measureText('mistynote.com').width;
+
+    // ── Total watermark block width ──
+
+    const totalW = logoW + gap + textW;
+
+    // ── Position: bottom right with padding ──
+
+    const blockX = W - PAD - totalW;
+
+    const blockY = H - PAD - logoH;
+
+    // Subtle dark shadow so it's legible on both light and dark images
+
+    ctx.shadowColor   = 'rgba(0,0,0,0.35)';
+
+    ctx.shadowBlur    = Math.round(4 * SCALE);
+
+    ctx.shadowOffsetX = 0;
+
+    ctx.shadowOffsetY = Math.round(1 * SCALE);
+
+    // Draw logo
+
+    ctx.drawImage(logoImg, blockX, blockY, logoW, logoH);
+
+    // Draw "mistynote.com" vertically centred with logo
+
+    ctx.font         = font;
+
+    ctx.fillStyle    = 'rgba(255,255,255,0.55)';
+
+    ctx.textBaseline = 'middle';
+
+    ctx.fillText('mistynote.com', blockX + logoW + gap, blockY + logoH / 2);
+
+    // Reset shadow
+
+    ctx.shadowColor = 'transparent';
+
+    ctx.shadowBlur  = 0;
+
+    // ── Download ──
+
+    const a    = document.createElement('a');
+
+    a.href     = canvas.toDataURL('image/jpeg', 0.93);
+
+    a.download = `mistynote-${post.id?.slice(0, 8) || Date.now()}.jpg`;
+
+    a.click();
+
+    showToast('Image saved! 🖼️');
+
+  } catch (e) {
+
+    console.error('[SaveImage]', e);
+
+    showToast('Could not save image — try again');
+
+  }
+
+}
+
+// ── Inject post share menu styles ──
+
+function _injectPsmStyles() {
+
+  if (document.getElementById('psm-styles')) return;
+
+  const s = document.createElement('style');
+
+  s.id = 'psm-styles';
+
+  s.textContent = `
+
+  .psm-overlay {
+
+    position: fixed; inset: 0; z-index: 9999;
+
+    background: rgba(0,0,0,0.55);
+
+    display: flex; align-items: flex-end;
+
+    backdrop-filter: blur(2px);
+
+    -webkit-backdrop-filter: blur(2px);
+
+  }
+
+  .psm-sheet {
+
+    width: 100%; background: var(--bg);
+
+    border-radius: 24px 24px 0 0;
+
+    padding: 0 0 max(env(safe-area-inset-bottom), 16px);
+
+    transform: translateY(100%);
+
+    transition: transform 0.32s cubic-bezier(0.32,0.72,0,1);
+
+    max-height: 88vh; overflow-y: auto;
+
+  }
+
+  .psm-sheet-open { transform: translateY(0) !important; }
+
+  .psm-handle {
+
+    width: 36px; height: 4px; border-radius: 2px;
+
+    background: var(--border); margin: 12px auto 16px; 
+
+  }
+
+  .psm-row-label {
+
+    font-size: 11px; font-weight: 700; letter-spacing: .07em;
+
+    text-transform: uppercase; color: var(--text3);
+
+    padding: 0 18px; margin-bottom: 10px;
+
+  }
+
+  /* ── Row 1: People ── */
+
+  .psm-people-row {
+
+    display: flex; gap: 14px; padding: 0 18px 18px;
+
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+
+    scrollbar-width: none;
+
+  }
+
+  .psm-people-row::-webkit-scrollbar { display: none; }
+
+  .psm-person-pill {
+
+    display: flex; flex-direction: column; align-items: center;
+
+    gap: 6px; flex-shrink: 0; cursor: pointer;
+
+    -webkit-tap-highlight-color: transparent;
+
+  }
+
+  .psm-person-pill:active { opacity: 0.7; transform: scale(0.93); }
+
+  .psm-person-av {
+
+    width: 52px; height: 52px; border-radius: 50%;
+
+    object-fit: cover; background: var(--bg3);
+
+    border: 2px solid var(--border);
+
+  }
+
+  .psm-invite-av {
+
+    display: flex; align-items: center; justify-content: center;
+
+    background: linear-gradient(135deg, #6C47FF, #a855f7);
+
+    color: white; border: none;
+
+  }
+
+  .psm-person-name {
+
+    font-size: 11px; color: var(--text2); font-weight: 500;
+
+    max-width: 56px; overflow: hidden; text-overflow: ellipsis;
+
+    white-space: nowrap; text-align: center;
+
+  }
+
+  /* ── Row 2: Apps ── */
+
+  .psm-apps-row {
+
+    display: flex; gap: 6px; padding: 0 18px 18px;
+
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+
+    scrollbar-width: none;
+
+  }
+
+  .psm-apps-row::-webkit-scrollbar { display: none; }
+
+  .psm-app-pill {
+
+    display: flex; flex-direction: column; align-items: center;
+
+    gap: 6px; flex-shrink: 0; cursor: pointer; min-width: 58px;
+
+    -webkit-tap-highlight-color: transparent;
+
+  }
+
+  .psm-app-pill:active { opacity: 0.7; transform: scale(0.93); }
+
+  .psm-app-icon {
+
+    width: 48px; height: 48px; border-radius: 14px;
+
+    display: flex; align-items: center; justify-content: center;
+
+    padding: 11px; box-sizing: border-box;
+
+  }
+
+  .psm-app-icon svg { width: 100%; height: 100%; }
+
+  .psm-app-name {
+
+    font-size: 11px; color: var(--text2); font-weight: 500;
+
+    white-space: nowrap;
+
+  }
+
+  /* ── Row 3: Actions ── */
+
+  .psm-actions-row {
+
+    display: grid; grid-template-columns: 1fr 1fr;
+
+    gap: 8px; padding: 0 18px 14px;
+
+  }
+
+  .psm-action-btn {
+
+    display: flex; align-items: center; gap: 10px;
+
+    background: var(--bg2); border: 1px solid var(--border);
+
+    border-radius: 14px; padding: 13px 14px;
+
+    cursor: pointer; font-size: 13px; font-weight: 600;
+
+    color: var(--text);
+
+    -webkit-tap-highlight-color: transparent;
+
+    transition: all .15s;
+
+  }
+
+  .psm-action-btn:active { transform: scale(0.96); background: var(--bg3); }
+
+  .psm-action-icon {
+
+    width: 18px; height: 18px; flex-shrink: 0; color: var(--text2);
+
+  }
+
+  .psm-action-boost .psm-action-icon { color: #f59e0b; }
+
+  .psm-action-boost { border-color: rgba(245,158,11,0.25); }
+
+  .psm-action-danger { color: rgb(244,7,82) !important; }
+
+  .psm-action-danger .psm-action-icon { color: rgb(244,7,82); }
+
+  .psm-action-danger { border-color: rgba(244,7,82,0.25); }
+
+  /* ── Cancel ── */
+
+  .psm-cancel {
+
+    display: block; width: calc(100% - 36px); margin: 0 18px;
+
+    background: var(--bg2); border: 1.5px solid var(--border);
+
+    border-radius: 14px; padding: 14px;
+
+    font-size: 15px; font-weight: 700; color: var(--text);
+
+    cursor: pointer; font-family: inherit;
+
+    -webkit-tap-highlight-color: transparent;
+
+    transition: all .15s;
+
+  }
+
+  .psm-cancel:active { background: var(--bg3); transform: scale(0.98); }
+
+  `;
+
+  document.head.appendChild(s);
+
+}
+
+// Auto-inject styles when this file loads
+
+_injectPsmStyles();
+
+function showActionSheet(actions) {
+
+  const overlay = document.createElement('div');
+
+  overlay.className = 'action-sheet-overlay';
+
+  const sheet = document.createElement('div');
+
+  sheet.className = 'action-sheet';
+
+  actions.forEach((a, i) => {
+
+    if (i > 0 && a.divider) {
+
+      const div = document.createElement('div');
+
+      div.className = 'action-sheet-divider';
+
+      sheet.appendChild(div);
+
+    }
+
+    const item = document.createElement('div');
+
+    item.className = 'action-sheet-item' + (a.danger ? ' danger' : '');
+
+    item.innerHTML = `${a.icon ? `<span style="font-size:20px">${a.icon}</span>` : ''}<span>${a.label}</span>`;
+
+    item.addEventListener('click', () => { document.body.removeChild(overlay); a.action?.(); });
+
+    sheet.appendChild(item);
+
+  });
+
+  const cancelItem = document.createElement('div');
+
+  cancelItem.className = 'action-sheet-item';
+
+  cancelItem.style.cssText = 'font-weight:700;margin-top:8px;border-top:1px solid var(--border);';
+
+  cancelItem.textContent = 'Cancel';
+
+  cancelItem.addEventListener('click', () => document.body.removeChild(overlay));
+
+  sheet.appendChild(cancelItem);
+
+  overlay.appendChild(sheet);
+
+  overlay.addEventListener('click', e => { if (e.target === overlay) document.body.removeChild(overlay); });
+
+  document.body.appendChild(overlay);
+
+}
+
+async function deletePost(postId, el) {
+
+  if (!currentUser) return;
+
+  // Check if this is a repost before deleting
+
+  const originalPostId = el?.dataset.repostedPostId || null;
+
+  const { error } = await supabase.from('posts').delete().eq('id', postId).eq('user_id', currentUser.id);
+
+  if (error) { showToast('Delete failed'); return; }
+
+  // Animate out
+
+  el.style.transition = 'opacity .3s, transform .3s';
+
+  el.style.opacity = '0'; el.style.transform = 'scale(0.96)';
+
+  setTimeout(() => el.remove(), 300);
+
+  loadedPostIds.delete(postId);
+
+  repostedPosts.delete(originalPostId);
+
+  // If this was a repost — clean up UI on the original post
+
+  if (originalPostId) {
+
+    setRepostUI(originalPostId, false);
+
+    // Fetch real count from DB (trigger already decremented it) and update DOM
+
+    const { data } = await supabase
+
+      .from('posts').select('repost_count').eq('id', originalPostId).single();
+
+    const newCount = data?.repost_count ?? 0;
+
+    document.querySelectorAll(`.repost-btn[data-post-id="${originalPostId}"] span`)
+
+      .forEach(sp => { sp.textContent = newCount > 0 ? fmtNum(newCount) : ''; });
+
+    document.querySelectorAll('.repost-count-display')
+
+      .forEach(sp => { if (detailPostId === originalPostId) sp.textContent = newCount; });
+
+  }
+
+  showToast('Post deleted');
+
+}
+
+// ════════════════════════════════
+
+// ONESIGNAL PUSH NOTIFICATIONS
+
+// App ID: 913a9816-aa82-4607-a168-66a80c0c5cb3
+
+// ════════════════════════════════
+
+const ONESIGNAL_APP_ID = '913a9816-aa82-4607-a168-66a80c0c5cb3';
+
+// ── Init OneSignal — called from bootApp() in app-core.js ────────
+
+async function initOneSignal() {
+
+  try {
+
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+
+    await new Promise(resolve => {
+
+      window.OneSignalDeferred.push(async function(OneSignal) {
+
+        await OneSignal.init({
+
+          appId: ONESIGNAL_APP_ID,
+
+          notifyButton: { enable: false },
+
+          allowLocalhostAsSecureOrigin: true,
+
+        });
+
+        // Link this device token to the logged-in user's UUID
+
+        if (currentUser) {
+
+          try { await OneSignal.login(currentUser.id); } catch(e) {}
+
+        }
+
+        resolve();
+
+      });
+
+    });
+
+    console.log('[OneSignal] Ready');
+
+  } catch (e) {
+
+    console.warn('[OneSignal] Init failed:', e);
+
+  }
+
+}
+
+// ── Request permission — call after onboarding, not on load ───
+
+async function requestPushPermission() {
+
+  try {
+
+    window.OneSignalDeferred?.push(async function(OneSignal) {
+
+      const granted = await OneSignal.Notifications.permission;
+
+      if (!granted) await OneSignal.Notifications.requestPermission();
+
+    });
+
+  } catch (e) {}
+
+}
+
+// ── Push message map — every notification type has a message template ──
+
+function buildPushPayload(type, actorName, extras) {
+
+  const name = actorName ? '@' + actorName : 'Someone';
+
+  const note = extras.comment_text ? ' · ' + extras.comment_text.slice(0, 60) : '';
+
+  const map = {
+
+    like:         { title: '❤️ New Heart',         message: name + ' loved your note' },
+
+    comment:      { title: '💬 New Comment',      message: name + ':' + note },
+
+    reply:        { title: '💬 New Reply',        message: name + ' replied:' + note },
+
+    follow:       { title: '✨ New Follower',       message: name + ' started following you' },
+
+    repost:       { title: '🔁 Repost',              message: name + ' reposted your note' },
+
+    mention:      { title: '📣 You were mentioned', message: name + ' mentioned you:' + note },
+
+    like_comment: { title: '❤️ Comment liked',   message: name + ' liked your comment' },
+
+    mp_gift:      { title: '🎁 MistyPoints Received', message: name + ' sent you' + (extras.comment_text ? ' ' + extras.comment_text : ' MistyPoints') },
+
+    payment_received: { title: '💰 Payment Received',  message: name + ' paid you' },
+
+    new_order:          { title: '🛍️ New Order',          message: extras.comment_text || name + ' placed an order' },
+
+    order_shipped:      { title: '🚚 Order Shipped',      message: extras.comment_text || 'Your order has shipped!' },
+
+    delivery_confirmed: { title: '✅ Delivery Confirmed', message: extras.comment_text || name + ' confirmed delivery' },
+
+    system:       { title: '📢 MistyNote',            message: extras.comment_text || 'You have a new notification' },
+
+  };
+
+  return map[type] || { title: 'MistyNote', message: 'You have a new notification' };
+
+}
+
+// ── Central push dispatcher — called from insertNotification for every type ──
+
+async function dispatchPush(payload) {
+
+  if (!payload.user_id || !payload.type) return;
+
+  // Never push to yourself
+
+  if (payload.user_id === currentUser?.id) return;
+
+  try {
+
+    // Fetch actor name for the message
+
+    let actorName = '';
+
+    if (payload.actor_id && currentProfile && payload.actor_id === currentUser?.id) {
+
+      actorName = currentProfile.username || '';
+
+    } else if (payload.actor_id) {
+
+      const { data } = await supabase
+
+        .from('users').select('username').eq('id', payload.actor_id).maybeSingle();
+
+      actorName = data?.username || '';
+
+    }
+
+    const push = buildPushPayload(payload.type, actorName, payload);
+
+    // Call Supabase edge function which hits OneSignal REST API server-side
+
+    await supabase.functions.invoke('send-push', {
+
+      body: {
+
+        recipient_user_id: payload.user_id,
+
+        title:   push.title,
+
+        message: push.message,
+
+        url:     'https://mistynote.pages.dev',
+
+        data:    { type: payload.type, post_id: payload.post_id || null },
+
+      }
+
+    });
+
+  } catch(e) {
+
+    // Silent — push failure never interrupts the user action
+
+    console.warn('[push] dispatchPush error:', e);
+
+  }
 
 }
