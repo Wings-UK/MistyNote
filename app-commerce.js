@@ -444,7 +444,7 @@ async function renderMyStorefront() {
 
     supabase.from('products').select('id', { count: 'exact', head: true }).eq('storefront_id', currentStorefront.id).neq('status', 'archived'),
 
-    supabase.from('orders').select('id', { count: 'exact', head: true }).eq('storefront_id', currentStorefront.id).eq('status', 'paid'),
+    supabase.from('orders').select('id,price_ngn', { count: 'exact' }).eq('seller_id', currentUser.id).eq('status', 'paid'),
 
   ]);
 
@@ -452,7 +452,13 @@ async function renderMyStorefront() {
 
   const productCount  = productsRes.count || 0;
 
-  const pendingOrders = ordersRes.count || 0;
+  const paidOrders    = ordersRes.data || [];
+
+  const pendingOrders = paidOrders.length;
+
+  const totalRevenue  = paidOrders.reduce((s, o) => s + (Number(o.price_ngn) || 0), 0);
+
+  const totalSales    = pendingOrders;
 
   const badge = document.getElementById('sidepane-orders-badge');
 
@@ -522,7 +528,7 @@ async function renderMyStorefront() {
 
       <div class="msf-stat" onclick="openShopOrders()">
 
-        <div class="msf-stat-num">${sf.total_sales || 0}</div>
+        <div class="msf-stat-num">${totalSales}</div>
 
         <div class="msf-stat-label">Sales</div>
 
@@ -530,7 +536,7 @@ async function renderMyStorefront() {
 
       <div class="msf-stat" onclick="openMerchantDashboard()">
 
-        <div class="msf-stat-num">${mktFmtNgn(sf.total_revenue || 0)}</div>
+        <div class="msf-stat-num">${mktFmtNgn(totalRevenue)}</div>
 
         <div class="msf-stat-label">Revenue</div>
 
@@ -1891,7 +1897,7 @@ async function placeOrder() {
       // Do not throw on escrow error — order is recorded, MP will be in escrow_holds
 
       // Step 3: Notify seller
-      insertNotification({ user_id: sellerId, actor_id: currentUser.id, type: 'new_order', comment_text: `New order: ${item.product?.title || ''} · ${mktFmtNgn(priceNgn)}` });
+      insertNotification({ user_id: sellerId, actor_id: currentUser.id, type: 'new_order', comment_text: `New order for "${item.product?.title || 'your product'}" — ${mktFmtNgn(priceNgn)}. Go to Shop Orders to process.` });
 
       // Step 4: Decrement stock
       try { await supabase.rpc('decrement_stock', { p_product_id: productId, p_qty: item.quantity }); } catch(e) {}
@@ -1940,11 +1946,11 @@ async function loadMyBag() {
 
   const { data: orders, error: ordersErr } = await supabase.from('orders')
 
-    .select('*, product:products(title,images)')
+    .select('*, product:products(title,images,storefront:storefronts(store_name,logo_url))')
 
     .eq('buyer_id', currentUser.id).order('created_at', { ascending: false });
 
-  console.log('[loadMyBag] orders:', orders?.length, 'error:', ordersErr);
+  console.log('[loadMyBag] orders:', orders?.length, 'error:', JSON.stringify(ordersErr));
 
   if (!orders?.length) {
 
@@ -1980,11 +1986,11 @@ async function loadMyBag() {
 
               <div class="bag-order-number">${order.id.slice(0,8).toUpperCase()}</div>
 
-              <div class="bag-order-store">${escHtml(order.title||'')}</div>
+              <div class="bag-order-store">${escHtml(order.product?.storefront?.store_name || order.title || '')}</div>
 
-              <div class="bag-order-items-hint">Qty: ${order.quantity||1}</div>
+              <div class="bag-order-items-hint">${escHtml(order.title||'')} · Qty ${order.quantity||1}</div>
 
-              <div class="bag-order-total">${mktFmtNgn(order.price_ngn||0)}</div>
+              <div class="bag-order-total">${mktFmtNgn(order.price_ngn||0)} · ${fmtPts(order.price_mp||0)}</div>
 
             </div>
 
@@ -2062,11 +2068,11 @@ async function loadShopOrders() {
 
   const { data: orders, error: sellerOrdersErr } = await supabase.from('orders')
 
-    .select('*, buyer:profiles(username,avatar_url), product:products(title,images)')
+    .select('*, product:products(title,images)')
 
     .eq('seller_id', currentStorefront.user_id || currentUser.id).order('created_at', { ascending: false });
 
-  console.log('[loadShopOrders] orders:', orders?.length, 'error:', sellerOrdersErr);
+  console.log('[loadShopOrders] orders:', orders?.length, 'error:', JSON.stringify(sellerOrdersErr));
 
   if (!orders?.length) {
 
@@ -2126,9 +2132,9 @@ function renderShopOrderCard(order) {
 
           <div class="so-order-buyer">
 
-            <img class="so-order-buyer-av" src="${order.buyer?.avatar_url||''}" onerror="this.style.display='none'" alt="">
+            <img class="so-order-buyer-av" src="" onerror="this.style.display='none'" alt="">
 
-            @${escHtml(order.buyer?.username||'')}
+            Order #${order.id.slice(0,8).toUpperCase()}
 
           </div>
 
