@@ -1219,7 +1219,7 @@ async function renderProductPage(productId) {
 
   // Record view
 
-  if (currentUser) supabase.rpc('record_product_view', { p_product_id: productId }).catch(() => {});
+  if (currentUser) { try { await supabase.rpc('record_product_view', { p_product_id: productId }); } catch(e) {} }
 
 }
 
@@ -1894,7 +1894,7 @@ async function placeOrder() {
       insertNotification({ user_id: sellerId, actor_id: currentUser.id, type: 'new_order', comment_text: `New order: ${item.product?.title || ''} · ${mktFmtNgn(priceNgn)}` });
 
       // Step 4: Decrement stock
-      await supabase.rpc('decrement_stock', { p_product_id: productId, p_qty: item.quantity }).catch(() => {});
+      try { await supabase.rpc('decrement_stock', { p_product_id: productId, p_qty: item.quantity }); } catch(e) {}
 
     }
 
@@ -2016,11 +2016,11 @@ async function confirmDelivery(orderId) {
 
     if (!order) { showToast('Order not found'); return; }
 
-    await supabase.rpc('escrow_release_points', { seller_id: order.seller_id, buyer_id: order.buyer_id, order_id: order.id, points: order.price_mp }).catch(() => {});
+    try { await supabase.rpc('escrow_release_points', { seller_id: order.seller_id, buyer_id: order.buyer_id, order_id: order.id, points: order.price_mp }); } catch(e) { console.log('[confirmDelivery] escrow_release error:', e.message); }
 
     await supabase.from('orders').update({ status: 'delivered', confirmed_at: new Date().toISOString() }).eq('id', orderId);
 
-    await supabase.rpc('increment_storefront_stats', { p_seller_id: order.seller_id, p_revenue: order.price_ngn||0 }).catch(() => {});
+    try { await supabase.rpc('increment_storefront_stats', { p_seller_id: order.seller_id, p_revenue: order.price_ngn||0 }); } catch(e) {}
 
     insertNotification({ user_id: order.seller_id, actor_id: currentUser.id, type: 'delivery_confirmed', comment_text: `Order confirmed — MP released to your wallet` });
 
