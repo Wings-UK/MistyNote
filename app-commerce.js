@@ -1897,7 +1897,7 @@ async function placeOrder() {
       // Do not throw on escrow error — order is recorded, MP will be in escrow_holds
 
       // Step 3: Notify seller
-      insertNotification({ user_id: sellerId, actor_id: currentUser.id, type: 'new_order', comment_text: `New order for "${item.product?.title || 'your product'}" — ${mktFmtNgn(priceNgn)}. Go to Shop Orders to process.` });
+      insertNotification({ user_id: sellerId, actor_id: currentUser.id, type: 'new_order', comment_text: `New order: ${item.product?.title || 'your product'} · ${mktFmtNgn(priceNgn)}` });
 
       // Step 4: Decrement stock
       try { await supabase.rpc('decrement_stock', { p_product_id: productId, p_qty: item.quantity }); } catch(e) {}
@@ -3332,136 +3332,99 @@ async function updateStorefrontBanner(input) {
 async function openOrderDetail(orderId, role) {
 
   const { data: order } = await supabase.from('orders')
-
     .select('*')
-
     .eq('id', orderId).single();
 
   if (!order) { showToast('Order not found'); return; }
 
+  // Remove existing overlay if open
+  document.getElementById('order-detail-overlay')?.remove();
+
   const overlay = document.createElement('div');
-
-  overlay.id    = 'order-detail-overlay';
-
+  overlay.id = 'order-detail-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:900;background:var(--bg);overflow-y:auto;padding:0 0 80px';
 
-  const statusColors = { paid:'#007aff', processing:'#007aff', shipped:'#6C47FF', delivered:'#00c48c', cancelled:'var(--text3)' };
-
+  const statusColors = { paid:'#007aff', processing:'#ff9500', shipped:'#6C47FF', delivered:'#00c48c', cancelled:'var(--text3)', pending:'#ff9500' };
   const statusCol = statusColors[order.status] || 'var(--text3)';
+  const orderId8  = order.id.slice(0,8).toUpperCase();
 
   overlay.innerHTML = `
 
-    <div style="padding:calc(var(--safe-top)+16px) 16px 0;display:flex;align-items:center;gap:12px;margin-bottom:20px">
-
-      <button onclick="document.getElementById('order-detail-overlay').remove()" style="background:none;border:none;cursor:pointer">
-
+    <!-- Header -->
+    <div style="position:sticky;top:0;background:var(--surface);border-bottom:1px solid var(--border);padding:calc(var(--safe-top)+12px) 16px 12px;display:flex;align-items:center;gap:12px;z-index:2">
+      <button onclick="document.getElementById('order-detail-overlay').remove()" style="background:none;border:none;cursor:pointer;padding:4px">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-
       </button>
-
-      <h2 style="font-size:17px;font-weight:700;color:var(--text);margin:0">${order.order_number}</h2>
-
-      <span style="margin-left:auto;font-size:13px;font-weight:700;color:${statusCol}">${order.status.replace('_',' ')}</span>
-
+      <div style="flex:1">
+        <div style="font-size:16px;font-weight:700;color:var(--text)">Order #${orderId8}</div>
+        <div style="font-size:12px;color:var(--text3)">${timeSince(order.created_at)}</div>
+      </div>
+      <span style="font-size:13px;font-weight:700;color:${statusCol};text-transform:capitalize">${(order.status||'').replace('_',' ')}</span>
     </div>
 
     <div style="padding:0 16px">
 
-      <div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--border)">
-
-        <img style="width:40px;height:40px;border-radius:${role==='buyer'?'10px':'50%'};object-fit:cover;background:var(--bg2)"
-
-          src="${role==='buyer' ? order.storefront?.logo_url||'' : order.buyer?.avatar||''}" alt="">
-
-        <div>
-
-          <div style="font-size:14px;font-weight:600;color:var(--text)">${role==='buyer' ? escHtml(order.storefront?.store_name||'') : '@'+escHtml(order.buyer?.username||'')}</div>
-
-          <div style="font-size:12px;color:var(--text3)">${timeSince(order.created_at)}</div>
-
+      <!-- Product -->
+      <div style="padding:16px 0;border-bottom:1px solid var(--border2)">
+        <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Item</div>
+        <div style="display:flex;gap:12px;align-items:center">
+          <div style="width:60px;height:60px;border-radius:10px;background:${gradientFor(order.product_id||order.id)};flex-shrink:0"></div>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:2px">${escHtml(order.title||'—')}</div>
+            <div style="font-size:12px;color:var(--text3)">Qty: ${order.quantity||1}</div>
+          </div>
+          <div style="font-size:14px;font-weight:700;color:var(--text)">${mktFmtNgn(order.price_ngn||0)}</div>
         </div>
-
       </div>
 
-      <div style="padding:16px 0;border-bottom:1px solid var(--border)">
-
-        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">Items</div>
-
-        ${(order.items||[]).map(item => `
-
-          <div style="display:flex;gap:10px;margin-bottom:10px;align-items:center">
-
-            ${item.product?.images?.[0] ? `<img src="${item.product.images[0]}" style="width:52px;height:52px;border-radius:10px;object-fit:cover" alt="">` : `<div style="width:52px;height:52px;border-radius:10px;background:${gradientFor(item.product_id)}"></div>`}
-
-            <div style="flex:1"><div style="font-size:13px;font-weight:500;color:var(--text)">${escHtml(item.product_title)}</div><div style="font-size:12px;color:var(--text3)">Qty: ${item.quantity}</div></div>
-
-            <div style="font-size:13px;font-weight:600;color:var(--text)">${mktFmtNgn(item.price_ngn*item.quantity)}</div>
-
-          </div>`).join('')}
-
-      </div>
-
-      <div style="padding:16px 0;border-bottom:1px solid var(--border)">
-
-        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">Delivery</div>
-
-        <div style="font-size:13px;color:var(--text2);line-height:1.8">
-
-          <div>${escHtml(order.shipping_name||'')}</div><div>${escHtml(order.shipping_phone||'')}</div>
-
-          <div>${escHtml(order.shipping_address||'')}</div><div>${escHtml(order.shipping_state||'')}</div>
-
+      <!-- Delivery -->
+      <div style="padding:16px 0;border-bottom:1px solid var(--border2)">
+        <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Delivery</div>
+        <div style="font-size:13px;color:var(--text2);line-height:1.9">
+          ${order.shipping_address ? `<div>${escHtml(order.shipping_address)}</div>` : '<div style="color:var(--text3)">No address provided</div>'}
+          ${order.note ? `<div style="margin-top:4px;color:var(--text3)">Note: ${escHtml(order.note)}</div>` : ''}
         </div>
-
       </div>
 
-      <div style="padding:16px 0;border-bottom:1px solid var(--border)">
-
-        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">Payment</div>
-
-        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text2);margin-bottom:6px"><span>Subtotal</span><span>${mktFmtNgn(order.subtotal_ngn)}</span></div>
-
-        <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text2);margin-bottom:6px"><span>Shipping</span><span>${mktFmtNgn(order.shipping_ngn)}</span></div>
-
-        ${order.discount_ngn>0 ? `<div style="display:flex;justify-content:space-between;font-size:13px;color:var(--red);margin-bottom:6px"><span>Discount</span><span>-${mktFmtNgn(order.discount_ngn)}</span></div>` : ''}
-
-        <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700;color:var(--text);margin-top:6px"><span>Total</span><span>${mktFmtNgn(order.total_ngn)}</span></div>
-
-        <div style="font-size:12px;color:var(--text3);margin-top:4px">Paid with ${fmtPts(order.points_amount)}</div>
-
+      <!-- Payment -->
+      <div style="padding:16px 0;border-bottom:1px solid var(--border2)">
+        <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Payment</div>
+        <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px">
+          <span>Total</span><span>${mktFmtNgn(order.price_ngn||0)}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text3)">Paid with ${fmtPts(order.price_mp||0)}</div>
       </div>
 
+      <!-- Shipping proof -->
       ${order.shipping_proof_url ? `
-
-      <div style="padding:16px 0">
-
-        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">Shipping Proof</div>
-
+      <div style="padding:16px 0;border-bottom:1px solid var(--border2)">
+        <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Shipping Proof</div>
         <img src="${order.shipping_proof_url}" style="width:100%;border-radius:12px;object-fit:cover" alt="">
-
-        ${order.auto_release_at ? `<div style="font-size:12px;color:var(--text3);margin-top:6px">MP auto-releases in 7 days if delivery not confirmed</div>` : ''}
-
+        ${order.auto_release_at ? `<div style="font-size:12px;color:var(--text3);margin-top:6px">MP auto-releases if delivery not confirmed within 7 days</div>` : ''}
       </div>` : ''}
 
-      ${role==='buyer' && order.status==='shipped' ? `
+      <!-- Actions -->
+      <div style="padding:16px 0;display:flex;flex-direction:column;gap:10px">
 
-      <button onclick="confirmDelivery('${order.id}');document.getElementById('order-detail-overlay').remove()"
+        ${role==='buyer' && order.status==='shipped' ? `
+        <button onclick="confirmDelivery('${order.id}');document.getElementById('order-detail-overlay').remove()"
+          style="width:100%;height:50px;border-radius:14px;background:#00c48c;color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">
+          ✓ Confirm Delivery
+        </button>` : ''}
 
-        style="width:100%;height:48px;border-radius:24px;background:#00c48c;color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px">
+        ${role==='seller' && order.status==='paid' ? `
+        <button onclick="updateOrderStatus('${order.id}','processing');document.getElementById('order-detail-overlay').remove()"
+          style="width:100%;height:50px;border-radius:14px;background:var(--bg2);color:var(--text);border:1px solid var(--border);font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font)">
+          Mark as Processing
+        </button>` : ''}
 
-        Confirm Delivery
+        ${role==='seller' && (order.status==='paid'||order.status==='processing') ? `
+        <button onclick="openShipOrder('${order.id}');document.getElementById('order-detail-overlay').remove()"
+          style="width:100%;height:50px;border-radius:14px;background:var(--accent);color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">
+          Upload Shipping Proof
+        </button>` : ''}
 
-      </button>` : ''}
-
-      ${role==='seller' && (order.status==='paid'||order.status==='processing') ? `
-
-      <button onclick="openShipOrder('${order.id}');document.getElementById('order-detail-overlay').remove()"
-
-        style="width:100%;height:48px;border-radius:24px;background:var(--accent);color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px">
-
-        Upload Shipping Proof
-
-      </button>` : ''}
+      </div>
 
     </div>`;
 
