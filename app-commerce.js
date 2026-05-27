@@ -1834,9 +1834,15 @@ async function applyDiscountCode() {
 
 async function placeOrder() {
 
+  const name    = document.getElementById('co-name')?.value.trim();
+  const phone   = document.getElementById('co-phone')?.value.trim();
+  const state   = document.getElementById('co-state')?.value.trim();
   const address = document.getElementById('co-address')?.value.trim();
   const btn     = document.getElementById('co-place-btn');
 
+  if (!name)    { showToast('Enter recipient name'); return; }
+  if (!phone)   { showToast('Enter phone number'); return; }
+  if (!state)   { showToast('Select delivery state'); return; }
   if (!address) { showToast('Enter delivery address'); return; }
 
   const items = window._coItems || [];
@@ -1877,7 +1883,7 @@ async function placeOrder() {
         price_ngn:        priceNgn,
         price_mp:         priceMp,
         status:           'paid',
-        shipping_address: address,
+        shipping_address: `${name} · ${phone} · ${state} · ${address}`,
       }).select().single();
 
       console.log('[placeOrder] order insert — data:', order?.id, 'error:', JSON.stringify(orderErr));
@@ -3337,6 +3343,20 @@ async function openOrderDetail(orderId, role) {
 
   if (!order) { showToast('Order not found'); return; }
 
+  // Fetch product image separately since there's no FK join
+  let productImage = '';
+  if (order.product_id) {
+    const { data: prod } = await supabase.from('products').select('images').eq('id', order.product_id).single();
+    productImage = prod?.images?.[0] || '';
+  }
+
+  // Parse structured address: "Name · Phone · State · Street address"
+  const addrParts   = (order.shipping_address || '').split(' · ');
+  const shipName    = addrParts[0] || '';
+  const shipPhone   = addrParts[1] || '';
+  const shipState   = addrParts[2] || '';
+  const shipStreet  = addrParts.slice(3).join(' · ') || '';
+
   document.getElementById('order-detail-overlay')?.remove();
 
   const overlay = document.createElement('div');
@@ -3380,7 +3400,9 @@ async function openOrderDetail(orderId, role) {
     <div style="background:var(--surface);margin:0 16px 8px;border-radius:14px;padding:16px;border:1px solid var(--border)">
       <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px">Item</div>
       <div style="display:flex;gap:12px;align-items:center">
-        <div style="width:64px;height:64px;border-radius:12px;background:${gradientFor(order.product_id||order.id)};flex-shrink:0"></div>
+        ${productImage
+          ? `<img src="${productImage}" style="width:64px;height:64px;border-radius:12px;object-fit:cover;flex-shrink:0" alt="">`
+          : `<div style="width:64px;height:64px;border-radius:12px;background:${gradientFor(order.product_id||order.id)};flex-shrink:0"></div>`}
         <div style="flex:1;min-width:0">
           <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px;line-height:1.3">${escHtml(order.title||'—')}</div>
           <div style="font-size:12px;color:var(--text3)">Qty: ${order.quantity||1}</div>
@@ -3391,11 +3413,28 @@ async function openOrderDetail(orderId, role) {
 
     <!-- Delivery card -->
     <div style="background:var(--surface);margin:0 16px 8px;border-radius:14px;padding:16px;border:1px solid var(--border)">
-      <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px">Delivery Address</div>
-      <div style="display:flex;gap:10px;align-items:flex-start">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;margin-top:2px"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
-        <div style="font-size:14px;color:var(--text2);line-height:1.6">${order.shipping_address ? escHtml(order.shipping_address) : '<span style="color:var(--text3)">No address provided</span>'}</div>
-      </div>
+      <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px">Delivery</div>
+      ${shipName ? `
+      <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border2)">
+        <span style="font-size:12px;color:var(--text3)">Recipient</span>
+        <span style="font-size:13px;font-weight:600;color:var(--text)">${escHtml(shipName)}</span>
+      </div>` : ''}
+      ${shipPhone ? `
+      <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border2)">
+        <span style="font-size:12px;color:var(--text3)">Phone</span>
+        <span style="font-size:13px;font-weight:600;color:var(--text)">${escHtml(shipPhone)}</span>
+      </div>` : ''}
+      ${shipState ? `
+      <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border2)">
+        <span style="font-size:12px;color:var(--text3)">State</span>
+        <span style="font-size:13px;font-weight:600;color:var(--text)">${escHtml(shipState)}</span>
+      </div>` : ''}
+      ${shipStreet ? `
+      <div style="padding:7px 0">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:4px">Address</div>
+        <div style="font-size:13px;color:var(--text);line-height:1.5">${escHtml(shipStreet)}</div>
+      </div>` : `
+      <div style="font-size:13px;color:var(--text2)">${escHtml(order.shipping_address||'No address provided')}</div>`}
       ${order.note ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border2);font-size:12px;color:var(--text3)">Note: ${escHtml(order.note)}</div>` : ''}
     </div>
 
