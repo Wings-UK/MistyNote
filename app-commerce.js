@@ -3337,94 +3337,113 @@ async function openOrderDetail(orderId, role) {
 
   if (!order) { showToast('Order not found'); return; }
 
-  // Remove existing overlay if open
   document.getElementById('order-detail-overlay')?.remove();
 
   const overlay = document.createElement('div');
   overlay.id = 'order-detail-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:900;background:var(--bg);overflow-y:auto;padding:0 0 80px';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:900;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch';
 
-  const statusColors = { paid:'#007aff', processing:'#ff9500', shipped:'#6C47FF', delivered:'#00c48c', cancelled:'var(--text3)', pending:'#ff9500' };
-  const statusCol = statusColors[order.status] || 'var(--text3)';
-  const orderId8  = order.id.slice(0,8).toUpperCase();
+  const statusColors  = { paid:'#007aff', processing:'#ff9500', shipped:'#6C47FF', delivered:'#00c48c', cancelled:'#ff3b5c', pending:'#ff9500' };
+  const statusBg      = { paid:'rgba(0,122,255,0.1)', processing:'rgba(255,149,0,0.1)', shipped:'rgba(108,71,255,0.1)', delivered:'rgba(0,196,140,0.1)', cancelled:'rgba(255,59,92,0.1)', pending:'rgba(255,149,0,0.1)' };
+  const statusCol     = statusColors[order.status] || 'var(--text3)';
+  const statusBgCol   = statusBg[order.status] || 'var(--bg2)';
+  const orderId8      = order.id.slice(0,8).toUpperCase();
+  const statusLabel   = (order.status||'').replace('_',' ');
 
   overlay.innerHTML = `
 
-    <!-- Header -->
-    <div style="position:sticky;top:0;background:var(--surface);border-bottom:1px solid var(--border);padding:calc(var(--safe-top)+12px) 16px 12px;display:flex;align-items:center;gap:12px;z-index:2">
-      <button onclick="document.getElementById('order-detail-overlay').remove()" style="background:none;border:none;cursor:pointer;padding:4px">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-      </button>
-      <div style="flex:1">
-        <div style="font-size:16px;font-weight:700;color:var(--text)">Order #${orderId8}</div>
-        <div style="font-size:12px;color:var(--text3)">${timeSince(order.created_at)}</div>
+    <!-- Sticky top bar -->
+    <div style="position:sticky;top:0;z-index:2;background:var(--surface);border-bottom:1px solid var(--border);padding:calc(var(--safe-top)+0px) 0 0">
+      <div style="display:flex;align-items:center;height:52px;padding:0 4px 0 0">
+        <button onclick="document.getElementById('order-detail-overlay').remove()"
+          style="width:48px;height:52px;display:flex;align-items:center;justify-content:center;background:none;border:none;cursor:pointer;flex-shrink:0">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        </button>
+        <div style="flex:1;font-size:16px;font-weight:700;color:var(--text)">Order Detail</div>
+        <div style="margin-right:16px;background:${statusBgCol};color:${statusCol};font-size:12px;font-weight:700;padding:4px 10px;border-radius:20px;text-transform:capitalize">${statusLabel}</div>
       </div>
-      <span style="font-size:13px;font-weight:700;color:${statusCol};text-transform:capitalize">${(order.status||'').replace('_',' ')}</span>
     </div>
 
-    <div style="padding:0 16px">
+    <!-- Order ID banner -->
+    <div style="background:var(--surface);margin:8px 16px;border-radius:14px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border)">
+      <div>
+        <div style="font-size:11px;color:var(--text3);font-weight:500;margin-bottom:2px">ORDER ID</div>
+        <div style="font-size:15px;font-weight:800;color:var(--text);letter-spacing:1px">#${orderId8}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:11px;color:var(--text3);font-weight:500;margin-bottom:2px">PLACED</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${timeSince(order.created_at)}</div>
+      </div>
+    </div>
 
-      <!-- Product -->
-      <div style="padding:16px 0;border-bottom:1px solid var(--border2)">
-        <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Item</div>
-        <div style="display:flex;gap:12px;align-items:center">
-          <div style="width:60px;height:60px;border-radius:10px;background:${gradientFor(order.product_id||order.id)};flex-shrink:0"></div>
-          <div style="flex:1">
-            <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:2px">${escHtml(order.title||'—')}</div>
-            <div style="font-size:12px;color:var(--text3)">Qty: ${order.quantity||1}</div>
-          </div>
-          <div style="font-size:14px;font-weight:700;color:var(--text)">${mktFmtNgn(order.price_ngn||0)}</div>
+    <!-- Item card -->
+    <div style="background:var(--surface);margin:0 16px 8px;border-radius:14px;padding:16px;border:1px solid var(--border)">
+      <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px">Item</div>
+      <div style="display:flex;gap:12px;align-items:center">
+        <div style="width:64px;height:64px;border-radius:12px;background:${gradientFor(order.product_id||order.id)};flex-shrink:0"></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px;line-height:1.3">${escHtml(order.title||'—')}</div>
+          <div style="font-size:12px;color:var(--text3)">Qty: ${order.quantity||1}</div>
         </div>
+        <div style="font-size:15px;font-weight:800;color:var(--text);flex-shrink:0">${mktFmtNgn(order.price_ngn||0)}</div>
       </div>
+    </div>
 
-      <!-- Delivery -->
-      <div style="padding:16px 0;border-bottom:1px solid var(--border2)">
-        <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Delivery</div>
-        <div style="font-size:13px;color:var(--text2);line-height:1.9">
-          ${order.shipping_address ? `<div>${escHtml(order.shipping_address)}</div>` : '<div style="color:var(--text3)">No address provided</div>'}
-          ${order.note ? `<div style="margin-top:4px;color:var(--text3)">Note: ${escHtml(order.note)}</div>` : ''}
-        </div>
+    <!-- Delivery card -->
+    <div style="background:var(--surface);margin:0 16px 8px;border-radius:14px;padding:16px;border:1px solid var(--border)">
+      <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px">Delivery Address</div>
+      <div style="display:flex;gap:10px;align-items:flex-start">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;margin-top:2px"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        <div style="font-size:14px;color:var(--text2);line-height:1.6">${order.shipping_address ? escHtml(order.shipping_address) : '<span style="color:var(--text3)">No address provided</span>'}</div>
       </div>
+      ${order.note ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border2);font-size:12px;color:var(--text3)">Note: ${escHtml(order.note)}</div>` : ''}
+    </div>
 
-      <!-- Payment -->
-      <div style="padding:16px 0;border-bottom:1px solid var(--border2)">
-        <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Payment</div>
-        <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px">
-          <span>Total</span><span>${mktFmtNgn(order.price_ngn||0)}</span>
-        </div>
-        <div style="font-size:12px;color:var(--text3)">Paid with ${fmtPts(order.price_mp||0)}</div>
+    <!-- Payment card -->
+    <div style="background:var(--surface);margin:0 16px 8px;border-radius:14px;padding:16px;border:1px solid var(--border)">
+      <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px">Payment</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:13px;color:var(--text2)">Amount</span>
+        <span style="font-size:13px;color:var(--text)">${mktFmtNgn(order.price_ngn||0)}</span>
       </div>
-
-      <!-- Shipping proof -->
-      ${order.shipping_proof_url ? `
-      <div style="padding:16px 0;border-bottom:1px solid var(--border2)">
-        <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">Shipping Proof</div>
-        <img src="${order.shipping_proof_url}" style="width:100%;border-radius:12px;object-fit:cover" alt="">
-        ${order.auto_release_at ? `<div style="font-size:12px;color:var(--text3);margin-top:6px">MP auto-releases if delivery not confirmed within 7 days</div>` : ''}
-      </div>` : ''}
-
-      <!-- Actions -->
-      <div style="padding:16px 0;display:flex;flex-direction:column;gap:10px">
-
-        ${role==='buyer' && order.status==='shipped' ? `
-        <button onclick="confirmDelivery('${order.id}');document.getElementById('order-detail-overlay').remove()"
-          style="width:100%;height:50px;border-radius:14px;background:#00c48c;color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">
-          ✓ Confirm Delivery
-        </button>` : ''}
-
-        ${role==='seller' && order.status==='paid' ? `
-        <button onclick="updateOrderStatus('${order.id}','processing');document.getElementById('order-detail-overlay').remove()"
-          style="width:100%;height:50px;border-radius:14px;background:var(--bg2);color:var(--text);border:1px solid var(--border);font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font)">
-          Mark as Processing
-        </button>` : ''}
-
-        ${role==='seller' && (order.status==='paid'||order.status==='processing') ? `
-        <button onclick="openShipOrder('${order.id}');document.getElementById('order-detail-overlay').remove()"
-          style="width:100%;height:50px;border-radius:14px;background:var(--accent);color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">
-          Upload Shipping Proof
-        </button>` : ''}
-
+      <div style="height:1px;background:var(--border2);margin:8px 0"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:15px;font-weight:700;color:var(--text)">Total</span>
+        <span style="font-size:17px;font-weight:800;color:var(--text)">${mktFmtNgn(order.price_ngn||0)}</span>
       </div>
+      <div style="margin-top:6px;display:flex;align-items:center;gap:6px">
+        <span style="font-size:12px;color:var(--accent);font-weight:600;background:var(--accent-soft);padding:2px 8px;border-radius:6px">Paid with ${fmtPts(order.price_mp||0)}</span>
+      </div>
+    </div>
+
+    <!-- Shipping proof -->
+    ${order.shipping_proof_url ? `
+    <div style="background:var(--surface);margin:0 16px 8px;border-radius:14px;padding:16px;border:1px solid var(--border)">
+      <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px">Shipping Proof</div>
+      <img src="${order.shipping_proof_url}" style="width:100%;border-radius:10px;object-fit:cover" alt="">
+      ${order.auto_release_at ? `<div style="font-size:12px;color:var(--text3);margin-top:8px">⏱ MP auto-releases if delivery not confirmed within 7 days</div>` : ''}
+    </div>` : ''}
+
+    <!-- Action buttons -->
+    <div style="padding:8px 16px 32px;display:flex;flex-direction:column;gap:10px">
+
+      ${role==='buyer' && order.status==='shipped' ? `
+      <button onclick="confirmDelivery('${order.id}');document.getElementById('order-detail-overlay').remove()"
+        style="width:100%;height:52px;border-radius:14px;background:#00c48c;color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:8px">
+        ✓ Confirm Delivery
+      </button>` : ''}
+
+      ${role==='seller' && order.status==='paid' ? `
+      <button onclick="updateOrderStatus('${order.id}','processing');document.getElementById('order-detail-overlay').remove()"
+        style="width:100%;height:52px;border-radius:14px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font)">
+        Mark as Processing
+      </button>` : ''}
+
+      ${role==='seller' && (order.status==='paid'||order.status==='processing') ? `
+      <button onclick="openShipOrder('${order.id}');document.getElementById('order-detail-overlay').remove()"
+        style="width:100%;height:52px;border-radius:14px;background:var(--accent);color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">
+        Upload Shipping Proof
+      </button>` : ''}
 
     </div>`;
 
