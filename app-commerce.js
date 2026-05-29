@@ -29,7 +29,9 @@ let currentStorefrontId = null;
 let editingProductId = null;
 
 // Product prices use BASE_RATE (real KWD→NGN, no fee markup).
+
 // BUY_RATE (BASE_RATE × 1.04) is only used in app-wallet.js for wallet top-up.
+
 function mktNgnToMp(ngn) { var r = (typeof BASE_RATE !== 'undefined' && BASE_RATE > 0) ? BASE_RATE : 4400; return Math.ceil((ngn / r) * 100) / 100; }
 
 function mktMpToNgn(mp)  { var r = (typeof BASE_RATE !== 'undefined' && BASE_RATE > 0) ? BASE_RATE : 4400; return Math.round(mp * r); }
@@ -841,17 +843,27 @@ async function toggleStorefrontFollow(userId, btn) {
 // ══════════════════════════════════════════
 
 function pdpShowBars() {
+
   var t = document.getElementById('pdp-top-bar');
+
   var c = document.getElementById('pdp-cta-bar');
+
   if (t) t.style.display = 'flex';
+
   if (c) c.style.display = 'flex';
+
 }
 
 function pdpHideBars() {
+
   var t = document.getElementById('pdp-top-bar');
+
   var c = document.getElementById('pdp-cta-bar');
+
   if (t) t.style.display = 'none';
+
   if (c) c.style.display = 'none';
+
 }
 
 async function openProductPage(productId) {
@@ -915,310 +927,549 @@ async function renderProductPage(productId) {
   el.innerHTML = `
 
     <!-- SPACER below fixed top bar (bar lives outside this scroll container) -->
+
     <div class="pdp-header-spacer"></div>
 
     <!-- PRODUCT IMAGE (square, full-width) -->
+
     <div class="pdp-images" id="pdp-images">
+
       ${images.length > 0
+
         ? images.map((img, i) => `<div class="pdp-img-slide ${i===0?'active':''}" data-index="${i}"><img src="${img}" class="pdp-img" alt="" loading="${i===0?'eager':'lazy'}"></div>`).join('')
+
         : `<div class="pdp-img-placeholder" style="background:${gradientFor(p.id)}"></div>`}
+
       ${images.length > 1
+
         ? `<div class="pdp-img-dots">${images.map((_,i) => `<div class="pdp-img-dot ${i===0?'active':''}" onclick="pdpGoToImage(${i})"></div>`).join('')}</div>`
+
         : ''}
+
       ${discount > 0 ? `<div class="pdp-discount-badge">${discount}%</div>` : ''}
+
     </div>
 
     <!-- MAIN INFO BLOCK -->
+
     <div class="pdp-info-block">
 
       <!-- Title -->
+
       <div class="pdp-title">${escHtml(p.title)}</div>
 
       <!-- Rating row: star + score + (recent 6mo score) + pipe + review count -->
+
       ${p.rating > 0 ? `
+
       <div class="pdp-rating-row">
+
         <span class="pdp-star">★</span>
+
         <span class="pdp-rating-score">${Number(p.rating).toFixed(2)}</span>
+
         <span class="pdp-rating-recent">(last 6 months ${Number(p.rating).toFixed(2)})</span>
+
         <span class="pdp-rating-pipe">|</span>
+
         <span class="pdp-rating-link">${p.review_count || 0} reviews</span>
+
       </div>` : ''}
 
       <!-- Discount % + strikethrough original price -->
+
       ${p.compare_price_ngn > p.price_ngn ? `
+
       <div class="pdp-discount-row">
+
         <span class="pdp-discount-pct">${discount}%</span>
+
         <span class="pdp-compare-price">${mktFmtNgn(p.compare_price_ngn)}</span>
+
       </div>` : ''}
 
       <!-- Big red price -->
+
       <div class="pdp-price-big">${mktFmtNgn(p.price_ngn)}</div>
 
       <!-- Free delivery row -->
+
       <div class="pdp-free-delivery">
+
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+
         Free delivery
+
       </div>
 
     </div><!-- /pdp-info-block -->
 
     <!-- INFO ROWS: Points · Benefits · Shipping -->
+
     <div class="pdp-info-rows">
 
       <!-- Points row -->
+
       <div class="pdp-info-row">
+
         <span class="pdp-row-label">Earn</span>
+
         <div class="pdp-row-content">
+
           <div class="pdp-points-amount" onclick="this.closest('.pdp-info-row').querySelector('.pdp-points-card').style.display=this.closest('.pdp-info-row').querySelector('.pdp-points-card').style.display==='none'?'block':'none'">
+
             Up to ${fmtPts(mktNgnToMp(p.price_ngn))} MistyPoints
+
             <span class="pdp-points-chevron">
+
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+
             </span>
+
           </div>
+
           <!-- Expandable points card -->
+
           <div class="pdp-points-card" style="display:none">
+
             <div class="pdp-points-card-top">
+
               <span class="pdp-points-badge">M+</span>
+
               <span class="pdp-points-card-desc">Up to 5% extra MP back</span>
+
               <span class="pdp-points-card-val">${fmtPts(Math.round(mktNgnToMp(p.price_ngn)*0.05))}</span>
+
             </div>
+
             <button class="pdp-points-card-btn">
+
               Pay with MP and earn more
+
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+
             </button>
+
           </div>
+
         </div>
+
       </div>
 
       <!-- Benefits row -->
+
       <div class="pdp-info-row">
+
         <span class="pdp-row-label">Perks</span>
+
         <div class="pdp-row-content">
+
           <div class="pdp-benefit-line">
+
             <span>Pay with MP · earn up to ${fmtPts(Math.round(mktNgnToMp(p.price_ngn)*0.02))} back (2%)</span>
+
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+
           </div>
+
           <div class="pdp-benefit-line">
+
             <span>Instalment available · Escrow protected</span>
+
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+
           </div>
+
         </div>
+
       </div>
 
       <!-- Shipping row -->
+
       <div class="pdp-info-row">
+
         <span class="pdp-row-label">Delivery</span>
+
         <div class="pdp-row-content">
+
           <div class="pdp-ship-detail">
+
             <strong>Ships today</strong><span class="pdp-ship-dot">·</span>estimated delivery date available<br>
+
             Order now for fastest dispatch<br>
+
             Free delivery
+
           </div>
+
           <div class="pdp-ship-more">
+
             See more
+
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+
           </div>
+
         </div>
+
       </div>
 
     </div><!-- /pdp-info-rows -->
 
     <!-- REVIEW SUMMARY -->
+
     ${reviews.length > 0 || (p.review_count > 0) ? `
+
     <div class="pdp-review-summary">
+
       <div class="pdp-review-summary-title">
+
         <span>94%</span> of reviews are 4 stars or above
+
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="vertical-align:middle;margin-left:4px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+
       </div>
+
       <div class="pdp-review-cards">
+
         ${reviews.slice(0,5).map(r => `
+
           <div class="pdp-review-card">
+
             <img class="pdp-review-card-img" src="${r.reviewer?.avatar||''}" onerror="this.style.background='var(--bg3)';this.src=''" alt="">
+
             <div class="pdp-review-card-body">
+
               <div class="pdp-review-card-top">
+
                 <span class="pdp-review-card-star">★</span>
+
                 <span class="pdp-review-card-score">${r.rating}</span>
+
                 <span class="pdp-review-card-tag">True to size</span>
+
               </div>
+
               <div class="pdp-review-card-text">${escHtml(r.review||'')}</div>
+
             </div>
+
           </div>`).join('')}
+
         ${reviews.length === 0 ? `
+
           <div class="pdp-review-card">
+
             <div class="pdp-review-card-img" style="background:var(--bg3)"></div>
+
             <div class="pdp-review-card-body">
+
               <div class="pdp-review-card-top"><span class="pdp-review-card-star">★</span><span class="pdp-review-card-score">5</span><span class="pdp-review-card-tag">True to size</span></div>
+
               <div class="pdp-review-card-text">Great quality, looks exactly as shown. Highly recommend!</div>
+
             </div>
+
           </div>` : ''}
+
       </div>
+
     </div>` : ''}
 
     <!-- RELATED PRODUCTS -->
+
     <div class="pdp-related-section">
+
       <div class="pdp-related-header">
+
         <div class="pdp-related-title">More colours &amp; styles</div>
+
       </div>
+
       <div class="pdp-related-scroll" id="pdp-related-scroll">
+
         <div class="pdp-related-card">
+
           <div class="pdp-related-img-wrap">
+
             <div class="pdp-related-img" style="background:var(--bg2)"></div>
+
             <button class="pdp-related-wish">
+
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>
+
             </button>
+
           </div>
+
           <button class="pdp-related-add-btn">
+
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/></svg>
+
             Add
+
           </button>
+
           <div class="pdp-related-name">Related item</div>
+
           <div class="pdp-related-price-row">
+
             <span class="pdp-related-price">${mktFmtNgn(p.price_ngn)}</span>
+
           </div>
+
           <div class="pdp-related-ship">Free delivery</div>
+
         </div>
+
       </div>
+
     </div>
 
     <!-- TAB BAR -->
+
     <div class="pdp-tab-bar" id="pdp-tab-bar">
+
       <button class="pdp-tab-btn active" onclick="pdpSwitchTab('details',this)">Details</button>
+
       <button class="pdp-tab-btn" onclick="pdpSwitchTab('reviews',this)">Reviews ${p.review_count||0}</button>
+
       <button class="pdp-tab-btn" onclick="pdpSwitchTab('qa',this)">Q&amp;A</button>
+
       <button class="pdp-tab-btn" onclick="pdpSwitchTab('seller',this)">Seller Info</button>
+
       <button class="pdp-tab-btn" onclick="pdpSwitchTab('related',this)">Recommended</button>
+
     </div>
 
     <!-- TAB: DETAILS (default active) -->
+
     <div class="pdp-tab-panel active" id="pdp-panel-details">
+
       <div class="pdp-detail-panel">
 
         ${variants.length > 0 ? `
+
         <div class="pdp-variants" id="pdp-variants">
+
           ${variants.map(v => `
+
             <div class="pdp-variant-group">
+
               <div class="pdp-variant-label">${escHtml(v.name)}</div>
+
               <div class="pdp-variant-options">
+
                 ${(v.options||[]).map((opt,i) => `
+
                   <button class="pdp-variant-opt ${i===0?'selected':''} ${opt.stock===0?'out-of-stock':''}"
+
                     data-variant-id="${v.id}" data-option-index="${i}"
+
                     onclick="selectVariantOption(this,'${v.id}',${i})" ${opt.stock===0?'disabled':''}>
+
                     ${escHtml(opt.name)}
+
                     ${opt.price_ngn && opt.price_ngn !== p.price_ngn ? `<span style="font-size:10px;opacity:0.7;display:block">${mktFmtNgn(opt.price_ngn)}</span>` : ''}
+
                   </button>`).join('')}
+
               </div>
+
             </div>`).join('')}
+
         </div>` : ''}
 
         <div class="pdp-qty-row">
+
           <span class="pdp-qty-label">Quantity</span>
+
           <div class="pdp-qty-ctrl">
+
             <button class="pdp-qty-btn" onclick="pdpChangeQty(-1)">−</button>
+
             <span class="pdp-qty-val" id="pdp-qty">1</span>
+
             <button class="pdp-qty-btn" onclick="pdpChangeQty(1)">+</button>
+
           </div>
+
           <span class="pdp-stock-hint">${p.stock > 0 ? p.stock + ' in stock' : 'Out of stock'}</span>
+
         </div>
 
         ${p.description ? `
+
         <div class="pdp-detail-section-title">Description</div>
+
         <div class="pdp-description">${escHtml(p.description)}</div>` : ''}
 
         <div class="pdp-detail-section-title">Product Info</div>
+
         <div class="pdp-details">
+
           <div class="pdp-detail-row"><span>Condition</span><span>${p.condition||'—'}</span></div>
+
           ${p.sku ? `<div class="pdp-detail-row"><span>SKU</span><span>${escHtml(p.sku)}</span></div>` : ''}
+
           ${p.weight_kg ? `<div class="pdp-detail-row"><span>Weight</span><span>${p.weight_kg}kg</span></div>` : ''}
+
           <div class="pdp-detail-row"><span>Category</span><span>${escHtml(p.category||'—')}</span></div>
+
         </div>
 
       </div>
 
       <!-- Safety notice -->
+
       <div class="pdp-safety-card">
+
         <svg class="pdp-safety-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10" fill="#ff3b5c" opacity="0.15"/><circle cx="12" cy="12" r="10" fill="none" stroke="#ff3b5c" stroke-width="2"/><line x1="12" y1="8" x2="12" y2="12" stroke="#ff3b5c" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16" r="1" fill="#ff3b5c"/></svg>
+
         <div class="pdp-safety-text">
+
           If a seller directs you to pay outside MistyNote or asks for personal details via external links,
+
           <a>do not pay</a> and report them immediately via <a>Help &amp; Support</a>.
+
         </div>
+
       </div>
+
     </div>
 
     <!-- TAB: REVIEWS -->
+
     <div class="pdp-tab-panel" id="pdp-panel-reviews">
+
       <div class="pdp-reviews-panel">
+
         ${reviews.length > 0
+
           ? `<div class="pdp-reviews-top"><span>94%</span> of reviews are 4 stars or above</div>
+
              ${reviews.map(r => `
+
                <div class="sf-review">
+
                  <div class="sf-review-header">
+
                    <img class="sf-review-avatar" src="${r.reviewer?.avatar||''}" onerror="this.src=''" alt="">
+
                    <div>
+
                      <div class="sf-review-name">@${escHtml(r.reviewer?.username||'User')}</div>
+
                      <div class="sf-review-stars">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</div>
+
                    </div>
+
                    <div class="sf-review-time">${timeSince(r.created_at)}</div>
+
                  </div>
+
                  ${r.review ? `<div class="sf-review-text">${escHtml(r.review)}</div>` : ''}
+
                </div>`).join('')}`
+
           : `<div style="padding:40px 0;text-align:center;color:var(--text3);font-size:14px;">No reviews yet — be the first!</div>`}
+
       </div>
+
     </div>
 
     <!-- TAB: Q&A -->
+
     <div class="pdp-tab-panel" id="pdp-panel-qa">
+
       <div style="padding:40px 16px;text-align:center;color:var(--text3);font-size:14px;">Q&amp;A coming soon</div>
+
     </div>
 
     <!-- TAB: SELLER INFO -->
+
     <div class="pdp-tab-panel" id="pdp-panel-seller">
+
       ${sf.id ? `
+
       <div style="padding:16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border2);cursor:pointer" onclick="openStorefront('${sf.id}')">
+
         <img style="width:48px;height:48px;border-radius:10px;object-fit:cover;background:var(--bg2)" src="${sf.logo_url||''}" onerror="this.style.background='var(--bg2)'" alt="">
+
         <div style="flex:1">
+
           <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:2px">${escHtml(sf.store_name||'')}</div>
+
           <div style="font-size:12px;color:var(--text3)">${escHtml(sf.category||'')} · Visit store</div>
+
         </div>
+
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+
       </div>` : `<div style="padding:40px 16px;text-align:center;color:var(--text3);font-size:14px;">No seller info available</div>`}
+
     </div>
 
     <!-- TAB: RECOMMENDED -->
+
     <div class="pdp-tab-panel" id="pdp-panel-related">
+
       <div style="padding:40px 16px;text-align:center;color:var(--text3);font-size:14px;">Recommended products coming soon</div>
+
     </div>
 
     <!-- Bottom spacer so last content clears fixed CTA -->
+
     <div style="height:calc(72px + var(--safe-bottom))"></div>`;
 
   // ── Show & populate the fixed bars that live outside #page-product ──
+
   var topBar   = document.getElementById('pdp-top-bar');
+
   var ctaBar   = document.getElementById('pdp-cta-bar');
+
   var storeName = document.getElementById('pdp-top-store-name');
+
   var buyBtn   = document.getElementById('pdp-buy-now-btn');
+
   var giftBtn  = document.getElementById('pdp-gift-btn');
+
   var soldBtn  = document.getElementById('pdp-sold-out-btn');
 
   // Set store name in top bar
+
   if (storeName) storeName.textContent = sf.store_name || 'MistyNote';
 
   // Wire buy button to this product
+
   if (buyBtn)  buyBtn.onclick  = function() { buyNow(p.id); };
+
   if (giftBtn) giftBtn.onclick = function() { /* gift flow */ };
 
   // Show/hide sold out vs active buttons
+
   if (p.stock > 0) {
+
     if (giftBtn) giftBtn.style.display = '';
+
     if (buyBtn)  buyBtn.style.display  = '';
+
     if (soldBtn) soldBtn.style.display = 'none';
+
   } else {
+
     if (giftBtn) giftBtn.style.display = 'none';
+
     if (buyBtn)  buyBtn.style.display  = 'none';
+
     if (soldBtn) soldBtn.style.display = '';
+
   }
 
   // Show both bars
+
   if (topBar) topBar.style.display = 'flex';
+
   if (ctaBar) ctaBar.style.display = 'flex';
 
   initPdpSwipe();
@@ -1244,25 +1495,41 @@ function pdpGoToImage(index) {
 function pdpSwitchTab(tab, btn) {
 
   // Switch panels
+
   document.querySelectorAll('.pdp-tab-panel').forEach(function(p) { p.classList.remove('active'); });
+
   var panel = document.getElementById('pdp-panel-' + tab);
+
   if (panel) panel.classList.add('active');
 
   // Switch active tab button
+
   document.querySelectorAll('.pdp-tab-btn').forEach(function(b) { b.classList.remove('active'); });
+
   if (btn) btn.classList.add('active');
 
   // Scroll tab bar so active tab is visible
+
   // Scroll the tab bar so active tab is visible — scroll the bar itself, not the page
+
   if (btn) {
+
     var bar = document.getElementById('pdp-tab-bar');
+
     if (bar) {
+
       var btnLeft   = btn.offsetLeft;
+
       var btnWidth  = btn.offsetWidth;
+
       var barWidth  = bar.offsetWidth;
+
       var target    = btnLeft - (barWidth / 2) + (btnWidth / 2);
+
       bar.scrollTo({ left: target, behavior: 'smooth' });
+
     }
+
   }
 
 }
@@ -1582,6 +1849,7 @@ async function loadCheckoutPage() {
   if (!currentUser) { el.innerHTML = `<div class="empty-state"><p>Sign in to checkout</p></div>`; return; }
 
   // ── Sync wallet balance FIRST before rendering so the displayed balance is accurate ──
+
   await syncWalletBalance();
 
   const { data: items } = await supabase.from('cart_items')
@@ -1848,9 +2116,7 @@ async function placeOrder() {
   const items = window._coItems || [];
   if (!items.length) { showToast('Your cart is empty'); return; }
 
-  const totalMp = items.reduce((s, i) => {
-    return s + Math.ceil(mktNgnToMp((i.product?.price_ngn||0) * i.quantity) * 100) / 100;
-  }, 0);
+  const totalMp = items.reduce((s, i) => s + Math.ceil(mktNgnToMp((i.product?.price_ngn||0) * i.quantity) * 100) / 100, 0);
 
   if (walletState.points < totalMp) { showToast('Insufficient MistyPoints — top up your wallet'); openWallet(); return; }
 
@@ -1868,12 +2134,12 @@ async function placeOrder() {
       const priceNgn  = (item.product?.price_ngn || 0) * item.quantity;
       const priceMp   = Math.ceil(mktNgnToMp(priceNgn) * 100) / 100;
 
-      console.log('[placeOrder] item:', { sellerId, productId, priceNgn, priceMp, title: item.product?.title });
-
       if (!sellerId) throw new Error('Seller not found for: ' + (item.product?.title || productId));
       if (sellerId === currentUser.id) throw new Error('You cannot buy your own product');
 
-      // Step 1: Insert order as paid immediately
+      // Auto-cancel if seller doesn't respond in 48 hours
+      const autoCancel = new Date(Date.now() + 48 * 60 * 60 * 1000);
+
       const { data: order, error: orderErr } = await supabase.from('orders').insert({
         buyer_id:         currentUser.id,
         seller_id:        sellerId,
@@ -1882,52 +2148,37 @@ async function placeOrder() {
         quantity:         item.quantity,
         price_ngn:        priceNgn,
         price_mp:         priceMp,
-        status:           'paid',
+        status:           'pending',
         shipping_address: `${name} · ${phone} · ${state} · ${address}`,
+        auto_cancel_at:   autoCancel.toISOString(),
       }).select().single();
-
-      console.log('[placeOrder] order insert — data:', order?.id, 'error:', JSON.stringify(orderErr));
 
       if (orderErr) throw new Error('Order failed: ' + orderErr.message);
 
-      // Step 2: Escrow — MP already moved via walletPinCheck flow
-      // Call RPC but NEVER roll back if it errors — MP may have already moved
+      // Hold MP in escrow immediately
       const { error: escrowErr } = await supabase.rpc('escrow_hold_points', {
-        buyer_id:  currentUser.id,
-        seller_id: sellerId,
-        order_id:  order.id,
-        points:    priceMp,
+        buyer_id: currentUser.id, seller_id: sellerId, order_id: order.id, points: priceMp,
       });
+      if (escrowErr) console.log('[placeOrder] escrow note:', escrowErr.message);
 
-      console.log('[placeOrder] escrow error (if any):', JSON.stringify(escrowErr));
-      // Do not throw on escrow error — order is recorded, MP will be in escrow_holds
+      // Notify seller with accept/decline prompt
+      insertNotification({ user_id: sellerId, actor_id: currentUser.id, type: 'new_order',
+        comment_text: `New order: ${item.product?.title || 'your product'} · ${mktFmtNgn(priceNgn)} — Accept or decline within 48hrs` });
 
-      // Step 3: Notify seller
-      insertNotification({ user_id: sellerId, actor_id: currentUser.id, type: 'new_order', comment_text: `New order: ${item.product?.title || 'your product'} · ${mktFmtNgn(priceNgn)}` });
-
-      // Step 4: Decrement stock
       try { await supabase.rpc('decrement_stock', { p_product_id: productId, p_qty: item.quantity }); } catch(e) {}
 
     }
 
-    // Step 5: Clear cart
-    const { error: cartErr } = await supabase.from('cart_items').delete().eq('user_id', currentUser.id);
-    console.log('[placeOrder] cart clear error:', JSON.stringify(cartErr));
-
+    await supabase.from('cart_items').delete().eq('user_id', currentUser.id);
     cartCount = 0; updateCartBadges(); syncWalletBalance();
 
-    showToast('Order placed! 🎉');
-
+    showToast('Order placed! Waiting for seller to accept 🎉');
     slideBack();
-
     setTimeout(() => openMyBag(), 400);
 
   } catch(e) {
-
-    console.log('[placeOrder] CATCH:', e.message, e.stack);
     btn.disabled = false; btn.textContent = 'Place Order';
     showToast('Order failed: ' + (e.message || 'Please try again'));
-
   }
 
 }
@@ -1938,127 +2189,112 @@ async function placeOrder() {
 
 // ══════════════════════════════════════════
 
-function openMyBag() { console.log('[openMyBag] called, currentUser:', currentUser?.id); slideTo('my-bag', loadMyBag); }
+function openMyBag() { slideTo('my-bag', loadMyBag); }
 
 async function loadMyBag() {
 
-  console.log('[loadMyBag] called, currentUser:', currentUser?.id);
-
   const el = document.getElementById('my-bag-content');
-
-  console.log('[loadMyBag] element found:', !!el);
-
   if (!el) return;
-
   el.innerHTML = `<div class="loading-pulse" style="height:300px"></div>`;
-
   if (!currentUser) { el.innerHTML = `<div class="empty-state"><p>Sign in to view your bag</p></div>`; return; }
 
-  const { data: orders, error: ordersErr } = await supabase.from('orders')
-
-    .select('*')
-
-    .eq('buyer_id', currentUser.id).order('created_at', { ascending: false });
-
-  console.log('[loadMyBag] orders count:', orders?.length, '| error:', JSON.stringify(ordersErr));
-  console.log('[loadMyBag] first order raw:', JSON.stringify(orders?.[0]));
+  const { data: orders } = await supabase.from('orders')
+    .select('*').eq('buyer_id', currentUser.id).order('created_at', { ascending: false });
 
   if (!orders?.length) {
-
     el.innerHTML = `<div class="empty-state"><div style="font-size:48px;margin-bottom:12px">🛍️</div><p>No orders yet</p><span>Your purchases will appear here</span><button class="btn-primary" style="margin-top:16px" onclick="slideBack();navTo('market')">Start Shopping</button></div>`;
-
     return;
-
   }
 
-  const statusColors = { pending:'#ff9500', paid:'#007aff', processing:'#007aff', shipped:'#6C47FF', delivered:'#00c48c', cancelled:'var(--text3)', refunded:'var(--text3)' };
+  const statusMeta = {
+    pending:    { color:'#ff9500', bg:'rgba(255,149,0,0.1)',    icon:'⏳', label:'Awaiting seller' },
+    accepted:   { color:'#007aff', bg:'rgba(0,122,255,0.1)',    icon:'✓',  label:'Accepted' },
+    processing: { color:'#007aff', bg:'rgba(0,122,255,0.1)',    icon:'⚙️', label:'Processing' },
+    shipped:    { color:'#6C47FF', bg:'rgba(108,71,255,0.1)',   icon:'🚚', label:'Shipped' },
+    delivered:  { color:'#00c48c', bg:'rgba(0,196,140,0.1)',    icon:'✅', label:'Delivered' },
+    cancelled:  { color:'#ff3b5c', bg:'rgba(255,59,92,0.1)',    icon:'✕',  label:'Cancelled' },
+    declined:   { color:'#ff3b5c', bg:'rgba(255,59,92,0.1)',    icon:'✕',  label:'Declined' },
+    refunded:   { color:'#8e8e93', bg:'rgba(142,142,147,0.1)',  icon:'↩',  label:'Refunded' },
+  };
 
-  el.innerHTML = `
+  el.innerHTML = `<div class="bag-list">${orders.map(order => {
 
-    <div class="bag-list">
+    const meta = statusMeta[order.status] || { color:'var(--text3)', bg:'var(--bg2)', icon:'•', label: order.status };
+    const addrParts = (order.shipping_address||'').split(' · ');
+    const storeLabel = escHtml(order.title || '—');
 
-      ${orders.map(order => {
+    return `
+      <div class="bag-order-card" onclick="openOrderDetail('${order.id}','buyer')">
 
-        const img       = '';
-
-        const statusCol = statusColors[order.status] || 'var(--text3)';
-
-        return `
-
-          <div class="bag-order-card" onclick="openOrderDetail('${order.id}','buyer')">
-
-            <div class="bag-order-img-wrap">
-
-              ${img ? `<img src="${img}" class="bag-order-img" alt="">` : `<div class="bag-order-img" style="background:${gradientFor(order.id)}"></div>`}
-
+        <div style="display:flex;gap:14px;align-items:flex-start">
+          <div style="width:58px;height:58px;border-radius:14px;background:${gradientFor(order.product_id||order.id)};flex-shrink:0;position:relative">
+            <span style="position:absolute;bottom:-6px;right:-6px;width:22px;height:22px;border-radius:50%;background:${meta.color};color:white;font-size:11px;display:flex;align-items:center;justify-content:center;border:2px solid var(--surface)">${meta.icon}</span>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">${storeLabel}</div>
+            <div style="font-size:12px;color:var(--text3);margin-bottom:6px">Qty ${order.quantity||1} · ${timeSince(order.created_at)}</div>
+            <div style="display:inline-flex;align-items:center;gap:5px;background:${meta.bg};padding:3px 10px;border-radius:20px">
+              <span style="font-size:12px;font-weight:700;color:${meta.color}">${meta.label}</span>
             </div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:14px;font-weight:800;color:var(--text)">${mktFmtNgn(order.price_ngn||0)}</div>
+            <div style="font-size:11px;color:var(--accent);margin-top:2px">${fmtPts(order.price_mp||0)}</div>
+          </div>
+        </div>
 
-            <div class="bag-order-info">
+        ${order.status==='pending' ? `
+        <div style="margin-top:12px;padding:10px 12px;background:rgba(255,149,0,0.08);border-radius:10px;border-left:3px solid #ff9500;font-size:12px;color:#ff9500">
+          ⏳ Waiting for seller to accept · MP held in escrow
+        </div>` : ''}
 
-              <div class="bag-order-number">${order.id.slice(0,8).toUpperCase()}</div>
+        ${order.status==='declined' ? `
+        <div style="margin-top:12px;padding:10px 12px;background:rgba(255,59,92,0.08);border-radius:10px;border-left:3px solid #ff3b5c;font-size:12px;color:#ff3b5c">
+          ✕ Seller declined · ${order.decline_reason ? escHtml(order.decline_reason) : 'MP will be refunded automatically'}
+        </div>` : ''}
 
-              <div class="bag-order-store">${escHtml(order.product?.storefront?.store_name || order.title || '')}</div>
+        ${order.status==='shipped' ? `
+        <div style="margin-top:12px">
+          <button class="bag-confirm-btn" onclick="event.stopPropagation();confirmDelivery('${order.id}')">
+            ✓ Confirm Delivery
+          </button>
+        </div>` : ''}
 
-              <div class="bag-order-items-hint">${escHtml(order.title||'')} · Qty ${order.quantity||1}</div>
+      </div>`;
 
-              <div class="bag-order-total">${mktFmtNgn(order.price_ngn||0)} · ${fmtPts(order.price_mp||0)}</div>
-
-            </div>
-
-            <div class="bag-order-right">
-
-              <div class="bag-order-status" style="color:${statusCol}">${order.status.replace('_',' ')}</div>
-
-              <div class="bag-order-date">${timeSince(order.created_at)}</div>
-
-              ${order.status==='shipped' ? `<button class="bag-confirm-btn" onclick="event.stopPropagation();confirmDelivery('${order.id}')">Confirm Delivery</button>` : ''}
-
-            </div>
-
-          </div>`;
-
-      }).join('')}
-
-    </div>`;
+  }).join('')}</div>`;
 
 }
 
 async function confirmDelivery(orderId) {
 
-  showActionSheet([{ label: 'Confirm Delivery', action: async () => {
+  showActionSheet([{ label: '✓ Confirm Delivery', action: async () => {
 
     showToast('Confirming delivery…');
-
     const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
-
     if (!order) { showToast('Order not found'); return; }
 
-    try { await supabase.rpc('escrow_release_points', { seller_id: order.seller_id, buyer_id: order.buyer_id, order_id: order.id, points: order.price_mp }); } catch(e) { console.log('[confirmDelivery] escrow_release error:', e.message); }
+    try { await supabase.rpc('escrow_release_points', { seller_id: order.seller_id, buyer_id: order.buyer_id, order_id: order.id, points: order.price_mp }); } catch(e) {}
 
     await supabase.from('orders').update({ status: 'delivered', confirmed_at: new Date().toISOString() }).eq('id', orderId);
 
     try { await supabase.rpc('increment_storefront_stats', { p_seller_id: order.seller_id, p_revenue: order.price_ngn||0 }); } catch(e) {}
 
-    insertNotification({ user_id: order.seller_id, actor_id: currentUser.id, type: 'delivery_confirmed', comment_text: `Order confirmed — MP released to your wallet` });
+    insertNotification({ user_id: order.seller_id, actor_id: currentUser.id, type: 'delivery_confirmed',
+      comment_text: `Delivery confirmed for "${order.title||'your product'}" — MP released to your wallet ✓` });
 
-    showToast('Delivery confirmed! Payment released to seller ✓');
-
+    showToast('Delivery confirmed! Payment released ✓');
     loadMyBag();
-
     setTimeout(() => promptReview(orderId), 1000);
 
-  }}]);
+  }}, { label: 'Cancel', action: () => {} }]);
 
 }
 
 async function promptReview(orderId) {
-
   const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
-
   if (!order?.product_id) return;
-
   showActionSheet([{ label: '⭐ Leave a Review', action: () => openLeaveReview(order) }, { label: 'Maybe later', action: () => {} }]);
-
 }
 
 // ══════════════════════════════════════════
@@ -2071,110 +2307,127 @@ function openShopOrders() { slideTo('shop-orders', loadShopOrders); }
 
 async function loadShopOrders() {
 
-  console.log('[loadShopOrders] called, currentStorefront:', currentStorefront?.id, 'user_id:', currentStorefront?.user_id, 'currentUser:', currentUser?.id);
-
   const el = document.getElementById('shop-orders-content');
-
-  console.log('[loadShopOrders] element found:', !!el);
-
-  if (!el || !currentStorefront) { console.log('[loadShopOrders] early return — el:', !!el, 'currentStorefront:', !!currentStorefront); return; }
-
+  if (!el || !currentStorefront) return;
   el.innerHTML = `<div class="loading-pulse" style="height:300px"></div>`;
 
   const sellerId = currentStorefront.user_id || currentUser.id;
-  console.log('[loadShopOrders] querying seller_id:', sellerId);
 
-  const { data: orders, error: sellerOrdersErr } = await supabase.from('orders')
-
-    .select('*')
-
-    .eq('seller_id', sellerId).order('created_at', { ascending: false });
-
-  console.log('[loadShopOrders] orders count:', orders?.length, '| error:', JSON.stringify(sellerOrdersErr));
-  console.log('[loadShopOrders] first order raw:', JSON.stringify(orders?.[0]));
+  const { data: orders } = await supabase.from('orders')
+    .select('*').eq('seller_id', sellerId).order('created_at', { ascending: false });
 
   if (!orders?.length) {
-
     el.innerHTML = `<div class="empty-state"><div style="font-size:48px;margin-bottom:12px">📦</div><p>No orders yet</p><span>Orders from customers will appear here</span></div>`;
-
     return;
-
   }
 
-  const tabs = ['All','Paid','Processing','Shipped','Delivered'];
+  // Count pending needing action
+  const pendingCount = orders.filter(o => o.status === 'pending').length;
+
+  const tabs = [
+    { id:'all',        label:'All',         count: orders.length },
+    { id:'pending',    label:'New',          count: orders.filter(o=>o.status==='pending').length },
+    { id:'accepted',   label:'Accepted',     count: orders.filter(o=>o.status==='accepted').length },
+    { id:'processing', label:'Processing',   count: orders.filter(o=>o.status==='processing').length },
+    { id:'shipped',    label:'Shipped',      count: orders.filter(o=>o.status==='shipped').length },
+    { id:'delivered',  label:'Delivered',    count: orders.filter(o=>o.status==='delivered').length },
+  ].filter(t => t.id === 'all' || t.count > 0);
 
   el.innerHTML = `
 
-    <div class="so-tabs">
+    ${pendingCount > 0 ? `
+    <div style="margin:16px 16px 0;padding:14px;background:rgba(255,149,0,0.08);border-radius:14px;border:1px solid rgba(255,149,0,0.25);display:flex;align-items:center;gap:10px">
+      <span style="font-size:24px">⏳</span>
+      <div>
+        <div style="font-size:13px;font-weight:700;color:#ff9500">${pendingCount} order${pendingCount>1?'s':''} waiting for your response</div>
+        <div style="font-size:12px;color:var(--text3)">Accept or decline within 48hrs to avoid auto-cancellation</div>
+      </div>
+    </div>` : ''}
 
-      ${tabs.map((t,i) => `<button class="so-tab ${i===0?'active':''}" onclick="filterShopOrders('${t.toLowerCase()}',this)">${t}</button>`).join('')}
-
+    <div class="so-tabs" style="padding:12px 16px 0;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none">
+      ${tabs.map((t,i) => `
+        <button class="so-tab ${i===0?'active':''}" onclick="filterShopOrders('${t.id}',this)"
+          style="flex-shrink:0;padding:7px 14px;border-radius:20px;border:1.5px solid ${i===0?'var(--accent)':'var(--border)'};background:${i===0?'var(--accent-soft)':'none'};font-size:12px;font-weight:600;color:${i===0?'var(--accent)':'var(--text3)'};cursor:pointer;font-family:var(--font);white-space:nowrap">
+          ${t.label}${t.count > 0 ? ` <span style="opacity:0.7">(${t.count})</span>` : ''}
+        </button>`).join('')}
     </div>
 
-    <div class="so-list" id="so-list">
-
+    <div class="so-list" id="so-list" style="padding:12px 16px;display:flex;flex-direction:column;gap:10px">
       ${orders.map(order => renderShopOrderCard(order)).join('')}
-
     </div>`;
 
 }
 
 function renderShopOrderCard(order) {
 
-  const img       = '';
+  const statusMeta = {
+    pending:    { color:'#ff9500', bg:'rgba(255,149,0,0.1)',   label:'New Order',   urgent: true },
+    accepted:   { color:'#007aff', bg:'rgba(0,122,255,0.1)',   label:'Accepted' },
+    processing: { color:'#007aff', bg:'rgba(0,122,255,0.1)',   label:'Processing' },
+    shipped:    { color:'#6C47FF', bg:'rgba(108,71,255,0.1)',  label:'Shipped' },
+    delivered:  { color:'#00c48c', bg:'rgba(0,196,140,0.1)',   label:'Delivered' },
+    cancelled:  { color:'#8e8e93', bg:'rgba(142,142,147,0.1)', label:'Cancelled' },
+    declined:   { color:'#ff3b5c', bg:'rgba(255,59,92,0.1)',   label:'Declined' },
+  };
 
-  const statusColors = { paid:'#007aff', processing:'#ff9500', shipped:'#6C47FF', delivered:'#00c48c', cancelled:'var(--text3)' };
-
-  const statusCol = statusColors[order.status] || 'var(--text3)';
+  const meta = statusMeta[order.status] || { color:'var(--text3)', bg:'var(--bg2)', label: order.status };
+  const addrParts = (order.shipping_address||'').split(' · ');
+  const shipState = addrParts[2] || '';
 
   return `
+    <div class="so-order-card" data-status="${order.status}" onclick="openOrderDetail('${order.id}','seller')"
+      style="background:var(--surface);border-radius:16px;padding:16px;border:1.5px solid ${meta.urgent ? 'rgba(255,149,0,0.4)' : 'var(--border)'};cursor:pointer;-webkit-tap-highlight-color:transparent;${meta.urgent ? 'box-shadow:0 0 0 3px rgba(255,149,0,0.08)' : ''}">
 
-    <div class="so-order-card" data-status="${order.status}" onclick="openOrderDetail('${order.id}','seller')">
-
-      <div class="so-order-header">
-
-        <div class="so-order-num">${order.id.slice(0,8).toUpperCase()}</div>
-
-        <div class="so-order-status" style="color:${statusCol}">${order.status.replace('_',' ')}</div>
-
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">
+        <div>
+          <div style="font-size:11px;color:var(--text3);font-weight:500;margin-bottom:2px">#${order.id.slice(0,8).toUpperCase()} · ${timeSince(order.created_at)}</div>
+          <div style="font-size:15px;font-weight:700;color:var(--text)">${escHtml(order.title||'—')}</div>
+        </div>
+        <span style="flex-shrink:0;background:${meta.bg};color:${meta.color};font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;margin-left:8px">${meta.label}</span>
       </div>
 
-      <div class="so-order-body">
-
-        <div class="so-order-img-wrap">
-
-          ${img ? `<img src="${img}" class="so-order-img" alt="">` : `<div class="so-order-img" style="background:${gradientFor(order.id)}"></div>`}
-
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+        <div style="width:52px;height:52px;border-radius:12px;background:${gradientFor(order.product_id||order.id)};flex-shrink:0"></div>
+        <div style="flex:1">
+          <div style="font-size:13px;color:var(--text2)">Qty: ${order.quantity||1}</div>
+          ${shipState ? `<div style="font-size:12px;color:var(--text3)">📍 ${escHtml(shipState)}</div>` : ''}
         </div>
-
-        <div class="so-order-info">
-
-          <div class="so-order-buyer">
-
-            <img class="so-order-buyer-av" src="" onerror="this.style.display='none'" alt="">
-
-            Order #${order.id.slice(0,8).toUpperCase()}
-
-          </div>
-
-          <div class="so-order-items">${escHtml(order.title||'')} × ${order.quantity||1}</div>
-
-          <div class="so-order-total">${mktFmtNgn(order.price_ngn||0)} · ${fmtPts(order.price_mp||0)}</div>
-
-          <div class="so-order-addr">${escHtml(order.shipping_address||'')} · ${timeSince(order.created_at)}</div>
-
+        <div style="text-align:right">
+          <div style="font-size:15px;font-weight:800;color:var(--text)">${mktFmtNgn(order.price_ngn||0)}</div>
+          <div style="font-size:11px;color:var(--accent)">${fmtPts(order.price_mp||0)}</div>
         </div>
-
       </div>
 
-      ${order.status==='paid'||order.status==='processing' ? `
+      ${order.status === 'pending' ? `
+      <div style="display:flex;gap:8px" onclick="event.stopPropagation()">
+        <button onclick="acceptOrder('${order.id}')"
+          style="flex:1;height:44px;border-radius:12px;background:var(--accent);color:white;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">
+          ✓ Accept
+        </button>
+        <button onclick="declineOrder('${order.id}')"
+          style="flex:1;height:44px;border-radius:12px;background:none;color:#ff3b5c;border:1.5px solid #ff3b5c;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">
+          ✕ Decline
+        </button>
+      </div>` : ''}
 
-      <div class="so-order-actions">
+      ${order.status === 'accepted' ? `
+      <div style="display:flex;gap:8px" onclick="event.stopPropagation()">
+        <button onclick="updateOrderStatus('${order.id}','processing')"
+          style="flex:1;height:44px;border-radius:12px;background:var(--bg2);color:var(--text);border:1px solid var(--border);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)">
+          ⚙️ Mark Processing
+        </button>
+        <button onclick="openShipOrder('${order.id}')"
+          style="flex:1;height:44px;border-radius:12px;background:var(--accent);color:white;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">
+          🚚 Ship Now
+        </button>
+      </div>` : ''}
 
-        ${order.status==='paid' ? `<button class="so-process-btn" onclick="event.stopPropagation();updateOrderStatus('${order.id}','processing')">Mark Processing</button>` : ''}
-
-        <button class="so-ship-btn" onclick="event.stopPropagation();openShipOrder('${order.id}')">Upload Shipping Proof</button>
-
+      ${order.status === 'processing' ? `
+      <div onclick="event.stopPropagation()">
+        <button onclick="openShipOrder('${order.id}')"
+          style="width:100%;height:44px;border-radius:12px;background:var(--accent);color:white;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">
+          🚚 Upload Shipping Proof
+        </button>
       </div>` : ''}
 
     </div>`;
@@ -2182,79 +2435,136 @@ function renderShopOrderCard(order) {
 }
 
 function filterShopOrders(status, btn) {
-
-  document.querySelectorAll('.so-tab').forEach(t => t.classList.remove('active'));
-
-  btn.classList.add('active');
-
-  document.querySelectorAll('.so-order-card').forEach(card => {
-
-    card.style.display = (status==='all' || card.dataset.status===status) ? 'block' : 'none';
-
+  document.querySelectorAll('.so-tab').forEach(t => {
+    t.classList.remove('active');
+    t.style.borderColor = 'var(--border)';
+    t.style.background  = 'none';
+    t.style.color       = 'var(--text3)';
   });
+  btn.classList.add('active');
+  btn.style.borderColor = 'var(--accent)';
+  btn.style.background  = 'var(--accent-soft)';
+  btn.style.color       = 'var(--accent)';
+  document.querySelectorAll('.so-order-card').forEach(card => {
+    card.style.display = (status==='all' || card.dataset.status===status) ? 'block' : 'none';
+  });
+}
+
+async function acceptOrder(orderId) {
+  await supabase.from('orders').update({ status: 'accepted', accepted_at: new Date().toISOString() }).eq('id', orderId);
+  const { data: order } = await supabase.from('orders').select('buyer_id,title,price_ngn').eq('id', orderId).single();
+  if (order) insertNotification({ user_id: order.buyer_id, actor_id: currentUser.id, type: 'order_accepted',
+    comment_text: `Your order "${order.title||'your product'}" has been accepted! Seller is preparing your order.` });
+  showToast('Order accepted ✓');
+  loadShopOrders();
+}
+
+async function declineOrder(orderId) {
+
+  // Show reason picker
+  const reasons = ['Out of stock', 'Cannot deliver to this location', 'Pricing issue', 'Other'];
+
+  showActionSheet([
+    ...reasons.map(r => ({
+      label: r,
+      action: async () => {
+        await supabase.from('orders').update({
+          status: 'declined', declined_at: new Date().toISOString(), decline_reason: r,
+        }).eq('id', orderId);
+
+        // Refund MP back to buyer
+        const { data: order } = await supabase.from('orders').select('buyer_id,seller_id,price_mp,title').eq('id', orderId).single();
+        if (order) {
+          try { await supabase.rpc('escrow_refund_points', { buyer_id: order.buyer_id, seller_id: order.seller_id, order_id: orderId, points: order.price_mp }); } catch(e) {}
+          insertNotification({ user_id: order.buyer_id, actor_id: currentUser.id, type: 'order_declined',
+            comment_text: `"${order.title||'Your order'}" was declined: ${r}. Your MP has been refunded.` });
+        }
+        showToast('Order declined. Buyer will be refunded.');
+        loadShopOrders();
+      }
+    })),
+    { label: 'Cancel', action: () => {} }
+  ]);
 
 }
 
 async function updateOrderStatus(orderId, status) {
-
-  await supabase.from('orders').update({ status, updated_at: new Date().toISOString() }).eq('id', orderId);
-
+  await supabase.from('orders').update({ status }).eq('id', orderId);
   showToast('Order updated to ' + status);
-
   loadShopOrders();
-
 }
 
 async function openShipOrder(orderId) {
 
+  // Show shipping details input sheet first
+  const sheet = document.createElement('div');
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:950;background:rgba(0,0,0,0.5);display:flex;align-items:flex-end';
+  sheet.innerHTML = `
+    <div style="width:100%;background:var(--surface);border-radius:24px 24px 0 0;padding:24px 20px calc(var(--safe-bottom)+24px)">
+      <div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 20px"></div>
+      <div style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:6px">Upload Shipping Proof</div>
+      <div style="font-size:13px;color:var(--text3);margin-bottom:20px">Add courier details and a photo of the waybill or package</div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px">Courier Name</div>
+        <input id="ship-courier" class="co-input" placeholder="e.g. GIG Logistics, DHL, NIPOST…" style="width:100%;box-sizing:border-box">
+      </div>
+      <div style="margin-bottom:20px">
+        <div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px">Tracking Number (optional)</div>
+        <input id="ship-tracking" class="co-input" placeholder="Waybill or tracking number" style="width:100%;box-sizing:border-box">
+      </div>
+      <button onclick="submitShipOrder('${orderId}',this.closest('div[style*=fixed]'))"
+        style="width:100%;height:52px;border-radius:14px;background:var(--accent);color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">
+        📷 Choose Proof Photo
+      </button>
+      <button onclick="this.closest('div[style*=fixed]').remove()"
+        style="width:100%;height:44px;border-radius:14px;background:none;color:var(--text3);border:none;font-size:14px;cursor:pointer;margin-top:8px;font-family:var(--font)">
+        Cancel
+      </button>
+    </div>`;
+  document.body.appendChild(sheet);
+
+}
+
+async function submitShipOrder(orderId, sheetEl) {
+
+  const courier  = document.getElementById('ship-courier')?.value.trim();
+  const tracking = document.getElementById('ship-tracking')?.value.trim();
+
+  if (!courier) { showToast('Enter courier name'); return; }
+
+  sheetEl?.remove();
+
   const input    = document.createElement('input');
-
   input.type     = 'file';
-
   input.accept   = 'image/*';
-
   input.onchange = async (e) => {
-
     const file = e.target.files?.[0];
-
     if (!file) return;
-
     showToast('Uploading shipping proof…');
-
     try {
-
       const path       = `shipping/${orderId}.jpg`;
-
       const compressed = await compressImage(file, 800);
-
       await supabase.storage.from('avatars').upload(path, compressed, { upsert: true, contentType: 'image/jpeg' });
-
       const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-
       const autoRelease = new Date(); autoRelease.setDate(autoRelease.getDate() + 7);
 
       await supabase.from('orders').update({
-
-        status: 'shipped', shipping_proof_url: urlData.publicUrl,
-
-        shipping_proof_uploaded_at: new Date().toISOString(),
-
-        auto_release_at: autoRelease.toISOString(), updated_at: new Date().toISOString(),
-
+        status: 'shipped',
+        shipping_proof_url: urlData.publicUrl,
+        shipped_at: new Date().toISOString(),
+        auto_release_at: autoRelease.toISOString(),
+        courier: courier,
+        tracking_number: tracking || null,
       }).eq('id', orderId);
 
-      const { data: order } = await supabase.from('orders').select('buyer_id').eq('id', orderId).single();
+      const { data: order } = await supabase.from('orders').select('buyer_id,title').eq('id', orderId).single();
+      if (order) insertNotification({ user_id: order.buyer_id, actor_id: currentUser.id, type: 'order_shipped',
+        comment_text: `"${order.title||'Your order'}" has been shipped via ${courier}${tracking ? ` · Tracking: ${tracking}` : ''}. Confirm delivery when it arrives.` });
 
-      if (order) insertNotification({ user_id: order.buyer_id, actor_id: currentUser.id, type: 'order_shipped', comment_text: `Your order has been shipped!` });
-
-      showToast('Shipping proof uploaded ✓ MP auto-releases in 7 days if buyer doesn\'t confirm');
-
+      showToast('Shipped! Buyer notified ✓ Auto-releases in 7 days');
       loadShopOrders();
-
     } catch(e) { showToast('Upload failed — try again'); }
-
   };
-
   input.click();
 
 }
@@ -3337,154 +3647,193 @@ async function updateStorefrontBanner(input) {
 
 async function openOrderDetail(orderId, role) {
 
-  const { data: order } = await supabase.from('orders')
-    .select('*')
-    .eq('id', orderId).single();
-
+  const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
   if (!order) { showToast('Order not found'); return; }
 
-  // Fetch product image separately since there's no FK join
   let productImage = '';
   if (order.product_id) {
     const { data: prod } = await supabase.from('products').select('images').eq('id', order.product_id).single();
     productImage = prod?.images?.[0] || '';
   }
 
-  // Parse structured address: "Name · Phone · State · Street address"
-  const addrParts   = (order.shipping_address || '').split(' · ');
-  const shipName    = addrParts[0] || '';
-  const shipPhone   = addrParts[1] || '';
-  const shipState   = addrParts[2] || '';
-  const shipStreet  = addrParts.slice(3).join(' · ') || '';
+  const addrParts  = (order.shipping_address || '').split(' · ');
+  const shipName   = addrParts[0] || '';
+  const shipPhone  = addrParts[1] || '';
+  const shipState  = addrParts[2] || '';
+  const shipStreet = addrParts.slice(3).join(' · ') || '';
 
   document.getElementById('order-detail-overlay')?.remove();
 
   const overlay = document.createElement('div');
-  overlay.id = 'order-detail-overlay';
+  overlay.id    = 'order-detail-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;z-index:900;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch';
 
-  const statusColors  = { paid:'#007aff', processing:'#ff9500', shipped:'#6C47FF', delivered:'#00c48c', cancelled:'#ff3b5c', pending:'#ff9500' };
-  const statusBg      = { paid:'rgba(0,122,255,0.1)', processing:'rgba(255,149,0,0.1)', shipped:'rgba(108,71,255,0.1)', delivered:'rgba(0,196,140,0.1)', cancelled:'rgba(255,59,92,0.1)', pending:'rgba(255,149,0,0.1)' };
-  const statusCol     = statusColors[order.status] || 'var(--text3)';
-  const statusBgCol   = statusBg[order.status] || 'var(--bg2)';
-  const orderId8      = order.id.slice(0,8).toUpperCase();
-  const statusLabel   = (order.status||'').replace('_',' ');
+  const statusMeta = {
+    pending:    { color:'#ff9500', bg:'rgba(255,149,0,0.1)',   label:'Awaiting Acceptance' },
+    accepted:   { color:'#007aff', bg:'rgba(0,122,255,0.1)',   label:'Accepted' },
+    processing: { color:'#007aff', bg:'rgba(0,122,255,0.1)',   label:'Processing' },
+    shipped:    { color:'#6C47FF', bg:'rgba(108,71,255,0.1)',  label:'Shipped' },
+    delivered:  { color:'#00c48c', bg:'rgba(0,196,140,0.1)',   label:'Delivered' },
+    cancelled:  { color:'#8e8e93', bg:'rgba(142,142,147,0.1)', label:'Cancelled' },
+    declined:   { color:'#ff3b5c', bg:'rgba(255,59,92,0.1)',   label:'Declined' },
+    refunded:   { color:'#8e8e93', bg:'rgba(142,142,147,0.1)', label:'Refunded' },
+  };
+  const meta = statusMeta[order.status] || { color:'var(--text3)', bg:'var(--bg2)', label: order.status };
 
-  overlay.innerHTML = `
+  const timelineSteps = [
+    { icon:'🛍️', label:'Order Placed',    time: order.created_at,   done: true,                 bad: false },
+    { icon:'✓',  label:'Seller Accepted', time: order.accepted_at,  done: !!order.accepted_at,  bad: false },
+    { icon:'⚙️', label:'Processing',      time: null,               done: ['processing','shipped','delivered'].includes(order.status), bad: false },
+    { icon:'🚚', label:'Shipped',         time: order.shipped_at,   done: !!order.shipped_at,   bad: false },
+    { icon:'✅', label:'Delivered',       time: order.confirmed_at, done: !!order.confirmed_at, bad: false },
+  ];
+  if (order.status === 'declined' || order.status === 'cancelled') {
+    timelineSteps.splice(1, 4, { icon:'✕', label: order.status === 'declined' ? ('Declined: ' + (order.decline_reason||'')) : 'Cancelled', time: order.declined_at || order.cancelled_at, done: true, bad: true });
+  }
 
-    <!-- Sticky top bar -->
-    <div style="position:sticky;top:0;z-index:2;background:var(--surface);border-bottom:1px solid var(--border);padding:calc(var(--safe-top)+0px) 0 0">
-      <div style="display:flex;align-items:center;height:52px;padding:0 4px 0 0">
-        <button onclick="document.getElementById('order-detail-overlay').remove()"
-          style="width:48px;height:52px;display:flex;align-items:center;justify-content:center;background:none;border:none;cursor:pointer;flex-shrink:0">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-        </button>
-        <div style="flex:1;font-size:16px;font-weight:700;color:var(--text)">Order Detail</div>
-        <div style="margin-right:16px;background:${statusBgCol};color:${statusCol};font-size:12px;font-weight:700;padding:4px 10px;border-radius:20px;text-transform:capitalize">${statusLabel}</div>
-      </div>
-    </div>
+  const timelineHTML = timelineSteps.map(function(step, i) {
+    const isLast = i === timelineSteps.length - 1;
+    const dotBg  = step.done ? (step.bad ? 'rgba(255,59,92,0.15)' : 'rgba(0,196,140,0.15)') : 'var(--bg2)';
+    const lineBg = step.done ? (step.bad ? 'rgba(255,59,92,0.3)' : 'rgba(0,196,140,0.3)') : 'var(--border)';
+    return '<div style="display:flex;gap:12px;align-items:flex-start' + (!isLast ? ';margin-bottom:4px' : '') + '">' +
+      '<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">' +
+        '<div style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;background:' + dotBg + '">' +
+          (step.done ? step.icon : '<div style="width:8px;height:8px;border-radius:50%;background:var(--border)"></div>') +
+        '</div>' +
+        (!isLast ? '<div style="width:2px;flex:1;min-height:16px;background:' + lineBg + ';margin:3px 0"></div>' : '') +
+      '</div>' +
+      '<div style="padding-top:6px;padding-bottom:' + (!isLast ? '12' : '0') + 'px">' +
+        '<div style="font-size:13px;font-weight:600;color:' + (step.done ? 'var(--text)' : 'var(--text3)') + '">' + step.label + '</div>' +
+        (step.time ? '<div style="font-size:11px;color:var(--text3);margin-top:1px">' + timeSince(step.time) + '</div>' : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
 
-    <!-- Order ID banner -->
-    <div style="background:var(--surface);margin:8px 16px;border-radius:14px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border)">
-      <div>
-        <div style="font-size:11px;color:var(--text3);font-weight:500;margin-bottom:2px">ORDER ID</div>
-        <div style="font-size:15px;font-weight:800;color:var(--text);letter-spacing:1px">#${orderId8}</div>
-      </div>
-      <div style="text-align:right">
-        <div style="font-size:11px;color:var(--text3);font-weight:500;margin-bottom:2px">PLACED</div>
-        <div style="font-size:13px;font-weight:600;color:var(--text)">${timeSince(order.created_at)}</div>
-      </div>
-    </div>
+  const deliveryRows = [
+    shipName   ? ['Recipient', shipName]   : null,
+    shipPhone  ? ['Phone',     shipPhone]  : null,
+    shipState  ? ['State',     shipState]  : null,
+    shipStreet ? ['Address',   shipStreet] : null,
+  ].filter(Boolean).map(function(r) {
+    return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border2)">' +
+      '<span style="font-size:12px;color:var(--text3)">' + r[0] + '</span>' +
+      '<span style="font-size:13px;font-weight:600;color:var(--text);text-align:right;max-width:60%">' + escHtml(r[1]) + '</span>' +
+    '</div>';
+  }).join('');
 
-    <!-- Item card -->
-    <div style="background:var(--surface);margin:0 16px 8px;border-radius:14px;padding:16px;border:1px solid var(--border)">
-      <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px">Item</div>
-      <div style="display:flex;gap:12px;align-items:center">
-        ${productImage
-          ? `<img src="${productImage}" style="width:64px;height:64px;border-radius:12px;object-fit:cover;flex-shrink:0" alt="">`
-          : `<div style="width:64px;height:64px;border-radius:12px;background:${gradientFor(order.product_id||order.id)};flex-shrink:0"></div>`}
-        <div style="flex:1;min-width:0">
-          <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px;line-height:1.3">${escHtml(order.title||'—')}</div>
-          <div style="font-size:12px;color:var(--text3)">Qty: ${order.quantity||1}</div>
-        </div>
-        <div style="font-size:15px;font-weight:800;color:var(--text);flex-shrink:0">${mktFmtNgn(order.price_ngn||0)}</div>
-      </div>
-    </div>
+  overlay.innerHTML =
+    '<div style="position:sticky;top:0;z-index:2;background:var(--surface);border-bottom:1px solid var(--border);padding:calc(var(--safe-top)) 0 0">' +
+      '<div style="display:flex;align-items:center;height:52px">' +
+        '<button onclick="document.getElementById(\'order-detail-overlay\').remove()" style="width:48px;height:52px;display:flex;align-items:center;justify-content:center;background:none;border:none;cursor:pointer;flex-shrink:0">' +
+          '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>' +
+        '</button>' +
+        '<div style="flex:1;font-size:16px;font-weight:700;color:var(--text)">Order Detail</div>' +
+        '<div style="margin-right:16px;background:' + meta.bg + ';color:' + meta.color + ';font-size:12px;font-weight:700;padding:5px 12px;border-radius:20px">' + meta.label + '</div>' +
+      '</div>' +
+    '</div>' +
 
-    <!-- Delivery card -->
-    <div style="background:var(--surface);margin:0 16px 8px;border-radius:14px;padding:16px;border:1px solid var(--border)">
-      <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px">Delivery</div>
-      ${shipName ? `
-      <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border2)">
-        <span style="font-size:12px;color:var(--text3)">Recipient</span>
-        <span style="font-size:13px;font-weight:600;color:var(--text)">${escHtml(shipName)}</span>
-      </div>` : ''}
-      ${shipPhone ? `
-      <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border2)">
-        <span style="font-size:12px;color:var(--text3)">Phone</span>
-        <span style="font-size:13px;font-weight:600;color:var(--text)">${escHtml(shipPhone)}</span>
-      </div>` : ''}
-      ${shipState ? `
-      <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border2)">
-        <span style="font-size:12px;color:var(--text3)">State</span>
-        <span style="font-size:13px;font-weight:600;color:var(--text)">${escHtml(shipState)}</span>
-      </div>` : ''}
-      ${shipStreet ? `
-      <div style="padding:7px 0">
-        <div style="font-size:12px;color:var(--text3);margin-bottom:4px">Address</div>
-        <div style="font-size:13px;color:var(--text);line-height:1.5">${escHtml(shipStreet)}</div>
-      </div>` : `
-      <div style="font-size:13px;color:var(--text2)">${escHtml(order.shipping_address||'No address provided')}</div>`}
-      ${order.note ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border2);font-size:12px;color:var(--text3)">Note: ${escHtml(order.note)}</div>` : ''}
-    </div>
+    '<div style="padding:16px;display:flex;gap:14px;align-items:center;background:var(--surface);border-bottom:1px solid var(--border)">' +
+      (productImage
+        ? '<img src="' + productImage + '" style="width:72px;height:72px;border-radius:16px;object-fit:cover;flex-shrink:0" alt="">'
+        : '<div style="width:72px;height:72px;border-radius:16px;background:' + gradientFor(order.product_id||order.id) + ';flex-shrink:0"></div>') +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:3px;line-height:1.3">' + escHtml(order.title||'—') + '</div>' +
+        '<div style="font-size:12px;color:var(--text3);margin-bottom:6px">Qty: ' + (order.quantity||1) + ' · ' + timeSince(order.created_at) + '</div>' +
+        '<div style="font-size:12px;font-weight:600;color:var(--text3);letter-spacing:0.5px">#' + order.id.slice(0,8).toUpperCase() + '</div>' +
+      '</div>' +
+      '<div style="text-align:right;flex-shrink:0">' +
+        '<div style="font-size:18px;font-weight:900;color:var(--text)">' + mktFmtNgn(order.price_ngn||0) + '</div>' +
+        '<div style="font-size:12px;color:var(--accent);margin-top:2px;font-weight:600">' + fmtPts(order.price_mp||0) + '</div>' +
+      '</div>' +
+    '</div>' +
 
-    <!-- Payment card -->
-    <div style="background:var(--surface);margin:0 16px 8px;border-radius:14px;padding:16px;border:1px solid var(--border)">
-      <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px">Payment</div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <span style="font-size:13px;color:var(--text2)">Amount</span>
-        <span style="font-size:13px;color:var(--text)">${mktFmtNgn(order.price_ngn||0)}</span>
-      </div>
-      <div style="height:1px;background:var(--border2);margin:8px 0"></div>
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:15px;font-weight:700;color:var(--text)">Total</span>
-        <span style="font-size:17px;font-weight:800;color:var(--text)">${mktFmtNgn(order.price_ngn||0)}</span>
-      </div>
-      <div style="margin-top:6px;display:flex;align-items:center;gap:6px">
-        <span style="font-size:12px;color:var(--accent);font-weight:600;background:var(--accent-soft);padding:2px 8px;border-radius:6px">Paid with ${fmtPts(order.price_mp||0)}</span>
-      </div>
-    </div>
+    '<div style="padding:16px;display:flex;flex-direction:column;gap:12px">' +
 
-    <!-- Shipping proof -->
-    ${order.shipping_proof_url ? `
-    <div style="background:var(--surface);margin:0 16px 8px;border-radius:14px;padding:16px;border:1px solid var(--border)">
-      <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px">Shipping Proof</div>
-      <img src="${order.shipping_proof_url}" style="width:100%;border-radius:10px;object-fit:cover" alt="">
-      ${order.auto_release_at ? `<div style="font-size:12px;color:var(--text3);margin-top:8px">⏱ MP auto-releases if delivery not confirmed within 7 days</div>` : ''}
-    </div>` : ''}
+      '<div style="background:var(--surface);border-radius:16px;padding:16px;border:1px solid var(--border)">' +
+        '<div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:14px">Order Progress</div>' +
+        timelineHTML +
+      '</div>' +
 
-    <!-- Action buttons -->
-    <div style="padding:8px 16px 32px;display:flex;flex-direction:column;gap:10px">
+      '<div style="background:var(--surface);border-radius:16px;padding:16px;border:1px solid var(--border)">' +
+        '<div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px">Delivery</div>' +
+        (deliveryRows || ('<div style="font-size:13px;color:var(--text2)">' + escHtml(order.shipping_address||'—') + '</div>')) +
+        (order.note ? '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border2);font-size:12px;color:var(--text3)">Note: ' + escHtml(order.note) + '</div>' : '') +
+      '</div>' +
 
-      ${role==='buyer' && order.status==='shipped' ? `
-      <button onclick="confirmDelivery('${order.id}');document.getElementById('order-detail-overlay').remove()"
-        style="width:100%;height:52px;border-radius:14px;background:#00c48c;color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:8px">
-        ✓ Confirm Delivery
-      </button>` : ''}
+      (order.courier ? (
+        '<div style="background:var(--surface);border-radius:16px;padding:16px;border:1px solid var(--border)">' +
+          '<div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px">Shipping Info</div>' +
+          '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border2)">' +
+            '<span style="font-size:12px;color:var(--text3)">Courier</span>' +
+            '<span style="font-size:13px;font-weight:600;color:var(--text)">' + escHtml(order.courier) + '</span>' +
+          '</div>' +
+          (order.tracking_number ? (
+            '<div style="display:flex;justify-content:space-between;padding:8px 0">' +
+              '<span style="font-size:12px;color:var(--text3)">Tracking</span>' +
+              '<span style="font-size:13px;font-weight:700;color:var(--accent)">' + escHtml(order.tracking_number) + '</span>' +
+            '</div>'
+          ) : '') +
+        '</div>'
+      ) : '') +
 
-      ${role==='seller' && order.status==='paid' ? `
-      <button onclick="updateOrderStatus('${order.id}','processing');document.getElementById('order-detail-overlay').remove()"
-        style="width:100%;height:52px;border-radius:14px;background:var(--surface);color:var(--text);border:1.5px solid var(--border);font-size:15px;font-weight:600;cursor:pointer;font-family:var(--font)">
-        Mark as Processing
-      </button>` : ''}
+      (order.shipping_proof_url ? (
+        '<div style="background:var(--surface);border-radius:16px;padding:16px;border:1px solid var(--border)">' +
+          '<div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px">Shipping Proof</div>' +
+          '<img src="' + order.shipping_proof_url + '" style="width:100%;border-radius:12px;object-fit:cover" alt="">' +
+          (order.auto_release_at ? '<div style="font-size:12px;color:var(--text3);margin-top:8px">⏱ MP auto-releases in 7 days if not confirmed</div>' : '') +
+        '</div>'
+      ) : '') +
 
-      ${role==='seller' && (order.status==='paid'||order.status==='processing') ? `
-      <button onclick="openShipOrder('${order.id}');document.getElementById('order-detail-overlay').remove()"
-        style="width:100%;height:52px;border-radius:14px;background:var(--accent);color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">
-        Upload Shipping Proof
-      </button>` : ''}
+      '<div style="background:var(--surface);border-radius:16px;padding:16px;border:1px solid var(--border)">' +
+        '<div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px">Payment</div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center">' +
+          '<span style="font-size:15px;font-weight:700;color:var(--text)">Total</span>' +
+          '<span style="font-size:18px;font-weight:900;color:var(--text)">' + mktFmtNgn(order.price_ngn||0) + '</span>' +
+        '</div>' +
+        '<div style="margin-top:8px;display:inline-flex;align-items:center;background:var(--accent-soft);padding:4px 10px;border-radius:8px">' +
+          '<span style="font-size:12px;font-weight:700;color:var(--accent)">Paid with ' + fmtPts(order.price_mp||0) + '</span>' +
+        '</div>' +
+        (['pending','accepted','processing','shipped'].includes(order.status) ? '<div style="margin-top:10px;font-size:12px;color:#ff9500">🔒 MP held in escrow — releases on delivery confirmation</div>' : '') +
+      '</div>' +
 
-    </div>`;
+      (order.decline_reason ? (
+        '<div style="background:rgba(255,59,92,0.06);border-radius:16px;padding:16px;border:1px solid rgba(255,59,92,0.2)">' +
+          '<div style="font-size:12px;font-weight:700;color:#ff3b5c;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px">Decline Reason</div>' +
+          '<div style="font-size:13px;color:var(--text2)">' + escHtml(order.decline_reason) + '</div>' +
+          (role==='buyer' ? '<div style="font-size:12px;color:var(--text3);margin-top:6px">Your MP has been refunded to your wallet.</div>' : '') +
+        '</div>'
+      ) : '') +
+
+      '<div style="display:flex;flex-direction:column;gap:10px;padding-bottom:16px">' +
+
+        (role==='buyer' && order.status==='pending' ? '<div style="padding:14px;background:rgba(255,149,0,0.08);border-radius:12px;font-size:13px;color:#ff9500;text-align:center">⏳ Waiting for seller to accept your order</div>' : '') +
+
+        (role==='buyer' && order.status==='shipped' ?
+          '<button onclick="confirmDelivery(\'' + order.id + '\');document.getElementById(\'order-detail-overlay\').remove()" style="width:100%;height:52px;border-radius:14px;background:#00c48c;color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">✓ Confirm Delivery</button>' +
+          '<div style="font-size:12px;color:var(--text3);text-align:center">Only confirm when you have received your order</div>'
+        : '') +
+
+        (role==='seller' && order.status==='pending' ?
+          '<div style="display:flex;gap:10px">' +
+            '<button onclick="acceptOrder(\'' + order.id + '\');document.getElementById(\'order-detail-overlay\').remove()" style="flex:1;height:52px;border-radius:14px;background:var(--accent);color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">✓ Accept Order</button>' +
+            '<button onclick="declineOrder(\'' + order.id + '\');document.getElementById(\'order-detail-overlay\').remove()" style="flex:1;height:52px;border-radius:14px;background:none;color:#ff3b5c;border:1.5px solid #ff3b5c;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">✕ Decline</button>' +
+          '</div>'
+        : '') +
+
+        (role==='seller' && order.status==='accepted' ?
+          '<div style="display:flex;gap:10px">' +
+            '<button onclick="updateOrderStatus(\'' + order.id + '\',\'processing\');document.getElementById(\'order-detail-overlay\').remove()" style="flex:1;height:52px;border-radius:14px;background:var(--bg2);color:var(--text);border:1px solid var(--border);font-size:14px;font-weight:600;cursor:pointer;font-family:var(--font)">⚙️ Mark Processing</button>' +
+            '<button onclick="openShipOrder(\'' + order.id + '\');document.getElementById(\'order-detail-overlay\').remove()" style="flex:1;height:52px;border-radius:14px;background:var(--accent);color:white;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font)">🚚 Ship Now</button>' +
+          '</div>'
+        : '') +
+
+        (role==='seller' && order.status==='processing' ?
+          '<button onclick="openShipOrder(\'' + order.id + '\');document.getElementById(\'order-detail-overlay\').remove()" style="width:100%;height:52px;border-radius:14px;background:var(--accent);color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">🚚 Upload Shipping Proof</button>'
+        : '') +
+
+      '</div>' +
+
+    '</div>';
 
   document.body.appendChild(overlay);
 
