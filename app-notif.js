@@ -52,6 +52,10 @@ const NOTIF_TYPES = {
 
   new_order:        { emoji: '🛍️',  label: 'placed a new order',        badgeClass: 'badge-order',   accentColor: '#ff6b35' },
 
+  order_accepted:   { emoji: '✓',   label: 'accepted your order',       badgeClass: 'badge-order',   accentColor: '#007aff' },
+
+  order_declined:   { emoji: '✕',   label: 'declined your order',       badgeClass: 'badge-order',   accentColor: '#ff3b5c' },
+
   delivery_confirmed: { emoji: '✅', label: 'confirmed delivery',       badgeClass: 'badge-order',   accentColor: '#00b87a' },
 
   payment_received: { emoji: '💰',  label: 'Payment received',          badgeClass: 'badge-wallet',  accentColor: '#00b87a' },
@@ -72,7 +76,7 @@ const NOTIF_FILTERS = [
 
   { id: 'follows',  label: 'Follows',  types: ['follow'] },
 
-  { id: 'commerce', label: 'Commerce', types: ['new_order','order_placed','order_shipped','order_delivered','delivery_confirmed','payment_received'] },
+  { id: 'commerce', label: 'Commerce', types: ['new_order','order_placed','order_accepted','order_declined','order_shipped','order_delivered','delivery_confirmed','payment_received'] },
 
   { id: 'wallet',   label: 'Wallet',   types: ['payment_received','wallet_credit','mp_gift'] },
 
@@ -378,7 +382,7 @@ function renderNotifItem(g, animDelay = 0) {
 
     ? `<div class="notif-comment-preview">"${escHtml(g.comment_text.slice(0,120))}${g.comment_text.length > 120 ? '…' : ''}"</div>`
 
-    : (['new_order','order_shipped','delivery_confirmed','order_placed','order_delivered'].includes(g.type) && g.comment_text)
+    : (['new_order','order_accepted','order_declined','order_shipped','delivery_confirmed','order_placed','order_delivered'].includes(g.type) && g.comment_text)
 
     ? `<div class="notif-comment-preview">${escHtml(g.comment_text)}</div>`
 
@@ -2511,6 +2515,10 @@ function buildPushPayload(type, actorName, extras) {
     payment_received: { title: '💰 Payment Received',  message: name + ' paid you' },
 
     new_order:          { title: '🛍️ New Order',          message: extras.comment_text || name + ' placed an order' },
+
+    order_accepted:     { title: '✓ Order Accepted',      message: extras.comment_text || 'Your order has been accepted!' },
+
+    order_declined:     { title: '✕ Order Declined',      message: extras.comment_text || 'Your order was declined. MP refunded.' },
 
     order_shipped:      { title: '🚚 Order Shipped',      message: extras.comment_text || 'Your order has shipped!' },
 
