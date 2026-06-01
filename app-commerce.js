@@ -2120,8 +2120,7 @@ async function loadShippingRates() {
 
         rateNgn = cheapest.amount || 0;
 
-        // Store courier name for pre-fill at ship time
-        _shippingByStore[sfId] = { rate: rateNgn, courier: cheapest.courier || cheapest.carrier || '' };
+        _shippingByStore[sfId] = rateNgn;
 
       } else {
 
@@ -2135,7 +2134,7 @@ async function loadShippingRates() {
 
         rateNgn = dbRate?.rate_ngn || 0;
 
-        _shippingByStore[sfId] = { rate: rateNgn, courier: '' };
+        _shippingByStore[sfId] = rateNgn;
 
       }
 
@@ -2152,7 +2151,7 @@ async function loadShippingRates() {
 
       rateNgn = dbRate?.rate_ngn || 0;
 
-      _shippingByStore[sfId] = { rate: rateNgn, courier: '' };
+      _shippingByStore[sfId] = rateNgn;
 
     }
 
