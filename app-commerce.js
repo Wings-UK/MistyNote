@@ -14,6 +14,42 @@
 
 'use strict';
 
+// ══════════════════════════════════════════
+// SENDBOX — Shipping & Logistics (Nigeria)
+// ══════════════════════════════════════════
+const SENDBOX_SECRET_KEY    = 'cb50a8737b93487477058966fadeceb88012814481210aee0de38e59a450c8b18cdd88e02f1a3dc921cd6413b8c342fc92fc0332cdca4336dedfd2877cc58dec';
+const SENDBOX_ACCESS_TOKEN  = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1aWQiOiI2YTE5ZTQ1YmEyOGIyYTAwMjI3ZTQ0ZGMiLCJhaWQiOiI2YTFjZDFhNWEyOGIyYTAwMWY2ODAzNmQiLCJ0d29fZmEiOmZhbHNlLCJpbnN0YW5jZV9pZCI6IjYxMzZkZmE2YTFhYjlkMzE4YmNmY2I5NCIsImVudGl0eV9pZCI6bnVsbCwiaXNzIjoic2VuZGJveC5hcHBzLmF1dGgtNjEzNmRmYTZhMWFiOWQzMThiY2ZjYjk0IiwiZXhwIjoxNzg1MzcxMTczfQ.bRU539sPAxXiNDv9KHXPcyTUuOCVWtKu-thqUU9Bx3Q';
+const SENDBOX_REFRESH_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhcHBsaWNhdGlvbiI6eyJwayI6IjZhMWNkMWE1YTI4YjJhMDAxZjY4MDM2ZCIsImRlc2NyaXB0b24iOiJUaGUgdmlyYWwgcGxhdGZvcm0uLi4iLCJuYW1lIjoiTWlzdHlOb3RlICJ9LCJhcHBfaWQiOiI2YTFjZDFhNWEyOGIyYTAwMWY2ODAzNmQiLCJpc3MiOiJzZW5kYm94LmFwcHMuYXV0aCIsImV4cCI6MTgxNDgzMzU3M30.L5LErAx9f4sKckXVsyV89gDpfnBsJt8SJVHJFd0oCf4';
+const SENDBOX_BASE          = 'https://api.sendbox.co';
+// Webhook already registered: https://mistynote.pages.dev/api/sendbox-webhook
+
+let _sendboxToken = SENDBOX_ACCESS_TOKEN;
+
+async function sendboxRequest(method, path, body, _isRetry = false) {
+  const opts = { method, headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _sendboxToken } };
+  if (body) opts.body = JSON.stringify(body);
+  try {
+    const res  = await fetch(SENDBOX_BASE + path, opts);
+    if (res.status === 401 && !_isRetry) {
+      const ok = await _sendboxRefreshToken();
+      if (ok) return sendboxRequest(method, path, body, true);
+    }
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.message || json.error || 'Sendbox error');
+    return json;
+  } catch (e) { throw e; }
+}
+
+async function _sendboxRefreshToken() {
+  try {
+    const res  = await fetch(SENDBOX_BASE + '/auth/token/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: SENDBOX_REFRESH_TOKEN }) });
+    const json = await res.json();
+    const t    = json?.data?.access_token || json?.access_token;
+    if (t) { _sendboxToken = t; return true; }
+    return false;
+  } catch (e) { return false; }
+}
+
 // ── COMMERCE STATE ────────────────────────────────────────
 
 let currentStorefront = null;
@@ -1994,6 +2030,8 @@ async function loadShippingRates() {
 
   const state      = document.getElementById('co-state')?.value;
 
+  const streetEl   = document.getElementById('co-street');
+
   const shippingEl = document.getElementById('co-shipping');
 
   const totalEl    = document.getElementById('co-total');
@@ -2002,7 +2040,7 @@ async function loadShippingRates() {
 
   if (!state || !shippingEl) return;
 
-  shippingEl.textContent = 'Loading…';
+  shippingEl.textContent = 'Getting rate…';
 
   const storeIds = Object.keys(window._coByStore || {});
 
@@ -2012,13 +2050,38 @@ async function loadShippingRates() {
 
   for (const sfId of storeIds) {
 
-    const { data: rate } = await supabase.from('shipping_rates').select('rate_ngn').eq('storefront_id', sfId).eq('state', state).maybeSingle();
+    let rateNgn = 0;
 
-    const r = rate?.rate_ngn || 0;
+    try {
 
-    _shippingByStore[sfId] = r;
+      const { data: sf } = await supabase.from('storefronts').select('pickup_state, pickup_address').eq('id', sfId).maybeSingle();
 
-    totalShipping += r;
+      const rateRes = await sendboxRequest('POST', '/shipping/rates', {
+        origin:      { state: sf?.pickup_state || 'Lagos', address: sf?.pickup_address || '', country: 'NG' },
+        destination: { state, address: streetEl?.value?.trim() || '', country: 'NG' },
+        weight: 1, length: 10, width: 10, height: 10, type: 'parcel',
+      });
+
+      const rates = rateRes?.data || rateRes?.rates || [];
+
+      if (rates.length > 0) {
+        rateNgn = rates.reduce((a, b) => (a.amount < b.amount ? a : b)).amount || 0;
+      } else {
+        const { data: dbRate } = await supabase.from('shipping_rates').select('rate_ngn').eq('storefront_id', sfId).eq('state', state).maybeSingle();
+        rateNgn = dbRate?.rate_ngn || 0;
+      }
+
+    } catch (err) {
+
+      console.warn('[Sendbox] Rate fetch failed, using DB fallback:', err.message);
+      const { data: dbRate } = await supabase.from('shipping_rates').select('rate_ngn').eq('storefront_id', sfId).eq('state', state).maybeSingle();
+      rateNgn = dbRate?.rate_ngn || 0;
+
+    }
+
+    _shippingByStore[sfId] = rateNgn;
+
+    totalShipping += rateNgn;
 
   }
 
@@ -2103,17 +2166,25 @@ async function applyDiscountCode() {
 async function placeOrder() {
 
   const name    = document.getElementById('co-name')?.value.trim();
+
   const phone   = document.getElementById('co-phone')?.value.trim();
+
   const state   = document.getElementById('co-state')?.value.trim();
+
   const address = document.getElementById('co-address')?.value.trim();
+
   const btn     = document.getElementById('co-place-btn');
 
   if (!name)    { showToast('Enter recipient name'); return; }
+
   if (!phone)   { showToast('Enter phone number'); return; }
+
   if (!state)   { showToast('Select delivery state'); return; }
+
   if (!address) { showToast('Enter delivery address'); return; }
 
   const items = window._coItems || [];
+
   if (!items.length) { showToast('Your cart is empty'); return; }
 
   const totalMp = items.reduce((s, i) => s + Math.ceil(mktNgnToMp((i.product?.price_ngn||0) * i.quantity) * 100) / 100, 0);
@@ -2121,6 +2192,7 @@ async function placeOrder() {
   if (walletState.points < totalMp) { showToast('Insufficient MistyPoints — top up your wallet'); openWallet(); return; }
 
   const pinOk = await walletPinCheck();
+
   if (!pinOk) return;
 
   btn.disabled = true; btn.textContent = 'Placing order…';
@@ -2130,39 +2202,61 @@ async function placeOrder() {
     for (const item of items) {
 
       const sellerId  = item.product?.storefront?.user_id;
+
       const productId = item.product_id;
+
       const priceNgn  = (item.product?.price_ngn || 0) * item.quantity;
+
       const priceMp   = Math.ceil(mktNgnToMp(priceNgn) * 100) / 100;
 
       if (!sellerId) throw new Error('Seller not found for: ' + (item.product?.title || productId));
+
       if (sellerId === currentUser.id) throw new Error('You cannot buy your own product');
 
       // Auto-cancel if seller doesn't respond in 48 hours
+
       const autoCancel = new Date(Date.now() + 48 * 60 * 60 * 1000);
 
       const { data: order, error: orderErr } = await supabase.from('orders').insert({
+
         buyer_id:         currentUser.id,
+
         seller_id:        sellerId,
+
         product_id:       productId,
+
         title:            item.product?.title || '',
+
         quantity:         item.quantity,
+
         price_ngn:        priceNgn,
+
         price_mp:         priceMp,
+
         status:           'pending',
+
         shipping_address: `${name} · ${phone} · ${state} · ${address}`,
+
         auto_cancel_at:   autoCancel.toISOString(),
+
       }).select().single();
 
       if (orderErr) throw new Error('Order failed: ' + orderErr.message);
 
       // Hold MP in escrow immediately
+
       const { error: escrowErr } = await supabase.rpc('escrow_hold_points', {
+
         buyer_id: currentUser.id, seller_id: sellerId, order_id: order.id, points: priceMp,
+
       });
+
       if (escrowErr) console.log('[placeOrder] escrow note:', escrowErr.message);
 
       // Notify seller with accept/decline prompt
+
       insertNotification({ user_id: sellerId, actor_id: currentUser.id, type: 'new_order',
+
         comment_text: `New order: ${item.product?.title || 'your product'} · ${mktFmtNgn(priceNgn)} — Accept or decline within 48hrs` });
 
       try { await supabase.rpc('decrement_stock', { p_product_id: productId, p_qty: item.quantity }); } catch(e) {}
@@ -2170,15 +2264,21 @@ async function placeOrder() {
     }
 
     await supabase.from('cart_items').delete().eq('user_id', currentUser.id);
+
     cartCount = 0; updateCartBadges(); syncWalletBalance();
 
     showToast('Order placed! Waiting for seller to accept 🎉');
+
     slideBack();
+
     setTimeout(() => openMyBag(), 400);
 
   } catch(e) {
+
     btn.disabled = false; btn.textContent = 'Place Order';
+
     showToast('Order failed: ' + (e.message || 'Please try again'));
+
   }
 
 }
@@ -2194,70 +2294,115 @@ function openMyBag() { slideTo('my-bag', loadMyBag); }
 async function loadMyBag() {
 
   const el = document.getElementById('my-bag-content');
+
   if (!el) return;
+
   el.innerHTML = `<div class="loading-pulse" style="height:300px"></div>`;
+
   if (!currentUser) { el.innerHTML = `<div class="empty-state"><p>Sign in to view your bag</p></div>`; return; }
 
   const { data: orders } = await supabase.from('orders')
+
     .select('*').eq('buyer_id', currentUser.id).order('created_at', { ascending: false });
 
   if (!orders?.length) {
+
     el.innerHTML = `<div class="empty-state"><div style="font-size:48px;margin-bottom:12px">🛍️</div><p>No orders yet</p><span>Your purchases will appear here</span><button class="btn-primary" style="margin-top:16px" onclick="slideBack();navTo('market')">Start Shopping</button></div>`;
+
     return;
+
   }
 
   const statusMeta = {
+
     pending:    { color:'#ff9500', bg:'rgba(255,149,0,0.1)',    icon:'⏳', label:'Awaiting seller' },
+
     accepted:   { color:'#007aff', bg:'rgba(0,122,255,0.1)',    icon:'✓',  label:'Accepted' },
+
     processing: { color:'#007aff', bg:'rgba(0,122,255,0.1)',    icon:'⚙️', label:'Processing' },
+
     shipped:    { color:'#6C47FF', bg:'rgba(108,71,255,0.1)',   icon:'🚚', label:'Shipped' },
+
     delivered:  { color:'#00c48c', bg:'rgba(0,196,140,0.1)',    icon:'✅', label:'Delivered' },
+
     cancelled:  { color:'#ff3b5c', bg:'rgba(255,59,92,0.1)',    icon:'✕',  label:'Cancelled' },
+
     declined:   { color:'#ff3b5c', bg:'rgba(255,59,92,0.1)',    icon:'✕',  label:'Declined' },
+
     refunded:   { color:'#8e8e93', bg:'rgba(142,142,147,0.1)',  icon:'↩',  label:'Refunded' },
+
   };
 
   el.innerHTML = `<div class="bag-list">${orders.map(order => {
 
     const meta = statusMeta[order.status] || { color:'var(--text3)', bg:'var(--bg2)', icon:'•', label: order.status };
+
     const addrParts = (order.shipping_address||'').split(' · ');
+
     const storeLabel = escHtml(order.title || '—');
 
     return `
+
       <div class="bag-order-card" onclick="openOrderDetail('${order.id}','buyer')">
 
         <div style="display:flex;gap:14px;align-items:flex-start">
+
           <div style="width:58px;height:58px;border-radius:14px;background:${gradientFor(order.product_id||order.id)};flex-shrink:0;position:relative">
+
             <span style="position:absolute;bottom:-6px;right:-6px;width:22px;height:22px;border-radius:50%;background:${meta.color};color:white;font-size:11px;display:flex;align-items:center;justify-content:center;border:2px solid var(--surface)">${meta.icon}</span>
+
           </div>
+
           <div style="flex:1;min-width:0">
+
             <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">${storeLabel}</div>
+
             <div style="font-size:12px;color:var(--text3);margin-bottom:6px">Qty ${order.quantity||1} · ${timeSince(order.created_at)}</div>
+
             <div style="display:inline-flex;align-items:center;gap:5px;background:${meta.bg};padding:3px 10px;border-radius:20px">
+
               <span style="font-size:12px;font-weight:700;color:${meta.color}">${meta.label}</span>
+
             </div>
+
           </div>
+
           <div style="text-align:right;flex-shrink:0">
+
             <div style="font-size:14px;font-weight:800;color:var(--text)">${mktFmtNgn(order.price_ngn||0)}</div>
+
             <div style="font-size:11px;color:var(--accent);margin-top:2px">${fmtPts(order.price_mp||0)}</div>
+
           </div>
+
         </div>
 
         ${order.status==='pending' ? `
+
         <div style="margin-top:12px;padding:10px 12px;background:rgba(255,149,0,0.08);border-radius:10px;border-left:3px solid #ff9500;font-size:12px;color:#ff9500">
+
           ⏳ Waiting for seller to accept · MP held in escrow
+
         </div>` : ''}
 
         ${order.status==='declined' ? `
+
         <div style="margin-top:12px;padding:10px 12px;background:rgba(255,59,92,0.08);border-radius:10px;border-left:3px solid #ff3b5c;font-size:12px;color:#ff3b5c">
+
           ✕ Seller declined · ${order.decline_reason ? escHtml(order.decline_reason) : 'MP will be refunded automatically'}
+
         </div>` : ''}
 
         ${order.status==='shipped' ? `
+
         <div style="margin-top:12px">
+
           <button class="bag-confirm-btn" onclick="event.stopPropagation();confirmDelivery('${order.id}')">
+
             ✓ Confirm Delivery
+
           </button>
+
         </div>` : ''}
 
       </div>`;
@@ -2271,7 +2416,9 @@ async function confirmDelivery(orderId) {
   showActionSheet([{ label: '✓ Confirm Delivery', action: async () => {
 
     showToast('Confirming delivery…');
+
     const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
+
     if (!order) { showToast('Order not found'); return; }
 
     try { await supabase.rpc('escrow_release_points', { seller_id: order.seller_id, buyer_id: order.buyer_id, order_id: order.id, points: order.price_mp }); } catch(e) {}
@@ -2281,10 +2428,13 @@ async function confirmDelivery(orderId) {
     try { await supabase.rpc('increment_storefront_stats', { p_seller_id: order.seller_id, p_revenue: order.price_ngn||0 }); } catch(e) {}
 
     insertNotification({ user_id: order.seller_id, actor_id: currentUser.id, type: 'delivery_confirmed',
+
       comment_text: `Delivery confirmed for "${order.title||'your product'}" — MP released to your wallet ✓` });
 
     showToast('Delivery confirmed! Payment released ✓');
+
     loadMyBag();
+
     setTimeout(() => promptReview(orderId), 1000);
 
   }}, { label: 'Cancel', action: () => {} }]);
@@ -2292,9 +2442,13 @@ async function confirmDelivery(orderId) {
 }
 
 async function promptReview(orderId) {
+
   const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
+
   if (!order?.product_id) return;
+
   showActionSheet([{ label: '⭐ Leave a Review', action: () => openLeaveReview(order) }, { label: 'Maybe later', action: () => {} }]);
+
 }
 
 // ══════════════════════════════════════════
@@ -2308,52 +2462,81 @@ function openShopOrders() { slideTo('shop-orders', loadShopOrders); }
 async function loadShopOrders() {
 
   const el = document.getElementById('shop-orders-content');
+
   if (!el || !currentStorefront) return;
+
   el.innerHTML = `<div class="loading-pulse" style="height:300px"></div>`;
 
   const sellerId = currentStorefront.user_id || currentUser.id;
 
   const { data: orders } = await supabase.from('orders')
+
     .select('*').eq('seller_id', sellerId).order('created_at', { ascending: false });
 
   if (!orders?.length) {
+
     el.innerHTML = `<div class="empty-state"><div style="font-size:48px;margin-bottom:12px">📦</div><p>No orders yet</p><span>Orders from customers will appear here</span></div>`;
+
     return;
+
   }
 
   // Count pending needing action
+
   const pendingCount = orders.filter(o => o.status === 'pending').length;
 
   const tabs = [
+
     { id:'all',        label:'All',         count: orders.length },
+
     { id:'pending',    label:'New',          count: orders.filter(o=>o.status==='pending').length },
+
     { id:'accepted',   label:'Accepted',     count: orders.filter(o=>o.status==='accepted').length },
+
     { id:'processing', label:'Processing',   count: orders.filter(o=>o.status==='processing').length },
+
     { id:'shipped',    label:'Shipped',      count: orders.filter(o=>o.status==='shipped').length },
+
     { id:'delivered',  label:'Delivered',    count: orders.filter(o=>o.status==='delivered').length },
+
   ].filter(t => t.id === 'all' || t.count > 0);
 
   el.innerHTML = `
 
     ${pendingCount > 0 ? `
+
     <div style="margin:16px 16px 0;padding:14px;background:rgba(255,149,0,0.08);border-radius:14px;border:1px solid rgba(255,149,0,0.25);display:flex;align-items:center;gap:10px">
+
       <span style="font-size:24px">⏳</span>
+
       <div>
+
         <div style="font-size:13px;font-weight:700;color:#ff9500">${pendingCount} order${pendingCount>1?'s':''} waiting for your response</div>
+
         <div style="font-size:12px;color:var(--text3)">Accept or decline within 48hrs to avoid auto-cancellation</div>
+
       </div>
+
     </div>` : ''}
 
     <div class="so-tabs" style="padding:12px 16px 0;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none">
+
       ${tabs.map((t,i) => `
+
         <button class="so-tab ${i===0?'active':''}" onclick="filterShopOrders('${t.id}',this)"
+
           style="flex-shrink:0;padding:7px 14px;border-radius:20px;border:1.5px solid ${i===0?'var(--accent)':'var(--border)'};background:${i===0?'var(--accent-soft)':'none'};font-size:12px;font-weight:600;color:${i===0?'var(--accent)':'var(--text3)'};cursor:pointer;font-family:var(--font);white-space:nowrap">
+
           ${t.label}${t.count > 0 ? ` <span style="opacity:0.7">(${t.count})</span>` : ''}
+
         </button>`).join('')}
+
     </div>
 
     <div class="so-list" id="so-list" style="padding:12px 16px;display:flex;flex-direction:column;gap:10px">
+
       ${orders.map(order => renderShopOrderCard(order)).join('')}
+
     </div>`;
 
 }
@@ -2361,73 +2544,127 @@ async function loadShopOrders() {
 function renderShopOrderCard(order) {
 
   const statusMeta = {
+
     pending:    { color:'#ff9500', bg:'rgba(255,149,0,0.1)',   label:'New Order',   urgent: true },
+
     accepted:   { color:'#007aff', bg:'rgba(0,122,255,0.1)',   label:'Accepted' },
+
     processing: { color:'#007aff', bg:'rgba(0,122,255,0.1)',   label:'Processing' },
+
     shipped:    { color:'#6C47FF', bg:'rgba(108,71,255,0.1)',  label:'Shipped' },
+
     delivered:  { color:'#00c48c', bg:'rgba(0,196,140,0.1)',   label:'Delivered' },
+
     cancelled:  { color:'#8e8e93', bg:'rgba(142,142,147,0.1)', label:'Cancelled' },
+
     declined:   { color:'#ff3b5c', bg:'rgba(255,59,92,0.1)',   label:'Declined' },
+
   };
 
   const meta = statusMeta[order.status] || { color:'var(--text3)', bg:'var(--bg2)', label: order.status };
+
   const addrParts = (order.shipping_address||'').split(' · ');
+
   const shipState = addrParts[2] || '';
 
   return `
+
     <div class="so-order-card" data-status="${order.status}" onclick="openOrderDetail('${order.id}','seller')"
+
       style="background:var(--surface);border-radius:16px;padding:16px;border:1.5px solid ${meta.urgent ? 'rgba(255,149,0,0.4)' : 'var(--border)'};cursor:pointer;-webkit-tap-highlight-color:transparent;${meta.urgent ? 'box-shadow:0 0 0 3px rgba(255,149,0,0.08)' : ''}">
 
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">
+
         <div>
+
           <div style="font-size:11px;color:var(--text3);font-weight:500;margin-bottom:2px">#${order.id.slice(0,8).toUpperCase()} · ${timeSince(order.created_at)}</div>
+
           <div style="font-size:15px;font-weight:700;color:var(--text)">${escHtml(order.title||'—')}</div>
+
         </div>
+
         <span style="flex-shrink:0;background:${meta.bg};color:${meta.color};font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;margin-left:8px">${meta.label}</span>
+
       </div>
 
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+
         <div style="width:52px;height:52px;border-radius:12px;background:${gradientFor(order.product_id||order.id)};flex-shrink:0"></div>
+
         <div style="flex:1">
+
           <div style="font-size:13px;color:var(--text2)">Qty: ${order.quantity||1}</div>
+
           ${shipState ? `<div style="font-size:12px;color:var(--text3)">📍 ${escHtml(shipState)}</div>` : ''}
+
         </div>
+
         <div style="text-align:right">
+
           <div style="font-size:15px;font-weight:800;color:var(--text)">${mktFmtNgn(order.price_ngn||0)}</div>
+
           <div style="font-size:11px;color:var(--accent)">${fmtPts(order.price_mp||0)}</div>
+
         </div>
+
       </div>
 
       ${order.status === 'pending' ? `
+
       <div style="display:flex;gap:8px" onclick="event.stopPropagation()">
+
         <button onclick="acceptOrder('${order.id}')"
+
           style="flex:1;height:44px;border-radius:12px;background:var(--accent);color:white;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">
+
           ✓ Accept
+
         </button>
+
         <button onclick="declineOrder('${order.id}')"
+
           style="flex:1;height:44px;border-radius:12px;background:none;color:#ff3b5c;border:1.5px solid #ff3b5c;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">
+
           ✕ Decline
+
         </button>
+
       </div>` : ''}
 
       ${order.status === 'accepted' ? `
+
       <div style="display:flex;gap:8px" onclick="event.stopPropagation()">
+
         <button onclick="updateOrderStatus('${order.id}','processing')"
+
           style="flex:1;height:44px;border-radius:12px;background:var(--bg2);color:var(--text);border:1px solid var(--border);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)">
+
           ⚙️ Mark Processing
+
         </button>
+
         <button onclick="openShipOrder('${order.id}')"
+
           style="flex:1;height:44px;border-radius:12px;background:var(--accent);color:white;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">
+
           🚚 Ship Now
+
         </button>
+
       </div>` : ''}
 
       ${order.status === 'processing' ? `
+
       <div onclick="event.stopPropagation()">
+
         <button onclick="openShipOrder('${order.id}')"
+
           style="width:100%;height:44px;border-radius:12px;background:var(--accent);color:white;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">
+
           🚚 Upload Shipping Proof
+
         </button>
+
       </div>` : ''}
 
     </div>`;
@@ -2435,84 +2672,248 @@ function renderShopOrderCard(order) {
 }
 
 function filterShopOrders(status, btn) {
+
   document.querySelectorAll('.so-tab').forEach(t => {
+
     t.classList.remove('active');
+
     t.style.borderColor = 'var(--border)';
+
     t.style.background  = 'none';
+
     t.style.color       = 'var(--text3)';
+
   });
+
   btn.classList.add('active');
+
   btn.style.borderColor = 'var(--accent)';
+
   btn.style.background  = 'var(--accent-soft)';
+
   btn.style.color       = 'var(--accent)';
+
   document.querySelectorAll('.so-order-card').forEach(card => {
+
     card.style.display = (status==='all' || card.dataset.status===status) ? 'block' : 'none';
+
   });
+
 }
 
 async function acceptOrder(orderId) {
+
   await supabase.from('orders').update({ status: 'accepted', accepted_at: new Date().toISOString() }).eq('id', orderId);
+
   const { data: order } = await supabase.from('orders').select('buyer_id,title,price_ngn').eq('id', orderId).single();
+
   if (order) insertNotification({ user_id: order.buyer_id, actor_id: currentUser.id, type: 'order_accepted',
+
     comment_text: `Your order "${order.title||'your product'}" has been accepted! Seller is preparing your order.` });
+
   showToast('Order accepted ✓');
+
   loadShopOrders();
+
 }
 
 async function declineOrder(orderId) {
 
   // Show reason picker
+
   const reasons = ['Out of stock', 'Cannot deliver to this location', 'Pricing issue', 'Other'];
 
   showActionSheet([
+
     ...reasons.map(r => ({
+
       label: r,
+
       action: async () => {
+
         await supabase.from('orders').update({
+
           status: 'declined', declined_at: new Date().toISOString(), decline_reason: r,
+
         }).eq('id', orderId);
 
         // Refund MP back to buyer
+
         const { data: order } = await supabase.from('orders').select('buyer_id,seller_id,price_mp,title').eq('id', orderId).single();
+
         if (order) {
+
           try { await supabase.rpc('escrow_refund_points', { buyer_id: order.buyer_id, seller_id: order.seller_id, order_id: orderId, points: order.price_mp }); } catch(e) {}
+
           insertNotification({ user_id: order.buyer_id, actor_id: currentUser.id, type: 'order_declined',
+
             comment_text: `"${order.title||'Your order'}" was declined: ${r}. Your MP has been refunded.` });
+
         }
+
         showToast('Order declined. Buyer will be refunded.');
+
         loadShopOrders();
+
       }
+
     })),
+
     { label: 'Cancel', action: () => {} }
+
   ]);
 
 }
 
 async function updateOrderStatus(orderId, status) {
+
   await supabase.from('orders').update({ status }).eq('id', orderId);
+
   showToast('Order updated to ' + status);
+
   loadShopOrders();
+
 }
 
 async function openShipOrder(orderId) {
 
-  // Show shipping details input sheet first
+  const { data: order } = await supabase.from('orders').select('*, storefronts(pickup_state, pickup_address, pickup_name, pickup_phone)').eq('id', orderId).single();
+
+  if (!order) { showToast('Order not found'); return; }
+
+  const addrParts  = (order.shipping_address || '').split(' · ');
+  const shipName   = addrParts[0] || '';
+  const shipPhone  = addrParts[1] || '';
+  const shipState  = addrParts[2] || '';
+  const shipStreet = addrParts.slice(3).join(' · ') || '';
+
+  const sheet = document.createElement('div');
+
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:950;background:rgba(0,0,0,0.5);display:flex;align-items:flex-end';
+
+  sheet.innerHTML = `
+
+    <div style="width:100%;background:var(--surface);border-radius:24px 24px 0 0;padding:24px 20px calc(var(--safe-bottom)+24px)">
+
+      <div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 20px"></div>
+
+      <div style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:6px">Ship Order via Sendbox</div>
+
+      <div style="font-size:13px;color:var(--text3);margin-bottom:16px">Sendbox will book a pickup and generate a waybill automatically</div>
+
+      <div style="background:var(--bg2);border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--text2);line-height:1.7">
+        📍 <strong>Deliver to:</strong> ${escHtml(shipName)} · ${escHtml(shipState)}<br>
+        🏠 ${escHtml(shipStreet) || '—'}
+      </div>
+
+      <div style="margin-bottom:12px">
+        <div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px">Package Weight (kg)</div>
+        <input id="ship-weight" class="co-input" type="number" min="0.1" step="0.1" placeholder="e.g. 0.5" value="0.5" style="width:100%;box-sizing:border-box">
+      </div>
+
+      <div style="margin-bottom:20px">
+        <div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px">Note to Courier (optional)</div>
+        <input id="ship-note" class="co-input" placeholder="e.g. Fragile, handle with care" style="width:100%;box-sizing:border-box">
+      </div>
+
+      <button id="ship-sendbox-btn" onclick="submitShipOrder('${orderId}',this.closest('div[style*=fixed]'))"
+        style="width:100%;height:52px;border-radius:14px;background:var(--accent);color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">
+        🚚 Book Pickup with Sendbox
+      </button>
+
+      <button onclick="this.closest('div[style*=fixed]').remove()"
+        style="width:100%;height:44px;border-radius:14px;background:none;color:var(--text3);border:none;font-size:14px;cursor:pointer;margin-top:8px;font-family:var(--font)">
+        Cancel
+      </button>
+
+    </div>`;
+
+  sheet._orderData = { order, shipName, shipPhone, shipState, shipStreet };
+
+  document.body.appendChild(sheet);
+
+}
+
+async function submitShipOrder(orderId, sheetEl) {
+
+  const weight   = parseFloat(document.getElementById('ship-weight')?.value) || 0.5;
+  const noteText = document.getElementById('ship-note')?.value.trim() || '';
+  const btn      = document.getElementById('ship-sendbox-btn');
+  const { order, shipName, shipPhone, shipState, shipStreet } = sheetEl?._orderData || {};
+
+  if (!order) { showToast('Order data missing — please retry'); return; }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Booking pickup…'; }
+
+  try {
+
+    const sf = order.storefronts || {};
+
+    const shipmentRes = await sendboxRequest('POST', '/shipping/shipments', {
+      sender:    { name: sf.pickup_name || currentProfile?.username || '', phone: sf.pickup_phone || '', address: sf.pickup_address || '', state: sf.pickup_state || 'Lagos', country: 'NG' },
+      recipient: { name: shipName, phone: shipPhone, address: shipStreet, state: shipState, country: 'NG' },
+      parcel:    { weight, length: 10, width: 10, height: 10, description: order.title || 'Order', value: order.price_ngn || 0 },
+      note: noteText, delivery_type: 'door_delivery', payment_method: 'prepaid',
+    });
+
+    const shipmentId  = shipmentRes?.data?.id || shipmentRes?.shipment_id || '';
+    const trackingNum = shipmentRes?.data?.tracking_number || shipmentRes?.tracking_number || '';
+    const trackingUrl = shipmentRes?.data?.tracking_url || `https://app.sendbox.co/tracking/${trackingNum}`;
+    const courierName = shipmentRes?.data?.courier || shipmentRes?.carrier || 'Sendbox';
+    const waybillUrl  = shipmentRes?.data?.waybill_url || null;
+
+    if (!shipmentId) throw new Error('Sendbox did not return a shipment ID');
+
+    const autoRelease = new Date(); autoRelease.setDate(autoRelease.getDate() + 7);
+
+    await supabase.from('orders').update({
+      status: 'shipped', shipped_at: new Date().toISOString(), auto_release_at: autoRelease.toISOString(),
+      courier: courierName, tracking_number: trackingNum,
+      sendbox_shipment_id: shipmentId, sendbox_tracking_url: trackingUrl, sendbox_status: 'booked',
+      shipping_proof_url: waybillUrl || null,
+    }).eq('id', orderId);
+
+    const { data: freshOrder } = await supabase.from('orders').select('buyer_id,title').eq('id', orderId).single();
+    if (freshOrder) insertNotification({ user_id: freshOrder.buyer_id, actor_id: currentUser.id, type: 'order_shipped',
+      comment_text: `"${freshOrder.title||'Your order'}" has been shipped via ${courierName}. Track: ${trackingNum || trackingUrl}. Confirm delivery when it arrives.` });
+
+    sheetEl?.remove();
+    showToast(`Shipped via ${courierName} ✓ Tracking: ${trackingNum || 'See order detail'}`);
+    loadShopOrders();
+
+  } catch (err) {
+
+    console.error('[Sendbox] submitShipOrder failed:', err);
+    if (btn) { btn.disabled = false; btn.textContent = '🚚 Book Pickup with Sendbox'; }
+
+    showActionSheet([
+      { label: '📷 Upload Proof Manually Instead', action: () => { sheetEl?.remove(); _fallbackManualShip(orderId); } },
+      { label: 'Retry', action: () => submitShipOrder(orderId, sheetEl) },
+      { label: 'Cancel', action: () => {} },
+    ]);
+
+  }
+
+}
+
+async function _fallbackManualShip(orderId) {
+
   const sheet = document.createElement('div');
   sheet.style.cssText = 'position:fixed;inset:0;z-index:950;background:rgba(0,0,0,0.5);display:flex;align-items:flex-end';
   sheet.innerHTML = `
     <div style="width:100%;background:var(--surface);border-radius:24px 24px 0 0;padding:24px 20px calc(var(--safe-bottom)+24px)">
       <div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 20px"></div>
-      <div style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:6px">Upload Shipping Proof</div>
-      <div style="font-size:13px;color:var(--text3);margin-bottom:20px">Add courier details and a photo of the waybill or package</div>
+      <div style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:6px">Manual Shipping</div>
+      <div style="font-size:13px;color:var(--text3);margin-bottom:20px">Sendbox unavailable — enter courier details manually</div>
       <div style="margin-bottom:12px">
         <div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px">Courier Name</div>
-        <input id="ship-courier" class="co-input" placeholder="e.g. GIG Logistics, DHL, NIPOST…" style="width:100%;box-sizing:border-box">
+        <input id="ship-courier" class="co-input" placeholder="e.g. GIG Logistics, DHL…" style="width:100%;box-sizing:border-box">
       </div>
       <div style="margin-bottom:20px">
         <div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px">Tracking Number (optional)</div>
         <input id="ship-tracking" class="co-input" placeholder="Waybill or tracking number" style="width:100%;box-sizing:border-box">
       </div>
-      <button onclick="submitShipOrder('${orderId}',this.closest('div[style*=fixed]'))"
+      <button onclick="_fallbackSubmitManualShip('${orderId}',this.closest('div[style*=fixed]'))"
         style="width:100%;height:52px;border-radius:14px;background:var(--accent);color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">
         📷 Choose Proof Photo
       </button>
@@ -2525,7 +2926,7 @@ async function openShipOrder(orderId) {
 
 }
 
-async function submitShipOrder(orderId, sheetEl) {
+async function _fallbackSubmitManualShip(orderId, sheetEl) {
 
   const courier  = document.getElementById('ship-courier')?.value.trim();
   const tracking = document.getElementById('ship-tracking')?.value.trim();
@@ -2534,9 +2935,10 @@ async function submitShipOrder(orderId, sheetEl) {
 
   sheetEl?.remove();
 
-  const input    = document.createElement('input');
-  input.type     = 'file';
-  input.accept   = 'image/*';
+  const input  = document.createElement('input');
+  input.type   = 'file';
+  input.accept = 'image/*';
+
   input.onchange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -2547,24 +2949,19 @@ async function submitShipOrder(orderId, sheetEl) {
       await supabase.storage.from('avatars').upload(path, compressed, { upsert: true, contentType: 'image/jpeg' });
       const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
       const autoRelease = new Date(); autoRelease.setDate(autoRelease.getDate() + 7);
-
       await supabase.from('orders').update({
-        status: 'shipped',
-        shipping_proof_url: urlData.publicUrl,
-        shipped_at: new Date().toISOString(),
-        auto_release_at: autoRelease.toISOString(),
-        courier: courier,
-        tracking_number: tracking || null,
+        status: 'shipped', shipping_proof_url: urlData.publicUrl,
+        shipped_at: new Date().toISOString(), auto_release_at: autoRelease.toISOString(),
+        courier, tracking_number: tracking || null,
       }).eq('id', orderId);
-
       const { data: order } = await supabase.from('orders').select('buyer_id,title').eq('id', orderId).single();
       if (order) insertNotification({ user_id: order.buyer_id, actor_id: currentUser.id, type: 'order_shipped',
         comment_text: `"${order.title||'Your order'}" has been shipped via ${courier}${tracking ? ` · Tracking: ${tracking}` : ''}. Confirm delivery when it arrives.` });
-
       showToast('Shipped! Buyer notified ✓ Auto-releases in 7 days');
       loadShopOrders();
     } catch(e) { showToast('Upload failed — try again'); }
   };
+
   input.click();
 
 }
@@ -3577,7 +3974,104 @@ async function renewStorefrontSubscription() {
 
 }
 
-async function openEditStorefront() { showToast('Edit storefront — coming soon ✨'); }
+async function openEditStorefront() {
+
+  if (!currentStorefront) return;
+
+  const { data: sf } = await supabase.from('storefronts')
+    .select('store_name, category, description, pickup_name, pickup_phone, pickup_state, pickup_address')
+    .eq('id', currentStorefront.id).single();
+
+  if (!sf) { showToast('Could not load storefront data'); return; }
+
+  const nigeriaStates = ['Abia','Adamawa','Akwa Ibom','Anambra','Bauchi','Bayelsa','Benue','Borno','Cross River','Delta','Ebonyi','Edo','Ekiti','Enugu','FCT','Gombe','Imo','Jigawa','Kaduna','Kano','Katsina','Kebbi','Kogi','Kwara','Lagos','Nasarawa','Niger','Ogun','Ondo','Osun','Oyo','Plateau','Rivers','Sokoto','Taraba','Yobe','Zamfara'];
+
+  const stateOptions = nigeriaStates.map(s => `<option value="${s}" ${sf.pickup_state === s ? 'selected' : ''}>${s}</option>`).join('');
+
+  const overlay = document.createElement('div');
+  overlay.id = 'edit-storefront-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:900;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch';
+
+  overlay.innerHTML =
+    '<div style="position:sticky;top:0;z-index:2;background:var(--surface);border-bottom:1px solid var(--border);padding:calc(var(--safe-top)) 0 0">' +
+      '<div style="display:flex;align-items:center;height:52px">' +
+        '<button onclick="document.getElementById(\'edit-storefront-overlay\').remove()" style="width:48px;height:52px;display:flex;align-items:center;justify-content:center;background:none;border:none;cursor:pointer;flex-shrink:0">' +
+          '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>' +
+        '</button>' +
+        '<div style="flex:1;font-size:16px;font-weight:700;color:var(--text)">Edit Storefront</div>' +
+        '<button id="esf-save-btn" onclick="saveEditStorefront()" style="margin-right:16px;height:34px;padding:0 18px;border-radius:10px;background:var(--accent);color:white;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font)">Save</button>' +
+      '</div>' +
+    '</div>' +
+    '<div style="padding:16px;display:flex;flex-direction:column;gap:12px">' +
+
+      '<div style="background:var(--surface);border-radius:16px;padding:16px;border:1px solid var(--border)">' +
+        '<div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:14px">Store Info</div>' +
+        '<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px">Store Name</div>' +
+        '<input id="esf-name" class="co-input" value="' + escHtml(sf.store_name || '') + '" placeholder="Your store name" style="width:100%;box-sizing:border-box"></div>' +
+        '<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px">Category</div>' +
+        '<input id="esf-category" class="co-input" value="' + escHtml(sf.category || '') + '" placeholder="e.g. Fashion, Electronics, Food…" style="width:100%;box-sizing:border-box"></div>' +
+        '<div><div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px">Description</div>' +
+        '<textarea id="esf-description" class="co-input" rows="3" placeholder="Tell buyers about your store…" style="width:100%;box-sizing:border-box;resize:none;min-height:72px">' + escHtml(sf.description || '') + '</textarea></div>' +
+      '</div>' +
+
+      '<div style="background:var(--surface);border-radius:16px;padding:16px;border:1px solid var(--border)">' +
+        '<div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:4px">Pickup Address</div>' +
+        '<div style="font-size:12px;color:var(--text3);margin-bottom:14px;line-height:1.5">Where Sendbox will collect orders from.</div>' +
+        '<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px">Contact Name</div>' +
+        '<input id="esf-pickup-name" class="co-input" value="' + escHtml(sf.pickup_name || '') + '" placeholder="Full name at pickup" style="width:100%;box-sizing:border-box"></div>' +
+        '<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px">Contact Phone</div>' +
+        '<input id="esf-pickup-phone" class="co-input" type="tel" value="' + escHtml(sf.pickup_phone || '') + '" placeholder="e.g. 08012345678" style="width:100%;box-sizing:border-box"></div>' +
+        '<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px">State</div>' +
+        '<select id="esf-pickup-state" class="co-input" style="width:100%;box-sizing:border-box"><option value="">Select state…</option>' + stateOptions + '</select></div>' +
+        '<div><div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px">Street Address</div>' +
+        '<input id="esf-pickup-address" class="co-input" value="' + escHtml(sf.pickup_address || '') + '" placeholder="House/flat number, street, area" style="width:100%;box-sizing:border-box"></div>' +
+      '</div>' +
+
+      '<div style="height:32px"></div>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+
+}
+
+async function saveEditStorefront() {
+
+  const btn         = document.getElementById('esf-save-btn');
+  const storeName   = document.getElementById('esf-name')?.value.trim();
+  const category    = document.getElementById('esf-category')?.value.trim();
+  const description = document.getElementById('esf-description')?.value.trim();
+  const pickupName  = document.getElementById('esf-pickup-name')?.value.trim();
+  const pickupPhone = document.getElementById('esf-pickup-phone')?.value.trim();
+  const pickupState = document.getElementById('esf-pickup-state')?.value;
+  const pickupAddr  = document.getElementById('esf-pickup-address')?.value.trim();
+
+  if (!storeName) { showToast('Store name is required'); return; }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  try {
+
+    await supabase.from('storefronts').update({
+      store_name: storeName, category: category || null, description: description || null,
+      pickup_name: pickupName || null, pickup_phone: pickupPhone || null,
+      pickup_state: pickupState || null, pickup_address: pickupAddr || null,
+    }).eq('id', currentStorefront.id);
+
+    const { data: updated } = await supabase.from('storefronts').select('*').eq('id', currentStorefront.id).single();
+    if (updated) currentStorefront = updated;
+
+    document.getElementById('edit-storefront-overlay')?.remove();
+    showToast('Storefront updated ✓');
+    renderMyStorefront();
+
+  } catch (e) {
+
+    showToast('Save failed — try again');
+    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+
+  }
+
+}
 
 async function updateStorefrontLogo(input) {
 
@@ -3648,160 +4142,297 @@ async function updateStorefrontBanner(input) {
 async function openOrderDetail(orderId, role) {
 
   const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
+
   if (!order) { showToast('Order not found'); return; }
 
   let productImage = '';
+
   if (order.product_id) {
+
     const { data: prod } = await supabase.from('products').select('images').eq('id', order.product_id).single();
+
     productImage = prod?.images?.[0] || '';
+
   }
 
   const addrParts  = (order.shipping_address || '').split(' · ');
+
   const shipName   = addrParts[0] || '';
+
   const shipPhone  = addrParts[1] || '';
+
   const shipState  = addrParts[2] || '';
+
   const shipStreet = addrParts.slice(3).join(' · ') || '';
 
   document.getElementById('order-detail-overlay')?.remove();
 
   const overlay = document.createElement('div');
+
   overlay.id    = 'order-detail-overlay';
+
   overlay.style.cssText = 'position:fixed;inset:0;z-index:900;background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch';
 
   const statusMeta = {
+
     pending:    { color:'#ff9500', bg:'rgba(255,149,0,0.1)',   label:'Awaiting Acceptance' },
+
     accepted:   { color:'#007aff', bg:'rgba(0,122,255,0.1)',   label:'Accepted' },
+
     processing: { color:'#007aff', bg:'rgba(0,122,255,0.1)',   label:'Processing' },
+
     shipped:    { color:'#6C47FF', bg:'rgba(108,71,255,0.1)',  label:'Shipped' },
+
     delivered:  { color:'#00c48c', bg:'rgba(0,196,140,0.1)',   label:'Delivered' },
+
     cancelled:  { color:'#8e8e93', bg:'rgba(142,142,147,0.1)', label:'Cancelled' },
+
     declined:   { color:'#ff3b5c', bg:'rgba(255,59,92,0.1)',   label:'Declined' },
+
     refunded:   { color:'#8e8e93', bg:'rgba(142,142,147,0.1)', label:'Refunded' },
+
   };
+
   const meta = statusMeta[order.status] || { color:'var(--text3)', bg:'var(--bg2)', label: order.status };
 
   const timelineSteps = [
+
     { icon:'🛍️', label:'Order Placed',    time: order.created_at,   done: true,                 bad: false },
+
     { icon:'✓',  label:'Seller Accepted', time: order.accepted_at,  done: !!order.accepted_at,  bad: false },
+
     { icon:'⚙️', label:'Processing',      time: null,               done: ['processing','shipped','delivered'].includes(order.status), bad: false },
+
     { icon:'🚚', label:'Shipped',         time: order.shipped_at,   done: !!order.shipped_at,   bad: false },
+
     { icon:'✅', label:'Delivered',       time: order.confirmed_at, done: !!order.confirmed_at, bad: false },
+
   ];
+
   if (order.status === 'declined' || order.status === 'cancelled') {
+
     timelineSteps.splice(1, 4, { icon:'✕', label: order.status === 'declined' ? ('Declined: ' + (order.decline_reason||'')) : 'Cancelled', time: order.declined_at || order.cancelled_at, done: true, bad: true });
+
   }
 
   const timelineHTML = timelineSteps.map(function(step, i) {
+
     const isLast = i === timelineSteps.length - 1;
+
     const dotBg  = step.done ? (step.bad ? 'rgba(255,59,92,0.15)' : 'rgba(0,196,140,0.15)') : 'var(--bg2)';
+
     const lineBg = step.done ? (step.bad ? 'rgba(255,59,92,0.3)' : 'rgba(0,196,140,0.3)') : 'var(--border)';
+
     return '<div style="display:flex;gap:12px;align-items:flex-start' + (!isLast ? ';margin-bottom:4px' : '') + '">' +
+
       '<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">' +
+
         '<div style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;background:' + dotBg + '">' +
+
           (step.done ? step.icon : '<div style="width:8px;height:8px;border-radius:50%;background:var(--border)"></div>') +
+
         '</div>' +
+
         (!isLast ? '<div style="width:2px;flex:1;min-height:16px;background:' + lineBg + ';margin:3px 0"></div>' : '') +
+
       '</div>' +
+
       '<div style="padding-top:6px;padding-bottom:' + (!isLast ? '12' : '0') + 'px">' +
+
         '<div style="font-size:13px;font-weight:600;color:' + (step.done ? 'var(--text)' : 'var(--text3)') + '">' + step.label + '</div>' +
+
         (step.time ? '<div style="font-size:11px;color:var(--text3);margin-top:1px">' + timeSince(step.time) + '</div>' : '') +
+
       '</div>' +
+
     '</div>';
+
   }).join('');
 
   const deliveryRows = [
+
     shipName   ? ['Recipient', shipName]   : null,
+
     shipPhone  ? ['Phone',     shipPhone]  : null,
+
     shipState  ? ['State',     shipState]  : null,
+
     shipStreet ? ['Address',   shipStreet] : null,
+
   ].filter(Boolean).map(function(r) {
+
     return '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border2)">' +
+
       '<span style="font-size:12px;color:var(--text3)">' + r[0] + '</span>' +
+
       '<span style="font-size:13px;font-weight:600;color:var(--text);text-align:right;max-width:60%">' + escHtml(r[1]) + '</span>' +
+
     '</div>';
+
   }).join('');
 
   overlay.innerHTML =
+
     '<div style="position:sticky;top:0;z-index:2;background:var(--surface);border-bottom:1px solid var(--border);padding:calc(var(--safe-top)) 0 0">' +
+
       '<div style="display:flex;align-items:center;height:52px">' +
+
         '<button onclick="document.getElementById(\'order-detail-overlay\').remove()" style="width:48px;height:52px;display:flex;align-items:center;justify-content:center;background:none;border:none;cursor:pointer;flex-shrink:0">' +
+
           '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>' +
+
         '</button>' +
+
         '<div style="flex:1;font-size:16px;font-weight:700;color:var(--text)">Order Detail</div>' +
+
         '<div style="margin-right:16px;background:' + meta.bg + ';color:' + meta.color + ';font-size:12px;font-weight:700;padding:5px 12px;border-radius:20px">' + meta.label + '</div>' +
+
       '</div>' +
+
     '</div>' +
 
     '<div style="padding:16px;display:flex;gap:14px;align-items:center;background:var(--surface);border-bottom:1px solid var(--border)">' +
+
       (productImage
+
         ? '<img src="' + productImage + '" style="width:72px;height:72px;border-radius:16px;object-fit:cover;flex-shrink:0" alt="">'
+
         : '<div style="width:72px;height:72px;border-radius:16px;background:' + gradientFor(order.product_id||order.id) + ';flex-shrink:0"></div>') +
+
       '<div style="flex:1;min-width:0">' +
+
         '<div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:3px;line-height:1.3">' + escHtml(order.title||'—') + '</div>' +
+
         '<div style="font-size:12px;color:var(--text3);margin-bottom:6px">Qty: ' + (order.quantity||1) + ' · ' + timeSince(order.created_at) + '</div>' +
+
         '<div style="font-size:12px;font-weight:600;color:var(--text3);letter-spacing:0.5px">#' + order.id.slice(0,8).toUpperCase() + '</div>' +
+
       '</div>' +
+
       '<div style="text-align:right;flex-shrink:0">' +
+
         '<div style="font-size:18px;font-weight:900;color:var(--text)">' + mktFmtNgn(order.price_ngn||0) + '</div>' +
+
         '<div style="font-size:12px;color:var(--accent);margin-top:2px;font-weight:600">' + fmtPts(order.price_mp||0) + '</div>' +
+
       '</div>' +
+
     '</div>' +
 
     '<div style="padding:16px;display:flex;flex-direction:column;gap:12px">' +
 
       '<div style="background:var(--surface);border-radius:16px;padding:16px;border:1px solid var(--border)">' +
+
         '<div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:14px">Order Progress</div>' +
+
         timelineHTML +
+
       '</div>' +
 
       '<div style="background:var(--surface);border-radius:16px;padding:16px;border:1px solid var(--border)">' +
+
         '<div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px">Delivery</div>' +
+
         (deliveryRows || ('<div style="font-size:13px;color:var(--text2)">' + escHtml(order.shipping_address||'—') + '</div>')) +
+
         (order.note ? '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border2);font-size:12px;color:var(--text3)">Note: ' + escHtml(order.note) + '</div>' : '') +
+
       '</div>' +
 
       (order.courier ? (
+
         '<div style="background:var(--surface);border-radius:16px;padding:16px;border:1px solid var(--border)">' +
+
           '<div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px">Shipping Info</div>' +
+
           '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border2)">' +
+
             '<span style="font-size:12px;color:var(--text3)">Courier</span>' +
+
             '<span style="font-size:13px;font-weight:600;color:var(--text)">' + escHtml(order.courier) + '</span>' +
+
           '</div>' +
+
           (order.tracking_number ? (
-            '<div style="display:flex;justify-content:space-between;padding:8px 0">' +
+
+            '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border2)">' +
+
               '<span style="font-size:12px;color:var(--text3)">Tracking</span>' +
+
               '<span style="font-size:13px;font-weight:700;color:var(--accent)">' + escHtml(order.tracking_number) + '</span>' +
+
             '</div>'
+
           ) : '') +
+
+          (order.sendbox_tracking_url ? (
+
+            '<div style="padding:10px 0">' +
+
+              '<a href="' + escHtml(order.sendbox_tracking_url) + '" target="_blank" rel="noopener" ' +
+
+                'style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:44px;border-radius:12px;background:rgba(108,71,255,0.1);color:var(--accent);font-size:14px;font-weight:700;text-decoration:none">' +
+
+                '📍 Track Live on Sendbox' +
+
+              '</a>' +
+
+            '</div>'
+
+          ) : '') +
+
         '</div>'
+
       ) : '') +
 
       (order.shipping_proof_url ? (
+
         '<div style="background:var(--surface);border-radius:16px;padding:16px;border:1px solid var(--border)">' +
+
           '<div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px">Shipping Proof</div>' +
+
           '<img src="' + order.shipping_proof_url + '" style="width:100%;border-radius:12px;object-fit:cover" alt="">' +
+
           (order.auto_release_at ? '<div style="font-size:12px;color:var(--text3);margin-top:8px">⏱ MP auto-releases in 7 days if not confirmed</div>' : '') +
+
         '</div>'
+
       ) : '') +
 
       '<div style="background:var(--surface);border-radius:16px;padding:16px;border:1px solid var(--border)">' +
+
         '<div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.6px;margin-bottom:12px">Payment</div>' +
+
         '<div style="display:flex;justify-content:space-between;align-items:center">' +
+
           '<span style="font-size:15px;font-weight:700;color:var(--text)">Total</span>' +
+
           '<span style="font-size:18px;font-weight:900;color:var(--text)">' + mktFmtNgn(order.price_ngn||0) + '</span>' +
+
         '</div>' +
+
         '<div style="margin-top:8px;display:inline-flex;align-items:center;background:var(--accent-soft);padding:4px 10px;border-radius:8px">' +
+
           '<span style="font-size:12px;font-weight:700;color:var(--accent)">Paid with ' + fmtPts(order.price_mp||0) + '</span>' +
+
         '</div>' +
+
         (['pending','accepted','processing','shipped'].includes(order.status) ? '<div style="margin-top:10px;font-size:12px;color:#ff9500">🔒 MP held in escrow — releases on delivery confirmation</div>' : '') +
+
       '</div>' +
 
       (order.decline_reason ? (
+
         '<div style="background:rgba(255,59,92,0.06);border-radius:16px;padding:16px;border:1px solid rgba(255,59,92,0.2)">' +
+
           '<div style="font-size:12px;font-weight:700;color:#ff3b5c;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:6px">Decline Reason</div>' +
+
           '<div style="font-size:13px;color:var(--text2)">' + escHtml(order.decline_reason) + '</div>' +
+
           (role==='buyer' ? '<div style="font-size:12px;color:var(--text3);margin-top:6px">Your MP has been refunded to your wallet.</div>' : '') +
+
         '</div>'
+
       ) : '') +
 
       '<div style="display:flex;flex-direction:column;gap:10px;padding-bottom:16px">' +
@@ -3809,26 +4440,41 @@ async function openOrderDetail(orderId, role) {
         (role==='buyer' && order.status==='pending' ? '<div style="padding:14px;background:rgba(255,149,0,0.08);border-radius:12px;font-size:13px;color:#ff9500;text-align:center">⏳ Waiting for seller to accept your order</div>' : '') +
 
         (role==='buyer' && order.status==='shipped' ?
+
           '<button onclick="confirmDelivery(\'' + order.id + '\');document.getElementById(\'order-detail-overlay\').remove()" style="width:100%;height:52px;border-radius:14px;background:#00c48c;color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">✓ Confirm Delivery</button>' +
+
           '<div style="font-size:12px;color:var(--text3);text-align:center">Only confirm when you have received your order</div>'
+
         : '') +
 
         (role==='seller' && order.status==='pending' ?
+
           '<div style="display:flex;gap:10px">' +
+
             '<button onclick="acceptOrder(\'' + order.id + '\');document.getElementById(\'order-detail-overlay\').remove()" style="flex:1;height:52px;border-radius:14px;background:var(--accent);color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">✓ Accept Order</button>' +
+
             '<button onclick="declineOrder(\'' + order.id + '\');document.getElementById(\'order-detail-overlay\').remove()" style="flex:1;height:52px;border-radius:14px;background:none;color:#ff3b5c;border:1.5px solid #ff3b5c;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">✕ Decline</button>' +
+
           '</div>'
+
         : '') +
 
         (role==='seller' && order.status==='accepted' ?
+
           '<div style="display:flex;gap:10px">' +
+
             '<button onclick="updateOrderStatus(\'' + order.id + '\',\'processing\');document.getElementById(\'order-detail-overlay\').remove()" style="flex:1;height:52px;border-radius:14px;background:var(--bg2);color:var(--text);border:1px solid var(--border);font-size:14px;font-weight:600;cursor:pointer;font-family:var(--font)">⚙️ Mark Processing</button>' +
+
             '<button onclick="openShipOrder(\'' + order.id + '\');document.getElementById(\'order-detail-overlay\').remove()" style="flex:1;height:52px;border-radius:14px;background:var(--accent);color:white;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font)">🚚 Ship Now</button>' +
+
           '</div>'
+
         : '') +
 
         (role==='seller' && order.status==='processing' ?
+
           '<button onclick="openShipOrder(\'' + order.id + '\');document.getElementById(\'order-detail-overlay\').remove()" style="width:100%;height:52px;border-radius:14px;background:var(--accent);color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">🚚 Upload Shipping Proof</button>'
+
         : '') +
 
       '</div>' +
