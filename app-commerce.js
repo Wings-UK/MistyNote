@@ -2777,9 +2777,12 @@ async function updateOrderStatus(orderId, status) {
 
 async function openShipOrder(orderId) {
 
-  const { data: order } = await supabase.from('orders').select('*, storefronts(pickup_state, pickup_address, pickup_name, pickup_phone)').eq('id', orderId).single();
+  const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
 
   if (!order) { showToast('Order not found'); return; }
+
+  // Fetch seller's pickup address separately using seller_id
+  const { data: sf } = await supabase.from('storefronts').select('pickup_state, pickup_address, pickup_name, pickup_phone').eq('user_id', order.seller_id).maybeSingle();
 
   const addrParts  = (order.shipping_address || '').split(' · ');
   const shipName   = addrParts[0] || '';
@@ -2828,7 +2831,7 @@ async function openShipOrder(orderId) {
 
     </div>`;
 
-  sheet._orderData = { order, shipName, shipPhone, shipState, shipStreet };
+  sheet._orderData = { order, sf, shipName, shipPhone, shipState, shipStreet };
 
   document.body.appendChild(sheet);
 
@@ -2839,7 +2842,7 @@ async function submitShipOrder(orderId, sheetEl) {
   const weight   = parseFloat(document.getElementById('ship-weight')?.value) || 0.5;
   const noteText = document.getElementById('ship-note')?.value.trim() || '';
   const btn      = document.getElementById('ship-sendbox-btn');
-  const { order, shipName, shipPhone, shipState, shipStreet } = sheetEl?._orderData || {};
+  const { order, sf, shipName, shipPhone, shipState, shipStreet } = sheetEl?._orderData || {};
 
   if (!order) { showToast('Order data missing — please retry'); return; }
 
@@ -2847,10 +2850,10 @@ async function submitShipOrder(orderId, sheetEl) {
 
   try {
 
-    const sf = order.storefronts || {};
+    const pickup = sf || {};
 
     const shipmentRes = await sendboxRequest('POST', '/shipping/shipments', {
-      sender:    { name: sf.pickup_name || currentProfile?.username || '', phone: sf.pickup_phone || '', address: sf.pickup_address || '', state: sf.pickup_state || 'Lagos', country: 'NG' },
+      sender:    { name: pickup.pickup_name || currentProfile?.username || '', phone: pickup.pickup_phone || '', address: pickup.pickup_address || '', state: pickup.pickup_state || 'Lagos', country: 'NG' },
       recipient: { name: shipName, phone: shipPhone, address: shipStreet, state: shipState, country: 'NG' },
       parcel:    { weight, length: 10, width: 10, height: 10, description: order.title || 'Order', value: order.price_ngn || 0 },
       note: noteText, delivery_type: 'door_delivery', payment_method: 'prepaid',
