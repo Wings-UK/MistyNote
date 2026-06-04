@@ -2781,7 +2781,6 @@ async function openShipOrder(orderId) {
 
   if (!order) { showToast('Order not found'); return; }
 
-  // Fetch seller's pickup address separately using seller_id
   const { data: sf } = await supabase.from('storefronts').select('pickup_state, pickup_address, pickup_name, pickup_phone').eq('user_id', order.seller_id).maybeSingle();
 
   const addrParts  = (order.shipping_address || '').split(' · ');
@@ -2791,48 +2790,78 @@ async function openShipOrder(orderId) {
   const shipStreet = addrParts.slice(3).join(' · ') || '';
 
   const sheet = document.createElement('div');
-
-  sheet.style.cssText = 'position:fixed;inset:0;z-index:950;background:rgba(0,0,0,0.5);display:flex;align-items:flex-end';
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:950;background:rgba(0,0,0,0.55);display:flex;align-items:flex-end';
 
   sheet.innerHTML = `
+    <div style="width:100%;background:var(--surface);border-radius:28px 28px 0 0;padding:0 0 calc(var(--safe-bottom)+24px);overflow:hidden">
 
-    <div style="width:100%;background:var(--surface);border-radius:24px 24px 0 0;padding:24px 20px calc(var(--safe-bottom)+24px)">
-
-      <div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 20px"></div>
-
-      <div style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:6px">Ship Order via Sendbox</div>
-
-      <div style="font-size:13px;color:var(--text3);margin-bottom:16px">Sendbox will book a pickup and generate a waybill automatically</div>
-
-      <div style="background:var(--bg2);border-radius:12px;padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--text2);line-height:1.7">
-        📍 <strong>Deliver to:</strong> ${escHtml(shipName)} · ${escHtml(shipState)}<br>
-        🏠 ${escHtml(shipStreet) || '—'}
+      <!-- Handle -->
+      <div style="display:flex;justify-content:center;padding:12px 0 0">
+        <div style="width:36px;height:4px;background:var(--border);border-radius:2px"></div>
       </div>
 
-      <div style="margin-bottom:12px">
-        <div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px">Package Weight (kg)</div>
-        <input id="ship-weight" class="co-input" type="number" min="0.1" step="0.1" placeholder="e.g. 0.5" value="0.5" style="width:100%;box-sizing:border-box">
+      <!-- Header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px 12px">
+        <div>
+          <div style="font-size:18px;font-weight:800;color:var(--text);letter-spacing:-0.3px">Ship with Sendbox</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">Pickup will be booked automatically</div>
+        </div>
+        <div style="width:44px;height:44px;border-radius:14px;background:rgba(108,71,255,0.1);display:flex;align-items:center;justify-content:center;font-size:22px">🚚</div>
       </div>
 
-      <div style="margin-bottom:20px">
-        <div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px">Note to Courier (optional)</div>
-        <input id="ship-note" class="co-input" placeholder="e.g. Fragile, handle with care" style="width:100%;box-sizing:border-box">
+      <!-- Divider -->
+      <div style="height:1px;background:var(--border);margin:0 20px"></div>
+
+      <!-- Delivery info -->
+      <div style="margin:16px 20px;background:var(--bg2);border-radius:16px;padding:14px 16px">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.7px;margin-bottom:10px">Delivering To</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <div style="width:32px;height:32px;border-radius:10px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">👤</div>
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--text)">${escHtml(shipName)}</div>
+            <div style="font-size:12px;color:var(--text3)">${escHtml(shipPhone)}</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:10px;margin-top:8px">
+          <div style="width:32px;height:32px;border-radius:10px;background:rgba(0,196,140,0.12);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">📍</div>
+          <div>
+            <div style="font-size:13px;font-weight:600;color:var(--text)">${escHtml(shipState)}</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:2px">${escHtml(shipStreet) || '—'}</div>
+          </div>
+        </div>
       </div>
 
-      <button id="ship-sendbox-btn" onclick="submitShipOrder('${orderId}',this.closest('div[style*=fixed]'))"
-        style="width:100%;height:52px;border-radius:14px;background:var(--accent);color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">
-        🚚 Book Pickup with Sendbox
-      </button>
+      <!-- Weight + Note -->
+      <div style="padding:0 20px;display:flex;flex-direction:column;gap:12px">
 
-      <button onclick="this.closest('div[style*=fixed]').remove()"
-        style="width:100%;height:44px;border-radius:14px;background:none;color:var(--text3);border:none;font-size:14px;cursor:pointer;margin-top:8px;font-family:var(--font)">
-        Cancel
-      </button>
+        <div style="display:flex;gap:12px">
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px">Weight (kg)</div>
+            <input id="ship-weight" class="co-input" type="number" min="0.1" step="0.1" value="0.5"
+              style="width:100%;box-sizing:border-box;text-align:center;font-size:16px;font-weight:700">
+          </div>
+          <div style="flex:2">
+            <div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px">Courier Note (optional)</div>
+            <input id="ship-note" class="co-input" placeholder="e.g. Fragile, call on arrival"
+              style="width:100%;box-sizing:border-box">
+          </div>
+        </div>
 
+        <!-- Book button -->
+        <button id="ship-sendbox-btn" onclick="submitShipOrder('${orderId}',this.closest('div[style*=fixed]'))"
+          style="width:100%;height:56px;border-radius:16px;background:var(--accent);color:white;border:none;font-size:16px;font-weight:800;cursor:pointer;font-family:var(--font);letter-spacing:-0.2px;margin-top:4px">
+          🚚 Book Pickup with Sendbox
+        </button>
+
+        <button onclick="this.closest('div[style*=fixed]').remove()"
+          style="width:100%;height:44px;border-radius:14px;background:none;color:var(--text3);border:none;font-size:14px;cursor:pointer;font-family:var(--font)">
+          Cancel
+        </button>
+
+      </div>
     </div>`;
 
   sheet._orderData = { order, sf, shipName, shipPhone, shipState, shipStreet };
-
   document.body.appendChild(sheet);
 
 }
@@ -2889,11 +2918,17 @@ async function submitShipOrder(orderId, sheetEl) {
     console.error('[Sendbox] submitShipOrder failed:', err);
     if (btn) { btn.disabled = false; btn.textContent = '🚚 Book Pickup with Sendbox'; }
 
-    showActionSheet([
-      { label: '📷 Upload Proof Manually Instead', action: () => { sheetEl?.remove(); _fallbackManualShip(orderId); } },
-      { label: 'Retry', action: () => submitShipOrder(orderId, sheetEl) },
-      { label: 'Cancel', action: () => {} },
-    ]);
+    // Show the actual error so we know what went wrong
+    const errMsg = err?.message || 'Unknown error';
+    showToast(`Sendbox: ${errMsg}`);
+
+    setTimeout(() => {
+      showActionSheet([
+        { label: '📷 Upload Proof Manually Instead', action: () => { sheetEl?.remove(); _fallbackManualShip(orderId); } },
+        { label: '🔄 Retry', action: () => submitShipOrder(orderId, sheetEl) },
+        { label: 'Cancel', action: () => {} },
+      ]);
+    }, 1500);
 
   }
 
