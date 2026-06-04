@@ -2661,7 +2661,7 @@ function renderShopOrderCard(order) {
 
           style="width:100%;height:44px;border-radius:12px;background:var(--accent);color:white;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">
 
-          🚚 Upload Shipping Proof
+          🚚 Ship Now
 
         </button>
 
@@ -4476,7 +4476,7 @@ async function openOrderDetail(orderId, role) {
 
         (role==='seller' && order.status==='processing' ?
 
-          '<button onclick="openShipOrder(\'' + order.id + '\');document.getElementById(\'order-detail-overlay\').remove()" style="width:100%;height:52px;border-radius:14px;background:var(--accent);color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">🚚 Upload Shipping Proof</button>'
+          '<button onclick="openShipOrder(\'' + order.id + '\');document.getElementById(\'order-detail-overlay\').remove()" style="width:100%;height:52px;border-radius:14px;background:var(--accent);color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">🚚 Ship Now</button>'
 
         : '') +
 
