@@ -19,7 +19,7 @@ export async function onRequestPost(context) {
       });
     }
 
-    const sendboxRes = await fetch('https://api.sendbox.co' + path, {
+    const sendboxRes = await fetch('https://ship.sendbox.co' + path, {
       method,
       headers: {
         'Content-Type':  'application/json',
