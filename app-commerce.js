@@ -26,15 +26,22 @@ const SENDBOX_BASE          = 'https://api.sendbox.co';
 let _sendboxToken = SENDBOX_ACCESS_TOKEN;
 
 async function sendboxRequest(method, path, body, _isRetry = false) {
-  const opts = { method, headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _sendboxToken } };
-  if (body) opts.body = JSON.stringify(body);
   try {
-    const res  = await fetch(SENDBOX_BASE + path, opts);
+    // Route through our Pages Function proxy to avoid CORS
+    const res  = await fetch('/api/sendbox', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, method, body, token: _sendboxToken }),
+    });
+
+    const json = await res.json();
+
+    // Token expired — refresh and retry once
     if (res.status === 401 && !_isRetry) {
       const ok = await _sendboxRefreshToken();
       if (ok) return sendboxRequest(method, path, body, true);
     }
-    const json = await res.json();
+
     if (!res.ok) throw new Error(json.message || json.error || 'Sendbox error');
     return json;
   } catch (e) { throw e; }
@@ -42,7 +49,11 @@ async function sendboxRequest(method, path, body, _isRetry = false) {
 
 async function _sendboxRefreshToken() {
   try {
-    const res  = await fetch(SENDBOX_BASE + '/auth/token/refresh', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: SENDBOX_REFRESH_TOKEN }) });
+    const res  = await fetch('/api/sendbox', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: '/auth/token/refresh', method: 'POST', body: { refresh_token: SENDBOX_REFRESH_TOKEN }, token: '' }),
+    });
     const json = await res.json();
     const t    = json?.data?.access_token || json?.access_token;
     if (t) { _sendboxToken = t; return true; }
