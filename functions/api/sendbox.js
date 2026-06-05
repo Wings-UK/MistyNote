@@ -30,6 +30,9 @@ export async function onRequestPost(context) {
 
     const data = await sendboxRes.json();
 
+    // Always return full Sendbox response so frontend can read the real error
+    console.log('[Sendbox Proxy]', sendboxRes.status, JSON.stringify(data));
+
     return new Response(JSON.stringify(data), {
       status: sendboxRes.status,
       headers: corsHeaders(),
