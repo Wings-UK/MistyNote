@@ -18,8 +18,8 @@
 // SENDBOX — Shipping & Logistics (Nigeria)
 // ══════════════════════════════════════════
 const SENDBOX_SECRET_KEY    = 'cb50a8737b93487477058966fadeceb88012814481210aee0de38e59a450c8b18cdd88e02f1a3dc921cd6413b8c342fc92fc0332cdca4336dedfd2877cc58dec';
-const SENDBOX_ACCESS_TOKEN  = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1aWQiOiI2YTE5ZTQ1YmEyOGIyYTAwMjI3ZTQ0ZGMiLCJhaWQiOiI2YTFjZDFhNWEyOGIyYTAwMWY2ODAzNmQiLCJ0d29fZmEiOmZhbHNlLCJpbnN0YW5jZV9pZCI6IjYxMzZkZmE2YTFhYjlkMzE4YmNmY2I5NCIsImVudGl0eV9pZCI6bnVsbCwiaXNzIjoic2VuZGJveC5hcHBzLmF1dGgtNjEzNmRmYTZhMWFiOWQzMThiY2ZjYjk0IiwiZXhwIjoxNzg1MzcxMTczfQ.bRU539sPAxXiNDv9KHXPcyTUuOCVWtKu-thqUU9Bx3Q';
-const SENDBOX_REFRESH_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhcHBsaWNhdGlvbiI6eyJwayI6IjZhMWNkMWE1YTI4YjJhMDAxZjY4MDM2ZCIsImRlc2NyaXB0b24iOiJUaGUgdmlyYWwgcGxhdGZvcm0uLi4iLCJuYW1lIjoiTWlzdHlOb3RlICJ9LCJhcHBfaWQiOiI2YTFjZDFhNWEyOGIyYTAwMWY2ODAzNmQiLCJpc3MiOiJzZW5kYm94LmFwcHMuYXV0aCIsImV4cCI6MTgxNDgzMzU3M30.L5LErAx9f4sKckXVsyV89gDpfnBsJt8SJVHJFd0oCf4';
+const SENDBOX_ACCESS_TOKEN  = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1aWQiOiI2YTE5ZTQ1YmEyOGIyYTAwMjI3ZTQ0ZGMiLCJhaWQiOiI2YTFjZDFhNWEyOGIyYTAwMWY2ODAzNmQiLCJ0d29fZmEiOmZhbHNlLCJpbnN0YW5jZV9pZCI6IjYxMzZkZmE2YTFhYjlkMzE4YmNmY2I5NCIsImVudGl0eV9pZCI6bnVsbCwiaXNzIjoic2VuZGJveC5hcHBzLmF1dGgtNjEzNmRmYTZhMWFiOWQzMThiY2ZjYjk0IiwiZXhwIjoxNzg1NzQ1NTA3fQ.VI6gJBxjq2ow7GSmsg-Hm1DWMy3u9haNVBrS9omxNOo';
+const SENDBOX_REFRESH_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhcHBsaWNhdGlvbiI6eyJwayI6IjZhMWNkMWE1YTI4YjJhMDAxZjY4MDM2ZCIsImRlc2NyaXB0b24iOiJUaGUgdmlyYWwgcGxhdGZvcm0uLi4iLCJuYW1lIjoiTWlzdHlOb3RlICJ9LCJhcHBfaWQiOiI2YTFjZDFhNWEyOGIyYTAwMWY2ODAzNmQiLCJpc3MiOiJzZW5kYm94LmFwcHMuYXV0aCIsImV4cCI6MTgxNTIwNzkwN30.hTK-539CK5MlzQCmlXHjkxvjc_wLrOwML-6mlqVJLBY';
 const SENDBOX_BASE          = 'https://api.sendbox.co';
 // Webhook already registered: https://mistynote.pages.dev/api/sendbox-webhook
 
@@ -57,13 +57,22 @@ async function _sendboxRefreshToken() {
     const res  = await fetch('/api/sendbox', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: '/auth/token/refresh', method: 'POST', body: { refresh_token: SENDBOX_REFRESH_TOKEN }, token: '' }),
+      body: JSON.stringify({
+        path:   '/apps/auth/token/refresh',
+        method: 'POST',
+        body:   { refresh_token: SENDBOX_REFRESH_TOKEN },
+        token:  '',
+      }),
     });
     const json = await res.json();
-    const t    = json?.data?.access_token || json?.access_token;
+    console.log('[Sendbox] Refresh response:', JSON.stringify(json));
+    const t = json?.data?.access_token || json?.access_token || json?.token || json?.data?.token;
     if (t) { _sendboxToken = t; return true; }
     return false;
-  } catch (e) { return false; }
+  } catch (e) {
+    console.error('[Sendbox] Refresh failed:', e);
+    return false;
+  }
 }
 
 // ── COMMERCE STATE ────────────────────────────────────────
