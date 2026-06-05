@@ -42,7 +42,12 @@ async function sendboxRequest(method, path, body, _isRetry = false) {
       if (ok) return sendboxRequest(method, path, body, true);
     }
 
-    if (!res.ok) throw new Error(json.message || json.error || 'Sendbox error');
+    if (!res.ok) {
+      // Log full response so we can see the real Sendbox error
+      console.error('[Sendbox] Full error response:', JSON.stringify(json));
+      const msg = json.message || json.error || json.detail || json.msg || JSON.stringify(json);
+      throw new Error(msg);
+    }
     return json;
   } catch (e) { throw e; }
 }
