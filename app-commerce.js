@@ -23,12 +23,13 @@ const SENDBOX_REFRESH_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhcHBsaWNh
 const SENDBOX_BASE          = 'https://ship.sendbox.co';
 // Webhook already registered: https://mistynote.pages.dev/api/sendbox-webhook
 
+const SENDBOX_EDGE_URL = 'https://rhmknjlxddxkfyjbcfgjj.supabase.co/functions/v1/sendbox';
+
 let _sendboxToken = SENDBOX_ACCESS_TOKEN;
 
 async function sendboxRequest(method, path, body, _isRetry = false) {
   try {
-    // Route through our Pages Function proxy to avoid CORS
-    const res  = await fetch('/api/sendbox', {
+    const res  = await fetch(SENDBOX_EDGE_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path, method, body, token: _sendboxToken }),
@@ -36,14 +37,12 @@ async function sendboxRequest(method, path, body, _isRetry = false) {
 
     const json = await res.json();
 
-    // Token expired — refresh and retry once
     if (res.status === 401 && !_isRetry) {
       const ok = await _sendboxRefreshToken();
       if (ok) return sendboxRequest(method, path, body, true);
     }
 
     if (!res.ok) {
-      // Log full response so we can see the real Sendbox error
       console.error('[Sendbox] Full error response:', JSON.stringify(json));
       const msg = json.message || json.error || json.detail || json.msg || JSON.stringify(json);
       throw new Error(msg);
@@ -54,7 +53,7 @@ async function sendboxRequest(method, path, body, _isRetry = false) {
 
 async function _sendboxRefreshToken() {
   try {
-    const res  = await fetch('/api/sendbox', {
+    const res  = await fetch(SENDBOX_EDGE_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -2346,6 +2345,8 @@ async function loadMyBag() {
 
     processing: { color:'#007aff', bg:'rgba(0,122,255,0.1)',    icon:'⚙️', label:'Processing' },
 
+    shipping_requested: { color:'#ff9500', bg:'rgba(255,149,0,0.1)', icon:'📦', label:'Pickup Requested' },
+
     shipped:    { color:'#6C47FF', bg:'rgba(108,71,255,0.1)',   icon:'🚚', label:'Shipped' },
 
     delivered:  { color:'#00c48c', bg:'rgba(0,196,140,0.1)',    icon:'✅', label:'Delivered' },
@@ -2519,6 +2520,8 @@ async function loadShopOrders() {
     { id:'accepted',   label:'Accepted',     count: orders.filter(o=>o.status==='accepted').length },
 
     { id:'processing', label:'Processing',   count: orders.filter(o=>o.status==='processing').length },
+
+    { id:'shipping_requested', label:'Pickup Requested', count: orders.filter(o=>o.status==='shipping_requested').length },
 
     { id:'shipped',    label:'Shipped',      count: orders.filter(o=>o.status==='shipped').length },
 
@@ -2806,7 +2809,7 @@ async function openShipOrder(orderId) {
 
   if (!order) { showToast('Order not found'); return; }
 
-  const { data: sf } = await supabase.from('storefronts').select('pickup_state, pickup_address, pickup_name, pickup_phone').eq('user_id', order.seller_id).maybeSingle();
+  const { data: sf } = await supabase.from('storefronts').select('store_name, pickup_state, pickup_address, pickup_name, pickup_phone').eq('user_id', order.seller_id).maybeSingle();
 
   const addrParts  = (order.shipping_address || '').split(' · ');
   const shipName   = addrParts[0] || '';
@@ -2820,26 +2823,22 @@ async function openShipOrder(orderId) {
   sheet.innerHTML = `
     <div style="width:100%;background:var(--surface);border-radius:28px 28px 0 0;padding:0 0 calc(var(--safe-bottom)+24px);overflow:hidden">
 
-      <!-- Handle -->
       <div style="display:flex;justify-content:center;padding:12px 0 0">
         <div style="width:36px;height:4px;background:var(--border);border-radius:2px"></div>
       </div>
 
-      <!-- Header -->
       <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px 12px">
         <div>
-          <div style="font-size:18px;font-weight:800;color:var(--text);letter-spacing:-0.3px">Ship with Sendbox</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:2px">Pickup will be booked automatically</div>
+          <div style="font-size:18px;font-weight:800;color:var(--text);letter-spacing:-0.3px">Request Pickup</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">Our logistics team will book your courier</div>
         </div>
-        <div style="width:44px;height:44px;border-radius:14px;background:rgba(108,71,255,0.1);display:flex;align-items:center;justify-content:center;font-size:22px">🚚</div>
+        <div style="width:44px;height:44px;border-radius:14px;background:rgba(108,71,255,0.1);display:flex;align-items:center;justify-content:center;font-size:22px">📦</div>
       </div>
 
-      <!-- Divider -->
       <div style="height:1px;background:var(--border);margin:0 20px"></div>
 
-      <!-- Delivery info -->
       <div style="margin:16px 20px;background:var(--bg2);border-radius:16px;padding:14px 16px">
-        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.7px;margin-bottom:10px">Delivering To</div>
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.7px;margin-bottom:10px">Deliver To</div>
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
           <div style="width:32px;height:32px;border-radius:10px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0">👤</div>
           <div>
@@ -2856,26 +2855,29 @@ async function openShipOrder(orderId) {
         </div>
       </div>
 
-      <!-- Weight + Note -->
+      <div style="margin:0 20px 16px;background:var(--bg2);border-radius:16px;padding:14px 16px">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.7px;margin-bottom:10px">Pickup From</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${escHtml(sf?.pickup_name || currentProfile?.username || '')}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px">${escHtml(sf?.pickup_address || 'No pickup address set')} · ${escHtml(sf?.pickup_state || '')}</div>
+      </div>
+
       <div style="padding:0 20px;display:flex;flex-direction:column;gap:12px">
 
-        <div style="display:flex;gap:12px">
-          <div style="flex:1">
-            <div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px">Weight (kg)</div>
-            <input id="ship-weight" class="co-input" type="number" min="0.1" step="0.1" value="0.5"
-              style="width:100%;box-sizing:border-box;text-align:center;font-size:16px;font-weight:700">
-          </div>
-          <div style="flex:2">
-            <div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px">Courier Note (optional)</div>
-            <input id="ship-note" class="co-input" placeholder="e.g. Fragile, call on arrival"
-              style="width:100%;box-sizing:border-box">
-          </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px">Package Weight (kg)</div>
+          <input id="ship-weight" class="co-input" type="number" min="0.1" step="0.1" value="0.5"
+            style="width:100%;box-sizing:border-box">
         </div>
 
-        <!-- Book button -->
-        <button id="ship-sendbox-btn" onclick="submitShipOrder('${orderId}',this.closest('div[style*=fixed]'))"
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px">Note for our logistics team (optional)</div>
+          <input id="ship-note" class="co-input" placeholder="e.g. Fragile, call before pickup"
+            style="width:100%;box-sizing:border-box">
+        </div>
+
+        <button id="ship-request-btn" onclick="submitShipOrder('${orderId}',this.closest('div[style*=fixed]'))"
           style="width:100%;height:56px;border-radius:16px;background:var(--accent);color:white;border:none;font-size:16px;font-weight:800;cursor:pointer;font-family:var(--font);letter-spacing:-0.2px;margin-top:4px">
-          🚚 Book Pickup with Sendbox
+          📦 Request Pickup
         </button>
 
         <button onclick="this.closest('div[style*=fixed]').remove()"
@@ -2895,137 +2897,56 @@ async function submitShipOrder(orderId, sheetEl) {
 
   const weight   = parseFloat(document.getElementById('ship-weight')?.value) || 0.5;
   const noteText = document.getElementById('ship-note')?.value.trim() || '';
-  const btn      = document.getElementById('ship-sendbox-btn');
+  const btn      = document.getElementById('ship-request-btn');
   const { order, sf, shipName, shipPhone, shipState, shipStreet } = sheetEl?._orderData || {};
 
   if (!order) { showToast('Order data missing — please retry'); return; }
 
-  if (btn) { btn.disabled = true; btn.textContent = 'Booking pickup…'; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending request…'; }
 
   try {
 
-    const pickup = sf || {};
-
-    const shipmentRes = await sendboxRequest('POST', '/shipping/shipments', {
-      sender:    { name: pickup.pickup_name || currentProfile?.username || '', phone: pickup.pickup_phone || '', address: pickup.pickup_address || '', state: pickup.pickup_state || 'Lagos', country: 'NG' },
-      recipient: { name: shipName, phone: shipPhone, address: shipStreet, state: shipState, country: 'NG' },
-      parcel:    { weight, length: 10, width: 10, height: 10, description: order.title || 'Order', value: order.price_ngn || 0 },
-      note: noteText, delivery_type: 'door_delivery', payment_method: 'prepaid',
+    // Write a pickup request record for the admin/logistics team to action manually
+    await supabase.from('pickup_requests').insert({
+      order_id:        orderId,
+      seller_id:       order.seller_id,
+      buyer_id:        order.buyer_id,
+      store_name:      sf?.store_name || '',
+      pickup_name:     sf?.pickup_name  || currentProfile?.username || '',
+      pickup_phone:    sf?.pickup_phone || '',
+      pickup_address:  sf?.pickup_address || '',
+      pickup_state:    sf?.pickup_state || '',
+      delivery_name:   shipName,
+      delivery_phone:  shipPhone,
+      delivery_state:  shipState,
+      delivery_address: shipStreet,
+      weight_kg:       weight,
+      note:            noteText,
+      item_title:      order.title || '',
+      item_value_ngn:  order.price_ngn || order.total_ngn || 0,
+      status:          'pending',
+      requested_at:    new Date().toISOString(),
     });
 
-    const shipmentId  = shipmentRes?.data?.id || shipmentRes?.shipment_id || '';
-    const trackingNum = shipmentRes?.data?.tracking_number || shipmentRes?.tracking_number || '';
-    const trackingUrl = shipmentRes?.data?.tracking_url || `https://app.sendbox.co/tracking/${trackingNum}`;
-    const courierName = shipmentRes?.data?.courier || shipmentRes?.carrier || 'Sendbox';
-    const waybillUrl  = shipmentRes?.data?.waybill_url || null;
-
-    if (!shipmentId) throw new Error('Sendbox did not return a shipment ID');
-
-    const autoRelease = new Date(); autoRelease.setDate(autoRelease.getDate() + 7);
-
+    // Mark the order as awaiting pickup booking
     await supabase.from('orders').update({
-      status: 'shipped', shipped_at: new Date().toISOString(), auto_release_at: autoRelease.toISOString(),
-      courier: courierName, tracking_number: trackingNum,
-      sendbox_shipment_id: shipmentId, sendbox_tracking_url: trackingUrl, sendbox_status: 'booked',
-      shipping_proof_url: waybillUrl || null,
+      status:               'shipping_requested',
+      shipping_requested_at: new Date().toISOString(),
     }).eq('id', orderId);
 
-    const { data: freshOrder } = await supabase.from('orders').select('buyer_id,title').eq('id', orderId).single();
-    if (freshOrder) insertNotification({ user_id: freshOrder.buyer_id, actor_id: currentUser.id, type: 'order_shipped',
-      comment_text: `"${freshOrder.title||'Your order'}" has been shipped via ${courierName}. Track: ${trackingNum || trackingUrl}. Confirm delivery when it arrives.` });
-
     sheetEl?.remove();
-    showToast(`Shipped via ${courierName} ✓ Tracking: ${trackingNum || 'See order detail'}`);
+
+    showToast('Pickup requested ✓ Our team will book your courier shortly');
+
     loadShopOrders();
 
   } catch (err) {
 
-    console.error('[Sendbox] submitShipOrder failed:', err);
-    if (btn) { btn.disabled = false; btn.textContent = '🚚 Book Pickup with Sendbox'; }
-
-    // Show the actual error so we know what went wrong
-    const errMsg = err?.message || 'Unknown error';
-    showToast(`Sendbox: ${errMsg}`);
-
-    setTimeout(() => {
-      showActionSheet([
-        { label: '📷 Upload Proof Manually Instead', action: () => { sheetEl?.remove(); _fallbackManualShip(orderId); } },
-        { label: '🔄 Retry', action: () => submitShipOrder(orderId, sheetEl) },
-        { label: 'Cancel', action: () => {} },
-      ]);
-    }, 1500);
+    console.error('[Pickup Request] Failed:', err);
+    if (btn) { btn.disabled = false; btn.textContent = '📦 Request Pickup'; }
+    showToast('Could not send request — try again');
 
   }
-
-}
-
-async function _fallbackManualShip(orderId) {
-
-  const sheet = document.createElement('div');
-  sheet.style.cssText = 'position:fixed;inset:0;z-index:950;background:rgba(0,0,0,0.5);display:flex;align-items:flex-end';
-  sheet.innerHTML = `
-    <div style="width:100%;background:var(--surface);border-radius:24px 24px 0 0;padding:24px 20px calc(var(--safe-bottom)+24px)">
-      <div style="width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 20px"></div>
-      <div style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:6px">Manual Shipping</div>
-      <div style="font-size:13px;color:var(--text3);margin-bottom:20px">Sendbox unavailable — enter courier details manually</div>
-      <div style="margin-bottom:12px">
-        <div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px">Courier Name</div>
-        <input id="ship-courier" class="co-input" placeholder="e.g. GIG Logistics, DHL…" style="width:100%;box-sizing:border-box">
-      </div>
-      <div style="margin-bottom:20px">
-        <div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px">Tracking Number (optional)</div>
-        <input id="ship-tracking" class="co-input" placeholder="Waybill or tracking number" style="width:100%;box-sizing:border-box">
-      </div>
-      <button onclick="_fallbackSubmitManualShip('${orderId}',this.closest('div[style*=fixed]'))"
-        style="width:100%;height:52px;border-radius:14px;background:var(--accent);color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">
-        📷 Choose Proof Photo
-      </button>
-      <button onclick="this.closest('div[style*=fixed]').remove()"
-        style="width:100%;height:44px;border-radius:14px;background:none;color:var(--text3);border:none;font-size:14px;cursor:pointer;margin-top:8px;font-family:var(--font)">
-        Cancel
-      </button>
-    </div>`;
-  document.body.appendChild(sheet);
-
-}
-
-async function _fallbackSubmitManualShip(orderId, sheetEl) {
-
-  const courier  = document.getElementById('ship-courier')?.value.trim();
-  const tracking = document.getElementById('ship-tracking')?.value.trim();
-
-  if (!courier) { showToast('Enter courier name'); return; }
-
-  sheetEl?.remove();
-
-  const input  = document.createElement('input');
-  input.type   = 'file';
-  input.accept = 'image/*';
-
-  input.onchange = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    showToast('Uploading shipping proof…');
-    try {
-      const path       = `shipping/${orderId}.jpg`;
-      const compressed = await compressImage(file, 800);
-      await supabase.storage.from('avatars').upload(path, compressed, { upsert: true, contentType: 'image/jpeg' });
-      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-      const autoRelease = new Date(); autoRelease.setDate(autoRelease.getDate() + 7);
-      await supabase.from('orders').update({
-        status: 'shipped', shipping_proof_url: urlData.publicUrl,
-        shipped_at: new Date().toISOString(), auto_release_at: autoRelease.toISOString(),
-        courier, tracking_number: tracking || null,
-      }).eq('id', orderId);
-      const { data: order } = await supabase.from('orders').select('buyer_id,title').eq('id', orderId).single();
-      if (order) insertNotification({ user_id: order.buyer_id, actor_id: currentUser.id, type: 'order_shipped',
-        comment_text: `"${order.title||'Your order'}" has been shipped via ${courier}${tracking ? ` · Tracking: ${tracking}` : ''}. Confirm delivery when it arrives.` });
-      showToast('Shipped! Buyer notified ✓ Auto-releases in 7 days');
-      loadShopOrders();
-    } catch(e) { showToast('Upload failed — try again'); }
-  };
-
-  input.click();
 
 }
 
@@ -4264,7 +4185,9 @@ async function openOrderDetail(orderId, role) {
 
     { icon:'✓',  label:'Seller Accepted', time: order.accepted_at,  done: !!order.accepted_at,  bad: false },
 
-    { icon:'⚙️', label:'Processing',      time: null,               done: ['processing','shipped','delivered'].includes(order.status), bad: false },
+    { icon:'⚙️', label:'Processing',      time: null,               done: ['processing','shipping_requested','shipped','delivered'].includes(order.status), bad: false },
+
+    { icon:'📦', label:'Pickup Requested', time: order.shipping_requested_at, done: ['shipping_requested','shipped','delivered'].includes(order.status), bad: false },
 
     { icon:'🚚', label:'Shipped',         time: order.shipped_at,   done: !!order.shipped_at,   bad: false },
 
@@ -4480,7 +4403,7 @@ async function openOrderDetail(orderId, role) {
 
         '</div>' +
 
-        (['pending','accepted','processing','shipped'].includes(order.status) ? '<div style="margin-top:10px;font-size:12px;color:#ff9500">🔒 MP held in escrow — releases on delivery confirmation</div>' : '') +
+        (['pending','accepted','processing','shipping_requested','shipped'].includes(order.status) ? '<div style="margin-top:10px;font-size:12px;color:#ff9500">🔒 MP held in escrow — releases on delivery confirmation</div>' : '') +
 
       '</div>' +
 
@@ -4528,7 +4451,7 @@ async function openOrderDetail(orderId, role) {
 
             '<button onclick="updateOrderStatus(\'' + order.id + '\',\'processing\');document.getElementById(\'order-detail-overlay\').remove()" style="flex:1;height:52px;border-radius:14px;background:var(--bg2);color:var(--text);border:1px solid var(--border);font-size:14px;font-weight:600;cursor:pointer;font-family:var(--font)">⚙️ Mark Processing</button>' +
 
-            '<button onclick="openShipOrder(\'' + order.id + '\');document.getElementById(\'order-detail-overlay\').remove()" style="flex:1;height:52px;border-radius:14px;background:var(--accent);color:white;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font)">🚚 Ship Now</button>' +
+            '<button onclick="openShipOrder(\'' + order.id + '\');document.getElementById(\'order-detail-overlay\').remove()" style="flex:1;height:52px;border-radius:14px;background:var(--accent);color:white;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font)">📦 Request Pickup</button>' +
 
           '</div>'
 
@@ -4536,9 +4459,16 @@ async function openOrderDetail(orderId, role) {
 
         (role==='seller' && order.status==='processing' ?
 
-          '<button onclick="openShipOrder(\'' + order.id + '\');document.getElementById(\'order-detail-overlay\').remove()" style="width:100%;height:52px;border-radius:14px;background:var(--accent);color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">🚚 Ship Now</button>'
+          '<button onclick="openShipOrder(\'' + order.id + '\');document.getElementById(\'order-detail-overlay\').remove()" style="width:100%;height:52px;border-radius:14px;background:var(--accent);color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">📦 Request Pickup</button>'
 
         : '') +
+
+        (order.status==='shipping_requested' ?
+
+          '<div style="padding:14px;background:rgba(255,149,0,0.08);border-radius:12px;font-size:13px;color:#ff9500;text-align:center">📦 Pickup requested — our team is booking a courier</div>'
+
+        : '') +
+
 
       '</div>' +
 
