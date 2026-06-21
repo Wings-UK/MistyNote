@@ -23,7 +23,7 @@ const SENDBOX_REFRESH_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhcHBsaWNh
 const SENDBOX_BASE          = 'https://ship.sendbox.co';
 // Webhook already registered: https://mistynote.pages.dev/api/sendbox-webhook
 
-const SENDBOX_EDGE_URL = 'https://rhmknjlxddxkfyjbcfgjj.supabase.co/functions/v1/sendbox';
+const SENDBOX_EDGE_URL = 'https://rhmknjlxddxkfybcfgjj.supabase.co/functions/v1/sendbox';
 
 let _sendboxToken = SENDBOX_ACCESS_TOKEN;
 
@@ -2675,7 +2675,7 @@ function renderShopOrderCard(order) {
 
           style="flex:1;height:44px;border-radius:12px;background:var(--accent);color:white;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">
 
-          🚚 Ship Now
+          📦 Request Pickup
 
         </button>
 
@@ -2689,9 +2689,17 @@ function renderShopOrderCard(order) {
 
           style="width:100%;height:44px;border-radius:12px;background:var(--accent);color:white;border:none;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">
 
-          🚚 Ship Now
+          📦 Request Pickup
 
         </button>
+
+      </div>` : ''}
+
+      ${order.status === 'shipping_requested' ? `
+
+      <div style="padding:10px;background:rgba(255,149,0,0.08);border-radius:12px;font-size:12px;color:#ff9500;text-align:center">
+
+        📦 Pickup requested — booking in progress
 
       </div>` : ''}
 
