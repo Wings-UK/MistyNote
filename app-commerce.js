@@ -2447,7 +2447,9 @@ async function confirmDelivery(orderId) {
 
     if (!order) { showToast('Order not found'); return; }
 
-    try { await supabase.rpc('escrow_release_points', { seller_id: order.seller_id, buyer_id: order.buyer_id, order_id: order.id, points: order.price_mp }); } catch(e) {}
+    const { error: escrowErr } = await supabase.rpc('escrow_release_points', { p_order_id: order.id });
+
+    if (escrowErr) { console.error('[Escrow] Release failed:', escrowErr); showToast('Delivery confirmed, but payment release failed — contact support'); }
 
     await supabase.from('orders').update({ status: 'delivered', confirmed_at: new Date().toISOString() }).eq('id', orderId);
 
