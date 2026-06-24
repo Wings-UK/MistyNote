@@ -1874,7 +1874,21 @@ async function loadCheckoutPage() {
 
   const subtotal = items.reduce((s, i) => s + (i.product?.price_ngn||0) * i.quantity, 0);
 
-  const { data: states } = await supabase.from('ng_states').select('name').order('name');
+  // Only show states ALL sellers in the cart ship to
+  const storeIds = Object.keys(byStore);
+  const ratesPerStore = await Promise.all(
+    storeIds.map(sfId =>
+      supabase.from('shipping_rates').select('state').eq('storefront_id', sfId).then(r => r.data || [])
+    )
+  );
+
+  // Intersection — states every seller ships to
+  let availableStates = ratesPerStore[0]?.map(r => r.state) || [];
+  for (let i = 1; i < ratesPerStore.length; i++) {
+    const storeStates = ratesPerStore[i].map(r => r.state);
+    availableStates = availableStates.filter(s => storeStates.includes(s));
+  }
+  availableStates.sort();
 
   el.innerHTML = `
 
@@ -1918,13 +1932,19 @@ async function loadCheckoutPage() {
 
         <div class="co-field"><label class="co-label">State</label>
 
+          ${availableStates.length === 0 ? `
+            <div style="padding:12px;background:rgba(255,59,92,0.08);border-radius:12px;font-size:13px;color:var(--red);text-align:center">
+              😔 This seller currently doesn't ship to any location. Check back later or contact them directly.
+            </div>
+          ` : `
           <select class="co-input" id="co-state" onchange="loadShippingRates()">
 
             <option value="">Select delivery state…</option>
 
-            ${(states||[]).map(s => `<option>${s.name}</option>`).join('')}
+            ${availableStates.map(s => `<option>${s}</option>`).join('')}
 
           </select>
+          `}
 
         </div>
 
@@ -1970,7 +1990,7 @@ async function loadCheckoutPage() {
 
       </div>
 
-      <button class="co-place-order-btn" id="co-place-btn" onclick="placeOrder()">Place Order</button>
+      <button class="co-place-order-btn" id="co-place-btn" onclick="placeOrder()" ${availableStates.length === 0 ? 'disabled style="opacity:0.4;cursor:not-allowed"' : ''}>Place Order</button>
 
       <div style="height:32px"></div>
 
@@ -2024,7 +2044,7 @@ async function loadShippingRates() {
 
   window._coShipping = totalShipping;
 
-  shippingEl.textContent = totalShipping > 0 ? mktFmtNgn(totalShipping) : 'Free';
+  shippingEl.textContent = totalShipping > 0 ? mktFmtNgn(totalShipping) : '—';
 
   const total  = (window._coSubtotal||0) + totalShipping - (window._coDiscount||0);
 
@@ -2959,6 +2979,14 @@ async function buildAddProductForm(productId) {
 
   productVariants = p?.variants || [];
 
+  // Fetch current shipping rates count to show in form
+  const { data: existingRates } = await supabase
+    .from('shipping_rates')
+    .select('state')
+    .eq('storefront_id', currentStorefront?.id);
+
+  const ratesCount = existingRates?.length || 0;
+
   const categories = ['Fashion & Clothing','Beauty & Skincare','Food & Beverages','Electronics & Gadgets','Home & Living','Health & Wellness','Kids & Baby','Sports & Fitness','Art & Crafts','Books & Education','Automotive','Agriculture & Farm','Services','Other'];
 
   el.innerHTML = `
@@ -3027,7 +3055,7 @@ async function buildAddProductForm(productId) {
 
         </div>
 
-        <div class="ap-field"><label class="ap-label">Weight (kg) <span class="csf-required">*</span></label><input class="ap-input" id="ap-weight" type="number" placeholder="e.g. 0.5 for a shirt, 25 for a bag of rice" min="0.1" step="0.1" value="${p?.weight_kg||''}"></div>
+        <div class="ap-field"><label class="ap-label">Weight (kg) <span style="color:var(--text3);font-weight:400">(optional)</span></label><input class="ap-input" id="ap-weight" type="number" placeholder="e.g. 0.5 for a shirt, 25 for a bag of rice" min="0.1" step="0.1" value="${p?.weight_kg||''}"></div>
 
       </div>
 
@@ -3041,9 +3069,21 @@ async function buildAddProductForm(productId) {
 
       <div class="ap-section">
 
-        <div class="ap-section-title">Shipping Rates</div>
+        <div class="ap-section-title">Shipping Rates <span class="csf-required">*</span></div>
 
-        <button class="ap-shipping-btn" onclick="openShippingRates()">Manage Shipping by State →</button>
+        ${ratesCount === 0 ? `
+          <div style="padding:12px;background:rgba(255,59,92,0.08);border-radius:12px;margin-bottom:12px;font-size:13px;color:var(--red)">
+            ⚠️ No shipping rates set — buyers won't be able to order until you add at least one state
+          </div>
+        ` : `
+          <div style="padding:12px;background:rgba(0,196,140,0.08);border-radius:12px;margin-bottom:12px;font-size:13px;color:var(--green)">
+            ✓ Shipping to ${ratesCount} state${ratesCount > 1 ? 's' : ''}
+          </div>
+        `}
+
+        <button class="ap-shipping-btn" onclick="openShippingRates()">
+          ${ratesCount === 0 ? 'Set Shipping Rates →' : 'Manage Shipping Rates →'}
+        </button>
 
       </div>
 
@@ -3207,9 +3247,20 @@ async function saveProduct() {
 
   if (!category) { showToast('Select a category'); return; }
 
-  if (!weight)   { showToast('Enter product weight in kg — required for shipping'); return; }
-
   if (!currentStorefront) { showToast('No storefront found'); return; }
+
+  // Shipping rates are mandatory — check at least one state is set
+  const { data: existingRates } = await supabase
+    .from('shipping_rates')
+    .select('id')
+    .eq('storefront_id', currentStorefront.id)
+    .limit(1);
+
+  if (!existingRates || existingRates.length === 0) {
+    showToast('Set shipping rates for at least one state before listing a product');
+    openShippingRates();
+    return;
+  }
 
   if (btn) { btn.textContent = 'Saving…'; btn.disabled = true; }
 
