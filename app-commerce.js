@@ -27,11 +27,17 @@ const SENDBOX_EDGE_URL = 'https://rhmknjlxddxkfybcfgjj.supabase.co/functions/v1/
 
 let _sendboxToken = SENDBOX_ACCESS_TOKEN;
 
+// Supabase anon key needed to call Edge Functions
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJobWtuamx4ZGR4a2Z5YmNmZ2pqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk0MzM4OTgsImV4cCI6MjA4NTAwOTg5OH0.dNBxXmIdYAxJT-bt1WWcO62Nobt8aDLTRdnrs5g1CCI';
+
 async function sendboxRequest(method, path, body, _isRetry = false) {
   try {
     const res  = await fetch(SENDBOX_EDGE_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+      },
       body: JSON.stringify({ path, method, body, token: _sendboxToken }),
     });
 
@@ -55,7 +61,10 @@ async function _sendboxRefreshToken() {
   try {
     const res  = await fetch(SENDBOX_EDGE_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+      },
       body: JSON.stringify({
         path:   '/apps/auth/token/refresh',
         method: 'POST',
