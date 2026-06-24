@@ -2089,7 +2089,9 @@ async function loadShippingRates() {
       const rates = rateRes?.data || rateRes?.rates || [];
 
       if (rates.length > 0) {
-        rateNgn = rates.reduce((a, b) => (a.amount < b.amount ? a : b)).amount || 0;
+        const amounts = rates.map(r => r.amount || 0).filter(a => a > 0);
+        const average = amounts.reduce((sum, a) => sum + a, 0) / amounts.length;
+        rateNgn = Math.round(average * 1.04); // average courier rate + 4% buffer
       } else {
         const { data: dbRate } = await supabase.from('shipping_rates').select('rate_ngn').eq('storefront_id', sfId).eq('state', state).maybeSingle();
         rateNgn = dbRate?.rate_ngn || 0;
