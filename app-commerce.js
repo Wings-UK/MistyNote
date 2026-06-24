@@ -2080,10 +2080,16 @@ async function loadShippingRates() {
 
       const { data: sf } = await supabase.from('storefronts').select('pickup_state, pickup_address').eq('id', sfId).maybeSingle();
 
+      // Calculate total weight of all cart items from this storefront
+      const storeItems = (window._coByStore[sfId]?.items || []);
+      const totalWeight = storeItems.reduce((sum, item) => {
+        return sum + ((item.product?.weight_kg || 1) * (item.quantity || 1));
+      }, 0);
+
       const rateRes = await sendboxRequest('POST', '/shipping/rates', {
         origin:      { state: sf?.pickup_state || 'Lagos', address: sf?.pickup_address || '', country: 'NG' },
         destination: { state, address: streetEl?.value?.trim() || '', country: 'NG' },
-        weight: 1, length: 10, width: 10, height: 10, type: 'parcel',
+        weight: totalWeight || 1, length: 30, width: 30, height: 30, type: 'parcel',
       });
 
       const rates = rateRes?.data || rateRes?.rates || [];
@@ -2823,6 +2829,10 @@ async function openShipOrder(orderId) {
 
   const { data: sf } = await supabase.from('storefronts').select('store_name, pickup_state, pickup_address, pickup_name, pickup_phone').eq('user_id', order.seller_id).maybeSingle();
 
+  // Get product weight to pre-fill the pickup request
+  const { data: product } = await supabase.from('products').select('weight_kg').eq('id', order.product_id).maybeSingle();
+  const productWeight = ((product?.weight_kg || 1) * (order.quantity || 1)).toFixed(1);
+
   const addrParts  = (order.shipping_address || '').split(' · ');
   const shipName   = addrParts[0] || '';
   const shipPhone  = addrParts[1] || '';
@@ -2877,7 +2887,7 @@ async function openShipOrder(orderId) {
 
         <div>
           <div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:6px">Package Weight (kg)</div>
-          <input id="ship-weight" class="co-input" type="number" min="0.1" step="0.1" value="0.5"
+          <input id="ship-weight" class="co-input" type="number" min="0.1" step="0.1" value="${productWeight}"
             style="width:100%;box-sizing:border-box">
         </div>
 
@@ -3138,7 +3148,7 @@ async function buildAddProductForm(productId) {
 
         </div>
 
-        <div class="ap-field"><label class="ap-label">Weight (kg)</label><input class="ap-input" id="ap-weight" type="number" placeholder="0.5" min="0" step="0.1" value="${p?.weight_kg||''}"></div>
+        <div class="ap-field"><label class="ap-label">Weight (kg) <span class="csf-required">*</span></label><input class="ap-input" id="ap-weight" type="number" placeholder="e.g. 0.5 for a shirt, 25 for a bag of rice" min="0.1" step="0.1" value="${p?.weight_kg||''}"></div>
 
       </div>
 
@@ -3317,6 +3327,8 @@ async function saveProduct() {
   if (!price)    { showToast('Enter product price'); return; }
 
   if (!category) { showToast('Select a category'); return; }
+
+  if (!weight)   { showToast('Enter product weight in kg — required for shipping'); return; }
 
   if (!currentStorefront) { showToast('No storefront found'); return; }
 
