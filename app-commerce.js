@@ -1784,7 +1784,13 @@ async function updateCartQty(itemId, productId, delta) {
 
   const qtyEl  = document.getElementById(`cart-qty-${itemId}`);
 
-  const newQty = Math.max(1, parseInt(qtyEl?.textContent || '1') + delta);
+  const newQty = parseInt(qtyEl?.textContent || '1') + delta;
+
+  // Remove item if quantity drops to 0
+  if (newQty <= 0) {
+    removeFromCart(itemId);
+    return;
+  }
 
   if (qtyEl) qtyEl.textContent = newQty;
 
