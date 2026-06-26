@@ -2050,7 +2050,20 @@ async function loadShippingRates() {
 
   window._coShipping = totalShipping;
 
-  shippingEl.textContent = totalShipping > 0 ? mktFmtNgn(totalShipping) : '—';
+  const placeBtn = document.getElementById('co-place-btn');
+
+  if (totalShipping === 0 && state) {
+    shippingEl.textContent = 'Seller doesn\'t ship to this location';
+    shippingEl.style.color = 'var(--red)';
+    if (placeBtn) { placeBtn.disabled = true; placeBtn.style.opacity = '0.4'; placeBtn.style.cursor = 'not-allowed'; }
+    if (totalEl) totalEl.textContent = mktFmtNgn((window._coSubtotal||0) - (window._coDiscount||0));
+    if (balEl) balEl.textContent = '';
+    return;
+  }
+
+  shippingEl.style.color = '';
+  shippingEl.textContent = totalShipping > 0 ? mktFmtNgn(totalShipping) : 'Select state above';
+  if (placeBtn) { placeBtn.disabled = false; placeBtn.style.opacity = '1'; placeBtn.style.cursor = ''; }
 
   const total  = (window._coSubtotal||0) + totalShipping - (window._coDiscount||0);
 
@@ -2147,6 +2160,11 @@ async function placeOrder() {
 
   if (!address) { showToast('Enter delivery address'); return; }
 
+  // Hard block — prevent order if seller doesn't ship to selected state
+  if (!window._coShipping || window._coShipping === 0) {
+    showToast('Seller doesn\'t ship to this location — select a different state');
+    return;
+  }
   const items = window._coItems || [];
 
   if (!items.length) { showToast('Your cart is empty'); return; }
@@ -3076,6 +3094,11 @@ async function buildAddProductForm(productId) {
       <div class="ap-section">
 
         <div class="ap-section-title">Shipping Rates <span class="csf-required">*</span></div>
+
+        <div style="font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.6">
+          Set your shipping price for each state you deliver to. 
+          <strong style="color:var(--text2)">Buyers in states you don't add a rate for will not be able to purchase this product.</strong>
+        </div>
 
         ${ratesCount === 0 ? `
           <div style="padding:12px;background:rgba(255,59,92,0.08);border-radius:12px;margin-bottom:12px;font-size:13px;color:var(--red)">
