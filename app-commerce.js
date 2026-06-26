@@ -2249,9 +2249,13 @@ async function placeOrder() {
 
     cartCount = 0; updateCartBadges(); syncWalletBalance();
 
+    cartItems = [];
+
     showToast('Order placed! Waiting for seller to accept 🎉');
 
     slideBack();
+
+    loadCartPage();
 
     setTimeout(() => openMyBag(), 400);
 
@@ -2284,114 +2288,137 @@ async function loadMyBag() {
   if (!currentUser) { el.innerHTML = `<div class="empty-state"><p>Sign in to view your bag</p></div>`; return; }
 
   const { data: orders } = await supabase.from('orders')
-
     .select('*').eq('buyer_id', currentUser.id).order('created_at', { ascending: false });
 
   if (!orders?.length) {
-
     el.innerHTML = `<div class="empty-state"><div style="font-size:48px;margin-bottom:12px">🛍️</div><p>No orders yet</p><span>Your purchases will appear here</span><button class="btn-primary" style="margin-top:16px" onclick="slideBack();navTo('market')">Start Shopping</button></div>`;
-
     return;
-
   }
 
   const statusMeta = {
-
-    pending:    { color:'#ff9500', bg:'rgba(255,149,0,0.1)',    icon:'⏳', label:'Awaiting seller' },
-
-    accepted:   { color:'#007aff', bg:'rgba(0,122,255,0.1)',    icon:'✓',  label:'Accepted' },
-
-    processing: { color:'#007aff', bg:'rgba(0,122,255,0.1)',    icon:'⚙️', label:'Processing' },
-
-    shipping_requested: { color:'#ff9500', bg:'rgba(255,149,0,0.1)', icon:'📦', label:'Pickup Requested' },
-
-    shipped:    { color:'#6C47FF', bg:'rgba(108,71,255,0.1)',   icon:'🚚', label:'Shipped' },
-
-    delivered:  { color:'#00c48c', bg:'rgba(0,196,140,0.1)',    icon:'✅', label:'Delivered' },
-
-    cancelled:  { color:'#ff3b5c', bg:'rgba(255,59,92,0.1)',    icon:'✕',  label:'Cancelled' },
-
-    declined:   { color:'#ff3b5c', bg:'rgba(255,59,92,0.1)',    icon:'✕',  label:'Declined' },
-
-    refunded:   { color:'#8e8e93', bg:'rgba(142,142,147,0.1)',  icon:'↩',  label:'Refunded' },
-
+    pending:            { color:'#ff9500', bg:'rgba(255,149,0,0.1)',   icon:'⏳', label:'Awaiting Seller' },
+    accepted:           { color:'#007aff', bg:'rgba(0,122,255,0.1)',   icon:'✓',  label:'Accepted' },
+    processing:         { color:'#007aff', bg:'rgba(0,122,255,0.1)',   icon:'⚙️', label:'Processing' },
+    shipping_requested: { color:'#ff9500', bg:'rgba(255,149,0,0.1)',   icon:'📦', label:'Pickup Booked' },
+    shipped:            { color:'#6C47FF', bg:'rgba(108,71,255,0.1)',  icon:'🚚', label:'On the Way' },
+    delivered:          { color:'#00c48c', bg:'rgba(0,196,140,0.1)',   icon:'✅', label:'Delivered' },
+    cancelled:          { color:'#ff3b5c', bg:'rgba(255,59,92,0.1)',   icon:'✕',  label:'Cancelled' },
+    declined:           { color:'#ff3b5c', bg:'rgba(255,59,92,0.1)',   icon:'✕',  label:'Declined' },
+    refunded:           { color:'#8e8e93', bg:'rgba(142,142,147,0.1)', icon:'↩',  label:'Refunded' },
   };
 
-  el.innerHTML = `<div class="bag-list">${orders.map(order => {
+  // Group by status for section headers
+  const active   = orders.filter(o => !['delivered','cancelled','declined','refunded'].includes(o.status));
+  const history  = orders.filter(o =>  ['delivered','cancelled','declined','refunded'].includes(o.status));
 
-    const meta = statusMeta[order.status] || { color:'var(--text3)', bg:'var(--bg2)', icon:'•', label: order.status };
+  const renderCard = (order) => {
 
-    const addrParts = (order.shipping_address||'').split(' · ');
+    const meta    = statusMeta[order.status] || { color:'var(--text3)', bg:'var(--bg2)', icon:'•', label: order.status };
+    const imgBg   = gradientFor(order.product_id || order.id);
 
-    const storeLabel = escHtml(order.title || '—');
+    // Status-specific action/info strip
+    let actionStrip = '';
+
+    if (order.status === 'pending') {
+      actionStrip = `
+        <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:rgba(255,149,0,0.07);border-radius:14px;margin-top:12px">
+          <div style="width:32px;height:32px;border-radius:10px;background:rgba(255,149,0,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px">⏳</div>
+          <div>
+            <div style="font-size:13px;font-weight:600;color:#ff9500">Waiting for seller</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:1px">Your payment is safely held in escrow</div>
+          </div>
+        </div>`;
+    }
+
+    if (order.status === 'declined') {
+      actionStrip = `
+        <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:rgba(255,59,92,0.07);border-radius:14px;margin-top:12px">
+          <div style="width:32px;height:32px;border-radius:10px;background:rgba(255,59,92,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px">✕</div>
+          <div>
+            <div style="font-size:13px;font-weight:600;color:#ff3b5c">Order Declined</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:1px">${order.decline_reason ? escHtml(order.decline_reason) : 'Your payment will be refunded automatically'}</div>
+          </div>
+        </div>`;
+    }
+
+    if (order.status === 'shipping_requested') {
+      actionStrip = `
+        <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:rgba(255,149,0,0.07);border-radius:14px;margin-top:12px">
+          <div style="width:32px;height:32px;border-radius:10px;background:rgba(255,149,0,0.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px">📦</div>
+          <div>
+            <div style="font-size:13px;font-weight:600;color:#ff9500">Pickup in progress</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:1px">Our team is booking a courier for your order</div>
+          </div>
+        </div>`;
+    }
+
+    if (order.status === 'shipped') {
+      actionStrip = `
+        <div style="margin-top:12px">
+          ${order.courier ? `<div style="font-size:12px;color:var(--text3);margin-bottom:8px;padding:0 2px">🚚 ${escHtml(order.courier)}${order.tracking_number ? ` · ${escHtml(order.tracking_number)}` : ''}</div>` : ''}
+          <button onclick="event.stopPropagation();confirmDelivery('${order.id}')"
+            style="width:100%;height:46px;border-radius:14px;background:var(--accent);color:white;border:none;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:8px">
+            ✓ &nbsp;I've Received My Order
+          </button>
+        </div>`;
+    }
+
+    if (['pending','accepted','processing'].includes(order.status)) {
+      actionStrip += `
+        <div style="margin-top:10px">
+          <button onclick="event.stopPropagation();cancelOrder('${order.id}')"
+            style="width:100%;height:40px;border-radius:12px;background:none;color:#ff3b5c;border:1.5px solid rgba(255,59,92,0.4);font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">
+            Cancel Order
+          </button>
+        </div>`;
+    }
 
     return `
+      <div onclick="openOrderDetail('${order.id}','buyer')"
+        style="background:var(--surface);border-radius:20px;padding:16px;margin-bottom:10px;border:1px solid var(--border);cursor:pointer;active:opacity:0.8">
 
-      <div class="bag-order-card" onclick="openOrderDetail('${order.id}','buyer')">
+        <div style="display:flex;gap:14px;align-items:center">
 
-        <div style="display:flex;gap:14px;align-items:flex-start">
-
-          <div style="width:58px;height:58px;border-radius:14px;background:${gradientFor(order.product_id||order.id)};flex-shrink:0;position:relative">
-
-            <span style="position:absolute;bottom:-6px;right:-6px;width:22px;height:22px;border-radius:50%;background:${meta.color};color:white;font-size:11px;display:flex;align-items:center;justify-content:center;border:2px solid var(--surface)">${meta.icon}</span>
-
+          <!-- Product image -->
+          <div style="width:64px;height:64px;border-radius:16px;background:${imgBg};flex-shrink:0;overflow:hidden">
+            ${order.image_url ? `<img src="${escHtml(order.image_url)}" style="width:100%;height:100%;object-fit:cover" alt="">` : ''}
           </div>
 
+          <!-- Info -->
           <div style="flex:1;min-width:0">
-
-            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">${storeLabel}</div>
-
-            <div style="font-size:12px;color:var(--text3);margin-bottom:6px">Qty ${order.quantity||1} · ${timeSince(order.created_at)}</div>
-
-            <div style="display:inline-flex;align-items:center;gap:5px;background:${meta.bg};padding:3px 10px;border-radius:20px">
-
-              <span style="font-size:12px;font-weight:700;color:${meta.color}">${meta.label}</span>
-
+            <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(order.title||'Order')}</div>
+            <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Qty ${order.quantity||1} · ${timeSince(order.created_at)}</div>
+            <div style="display:inline-flex;align-items:center;gap:5px;background:${meta.bg};padding:4px 12px;border-radius:20px">
+              <span style="font-size:11px;font-weight:700;color:${meta.color}">${meta.icon} ${meta.label}</span>
             </div>
-
           </div>
 
+          <!-- Price -->
           <div style="text-align:right;flex-shrink:0">
-
-            <div style="font-size:14px;font-weight:800;color:var(--text)">${mktFmtNgn(order.price_ngn||0)}</div>
-
+            <div style="font-size:15px;font-weight:800;color:var(--text)">${mktFmtNgn(order.price_ngn||0)}</div>
             <div style="font-size:11px;color:var(--accent);margin-top:2px">${fmtPts(order.price_mp||0)}</div>
-
           </div>
 
         </div>
 
-        ${order.status==='pending' ? `
-
-        <div style="margin-top:12px;padding:10px 12px;background:rgba(255,149,0,0.08);border-radius:10px;border-left:3px solid #ff9500;font-size:12px;color:#ff9500">
-
-          ⏳ Waiting for seller to accept · MP held in escrow
-
-        </div>` : ''}
-
-        ${order.status==='declined' ? `
-
-        <div style="margin-top:12px;padding:10px 12px;background:rgba(255,59,92,0.08);border-radius:10px;border-left:3px solid #ff3b5c;font-size:12px;color:#ff3b5c">
-
-          ✕ Seller declined · ${order.decline_reason ? escHtml(order.decline_reason) : 'MP will be refunded automatically'}
-
-        </div>` : ''}
-
-        ${order.status==='shipped' ? `
-
-        <div style="margin-top:12px">
-
-          <button class="bag-confirm-btn" onclick="event.stopPropagation();confirmDelivery('${order.id}')">
-
-            ✓ Confirm Delivery
-
-          </button>
-
-        </div>` : ''}
+        ${actionStrip}
 
       </div>`;
+  };
 
-  }).join('')}</div>`;
+  let html = '';
+
+  if (active.length > 0) {
+    html += `<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;padding:4px 4px 10px">Active Orders</div>`;
+    html += active.map(renderCard).join('');
+  }
+
+  if (history.length > 0) {
+    html += `<div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;padding:${active.length > 0 ? '16px' : '4px'} 4px 10px">Order History</div>`;
+    html += history.map(renderCard).join('');
+  }
+
+  el.innerHTML = `<div style="padding:16px 16px 80px">${html}</div>`;
 
 }
 
@@ -2424,6 +2451,100 @@ async function confirmDelivery(orderId) {
     setTimeout(() => promptReview(orderId), 1000);
 
   }}, { label: 'Cancel', action: () => {} }]);
+
+}
+
+async function cancelOrder(orderId) {
+
+  // Show reason input sheet
+  const sheet = document.createElement('div');
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:950;background:rgba(0,0,0,0.55);display:flex;align-items:flex-end';
+
+  sheet.innerHTML = `
+    <div style="width:100%;background:var(--surface);border-radius:28px 28px 0 0;padding:0 0 calc(var(--safe-bottom)+24px)">
+      <div style="display:flex;justify-content:center;padding:12px 0 0">
+        <div style="width:36px;height:4px;background:var(--border);border-radius:2px"></div>
+      </div>
+      <div style="padding:16px 20px 20px">
+        <div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:4px">Cancel Order</div>
+        <div style="font-size:13px;color:var(--text3);margin-bottom:20px">Your payment will be refunded to your wallet immediately.</div>
+        <div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:8px">Reason for cancelling (optional)</div>
+        <textarea id="cancel-reason" class="co-input" rows="3" placeholder="e.g. Ordered by mistake, found a better price, changed my mind…"
+          style="width:100%;box-sizing:border-box;resize:none;min-height:80px;margin-bottom:16px"></textarea>
+        <button id="cancel-confirm-btn" onclick="submitCancelOrder('${orderId}', this.closest('div[style*=fixed]'))"
+          style="width:100%;height:52px;border-radius:16px;background:#ff3b5c;color:white;border:none;font-size:15px;font-weight:800;cursor:pointer;font-family:var(--font);margin-bottom:8px">
+          Cancel Order & Refund
+        </button>
+        <button onclick="this.closest('div[style*=fixed]').remove()"
+          style="width:100%;height:44px;border-radius:14px;background:none;color:var(--text3);border:none;font-size:14px;cursor:pointer;font-family:var(--font)">
+          Keep Order
+        </button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(sheet);
+
+}
+
+async function submitCancelOrder(orderId, sheetEl) {
+
+  const reason = document.getElementById('cancel-reason')?.value.trim() || '';
+  const btn    = document.getElementById('cancel-confirm-btn');
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Cancelling…'; }
+
+  try {
+
+    const { data: order } = await supabase.from('orders').select('*').eq('id', orderId).single();
+
+    if (!order) { showToast('Order not found'); return; }
+
+    // Guard — cannot cancel if shipped or beyond
+    if (['shipped','delivered','cancelled','declined'].includes(order.status)) {
+      showToast('This order can no longer be cancelled');
+      sheetEl?.remove();
+      return;
+    }
+
+    // Refund escrow to buyer immediately
+    const { error: refundErr } = await supabase.rpc('escrow_refund_points', {
+      buyer_id:  order.buyer_id,
+      seller_id: order.seller_id,
+      order_id:  orderId,
+      points:    order.price_mp,
+    });
+
+    if (refundErr) {
+      console.error('[Cancel] Refund failed:', refundErr);
+      showToast('Refund failed: ' + refundErr.message + ' — contact support');
+      if (btn) { btn.disabled = false; btn.textContent = 'Cancel Order & Refund'; }
+      return;
+    }
+
+    // Mark order cancelled
+    await supabase.from('orders').update({
+      status:       'cancelled',
+      cancelled_at:  new Date().toISOString(),
+      cancel_reason: reason || null,
+    }).eq('id', orderId);
+
+    // Notify seller
+    insertNotification({
+      user_id:      order.seller_id,
+      actor_id:     currentUser.id,
+      type:         'order_cancelled',
+      comment_text: `"${order.title||'An order'}" was cancelled by the buyer${reason ? `: "${reason}"` : '.'} · MP refunded to buyer.`,
+    });
+
+    sheetEl?.remove();
+    showToast('Order cancelled. Your MP has been refunded ✓');
+    loadMyBag();
+
+  } catch (err) {
+    console.error('[Cancel] Error:', err);
+    showToast('Something went wrong — try again');
+    if (btn) { btn.disabled = false; btn.textContent = 'Cancel Order & Refund'; }
+  }
 
 }
 
@@ -4413,6 +4534,12 @@ async function openOrderDetail(orderId, role) {
           '<button onclick="confirmDelivery(\'' + order.id + '\');document.getElementById(\'order-detail-overlay\').remove()" style="width:100%;height:52px;border-radius:14px;background:#00c48c;color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">✓ Confirm Delivery</button>' +
 
           '<div style="font-size:12px;color:var(--text3);text-align:center">Only confirm when you have received your order</div>'
+
+        : '') +
+
+        (role==='buyer' && ['pending','accepted','processing'].includes(order.status) ?
+
+          '<button onclick="cancelOrder(\'' + order.id + '\');document.getElementById(\'order-detail-overlay\').remove()" style="width:100%;height:46px;border-radius:14px;background:none;color:#ff3b5c;border:1.5px solid #ff3b5c;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font)">Cancel Order</button>'
 
         : '') +
 
