@@ -718,7 +718,7 @@ async function renderStorefront(storefrontId) {
 
       ${products.length === 0 ? `<div class="sf-empty">No products yet</div>`
 
-        : `<div class="sf-products-grid">${products.map(p => renderProductCard(p, sf)).join('')}</div>`}
+        : `<div class="sf-products-grid">${products.map(p => renderProductCard(p, sf, isOwner)).join('')}</div>`}
 
     </div>
 
@@ -768,7 +768,7 @@ async function renderStorefront(storefrontId) {
 
 }
 
-function renderProductCard(p, sf) {
+function renderProductCard(p, sf, isOwner = false) {
 
   const img     = p.images?.[0] || '';
 
@@ -782,7 +782,7 @@ function renderProductCard(p, sf) {
 
   return `
 
-    <div class="prd-card" onclick="openProductPage('${p.id}')">
+    <div class="prd-card" onclick="${isOwner ? `slideTo('add-product',()=>buildAddProductForm('${p.id}'))` : `openProductPage('${p.id}')`}">
 
       <div class="prd-card-img-wrap">
 
@@ -791,6 +791,8 @@ function renderProductCard(p, sf) {
         ${badge}
 
         ${p.stock === 0 ? `<div class="prd-card-sold-out">Sold Out</div>` : ''}
+
+        ${isOwner ? `<div style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,0.55);backdrop-filter:blur(4px);border-radius:8px;padding:3px 8px;font-size:10px;font-weight:700;color:white;letter-spacing:0.3px">✏️ Edit</div>` : ''}
 
       </div>
 
