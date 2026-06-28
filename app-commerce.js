@@ -782,7 +782,7 @@ function renderProductCard(p, sf, isOwner = false) {
 
   return `
 
-    <div class="prd-card" onclick="${isOwner ? `slideTo('add-product',()=>buildAddProductForm('${p.id}'))` : `openProductPage('${p.id}')`}">
+    <div class="prd-card" onclick="${isOwner ? `editingProductId='${p.id}';slideTo('add-product',buildAddProductForm)` : `openProductPage('${p.id}')`}">
 
       <div class="prd-card-img-wrap">
 
@@ -3051,7 +3051,7 @@ async function loadMyProducts() {
 
       ${products.map(p => `
 
-        <div class="mp-product-row" onclick="slideTo('add-product',()=>buildAddProductForm('${p.id}'))">
+        <div class="mp-product-row" onclick="editingProductId='${p.id}';slideTo('add-product',buildAddProductForm)">
 
           <div class="mp-product-img-wrap">
 
@@ -3707,7 +3707,7 @@ async function loadMerchantDashboard() {
 
         ${products.map(p => `
 
-          <div class="dash-product-row" onclick="slideTo('add-product',()=>buildAddProductForm('${p.id}'))">
+          <div class="dash-product-row" onclick="editingProductId='${p.id}';slideTo('add-product',buildAddProductForm)">
 
             <div class="dash-product-img-wrap">
 
