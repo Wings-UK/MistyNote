@@ -2508,10 +2508,7 @@ async function submitCancelOrder(orderId, sheetEl) {
 
     // Refund escrow to buyer immediately
     const { error: refundErr } = await supabase.rpc('escrow_refund_points', {
-      buyer_id:  order.buyer_id,
-      seller_id: order.seller_id,
-      order_id:  orderId,
-      points:    order.price_mp,
+      p_order_id: orderId,
     });
 
     if (refundErr) {
@@ -2860,7 +2857,9 @@ async function declineOrder(orderId) {
 
         if (order) {
 
-          try { await supabase.rpc('escrow_refund_points', { buyer_id: order.buyer_id, seller_id: order.seller_id, order_id: orderId, points: order.price_mp }); } catch(e) {}
+          const { error: refundErr } = await supabase.rpc('escrow_refund_points', { p_order_id: orderId });
+
+          if (refundErr) console.error('[Decline] Refund failed:', refundErr.message);
 
           insertNotification({ user_id: order.buyer_id, actor_id: currentUser.id, type: 'order_declined',
 
