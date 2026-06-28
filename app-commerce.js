@@ -558,7 +558,7 @@ async function renderMyStorefront() {
 
     <div class="msf-actions">
 
-      <button class="msf-action-btn" onclick="slideTo('add-product', buildAddProductForm)">
+      <button class="msf-action-btn" onclick="editingProductId=null;slideTo('add-product', buildAddProductForm)">
 
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
 
@@ -3039,38 +3039,18 @@ async function loadMyProducts() {
     .order('created_at', { ascending: false });
 
   if (!products?.length) {
-    el.innerHTML = `
-      <div class="empty-state">
-        <div style="font-size:48px;margin-bottom:12px">📦</div>
-        <p>No products yet</p>
-        <span>Add your first product to start selling</span>
-        <button class="btn-primary" style="margin-top:16px" id="mp-add-first-btn">Add Product</button>
-      </div>`;
-    document.getElementById('mp-add-first-btn')?.addEventListener('click', () => {
-      editingProductId = null;
-      slideTo('add-product', buildAddProductForm);
-    });
+    el.innerHTML = `<div class="empty-state"><div style="font-size:48px;margin-bottom:12px">📦</div><p>No products yet</p><span>Add your first product to start selling</span><button class="btn-primary" style="margin-top:16px" onclick="editingProductId=null;slideTo('add-product',buildAddProductForm)">Add Product</button></div>`;
     return;
   }
 
-  el.innerHTML = `<div style="padding:12px 16px 80px;display:flex;flex-direction:column;gap:10px" id="mp-product-list"></div>`;
+  el.innerHTML = `<div style="padding:12px 16px 80px;display:flex;flex-direction:column;gap:10px">${products.map(p => {
 
-  const list = document.getElementById('mp-product-list');
-
-  products.forEach(p => {
-
-    const card = document.createElement('div');
-    card.style.cssText = 'background:var(--surface);border-radius:18px;padding:14px;border:1px solid var(--border);display:flex;gap:14px;align-items:center;cursor:pointer';
-
-    const img = p.images?.[0]
-      ? `<img src="${escHtml(p.images[0])}" style="width:68px;height:68px;border-radius:14px;object-fit:cover;flex-shrink:0" alt="">`
-      : `<div style="width:68px;height:68px;border-radius:14px;background:${gradientFor(p.id)};flex-shrink:0"></div>`;
-
+    const img         = p.images?.[0] ? `<img src="${escHtml(p.images[0])}" style="width:68px;height:68px;border-radius:14px;object-fit:cover;flex-shrink:0" alt="">` : `<div style="width:68px;height:68px;border-radius:14px;background:${gradientFor(p.id)};flex-shrink:0"></div>`;
     const stockColor  = p.stock === 0 ? '#ff3b5c' : p.stock <= 3 ? '#ff9500' : '#00c48c';
     const stockLabel  = p.stock === 0 ? 'Out of stock' : `${p.stock} in stock`;
     const statusColor = p.status === 'active' ? '#00c48c' : '#8e8e93';
 
-    card.innerHTML = `
+    return `<div style="background:var(--surface);border-radius:18px;padding:14px;border:1px solid var(--border);display:flex;gap:14px;align-items:center" data-pid="${escHtml(p.id)}">
       ${img}
       <div style="flex:1;min-width:0">
         <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(p.title)}</div>
@@ -3082,20 +3062,21 @@ async function loadMyProducts() {
         </div>
       </div>
       <div style="text-align:right;flex-shrink:0">
-        <div style="font-size:12px;color:var(--text3)">${p.views || 0} views</div>
-        <div style="font-size:12px;color:var(--text3);margin-top:2px">${p.sales_count || 0} sold</div>
-        <div style="margin-top:8px;width:28px;height:28px;border-radius:8px;background:var(--bg2);display:flex;align-items:center;justify-content:center;margin-left:auto">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
-        </div>
-      </div>`;
+        <div style="font-size:12px;color:var(--text3)">${p.views||0} views</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px">${p.sales_count||0} sold</div>
+        <svg style="margin-top:10px" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+      </div>
+    </div>`;
 
+  }).join('')}</div>`;
+
+  // Attach click handlers after innerHTML is set
+  el.querySelectorAll('[data-pid]').forEach(card => {
+    card.style.cursor = 'pointer';
     card.addEventListener('click', () => {
-      editingProductId = p.id;
+      editingProductId = card.dataset.pid;
       slideTo('add-product', buildAddProductForm);
     });
-
-    list.appendChild(card);
-
   });
 
 }
@@ -3112,21 +3093,22 @@ let productVariants = [];
 
 async function buildAddProductForm(productId) {
 
-  editingProductId = productId || null;
+  // Use passed productId OR the global editingProductId (set before slideTo call)
+  editingProductId = productId || editingProductId || null;
 
   const el      = document.getElementById('add-product-content');
 
   const titleEl = document.getElementById('add-product-title');
 
-  if (titleEl) titleEl.textContent = productId ? 'Edit Product' : 'Add Product';
+  if (titleEl) titleEl.textContent = editingProductId ? 'Edit Product' : 'Add Product';
 
   if (!el) return;
 
   let p = null;
 
-  if (productId) {
+  if (editingProductId) {
 
-    const { data } = await supabase.from('products').select('*, variants:product_variants(*)').eq('id', productId).single();
+    const { data } = await supabase.from('products').select('*, variants:product_variants(*)').eq('id', editingProductId).single();
 
     p = data;
 
