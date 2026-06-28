@@ -3034,58 +3034,69 @@ async function loadMyProducts() {
   el.innerHTML = `<div class="loading-pulse" style="height:300px"></div>`;
 
   const { data: products } = await supabase.from('products').select('*')
-
-    .eq('storefront_id', currentStorefront.id).neq('status','archived').order('created_at', { ascending: false });
+    .eq('storefront_id', currentStorefront.id)
+    .neq('status', 'archived')
+    .order('created_at', { ascending: false });
 
   if (!products?.length) {
-
-    el.innerHTML = `<div class="empty-state"><div style="font-size:48px;margin-bottom:12px">📦</div><p>No products yet</p><span>Add your first product to start selling</span><button class="btn-primary" style="margin-top:16px" onclick="slideTo('add-product',buildAddProductForm)">Add Product</button></div>`;
-
+    el.innerHTML = `
+      <div class="empty-state">
+        <div style="font-size:48px;margin-bottom:12px">📦</div>
+        <p>No products yet</p>
+        <span>Add your first product to start selling</span>
+        <button class="btn-primary" style="margin-top:16px" id="mp-add-first-btn">Add Product</button>
+      </div>`;
+    document.getElementById('mp-add-first-btn')?.addEventListener('click', () => {
+      editingProductId = null;
+      slideTo('add-product', buildAddProductForm);
+    });
     return;
-
   }
 
-  el.innerHTML = `
+  el.innerHTML = `<div style="padding:12px 16px 80px;display:flex;flex-direction:column;gap:10px" id="mp-product-list"></div>`;
 
-    <div class="mp-list">
+  const list = document.getElementById('mp-product-list');
 
-      ${products.map(p => `
+  products.forEach(p => {
 
-        <div class="mp-product-row" onclick="editingProductId='${p.id}';slideTo('add-product',buildAddProductForm)">
+    const card = document.createElement('div');
+    card.style.cssText = 'background:var(--surface);border-radius:18px;padding:14px;border:1px solid var(--border);display:flex;gap:14px;align-items:center;cursor:pointer';
 
-          <div class="mp-product-img-wrap">
+    const img = p.images?.[0]
+      ? `<img src="${escHtml(p.images[0])}" style="width:68px;height:68px;border-radius:14px;object-fit:cover;flex-shrink:0" alt="">`
+      : `<div style="width:68px;height:68px;border-radius:14px;background:${gradientFor(p.id)};flex-shrink:0"></div>`;
 
-            ${p.images?.[0] ? `<img src="${p.images[0]}" class="mp-product-img" alt="">` : `<div class="mp-product-img" style="background:${gradientFor(p.id)}"></div>`}
+    const stockColor  = p.stock === 0 ? '#ff3b5c' : p.stock <= 3 ? '#ff9500' : '#00c48c';
+    const stockLabel  = p.stock === 0 ? 'Out of stock' : `${p.stock} in stock`;
+    const statusColor = p.status === 'active' ? '#00c48c' : '#8e8e93';
 
-          </div>
+    card.innerHTML = `
+      ${img}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(p.title)}</div>
+        <div style="font-size:15px;font-weight:800;color:var(--text);margin-bottom:6px">${mktFmtNgn(p.price_ngn)}</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px;font-weight:700;color:${stockColor}">${stockLabel}</span>
+          <span style="color:var(--border)">·</span>
+          <span style="font-size:11px;font-weight:600;color:${statusColor};text-transform:capitalize">${p.status}</span>
+        </div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:12px;color:var(--text3)">${p.views || 0} views</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px">${p.sales_count || 0} sold</div>
+        <div style="margin-top:8px;width:28px;height:28px;border-radius:8px;background:var(--bg2);display:flex;align-items:center;justify-content:center;margin-left:auto">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+      </div>`;
 
-          <div class="mp-product-info">
+    card.addEventListener('click', () => {
+      editingProductId = p.id;
+      slideTo('add-product', buildAddProductForm);
+    });
 
-            <div class="mp-product-title">${escHtml(p.title)}</div>
+    list.appendChild(card);
 
-            <div class="mp-product-price">${mktFmtNgn(p.price_ngn)}</div>
-
-            <div class="mp-product-meta">
-
-              <span class="mp-product-stock ${p.stock===0?'out':''}">${p.stock} in stock</span>
-
-              <span class="mp-product-status ${p.status}">${p.status}</span>
-
-            </div>
-
-          </div>
-
-          <div class="mp-product-stats">
-
-            <div class="mp-product-stat">${p.views} views</div>
-
-            <div class="mp-product-stat">${p.sales_count} sold</div>
-
-          </div>
-
-        </div>`).join('')}
-
-    </div>`;
+  });
 
 }
 
