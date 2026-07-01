@@ -558,7 +558,7 @@ async function renderMyStorefront() {
 
     <div class="msf-actions">
 
-      <button class="msf-action-btn" onclick="editingProductId=null;slideTo('add-product', buildAddProductForm)">
+      <button class="msf-action-btn" onclick="openProductEdit(null)">
 
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
 
@@ -782,7 +782,7 @@ function renderProductCard(p, sf, isOwner = false) {
 
   return `
 
-    <div class="prd-card" onclick="${isOwner ? `editingProductId='${p.id}';slideTo('add-product',buildAddProductForm)` : `openProductPage('${p.id}')`}">
+    <div class="prd-card" onclick="${isOwner ? `openProductEdit('${p.id}')` : `openProductPage('${p.id}')`}">
 
       <div class="prd-card-img-wrap">
 
@@ -3025,6 +3025,11 @@ async function submitShipOrder(orderId, sheetEl) {
 
 function openMyProducts() { slideTo('my-products', loadMyProducts); }
 
+function openProductEdit(productId) {
+  editingProductId = productId || null;
+  slideTo('add-product', buildAddProductForm);
+}
+
 async function loadMyProducts() {
 
   const el = document.getElementById('my-products-content');
@@ -3039,45 +3044,33 @@ async function loadMyProducts() {
     .order('created_at', { ascending: false });
 
   if (!products?.length) {
-    el.innerHTML = `<div class="empty-state"><div style="font-size:48px;margin-bottom:12px">📦</div><p>No products yet</p><span>Add your first product to start selling</span><button class="btn-primary" style="margin-top:16px" onclick="editingProductId=null;slideTo('add-product',buildAddProductForm)">Add Product</button></div>`;
+    el.innerHTML = `<div class="empty-state"><div style="font-size:48px;margin-bottom:12px">📦</div><p>No products yet</p><span>Add your first product to start selling</span><button class="btn-primary" style="margin-top:16px" onclick="openProductEdit(null)">Add Product</button></div>`;
     return;
   }
 
-  el.innerHTML = `<div style="padding:12px 16px 80px;display:flex;flex-direction:column;gap:10px">${products.map(p => {
+  el.innerHTML = `<div class="mp-list">${products.map(p => {
 
-    const img         = p.images?.[0] ? `<img src="${escHtml(p.images[0])}" style="width:68px;height:68px;border-radius:14px;object-fit:cover;flex-shrink:0" alt="">` : `<div style="width:68px;height:68px;border-radius:14px;background:${gradientFor(p.id)};flex-shrink:0"></div>`;
-    const stockColor  = p.stock === 0 ? '#ff3b5c' : p.stock <= 3 ? '#ff9500' : '#00c48c';
-    const stockLabel  = p.stock === 0 ? 'Out of stock' : `${p.stock} in stock`;
-    const statusColor = p.status === 'active' ? '#00c48c' : '#8e8e93';
+    const img        = p.images?.[0] ? `<img src="${escHtml(p.images[0])}" class="mp-product-img" alt="">` : `<div class="mp-product-img" style="background:${gradientFor(p.id)}"></div>`;
+    const stockClass = p.stock === 0 ? 'out' : '';
+    const stockLabel = p.stock === 0 ? 'Out of stock' : `${p.stock} in stock`;
 
-    return `<div style="background:var(--surface);border-radius:18px;padding:14px;border:1px solid var(--border);display:flex;gap:14px;align-items:center" data-pid="${escHtml(p.id)}">
-      ${img}
-      <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(p.title)}</div>
-        <div style="font-size:15px;font-weight:800;color:var(--text);margin-bottom:6px">${mktFmtNgn(p.price_ngn)}</div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="font-size:11px;font-weight:700;color:${stockColor}">${stockLabel}</span>
-          <span style="color:var(--border)">·</span>
-          <span style="font-size:11px;font-weight:600;color:${statusColor};text-transform:capitalize">${p.status}</span>
+    return `<div class="mp-product-row" onclick="openProductEdit('${p.id}')">
+      <div class="mp-product-img-wrap">${img}</div>
+      <div class="mp-product-info">
+        <div class="mp-product-title">${escHtml(p.title)}</div>
+        <div class="mp-product-price">${mktFmtNgn(p.price_ngn)}</div>
+        <div class="mp-product-meta">
+          <span class="mp-product-stock ${stockClass}">${stockLabel}</span>
+          <span class="mp-product-status ${p.status}">${p.status}</span>
         </div>
       </div>
-      <div style="text-align:right;flex-shrink:0">
-        <div style="font-size:12px;color:var(--text3)">${p.views||0} views</div>
-        <div style="font-size:12px;color:var(--text3);margin-top:2px">${p.sales_count||0} sold</div>
-        <svg style="margin-top:10px" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+      <div class="mp-product-stats">
+        <div class="mp-product-stat">${p.views||0} views</div>
+        <div class="mp-product-stat">${p.sales_count||0} sold</div>
       </div>
     </div>`;
 
   }).join('')}</div>`;
-
-  // Attach click handlers after innerHTML is set
-  el.querySelectorAll('[data-pid]').forEach(card => {
-    card.style.cursor = 'pointer';
-    card.addEventListener('click', () => {
-      editingProductId = card.dataset.pid;
-      slideTo('add-product', buildAddProductForm);
-    });
-  });
 
 }
 
@@ -3700,7 +3693,7 @@ async function loadMerchantDashboard() {
 
         ${products.map(p => `
 
-          <div class="dash-product-row" onclick="editingProductId='${p.id}';slideTo('add-product',buildAddProductForm)">
+          <div class="dash-product-row" onclick="openProductEdit('${p.id}')">
 
             <div class="dash-product-img-wrap">
 
