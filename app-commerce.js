@@ -3026,13 +3026,8 @@ async function submitShipOrder(orderId, sheetEl) {
 function openMyProducts() { slideTo('my-products', loadMyProducts); }
 
 function openProductEdit(productId) {
-  console.log('[MyProducts] openProductEdit called with:', productId);
   editingProductId = productId || null;
-  console.log('[MyProducts] editingProductId set to:', editingProductId);
-  console.log('[MyProducts] slideTo available:', typeof slideTo);
-  console.log('[MyProducts] buildAddProductForm available:', typeof buildAddProductForm);
   slideTo('add-product', buildAddProductForm);
-  console.log('[MyProducts] slideTo called');
 }
 
 async function loadMyProducts() {
