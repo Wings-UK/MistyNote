@@ -214,7 +214,7 @@ function slideTo(pageId, setupFn) {
 
   // Deactivate any currently active slide page so they don't stack visually
 
-  const slidePages = ['detail','user-profile','settings','wallet','storefront','messages','chat','legal-terms','legal-privacy'];
+  const slidePages = ['detail','user-profile','settings','wallet','storefront','messages','chat','legal-terms','legal-privacy','my-storefront','shop-orders','my-products','add-product','my-bag','invite','create-storefront'];
 
   slidePages.forEach(id => {
 
@@ -873,8 +873,11 @@ function injectProfileStyles() {
     .prf-masonry-tile:active { transform:scale(.97); }
 
     .prf-masonry-repost-badge { position:absolute; top:7px; right:7px; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; color:#fff; pointer-events:none; }
+
     .prf-masonry-video-badge { position:absolute; top:7px; right:7px; width:26px; height:26px; border-radius:50%; background:rgba(0,0,0,0.28); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; pointer-events:none; }
+
     .prf-masonry-video-thumb { width:100%; display:block; object-fit:cover; background:#000; }
+
     .prf-masonry-views-pill { position:absolute; bottom:7px; left:7px; display:flex; align-items:center; gap:4px; background:rgba(0,0,0,0.45); backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); border-radius:20px; padding:3px 8px 3px 6px; font-size:11px; font-weight:400; color:white; pointer-events:none; }
 
     .prf-masonry-img { width:100%; display:block; object-fit:cover; }
@@ -2090,6 +2093,7 @@ async function showUserProfile(userId, tapEl) {
     renderPrfPosts(allPosts, `uprf-list-${userId}`, false, true, userId);
 
     // Check if this user has a storefront — show/hide banner accordingly
+
     supabase.from('storefronts').select('id').eq('user_id', userId).maybeSingle().then(({ data: sf }) => {
 
       const banner = document.getElementById(`uprf-storefront-banner-${userId}`);
