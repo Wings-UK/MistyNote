@@ -425,194 +425,175 @@ async function submitCreateStorefront() {
 // ══════════════════════════════════════════
 
 function openMyStorefront() {
-
   if (!currentStorefront) { openCreateStorefront(); return; }
-
   slideTo('my-storefront', renderMyStorefront);
-
 }
 
 async function renderMyStorefront() {
 
   const el = document.getElementById('my-storefront-content');
-
   if (!el) return;
 
-  el.innerHTML = `<div class="loading-pulse" style="height:300px"></div>`;
+  el.innerHTML = `<div class="loading-pulse" style="height:400px"></div>`;
 
-  const [sfRes, productsRes, ordersRes] = await Promise.all([
-
+  const [sfRes, productsRes, ordersRes, pendingRes] = await Promise.all([
     supabase.from('storefronts').select('*').eq('id', currentStorefront.id).maybeSingle(),
-
     supabase.from('products').select('id', { count: 'exact', head: true }).eq('storefront_id', currentStorefront.id).neq('status', 'archived'),
-
-    supabase.from('orders').select('id,price_ngn', { count: 'exact' }).eq('seller_id', currentUser.id).eq('status', 'paid'),
-
+    supabase.from('orders').select('id,price_ngn,status,created_at').eq('seller_id', currentUser.id),
+    supabase.from('orders').select('id', { count: 'exact', head: true }).eq('seller_id', currentUser.id).eq('status', 'pending'),
   ]);
 
-  const sf            = sfRes.data || currentStorefront;
+  const sf             = sfRes.data || currentStorefront;
+  const productCount   = productsRes.count || 0;
+  const orders         = ordersRes.data || [];
+  const pendingCount   = pendingRes.count || 0;
+  const totalRevenue   = orders.filter(o => o.status === 'delivered').reduce((s, o) => s + (Number(o.price_ngn) || 0), 0);
+  const weekAgo        = new Date(Date.now() - 7 * 86400000);
+  const weekRevenue    = orders.filter(o => o.status === 'delivered' && new Date(o.created_at) > weekAgo).reduce((s, o) => s + (Number(o.price_ngn) || 0), 0);
+  const totalSales     = orders.filter(o => o.status === 'delivered').length;
 
-  const productCount  = productsRes.count || 0;
-
-  const paidOrders    = ordersRes.data || [];
-
-  const pendingOrders = paidOrders.length;
-
-  const totalRevenue  = paidOrders.reduce((s, o) => s + (Number(o.price_ngn) || 0), 0);
-
-  const totalSales    = pendingOrders;
+  currentStorefront = sf;
 
   const badge = document.getElementById('sidepane-orders-badge');
+  if (badge) { badge.textContent = pendingCount; badge.style.display = pendingCount > 0 ? 'flex' : 'none'; }
 
-  if (badge) { badge.textContent = pendingOrders; badge.style.display = pendingOrders > 0 ? 'flex' : 'none'; }
+  const bannerStyle = sf.banner_url
+    ? `background:url('${sf.banner_url}') center/cover no-repeat`
+    : `background:linear-gradient(135deg,#1a0a2e 0%,#6C47FF 100%)`;
 
   el.innerHTML = `
+    <div style="padding-bottom:80px">
 
-    <div class="msf-banner-wrap">
-
-      ${sf.banner_url ? `<img src="${sf.banner_url}" class="msf-banner-img" alt="">` : `<div class="msf-banner-placeholder"></div>`}
-
-      <div class="msf-banner-overlay">
-
-        <button class="msf-edit-banner-btn" onclick="document.getElementById('msf-banner-input').click()">
-
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-
-          Edit Banner
-
+      <!-- Header with back + actions -->
+      <div style="position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;padding:calc(var(--safe-top) + 12px) 16px 12px;background:rgba(0,0,0,0.3);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)">
+        <button onclick="slideBack()" style="width:36px;height:36px;border-radius:12px;background:rgba(255,255,255,0.12);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
         </button>
-
-      </div>
-
-      <input type="file" id="msf-banner-input" accept="image/*" style="display:none" onchange="updateStorefrontBanner(this)">
-
-    </div>
-
-    <div class="msf-info-wrap">
-
-      <div class="msf-logo-wrap">
-
-        <img class="msf-logo" src="${sf.logo_url || ''}" onerror="this.style.display='none'" alt="">
-
-        <button class="msf-edit-logo-btn" onclick="document.getElementById('msf-logo-input').click()">
-
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
-
+        <div style="font-size:15px;font-weight:700;color:white;letter-spacing:-0.2px">My Store</div>
+        <button onclick="openEditStorefront()" style="width:36px;height:36px;border-radius:12px;background:rgba(255,255,255,0.12);border:none;display:flex;align-items:center;justify-content:center;cursor:pointer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
         </button>
-
-        <input type="file" id="msf-logo-input" accept="image/*" style="display:none" onchange="updateStorefrontLogo(this)">
-
       </div>
 
-      <div class="msf-store-details">
-
-        <div class="msf-store-name">${escHtml(sf.store_name)}</div>
-
-        <div class="msf-store-cat">${escHtml(sf.category)}</div>
-
-        ${sf.rating > 0 ? `<div class="msf-store-rating">★ ${sf.rating} · ${sf.review_count} reviews</div>` : ''}
-
+      <!-- Banner -->
+      <div style="${bannerStyle};height:180px;margin-top:-60px;position:relative;overflow:hidden">
+        <div style="position:absolute;inset:0;background:linear-gradient(to bottom,transparent 40%,rgba(0,0,0,0.7))"></div>
+        <button onclick="document.getElementById('msf-banner-input').click()" style="position:absolute;bottom:12px;right:12px;background:rgba(255,255,255,0.15);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.2);border-radius:10px;padding:6px 12px;color:white;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--font)">
+          📷 Edit Banner
+        </button>
+        <input type="file" id="msf-banner-input" accept="image/*" style="display:none" onchange="updateStorefrontBanner(this)">
       </div>
 
-      <button class="msf-edit-btn" onclick="openEditStorefront()">Edit Store</button>
+      <!-- Store identity -->
+      <div style="padding:0 16px;margin-top:-40px;position:relative;z-index:2">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:16px">
+          <div style="position:relative">
+            <div style="width:72px;height:72px;border-radius:20px;border:3px solid var(--bg);overflow:hidden;background:${gradientFor(sf.id)}">
+              ${sf.logo_url ? `<img src="${escHtml(sf.logo_url)}" style="width:100%;height:100%;object-fit:cover" alt="">` : ''}
+            </div>
+            <button onclick="document.getElementById('msf-logo-input').click()" style="position:absolute;bottom:-4px;right:-4px;width:24px;height:24px;border-radius:8px;background:var(--accent);border:2px solid var(--bg);display:flex;align-items:center;justify-content:center;cursor:pointer">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+            <input type="file" id="msf-logo-input" accept="image/*" style="display:none" onchange="updateStorefrontLogo(this)">
+          </div>
+          <button onclick="openStorefront('${sf.id}')" style="height:34px;padding:0 16px;border-radius:10px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-size:13px;font-weight:600;cursor:pointer;font-family:var(--font)">
+            View Store →
+          </button>
+        </div>
 
-    </div>
-
-    <div class="msf-stats-row">
-
-      <div class="msf-stat" onclick="openMyProducts()">
-
-        <div class="msf-stat-num">${productCount}</div>
-
-        <div class="msf-stat-label">Products</div>
-
+        <div style="margin-bottom:4px;font-size:20px;font-weight:800;color:var(--text);letter-spacing:-0.4px">${escHtml(sf.store_name)}</div>
+        <div style="font-size:13px;color:var(--text3);margin-bottom:4px">${escHtml(sf.category || '')}</div>
+        ${sf.rating > 0 ? `<div style="font-size:13px;color:#ff9500">★ ${sf.rating} <span style="color:var(--text3)">(${sf.review_count} reviews)</span></div>` : ''}
       </div>
 
-      <div class="msf-stat" onclick="openShopOrders()">
-
-        <div class="msf-stat-num">${totalSales}</div>
-
-        <div class="msf-stat-label">Sales</div>
-
+      <!-- Stats row -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:16px;margin-top:8px">
+        <div onclick="openMyProducts()" style="background:var(--surface);border-radius:16px;padding:14px;text-align:center;border:1px solid var(--border);cursor:pointer">
+          <div style="font-size:22px;font-weight:800;color:var(--text);letter-spacing:-0.5px">${productCount}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:3px;font-weight:600">Products</div>
+        </div>
+        <div onclick="openShopOrders()" style="background:var(--surface);border-radius:16px;padding:14px;text-align:center;border:1px solid var(--border);cursor:pointer">
+          <div style="font-size:22px;font-weight:800;color:var(--text);letter-spacing:-0.5px">${totalSales}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:3px;font-weight:600">Sales</div>
+        </div>
+        <div onclick="openMerchantDashboard()" style="background:var(--surface);border-radius:16px;padding:14px;text-align:center;border:1px solid var(--border);cursor:pointer">
+          <div style="font-size:16px;font-weight:800;color:var(--text);letter-spacing:-0.5px">${mktFmtNgn(totalRevenue)}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:3px;font-weight:600">Revenue</div>
+        </div>
       </div>
 
-      <div class="msf-stat" onclick="openMerchantDashboard()">
+      <!-- Pending orders alert -->
+      ${pendingCount > 0 ? `
+      <div onclick="openShopOrders()" style="margin:0 16px 16px;padding:14px 16px;background:rgba(255,149,0,0.1);border-radius:16px;border:1px solid rgba(255,149,0,0.25);display:flex;align-items:center;gap:12px;cursor:pointer">
+        <div style="width:36px;height:36px;border-radius:12px;background:rgba(255,149,0,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px">🔔</div>
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:700;color:#ff9500">${pendingCount} new order${pendingCount > 1 ? 's' : ''} waiting</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:1px">Tap to accept or decline</div>
+        </div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff9500" stroke-width="2.5" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+      </div>` : ''}
 
-        <div class="msf-stat-num">${mktFmtNgn(totalRevenue)}</div>
+      <!-- Quick Actions -->
+      <div style="padding:0 16px;margin-bottom:16px">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:12px">Quick Actions</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
 
-        <div class="msf-stat-label">Revenue</div>
+          <button onclick="openProductEdit(null)" style="background:var(--accent);border:none;border-radius:16px;padding:16px;text-align:left;cursor:pointer;font-family:var(--font)">
+            <div style="font-size:22px;margin-bottom:8px">➕</div>
+            <div style="font-size:14px;font-weight:700;color:white">Add Product</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.7);margin-top:2px">List something new</div>
+          </button>
 
+          <button onclick="openShopOrders()" style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;text-align:left;cursor:pointer;font-family:var(--font);position:relative">
+            ${pendingCount > 0 ? `<div style="position:absolute;top:12px;right:12px;width:20px;height:20px;border-radius:50%;background:#ff3b5c;color:white;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">${pendingCount}</div>` : ''}
+            <div style="font-size:22px;margin-bottom:8px">📦</div>
+            <div style="font-size:14px;font-weight:700;color:var(--text)">Orders</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">Manage incoming</div>
+          </button>
+
+          <button onclick="openMyProducts()" style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;text-align:left;cursor:pointer;font-family:var(--font)">
+            <div style="font-size:22px;margin-bottom:8px">🏷️</div>
+            <div style="font-size:14px;font-weight:700;color:var(--text)">My Products</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">${productCount} listed</div>
+          </button>
+
+          <button onclick="openMerchantDashboard()" style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;text-align:left;cursor:pointer;font-family:var(--font)">
+            <div style="font-size:22px;margin-bottom:8px">📊</div>
+            <div style="font-size:14px;font-weight:700;color:var(--text)">Analytics</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">${mktFmtNgn(weekRevenue)} this week</div>
+          </button>
+
+        </div>
       </div>
 
-    </div>
-
-    ${pendingOrders > 0 ? `
-
-    <div class="msf-alert" onclick="openShopOrders()">
-
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-
-      ${pendingOrders} new order${pendingOrders > 1 ? 's' : ''} waiting · Tap to manage
-
-    </div>` : ''}
-
-    <div class="msf-actions">
-
-      <button class="msf-action-btn" onclick="openProductEdit(null)">
-
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-
-        Add Product
-
-      </button>
-
-      <button class="msf-action-btn" onclick="openMyProducts()">
-
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-
-        My Products
-
-      </button>
-
-      <button class="msf-action-btn" onclick="openShopOrders()">
-
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-
-        Shop Orders
-
-      </button>
-
-      <button class="msf-action-btn" onclick="openMerchantDashboard()">
-
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-
-        Analytics
-
-      </button>
-
-    </div>
-
-    <div class="msf-subscription">
-
-      <div class="msf-subscription-info">
-
-        <span class="msf-subscription-label">Basic Plan</span>
-
-        <span class="msf-subscription-expiry">Renews ${new Date(sf.subscription_expires_at).toLocaleDateString('en-NG', {day:'numeric',month:'short',year:'numeric'})}</span>
-
+      <!-- This week summary -->
+      <div style="margin:0 16px 16px;background:var(--surface);border-radius:16px;padding:16px;border:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:14px">This Week</div>
+        <div style="display:flex;justify-content:space-between">
+          <div>
+            <div style="font-size:24px;font-weight:800;color:var(--text);letter-spacing:-0.5px">${mktFmtNgn(weekRevenue)}</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:2px">Revenue</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:24px;font-weight:800;color:var(--text);letter-spacing:-0.5px">${orders.filter(o => o.status==='delivered' && new Date(o.created_at) > weekAgo).length}</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:2px">Delivered</div>
+          </div>
+        </div>
       </div>
 
-      <button class="msf-renew-btn" onclick="renewStorefrontSubscription()">Renew</button>
-
-    </div>
-
-    <div style="padding:0 16px 24px">
-
-      <button class="msf-view-public-btn" onclick="openStorefront('${sf.id}')">View Public Storefront</button>
+      <!-- Subscription -->
+      ${sf.subscription_expires_at ? `
+      <div style="margin:0 16px;padding:14px 16px;background:var(--surface);border-radius:16px;border:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text)">Basic Plan</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">Renews ${new Date(sf.subscription_expires_at).toLocaleDateString('en-NG', {day:'numeric',month:'short',year:'numeric'})}</div>
+        </div>
+        <button onclick="renewStorefrontSubscription()" style="height:34px;padding:0 16px;border-radius:10px;background:var(--accent);border:none;color:white;font-size:13px;font-weight:700;cursor:pointer;font-family:var(--font)">Renew</button>
+      </div>` : ''}
 
     </div>`;
-
 }
+
 
 // ══════════════════════════════════════════
 
@@ -3033,8 +3014,11 @@ function openProductEdit(productId) {
 async function loadMyProducts() {
 
   const el = document.getElementById('my-products-content');
-
   if (!el || !currentStorefront) return;
+
+  // Fix the + Add button in the page header to use openProductEdit
+  const addBtn = document.querySelector('#page-my-products .page-header-action');
+  if (addBtn) addBtn.onclick = () => openProductEdit(null);
 
   el.innerHTML = `<div class="loading-pulse" style="height:300px"></div>`;
 
@@ -3044,29 +3028,37 @@ async function loadMyProducts() {
     .order('created_at', { ascending: false });
 
   if (!products?.length) {
-    el.innerHTML = `<div class="empty-state"><div style="font-size:48px;margin-bottom:12px">📦</div><p>No products yet</p><span>Add your first product to start selling</span><button class="btn-primary" style="margin-top:16px" onclick="openProductEdit(null)">Add Product</button></div>`;
+    el.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 32px;text-align:center">
+        <div style="font-size:52px;margin-bottom:16px">📦</div>
+        <div style="font-size:18px;font-weight:800;color:var(--text);margin-bottom:8px">No products yet</div>
+        <div style="font-size:14px;color:var(--text3);margin-bottom:24px;line-height:1.5">Add your first product to start selling on MistyNote</div>
+        <button onclick="openProductEdit(null)" style="height:50px;padding:0 32px;border-radius:14px;background:var(--accent);color:white;border:none;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font)">+ Add Product</button>
+      </div>`;
     return;
   }
 
-  el.innerHTML = `<div class="mp-list">${products.map(p => {
+  el.innerHTML = `<div style="padding:12px 16px 80px;display:flex;flex-direction:column;gap:10px">${products.map(p => {
 
-    const img        = p.images?.[0] ? `<img src="${escHtml(p.images[0])}" class="mp-product-img" alt="">` : `<div class="mp-product-img" style="background:${gradientFor(p.id)}"></div>`;
-    const stockClass = p.stock === 0 ? 'out' : '';
+    const img        = p.images?.[0] ? `<img src="${escHtml(p.images[0])}" style="width:64px;height:64px;border-radius:14px;object-fit:cover;flex-shrink:0" alt="">` : `<div style="width:64px;height:64px;border-radius:14px;background:${gradientFor(p.id)};flex-shrink:0"></div>`;
+    const stockColor = p.stock === 0 ? '#ff3b5c' : p.stock <= 3 ? '#ff9500' : '#00c48c';
     const stockLabel = p.stock === 0 ? 'Out of stock' : `${p.stock} in stock`;
 
-    return `<div class="mp-product-row" onclick="openProductEdit('${p.id}')">
-      <div class="mp-product-img-wrap">${img}</div>
-      <div class="mp-product-info">
-        <div class="mp-product-title">${escHtml(p.title)}</div>
-        <div class="mp-product-price">${mktFmtNgn(p.price_ngn)}</div>
-        <div class="mp-product-meta">
-          <span class="mp-product-stock ${stockClass}">${stockLabel}</span>
-          <span class="mp-product-status ${p.status}">${p.status}</span>
+    return `<div onclick="openProductEdit('${p.id}')" style="background:var(--surface);border-radius:18px;padding:14px;border:1px solid var(--border);display:flex;gap:14px;align-items:center;cursor:pointer;-webkit-tap-highlight-color:transparent">
+      ${img}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(p.title)}</div>
+        <div style="font-size:15px;font-weight:800;color:var(--text);margin-bottom:6px">${mktFmtNgn(p.price_ngn)}</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px;font-weight:700;color:${stockColor}">${stockLabel}</span>
+          <span style="color:var(--border)">·</span>
+          <span style="font-size:11px;font-weight:600;color:${p.status==='active'?'#00c48c':'#8e8e93'};text-transform:capitalize">${p.status}</span>
         </div>
       </div>
-      <div class="mp-product-stats">
-        <div class="mp-product-stat">${p.views||0} views</div>
-        <div class="mp-product-stat">${p.sales_count||0} sold</div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:12px;color:var(--text3)">${p.views||0} views</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px">${p.sales_count||0} sold</div>
+        <svg style="margin-top:10px;display:block;margin-left:auto" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="2.5" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
       </div>
     </div>`;
 
@@ -3074,7 +3066,6 @@ async function loadMyProducts() {
 
 }
 
-// ══════════════════════════════════════════
 
 // ADD / EDIT PRODUCT
 
@@ -3594,140 +3585,143 @@ function openMerchantDashboard() { slideTo('merchant-dashboard', loadMerchantDas
 async function loadMerchantDashboard() {
 
   const el = document.getElementById('merchant-dashboard-content');
-
   if (!el || !currentStorefront) return;
 
-  el.innerHTML = `<div class="loading-pulse" style="height:300px"></div>`;
+  el.innerHTML = `<div class="loading-pulse" style="height:400px"></div>`;
 
   const [ordersRes, productsRes] = await Promise.all([
-
-    supabase.from('orders').select('id,total_ngn,points_amount,status,created_at').eq('storefront_id', currentStorefront.id),
-
+    supabase.from('orders').select('id,price_ngn,status,created_at').eq('seller_id', currentUser.id),
     supabase.from('products').select('id,title,views,sales_count,price_ngn,images').eq('storefront_id', currentStorefront.id).neq('status','archived').order('sales_count', { ascending: false }).limit(5),
-
   ]);
 
   const orders   = ordersRes.data   || [];
-
   const products = productsRes.data || [];
 
-  const revenue  = orders.filter(o => o.status==='delivered').reduce((s,o) => s+o.total_ngn, 0);
+  const now      = new Date();
+  const weekAgo  = new Date(now - 7  * 86400000);
+  const monthAgo = new Date(now - 30 * 86400000);
 
-  const totalOrders     = orders.length;
+  const delivered      = orders.filter(o => o.status === 'delivered');
+  const totalRevenue   = delivered.reduce((s, o) => s + (Number(o.price_ngn) || 0), 0);
+  const weekRevenue    = delivered.filter(o => new Date(o.created_at) > weekAgo).reduce((s, o) => s + (Number(o.price_ngn) || 0), 0);
+  const monthRevenue   = delivered.filter(o => new Date(o.created_at) > monthAgo).reduce((s, o) => s + (Number(o.price_ngn) || 0), 0);
+  const totalOrders    = orders.length;
+  const pendingOrders  = orders.filter(o => ['pending','accepted','processing'].includes(o.status)).length;
+  const shippedOrders  = orders.filter(o => o.status === 'shipped' || o.status === 'shipping_requested').length;
+  const deliveredCount = delivered.length;
+  const cancelledCount = orders.filter(o => ['cancelled','declined'].includes(o.status)).length;
 
-  const pendingOrders   = orders.filter(o => o.status==='paid'||o.status==='processing').length;
-
-  const shippedOrders   = orders.filter(o => o.status==='shipped').length;
-
-  const deliveredOrders = orders.filter(o => o.status==='delivered').length;
-
-  const weekAgo    = new Date(Date.now() - 7*86400000);
-
-  const weekOrders = orders.filter(o => new Date(o.created_at) > weekAgo && o.status==='delivered');
-
-  const weekRevenue = weekOrders.reduce((s,o) => s+o.total_ngn, 0);
+  // Build last 7 days revenue bars
+  const dayLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const dayRevenue = Array(7).fill(0);
+  delivered.forEach(o => {
+    const d = new Date(o.created_at);
+    const daysAgo = Math.floor((now - d) / 86400000);
+    if (daysAgo < 7) {
+      const idx = 6 - daysAgo;
+      dayRevenue[idx] += Number(o.price_ngn) || 0;
+    }
+  });
+  const maxRevenue = Math.max(...dayRevenue, 1);
 
   el.innerHTML = `
+    <div style="padding:16px 16px 80px;display:flex;flex-direction:column;gap:14px">
 
-    <div class="dash-body">
-
-      <div class="dash-cards">
-
-        <div class="dash-card" style="background:linear-gradient(135deg,#6C47FF,#a78bfa)">
-
-          <div class="dash-card-label">Total Revenue</div>
-
-          <div class="dash-card-value">${mktFmtNgn(revenue)}</div>
-
-          <div class="dash-card-sub">All time</div>
-
+      <!-- Revenue cards -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div style="background:linear-gradient(135deg,#6C47FF,#9b6dff);border-radius:20px;padding:18px;grid-column:1/-1">
+          <div style="font-size:12px;color:rgba(255,255,255,0.7);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.6px">Total Revenue</div>
+          <div style="font-size:28px;font-weight:900;color:white;letter-spacing:-0.5px">${mktFmtNgn(totalRevenue)}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.6);margin-top:4px">${deliveredCount} delivered orders all time</div>
         </div>
-
-        <div class="dash-card" style="background:linear-gradient(135deg,#00c48c,#34d399)">
-
-          <div class="dash-card-label">This Week</div>
-
-          <div class="dash-card-value">${mktFmtNgn(weekRevenue)}</div>
-
-          <div class="dash-card-sub">${weekOrders.length} orders</div>
-
+        <div style="background:var(--surface);border-radius:16px;padding:16px;border:1px solid var(--border)">
+          <div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:6px">This Week</div>
+          <div style="font-size:18px;font-weight:800;color:var(--text);letter-spacing:-0.3px">${mktFmtNgn(weekRevenue)}</div>
         </div>
-
+        <div style="background:var(--surface);border-radius:16px;padding:16px;border:1px solid var(--border)">
+          <div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:6px">This Month</div>
+          <div style="font-size:18px;font-weight:800;color:var(--text);letter-spacing:-0.3px">${mktFmtNgn(monthRevenue)}</div>
+        </div>
       </div>
 
-      <div class="dash-order-stats">
-
-        <div class="dash-order-stat"><div class="dash-order-stat-num">${totalOrders}</div><div class="dash-order-stat-label">Total</div></div>
-
-        <div class="dash-order-stat" style="color:#ff9500" onclick="openShopOrders()"><div class="dash-order-stat-num">${pendingOrders}</div><div class="dash-order-stat-label">Pending</div></div>
-
-        <div class="dash-order-stat" style="color:#6C47FF"><div class="dash-order-stat-num">${shippedOrders}</div><div class="dash-order-stat-label">Shipped</div></div>
-
-        <div class="dash-order-stat" style="color:#00c48c"><div class="dash-order-stat-num">${deliveredOrders}</div><div class="dash-order-stat-label">Delivered</div></div>
-
+      <!-- 7-day chart -->
+      <div style="background:var(--surface);border-radius:20px;padding:18px;border:1px solid var(--border)">
+        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:16px">Last 7 Days</div>
+        <div style="display:flex;align-items:flex-end;gap:6px;height:80px">
+          ${dayRevenue.map((rev, i) => {
+            const h = Math.max(4, Math.round((rev / maxRevenue) * 72));
+            const isToday = i === 6;
+            return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px">
+              <div style="width:100%;border-radius:6px 6px 3px 3px;background:${isToday ? 'var(--accent)' : 'rgba(108,71,255,0.2)'};height:${h}px"></div>
+              <div style="font-size:9px;color:var(--text3);font-weight:600">${dayLabels[i]}</div>
+            </div>`;
+          }).join('')}
+        </div>
       </div>
 
+      <!-- Order stats -->
+      <div style="background:var(--surface);border-radius:20px;padding:18px;border:1px solid var(--border)">
+        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:14px">Order Status</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+          <div onclick="openShopOrders()" style="text-align:center;cursor:pointer">
+            <div style="font-size:22px;font-weight:800;color:var(--text)">${totalOrders}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:2px;font-weight:600">Total</div>
+          </div>
+          <div onclick="openShopOrders()" style="text-align:center;cursor:pointer">
+            <div style="font-size:22px;font-weight:800;color:#ff9500">${pendingOrders}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:2px;font-weight:600">Pending</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:22px;font-weight:800;color:#6C47FF">${shippedOrders}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:2px;font-weight:600">Shipped</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:22px;font-weight:800;color:#00c48c">${deliveredCount}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:2px;font-weight:600">Delivered</div>
+          </div>
+        </div>
+        ${cancelledCount > 0 ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:12px;color:var(--text3);text-align:center">${cancelledCount} cancelled or declined</div>` : ''}
+      </div>
+
+      <!-- Store rating -->
       ${currentStorefront.rating > 0 ? `
-
-      <div class="dash-section">
-
-        <div class="dash-section-title">Store Rating</div>
-
-        <div class="dash-rating">
-
-          <span class="dash-rating-stars">${'★'.repeat(Math.round(currentStorefront.rating))}${'☆'.repeat(5-Math.round(currentStorefront.rating))}</span>
-
-          <span class="dash-rating-val">${currentStorefront.rating} out of 5</span>
-
-          <span class="dash-rating-count">(${currentStorefront.review_count} reviews)</span>
-
+      <div style="background:var(--surface);border-radius:20px;padding:18px;border:1px solid var(--border)">
+        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px">Store Rating</div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="font-size:40px;font-weight:900;color:var(--text);letter-spacing:-1px">${currentStorefront.rating}</div>
+          <div>
+            <div style="font-size:18px;color:#ff9500;letter-spacing:2px">${'★'.repeat(Math.round(currentStorefront.rating))}${'☆'.repeat(5 - Math.round(currentStorefront.rating))}</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:3px">${currentStorefront.review_count} reviews</div>
+          </div>
         </div>
-
       </div>` : ''}
 
+      <!-- Top products -->
       ${products.length > 0 ? `
-
-      <div class="dash-section">
-
-        <div class="dash-section-title">Top Products</div>
-
+      <div style="background:var(--surface);border-radius:20px;padding:18px;border:1px solid var(--border)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <div style="font-size:13px;font-weight:700;color:var(--text)">Top Products</div>
+          <button onclick="openMyProducts()" style="background:none;border:none;font-size:12px;color:var(--accent);font-weight:600;cursor:pointer;font-family:var(--font)">See all</button>
+        </div>
         ${products.map(p => `
-
-          <div class="dash-product-row" onclick="openProductEdit('${p.id}')">
-
-            <div class="dash-product-img-wrap">
-
-              ${p.images?.[0] ? `<img src="${p.images[0]}" class="dash-product-img" alt="">` : `<div class="dash-product-img" style="background:${gradientFor(p.id)}"></div>`}
-
-            </div>
-
-            <div class="dash-product-info">
-
-              <div class="dash-product-title">${escHtml(p.title)}</div>
-
-              <div class="dash-product-price">${mktFmtNgn(p.price_ngn)}</div>
-
-            </div>
-
-            <div class="dash-product-stats">
-
-              <div class="dash-product-stat">${p.views} views</div>
-
-              <div class="dash-product-stat" style="color:#00c48c">${p.sales_count} sold</div>
-
-            </div>
-
-          </div>`).join('')}
-
+        <div onclick="openProductEdit('${p.id}')" style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border2);cursor:pointer">
+          <div style="width:44px;height:44px;border-radius:12px;overflow:hidden;flex-shrink:0;background:${gradientFor(p.id)}">
+            ${p.images?.[0] ? `<img src="${escHtml(p.images[0])}" style="width:100%;height:100%;object-fit:cover" alt="">` : ''}
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(p.title)}</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:2px">${p.views||0} views</div>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:13px;font-weight:700;color:#00c48c">${p.sales_count||0} sold</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">${mktFmtNgn(p.price_ngn)}</div>
+          </div>
+        </div>`).join('')}
       </div>` : ''}
-
-      <div style="height:32px"></div>
 
     </div>`;
-
 }
 
-// ══════════════════════════════════════════
 
 // DISCOUNT CODES
 
