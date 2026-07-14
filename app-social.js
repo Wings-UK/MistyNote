@@ -214,7 +214,7 @@ function slideTo(pageId, setupFn) {
 
   // Deactivate any currently active slide page so they don't stack visually
 
-  const slidePages = ['detail','user-profile','settings','wallet','storefront','messages','chat','legal-terms','legal-privacy','my-storefront','shop-orders','my-products','add-product','my-bag','invite','create-storefront'];
+  const slidePages = ['detail','user-profile','settings','wallet','storefront','messages','chat','legal-terms','legal-privacy','my-storefront','shop-orders','my-products','add-product','my-bag','invite','create-storefront','merchant-dashboard','discount-codes','product','cart','checkout'];
 
   slidePages.forEach(id => {
 
