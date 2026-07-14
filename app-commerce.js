@@ -3983,31 +3983,113 @@ async function submitReview(orderId, productId, storefrontId) {
 
 // ══════════════════════════════════════════
 
+let _mktCurrentCat = 'All';
+
+function mktSetCat(btn) {
+  document.querySelectorAll('.mkt-cat').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _mktCurrentCat = btn.textContent.trim();
+  loadMarketProducts(_mktCurrentCat);
+}
+
+// Override showMarket to also load real products
+const _origShowMarket = window.showMarket;
+window.showMarket = function() {
+  if (_origShowMarket) _origShowMarket();
+  loadMarketProducts(_mktCurrentCat);
+};
+
+// Load products on first visit if market page is already active
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    if (document.getElementById('page-market')?.classList.contains('active')) {
+      loadMarketProducts(_mktCurrentCat);
+    }
+  }, 800);
+});
+
 async function loadMarketProducts(category) {
 
-  const grid = document.getElementById('mkt-product-grid');
+  // Find the real grid — use the static .mkt-grid inside the All Products section
+  // We find it by locating the mkt-section that contains "All Products"
+  let grid = null;
+  document.querySelectorAll('.mkt-section').forEach(section => {
+    if (section.querySelector('.mkt-section-title')?.textContent?.includes('All Products')) {
+      grid = section.querySelector('.mkt-grid');
+    }
+  });
 
   if (!grid) return;
 
-  let query = supabase.from('products')
+  // Show loading state
+  grid.innerHTML = `
+    <div style="grid-column:1/-1;padding:40px;text-align:center;color:var(--text3);font-size:13px">Loading products…</div>`;
 
-    .select('*, storefront:storefronts(id,store_name,logo_url,rating)')
+  // Build query
+  let query = supabase
+    .from('products')
+    .select('*, storefront:storefronts(id,store_name,logo_url)')
+    .eq('status', 'active')
+    .gt('stock', 0)
+    .order('created_at', { ascending: false })
+    .limit(60);
 
-    .eq('status','active').gt('stock',0)
+  // Map tab labels to DB category values
+  const catMap = {
+    'Fashion':  'Fashion',
+    'Beauty':   'Beauty',
+    'Food':     'Food',
+    'Tech':     'Tech',
+    'Home':     'Home',
+    'Health':   'Health',
+    'Kids':     'Kids',
+  };
 
-    .order('created_at', { ascending: false }).limit(40);
-
-  if (category && category !== 'all') query = query.eq('category', category);
+  if (category && category !== 'All' && catMap[category]) {
+    query = query.eq('category', catMap[category]);
+  }
 
   const { data: products } = await query;
 
-  if (!products?.length) return;
+  if (!products?.length) {
+    grid.innerHTML = `
+      <div style="grid-column:1/-1;padding:48px 16px;text-align:center">
+        <div style="font-size:40px;margin-bottom:12px">🛍️</div>
+        <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:6px">No products yet</div>
+        <div style="font-size:13px;color:var(--text3)">Be the first to list something in ${category === 'All' ? 'the market' : category}</div>
+      </div>`;
+    return;
+  }
 
-  grid.innerHTML = products.map(p => renderProductCard(p, p.storefront)).join('');
+  grid.innerHTML = products.map(p => {
+
+    const img    = p.images?.[0];
+    const price  = mktFmtNgn(p.price_ngn);
+    const orig   = p.original_price_ngn ? mktFmtNgn(p.original_price_ngn) : null;
+    const pct    = p.original_price_ngn ? Math.round((1 - p.price_ngn / p.original_price_ngn) * 100) : null;
+    const store  = escHtml(p.storefront?.store_name || '');
+
+    return `<div class="mkt-product-card" onclick="openProductPage('${p.id}')">
+      <div class="mkt-product-img" style="${img ? `background:url('${escHtml(img)}') center/cover no-repeat` : `background:${gradientFor(p.id)}`}">
+        ${!img ? '' : ''}
+        ${pct ? `<span class="mkt-deal-badge" style="position:absolute;top:8px;left:8px">-${pct}%</span>` : ''}
+        ${p.stock <= 3 && p.stock > 0 ? `<span style="position:absolute;bottom:8px;left:8px;background:rgba(255,149,0,0.9);color:white;font-size:10px;font-weight:700;padding:3px 7px;border-radius:6px">${p.stock} left</span>` : ''}
+      </div>
+      <div class="mkt-product-body">
+        ${store ? `<p class="mkt-product-store">${store}</p>` : ''}
+        <p class="mkt-product-name">${escHtml(p.title)}</p>
+        ${orig ? `<div class="mkt-product-price-row"><span class="mkt-product-orig">${orig}</span><span class="mkt-product-pct">-${pct}%</span></div>` : ''}
+        <p class="mkt-product-price">${price}</p>
+        ${p.rating > 0 ? `<div style="font-size:11px;color:#ff9500;margin-top:3px">★ ${p.rating}</div>` : ''}
+      </div>
+    </div>`;
+
+  }).join('');
 
 }
 
 function openMktSearch() { showToast('Search coming soon ✨'); }
+
 
 // ══════════════════════════════════════════
 
