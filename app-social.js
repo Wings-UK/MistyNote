@@ -4663,6 +4663,7 @@ async function renderSuggestedForOtherProfile(userId, username) {
     box.className = 'prf-suggest-box';
     box.id = boxId;
     box.style.marginTop = '18px';
+    box.style.marginBottom = '0';
     box.innerHTML = `
       <div class="prf-suggest-header">
         <span class="prf-suggest-title">People who follow ${escHtml(username)} also follow</span>
