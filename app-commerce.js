@@ -1720,7 +1720,7 @@ async function buildAddProductForm(productId) {
     .select('state')
     .eq('storefront_id', currentStorefront?.id);
   const ratesCount = existingRates?.length || 0;
-  const categories = ['Fashion & Clothing','Beauty & Skincare','Food & Beverages','Electronics & Gadgets','Home & Living','Health & Wellness','Kids & Baby','Sports & Fitness','Art & Crafts','Books & Education','Automotive','Agriculture & Farm','Services','Other'];
+  const categories = ['Fashion','Beauty','Food','Tech','Home','Health','Kids','Sports','Art','Books','Automotive','Agriculture','Services','Other'];
   el.innerHTML = `
     <div class="ap-body">
       <div class="ap-section">
@@ -2220,78 +2220,272 @@ async function submitReview(orderId, productId, storefrontId) {
   document.getElementById('leave-review-overlay')?.remove();
 }
 // ══════════════════════════════════════════
-// MARKET PAGE — load real products
+// MARKET PAGE — fully functional
 // ══════════════════════════════════════════
+
+// ── Canonical category list — shared between upload form and market tabs ──
+const MKT_CATEGORIES = [
+  { tab: 'Fashion',    db: 'Fashion' },
+  { tab: 'Beauty',     db: 'Beauty' },
+  { tab: 'Food',       db: 'Food' },
+  { tab: 'Tech',       db: 'Tech' },
+  { tab: 'Home',       db: 'Home' },
+  { tab: 'Health',     db: 'Health' },
+  { tab: 'Kids',       db: 'Kids' },
+  { tab: 'Sports',     db: 'Sports' },
+  { tab: 'Art',        db: 'Art' },
+  { tab: 'Books',      db: 'Books' },
+  { tab: 'Auto',       db: 'Automotive' },
+  { tab: 'Agric',      db: 'Agriculture' },
+  { tab: 'Services',   db: 'Services' },
+  { tab: 'Other',      db: 'Other' },
+];
+
 let _mktCurrentCat = 'All';
+let _mktHeroTimer  = null;
+let _mktCdTimer    = null;
+let _mktLoaded     = false;
+
 function mktSetCat(btn) {
   document.querySelectorAll('.mkt-cat').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  _mktCurrentCat = btn.textContent.trim();
+  _mktCurrentCat = btn.dataset.cat || btn.textContent.trim();
   loadMarketProducts(_mktCurrentCat);
 }
-// Override showMarket to also load real products
+
+// Override showMarket to load all sections on first visit
 const _origShowMarket = window.showMarket;
 window.showMarket = function() {
   if (_origShowMarket) _origShowMarket();
-  loadMarketProducts(_mktCurrentCat);
+  if (!_mktLoaded) {
+    _mktLoaded = true;
+    _mktInitAll();
+  } else {
+    loadMarketProducts(_mktCurrentCat);
+  }
 };
-// Load products on first visit if market page is already active
+
 document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
     if (document.getElementById('page-market')?.classList.contains('active')) {
-      loadMarketProducts(_mktCurrentCat);
+      _mktLoaded = true;
+      _mktInitAll();
     }
   }, 800);
 });
+
+async function _mktInitAll() {
+  _mktStartHero();
+  _mktStartCountdown();
+  await Promise.all([
+    loadMarketProducts(_mktCurrentCat),
+    loadMktDeals(),
+    loadMktTrending(),
+    loadMktTopStores(),
+  ]);
+}
+
+// ── Hero auto-slide ──────────────────────────────────────────────────────────
+function _mktStartHero() {
+  const slides = document.querySelectorAll('.mkt-hero-slide');
+  const dots   = document.querySelectorAll('.mkt-hero-dot');
+  if (!slides.length) return;
+  let current = 0;
+  const go = (n) => {
+    slides[current].classList.remove('active');
+    dots[current]?.classList.remove('active');
+    current = (n + slides.length) % slides.length;
+    slides[current].classList.add('active');
+    dots[current]?.classList.add('active');
+  };
+  clearInterval(_mktHeroTimer);
+  _mktHeroTimer = setInterval(() => go(current + 1), 4000);
+  // Dot taps
+  dots.forEach((dot, i) => dot.addEventListener('click', () => { clearInterval(_mktHeroTimer); go(i); _mktHeroTimer = setInterval(() => go(current + 1), 4000); }));
+}
+
+// ── Countdown timer ──────────────────────────────────────────────────────────
+function _mktStartCountdown() {
+  const el = document.getElementById('mkt-countdown');
+  if (!el) return;
+  // Target: next midnight
+  const tick = () => {
+    const now    = new Date();
+    const target = new Date(now); target.setHours(24,0,0,0);
+    const diff   = Math.max(0, Math.floor((target - now) / 1000));
+    const h = String(Math.floor(diff / 3600)).padStart(2, '0');
+    const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+    const s = String(diff % 60).padStart(2, '0');
+    el.textContent = `${h}:${m}:${s}`;
+  };
+  tick();
+  clearInterval(_mktCdTimer);
+  _mktCdTimer = setInterval(tick, 1000);
+}
+
+// ── Flash Deals — real discounted products ───────────────────────────────────
+async function loadMktDeals() {
+  const scroll = document.getElementById('mkt-deals-scroll');
+  if (!scroll) return;
+  const { data } = await supabase
+    .from('products')
+    .select('id, title, images, price_ngn, compare_price_ngn, storefront_id')
+    .eq('status', 'active')
+    .gt('stock', 0)
+    .not('compare_price_ngn', 'is', null)
+    .gt('compare_price_ngn', 0)
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  if (!data?.length) return; // keep static placeholders if no real data
+
+  const gradients = [
+    'linear-gradient(135deg,#667eea,#764ba2)',
+    'linear-gradient(135deg,#f093fb,#f5576c)',
+    'linear-gradient(135deg,#4facfe,#00f2fe)',
+    'linear-gradient(135deg,#43e97b,#38f9d7)',
+    'linear-gradient(135deg,#f6d365,#fda085)',
+    'linear-gradient(135deg,#a18cd1,#fbc2eb)',
+  ];
+
+  scroll.innerHTML = data.map((p, i) => {
+    const img = p.images?.[0];
+    const pct = p.compare_price_ngn > 0 ? Math.round((1 - p.price_ngn / p.compare_price_ngn) * 100) : 0;
+    const bg  = img ? `background:url('${escHtml(img)}') center/cover` : `background:${gradients[i % gradients.length]}`;
+    return `<div class="mkt-deal-card" onclick="openProductPage('${p.id}')">
+      <div class="mkt-deal-img" style="${bg}">
+        ${!img ? '' : ''}
+        <span class="mkt-deal-badge">-${pct}%</span>
+      </div>
+      <div class="mkt-deal-info">
+        <p class="mkt-deal-name">${escHtml(p.title)}</p>
+        <p class="mkt-deal-orig">${mktFmtNgn(p.compare_price_ngn)}</p>
+        <p class="mkt-deal-price"><span class="mkt-deal-pct">-${pct}% </span>${mktFmtNgn(p.price_ngn)}</p>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Trending — by rating then recency ───────────────────────────────────────
+async function loadMktTrending() {
+  const scroll = document.getElementById('mkt-trending-scroll');
+  if (!scroll) return;
+  const { data } = await supabase
+    .from('products')
+    .select('id, title, images, rating, review_count')
+    .eq('status', 'active')
+    .gt('stock', 0)
+    .order('rating', { ascending: false })
+    .order('review_count', { ascending: false })
+    .limit(8);
+
+  if (!data?.length) return;
+
+  const gradients = [
+    'linear-gradient(135deg,#667eea,#764ba2)',
+    'linear-gradient(135deg,#f6d365,#fda085)',
+    'linear-gradient(135deg,#f093fb,#f5576c)',
+    'linear-gradient(135deg,#4facfe,#00f2fe)',
+    'linear-gradient(135deg,#43e97b,#38f9d7)',
+    'linear-gradient(135deg,#a18cd1,#fbc2eb)',
+    'linear-gradient(135deg,#ff6b6b,#ff8e53)',
+    'linear-gradient(135deg,#6C47FF,#a855f7)',
+  ];
+
+  scroll.innerHTML = data.map((p, i) => {
+    const img = p.images?.[0];
+    const bg  = img ? `background:url('${escHtml(img)}') center/cover` : `background:${gradients[i % gradients.length]}`;
+    return `<div class="mkt-trend-card" onclick="openProductPage('${p.id}')">
+      <div class="mkt-trend-img" style="${bg}">
+        <span class="mkt-trend-rank">${i + 1}</span>
+      </div>
+      <p class="mkt-trend-name">${escHtml(p.title)}</p>
+    </div>`;
+  }).join('');
+}
+
+// ── Top Stores — by order count ──────────────────────────────────────────────
+async function loadMktTopStores() {
+  const scroll = document.getElementById('mkt-stores-scroll');
+  if (!scroll) return;
+  // Fetch storefronts ordered by rating desc, review_count desc as proxy for sales
+  const { data } = await supabase
+    .from('storefronts')
+    .select('id, store_name, logo_url, category, state, rating, review_count, follower_count')
+    .order('review_count', { ascending: false })
+    .order('rating', { ascending: false })
+    .limit(10);
+
+  if (!data?.length) return;
+
+  const storeGradients = [
+    'linear-gradient(135deg,#6C47FF,#a855f7)',
+    'linear-gradient(135deg,#f0385a,#ff8c69)',
+    'linear-gradient(135deg,#00b87a,#38f9d7)',
+    'linear-gradient(135deg,#f5a623,#f093fb)',
+    'linear-gradient(135deg,#4facfe,#00f2fe)',
+    'linear-gradient(135deg,#43e97b,#38f9d7)',
+  ];
+
+  scroll.innerHTML = data.map((sf, i) => {
+    const initial = (sf.store_name || '?')[0].toUpperCase();
+    const bg      = storeGradients[i % storeGradients.length];
+    const meta    = [sf.state, sf.category].filter(Boolean).join(' · ');
+    return `<div class="mkt-store-card" onclick="openStorefront('${sf.id}')">
+      ${sf.logo_url
+        ? `<img src="${escHtml(sf.logo_url)}" class="mkt-store-av" style="object-fit:cover" alt="">`
+        : `<div class="mkt-store-av" style="background:${bg}">${escHtml(initial)}</div>`}
+      <p class="mkt-store-name">${escHtml(sf.store_name)}</p>
+      <p class="mkt-store-meta">${escHtml(meta)}</p>
+      <button class="mkt-store-follow" onclick="event.stopPropagation();openStorefront('${sf.id}')">Visit</button>
+    </div>`;
+  }).join('');
+}
+
+// ── All Products grid ────────────────────────────────────────────────────────
 async function loadMarketProducts(category) {
-  // Target the dedicated products grid
   const grid = document.getElementById('mkt-products-grid');
   if (!grid) return;
 
   grid.innerHTML = `<div style="grid-column:1/-1;padding:48px 16px;text-align:center;color:var(--text3);font-size:13px">
-    <div style="font-size:32px;margin-bottom:10px">&#128717;</div>Loading products&hellip;</div>`;
+    <div style="font-size:32px;margin-bottom:10px">&#128717;</div>Loading&hellip;</div>`;
 
   let query = supabase
     .from('products')
-    .select('*, storefront:storefronts(id,store_name,logo_url)')
+    .select('id, title, images, price_ngn, compare_price_ngn, category, stock, rating, storefront:storefronts(id, store_name, logo_url)')
     .eq('status', 'active')
     .gt('stock', 0)
     .order('created_at', { ascending: false })
     .limit(60);
 
-  const catMap = {
-    'Fashion': 'Fashion', 'Beauty': 'Beauty', 'Food': 'Food',
-    'Tech': 'Tech', 'Home': 'Home', 'Health': 'Health', 'Kids': 'Kids',
-  };
-  if (category && category !== 'All' && catMap[category]) {
-    query = query.eq('category', catMap[category]);
-  }
+  // Exact match against canonical DB category values
+  const catEntry = MKT_CATEGORIES.find(c => c.tab === category);
+  if (catEntry) query = query.eq('category', catEntry.db);
 
   const { data: products } = await query;
 
   if (!products?.length) {
-    grid.innerHTML = `
-      <div style="grid-column:1/-1;padding:56px 16px;text-align:center">
-        <div style="font-size:48px;margin-bottom:14px">&#128717;</div>
-        <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:6px">No products yet</div>
-        <div style="font-size:13px;color:var(--text3)">Be the first to list something in ${category === 'All' ? 'the market' : category}</div>
-      </div>`;
+    grid.innerHTML = `<div style="grid-column:1/-1;padding:56px 16px;text-align:center">
+      <div style="font-size:48px;margin-bottom:14px">&#128717;</div>
+      <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:6px">No products yet</div>
+      <div style="font-size:13px;color:var(--text3)">Be the first to list in ${catEntry?.db || 'the market'}</div>
+    </div>`;
     return;
   }
 
   grid.innerHTML = products.map(p => {
-    const img   = p.images?.[0];
-    const price = mktFmtNgn(p.price_ngn);
-    const orig  = p.original_price_ngn ? mktFmtNgn(p.original_price_ngn) : null;
-    const pct   = p.original_price_ngn ? Math.round((1 - p.price_ngn / p.original_price_ngn) * 100) : null;
-    const store = escHtml(p.storefront?.store_name || '');
-    const logo  = p.storefront?.logo_url;
-    const stars = p.rating > 0 ? `<div class="mkt-product-rating"><span style="color:#f5a623">&#9733;</span> ${p.rating.toFixed(1)}</div>` : '';
-    const lowStock = p.stock <= 3 && p.stock > 0
-      ? `<span class="mkt-product-stock">Only ${p.stock} left</span>` : '';
+    const img      = p.images?.[0];
+    const price    = mktFmtNgn(p.price_ngn);
+    const orig     = p.compare_price_ngn > 0 ? mktFmtNgn(p.compare_price_ngn) : null;
+    const pct      = p.compare_price_ngn > 0 ? Math.round((1 - p.price_ngn / p.compare_price_ngn) * 100) : null;
+    const store    = escHtml(p.storefront?.store_name || '');
+    const logo     = p.storefront?.logo_url;
+    const stars    = p.rating > 0 ? `<div class="mkt-product-rating"><span style="color:#f5a623">&#9733;</span> ${Number(p.rating).toFixed(1)}</div>` : '';
+    const lowStock = p.stock <= 3 ? `<span class="mkt-product-stock">Only ${p.stock} left</span>` : '';
+    const bg       = img ? `url('${escHtml(img)}') center/cover no-repeat` : gradientFor(p.id);
 
     return `<div class="mkt-product-card" onclick="openProductPage('${p.id}')">
-      <div class="mkt-product-img" style="${img ? `background:url('${escHtml(img)}') center/cover no-repeat` : `background:${gradientFor(p.id)}`}">
+      <div class="mkt-product-img" style="background:${bg}">
         ${pct ? `<span class="mkt-deal-badge">-${pct}%</span>` : ''}
         ${lowStock}
       </div>
@@ -2310,7 +2504,123 @@ async function loadMarketProducts(category) {
     </div>`;
   }).join('');
 }
-function openMktSearch() { showToast('Search coming soon ✨'); }
+
+// ── Search ───────────────────────────────────────────────────────────────────
+let _mktSearchTimer = null;
+
+function openMktSearch() {
+  const overlay = document.getElementById('mkt-search-overlay');
+  if (!overlay) return;
+  overlay.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => document.getElementById('mkt-search-input')?.focus(), 120);
+}
+
+function closeMktSearch() {
+  const overlay = document.getElementById('mkt-search-overlay');
+  if (overlay) overlay.style.display = 'none';
+  document.body.style.overflow = '';
+  mktSearchClear();
+}
+
+function mktSearchClear() {
+  const input = document.getElementById('mkt-search-input');
+  const clear = document.getElementById('mkt-search-clear');
+  if (input) input.value = '';
+  if (clear) clear.style.display = 'none';
+  const results = document.getElementById('mkt-search-results');
+  if (results) results.innerHTML = `<div class="mkt-search-empty">
+    <div style="font-size:40px;margin-bottom:12px">&#128269;</div>
+    <p>Search for products, stores or categories</p>
+  </div>`;
+}
+
+function mktSearchDebounce(val) {
+  const clear = document.getElementById('mkt-search-clear');
+  if (clear) clear.style.display = val ? 'flex' : 'none';
+  clearTimeout(_mktSearchTimer);
+  if (!val.trim()) { mktSearchClear(); return; }
+  _mktSearchTimer = setTimeout(() => runMktSearch(val.trim()), 320);
+}
+
+async function runMktSearch(q) {
+  const results = document.getElementById('mkt-search-results');
+  if (!results) return;
+  results.innerHTML = `<div class="mkt-search-loading"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg> Searching&hellip;</div>`;
+
+  const term = `%${q}%`;
+  const [prodRes, storeRes] = await Promise.all([
+    supabase.from('products')
+      .select('id, title, images, price_ngn, category, storefront:storefronts(store_name)')
+      .eq('status', 'active').gt('stock', 0)
+      .or(`title.ilike.${term},description.ilike.${term},category.ilike.${term}`)
+      .limit(20),
+    supabase.from('storefronts')
+      .select('id, store_name, logo_url, category, state')
+      .or(`store_name.ilike.${term},category.ilike.${term},description.ilike.${term}`)
+      .limit(6),
+  ]);
+
+  const products = prodRes.data || [];
+  const stores   = storeRes.data || [];
+
+  if (!products.length && !stores.length) {
+    results.innerHTML = `<div class="mkt-search-empty">
+      <div style="font-size:40px;margin-bottom:12px">&#128269;</div>
+      <p>No results for "<strong>${escHtml(q)}</strong>"</p>
+      <p style="font-size:12px;margin-top:6px">Try a different word or browse categories</p>
+    </div>`;
+    return;
+  }
+
+  let html = '';
+
+  if (stores.length) {
+    const storeGrads = ['linear-gradient(135deg,#6C47FF,#a855f7)','linear-gradient(135deg,#f0385a,#ff8c69)','linear-gradient(135deg,#00b87a,#38f9d7)','linear-gradient(135deg,#4facfe,#00f2fe)'];
+    html += `<div class="mkt-search-section-title">Stores</div>`;
+    html += stores.map((sf, i) => {
+      const initial = (sf.store_name || '?')[0].toUpperCase();
+      const meta    = [sf.state, sf.category].filter(Boolean).join(' · ');
+      return `<div class="mkt-search-result-row" onclick="closeMktSearch();openStorefront('${sf.id}')">
+        ${sf.logo_url
+          ? `<img src="${escHtml(sf.logo_url)}" class="mkt-search-result-img" style="border-radius:50%" alt="">`
+          : `<div class="mkt-search-store-av" style="background:${storeGrads[i % storeGrads.length]}">${escHtml(initial)}</div>`}
+        <div class="mkt-search-result-info">
+          <div class="mkt-search-result-name">${escHtml(sf.store_name)}</div>
+          <div class="mkt-search-result-meta">${escHtml(meta)}</div>
+        </div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+      </div>`;
+    }).join('');
+  }
+
+  if (products.length) {
+    html += `<div class="mkt-search-section-title">Products</div>`;
+    html += products.map(p => {
+      const img   = p.images?.[0];
+      const store = p.storefront?.store_name || '';
+      return `<div class="mkt-search-result-row" onclick="closeMktSearch();openProductPage('${p.id}')">
+        ${img
+          ? `<img src="${escHtml(img)}" class="mkt-search-result-img" alt="">`
+          : `<div class="mkt-search-result-img" style="background:${gradientFor(p.id)}"></div>`}
+        <div class="mkt-search-result-info">
+          <div class="mkt-search-result-name">${escHtml(p.title)}</div>
+          <div class="mkt-search-result-meta">${[store, p.category].filter(Boolean).join(' · ')}</div>
+        </div>
+        <div class="mkt-search-result-price">${mktFmtNgn(p.price_ngn)}</div>
+      </div>`;
+    }).join('');
+  }
+
+  results.innerHTML = html;
+}
+
+// Close search on Escape
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('mkt-search-overlay')?.style.display !== 'none') {
+    closeMktSearch();
+  }
+});
 // ══════════════════════════════════════════
 // STOREFRONT SUBSCRIPTION RENEWAL
 // ══════════════════════════════════════════
