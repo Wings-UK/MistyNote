@@ -401,7 +401,7 @@ function injectProfileStyles() {
     #user-profile-header .header-action circle {
       fill:#fff !important;
     }
-    .prf-storefront-banner { margin:18px 16px 18px; background:linear-gradient(135deg,#f4f3ff,#fdf2ff); border:1.5px solid #ddd6fe; border-radius:16px; padding:14px 16px; display:flex; align-items:center; gap:12px; cursor:pointer; transition:all .18s; }
+    .prf-storefront-banner { margin:18px 16px 0; background:linear-gradient(135deg,#f4f3ff,#fdf2ff); border:1.5px solid #ddd6fe; border-radius:16px; padding:14px 16px; display:flex; align-items:center; gap:12px; cursor:pointer; transition:all .18s; }
     .prf-storefront-banner:active { transform:scale(.98); }
     .prf-storefront-icon { font-size:28px; flex-shrink:0; }
     .prf-storefront-text { flex:1; }
@@ -410,7 +410,7 @@ function injectProfileStyles() {
     .prf-storefront-pill { font-size:11px; font-weight:700; color:#fff; background:#6C47FF; border-radius:20px; padding:3px 10px; white-space:nowrap; flex-shrink:0; }
     /* ── ICON TAB BAR (original ewe/yeb DNA, elevated) ── */
     .prf-icon-tabs {
-      display:flex; width:100%; margin-top:0;
+      display:flex; width:100%; margin-top:18px;
       border-top:1px solid var(--border,#e5e7eb);
       border-bottom:1px solid var(--border,#e5e7eb);
       background:var(--bg);
@@ -1048,10 +1048,7 @@ async function showUserProfile(userId, tapEl) {
     // Check if this user has a storefront — show/hide banner accordingly
     supabase.from('storefronts').select('id').eq('user_id', userId).maybeSingle().then(({ data: sf }) => {
       const banner = document.getElementById(`uprf-storefront-banner-${userId}`);
-      const tabs   = document.getElementById(`uprf-tabs-${userId}`);
       if (banner) banner.style.display = sf ? 'flex' : 'none';
-      // Keep consistent spacing: when banner is hidden, give tabs the same 18px gap
-      if (tabs) tabs.style.marginTop = sf ? '0' : '18px';
     });
     document.getElementById(`uprf-list-${userId}`)._loaded = true;
     // Check which posts we've liked and repaint
@@ -4665,6 +4662,7 @@ async function renderSuggestedForOtherProfile(userId, username) {
     box = document.createElement('div');
     box.className = 'prf-suggest-box';
     box.id = boxId;
+    box.style.marginTop = '18px';
     box.innerHTML = `
       <div class="prf-suggest-header">
         <span class="prf-suggest-title">People who follow ${escHtml(username)} also follow</span>
