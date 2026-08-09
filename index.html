@@ -830,7 +830,7 @@
               </div>
               <button class="mkt-see-all" onclick="showToast('Coming soon')">See all &rsaquo;</button>
             </div>
-            <div class="mkt-hscroll">
+            <div class="mkt-hscroll" id="mkt-deals-scroll">
               <div class="mkt-deal-card" onclick="showToast('Coming soon')">
                 <div class="mkt-deal-img" style="background:linear-gradient(135deg,#667eea,#764ba2)">
                   <span style="font-size:38px">&#128087;</span>
@@ -884,7 +884,7 @@
               <h3 class="mkt-section-title">&#128200; Trending Now</h3>
               <button class="mkt-see-all" onclick="showToast('Coming soon')">See all &rsaquo;</button>
             </div>
-            <div class="mkt-hscroll">
+            <div class="mkt-hscroll" id="mkt-trending-scroll">
               <div class="mkt-trend-card" onclick="showToast('Coming soon')">
                 <div class="mkt-trend-img" style="background:linear-gradient(135deg,#667eea,#764ba2)">
                   <span style="font-size:38px">&#128087;</span>
@@ -929,7 +929,7 @@
               <h3 class="mkt-section-title">&#127978; Top Stores</h3>
               <button class="mkt-see-all" onclick="showToast('Coming soon')">See all &rsaquo;</button>
             </div>
-            <div class="mkt-hscroll">
+            <div class="mkt-hscroll" id="mkt-stores-scroll">
               <div class="mkt-store-card" onclick="showToast('Coming soon')">
                 <div class="mkt-store-av" style="background:linear-gradient(135deg,#6C47FF,#a855f7)">A</div>
                 <p class="mkt-store-name">Afro Threads</p>
@@ -5362,6 +5362,27 @@
         Buy Now
       </button>
     </div>
+
+
+  <!-- ── Market Search Overlay ── -->
+  <div id="mkt-search-overlay" class="mkt-search-overlay" style="display:none">
+    <div class="mkt-search-modal">
+      <div class="mkt-search-bar-wrap">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="mkt-search-input" class="mkt-search-input" placeholder="Search products, stores&hellip;" autocomplete="off" oninput="mktSearchDebounce(this.value)">
+        <button class="mkt-search-clear" id="mkt-search-clear" onclick="mktSearchClear()" style="display:none">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <button class="mkt-search-cancel" onclick="closeMktSearch()">Cancel</button>
+    </div>
+    <div id="mkt-search-results" class="mkt-search-results">
+      <div class="mkt-search-empty">
+        <div style="font-size:40px;margin-bottom:12px">&#128269;</div>
+        <p>Search for products, stores or categories</p>
+      </div>
+    </div>
+  </div>
 
 </body>
 
