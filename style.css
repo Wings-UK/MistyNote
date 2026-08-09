@@ -848,6 +848,9 @@
     overflow: hidden;
     backdrop-filter: blur(4px);
   }
+  #prf-suggest-own {
+    margin-top: 18px;
+  }
   .prf-suggest-header {
     display: flex; align-items: center; justify-content: space-between;
     padding: 12px 14px 8px;
