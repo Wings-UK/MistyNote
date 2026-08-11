@@ -218,27 +218,26 @@ async function loadMessages() {
   }
 }
 // ── Open a chat ──
-// ── Push chat input bar above keyboard using visualViewport ──
+// ── Push chat input above keyboard using visualViewport ──
+// Approach: only shrink the messages area, never touch the page height/transform.
+// This avoids the empty-space gap caused by window.innerHeight != visual height.
 (function initChatKeyboardFix() {
   if (!window.visualViewport) return;
   function onViewportChange() {
-    const page = document.getElementById('page-chat');
-    if (!page || !page.classList.contains('active')) return;
-    const vv         = window.visualViewport;
-    const fullH      = window.innerHeight;
-    const visibleH   = vv.height;
-    const keyboardH  = Math.max(0, fullH - visibleH - vv.offsetTop);
-    // Shift the entire chat page up by keyboard height
-    page.style.transform  = keyboardH > 0 ? `translateY(-${keyboardH}px)` : '';
-    page.style.height     = keyboardH > 0 ? `${fullH}px` : '';
-    // Scroll messages to bottom so latest message stays visible
-    if (activeChatId) {
-      const msgsEl = document.getElementById('chat-messages');
-      if (msgsEl) setTimeout(() => { msgsEl.scrollTop = msgsEl.scrollHeight; }, 30);
-    }
+    const page   = document.getElementById('page-chat');
+    const msgsEl = document.getElementById('chat-messages');
+    if (!page || !page.classList.contains('active') || !msgsEl) return;
+    const vv        = window.visualViewport;
+    const fullH     = window.innerHeight;
+    const visibleH  = vv.height + vv.offsetTop;
+    const keyboardH = Math.max(0, fullH - visibleH);
+    // Shrink the messages area so the input bar rises above the keyboard
+    msgsEl.style.paddingBottom = keyboardH > 0 ? `${keyboardH}px` : '';
+    // Scroll to bottom so the latest message stays visible
+    if (keyboardH > 0) setTimeout(() => { msgsEl.scrollTop = msgsEl.scrollHeight; }, 30);
   }
-  window.visualViewport.addEventListener('resize', onViewportChange);
-  window.visualViewport.addEventListener('scroll', onViewportChange);
+  window.visualViewport.addEventListener('resize',  onViewportChange, { passive: true });
+  window.visualViewport.addEventListener('scroll',  onViewportChange, { passive: true });
 })();
 // ══════════════════════════════════════════
 // ONLINE STATUS + TYPING INDICATORS
