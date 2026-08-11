@@ -1267,6 +1267,10 @@
   #page-chat {
     display: none; flex-direction: column;
     position: fixed; inset: 0; z-index: 300;
+    background: var(--bg);
+    /* Ensure no gap at the bottom from any stale transform */
+    transform: none !important;
+    height: 100% !important;
   }
   #page-chat.active { display: flex; }
   #page-chat .chat-topbar { flex-shrink: 0; }
@@ -1429,9 +1433,8 @@
   .chat-url-col.recv { align-items: flex-start; }
 
   /* ════════════════════════════════════════════════════════
-     INPUT BAR — completely redesigned
+     INPUT BAR — see authoritative rule in the original section below
   ════════════════════════════════════════════════════════ */
-  .chat-reply-bar {
     display: none; align-items: center; gap: 10px;
     padding: 8px 14px;
     background: var(--bg2); border-top: 1px solid var(--border);
@@ -2938,9 +2941,9 @@
   .chat-typing-label { font-size: 12px; color: var(--text3); }
   /* Quick actions tray — approved preview */
   .chat-extras-tray {
-    display: flex; gap: 8px; padding: 10px 14px 4px;
+    display: flex; gap: 8px; padding: 8px 14px 6px;
     overflow-x: auto; scrollbar-width: none; flex-shrink: 0;
-    border-top: 1px solid var(--border2);
+    border-top: 1px solid var(--border);
   }
   .chat-extras-tray::-webkit-scrollbar { display: none; }
   .chat-extra-chip {
@@ -2953,12 +2956,12 @@
   }
   .chat-extra-chip:active { background: var(--accent-soft); color: var(--accent2); border-color: rgba(108,71,255,0.3); }
   .chat-extra-chip.highlight { background: var(--accent-soft); color: var(--accent2); border-color: rgba(108,71,255,0.25); }
-  /* Input bar — floating elevated */
+  /* Input bar — single authoritative rule, no duplicate */
   .chat-input-bar {
-    padding: 10px 12px calc(14px + var(--safe-bottom)); flex-shrink: 0;
-    background: var(--surface2);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    padding: 10px 12px;
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 10px);
+    flex-shrink: 0;
+    background: var(--surface);
     border-top: 1px solid var(--border);
   }
   .chat-input-bar-row { display: flex; align-items: flex-end; gap: 10px; }
