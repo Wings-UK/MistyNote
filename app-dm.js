@@ -220,9 +220,12 @@ async function loadMessages() {
 // ── Open a chat ──
 // ── Push chat input above keyboard using visualViewport ──
 // Approach: only shrink the messages area, never touch the page height/transform.
-// This avoids the empty-space gap caused by window.innerHeight != visual height.
 (function initChatKeyboardFix() {
   if (!window.visualViewport) return;
+  let _lastKeyboardH = 0;
+  function scrollToBottom(msgsEl) {
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+  }
   function onViewportChange() {
     const page   = document.getElementById('page-chat');
     const msgsEl = document.getElementById('chat-messages');
@@ -231,10 +234,14 @@ async function loadMessages() {
     const fullH     = window.innerHeight;
     const visibleH  = vv.height + vv.offsetTop;
     const keyboardH = Math.max(0, fullH - visibleH);
-    // Shrink the messages area so the input bar rises above the keyboard
-    msgsEl.style.paddingBottom = keyboardH > 0 ? `${keyboardH}px` : '';
-    // Scroll to bottom so the latest message stays visible
-    if (keyboardH > 0) setTimeout(() => { msgsEl.scrollTop = msgsEl.scrollHeight; }, 30);
+    // Shrink messages area so input bar rises above keyboard
+    msgsEl.style.paddingBottom = keyboardH > 0 ? `${keyboardH}px` : '0px';
+    // Scroll to bottom immediately and again after animation completes
+    scrollToBottom(msgsEl);
+    if (keyboardH !== _lastKeyboardH) {
+      setTimeout(() => scrollToBottom(msgsEl), 150);
+    }
+    _lastKeyboardH = keyboardH;
   }
   window.visualViewport.addEventListener('resize',  onViewportChange, { passive: true });
   window.visualViewport.addEventListener('scroll',  onViewportChange, { passive: true });
