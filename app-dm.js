@@ -83,11 +83,79 @@ function updateDmDot(totalUnread) {
   if (!dot) return;
   if (totalUnread > 0) {
     dot.style.display = 'flex';
-    dot.textContent   = totalUnread > 9 ? '9+' : totalUnread > 0 ? String(totalUnread) : '';
+    dot.textContent   = totalUnread > 9 ? '9+' : String(totalUnread);
   } else {
     dot.style.display = 'none';
+    dot.textContent   = '';
   }
 }
+
+// ── Check unread DMs on startup — runs as soon as user is authenticated ──
+// This mirrors how app-notif.js shows its badge immediately on load,
+// without requiring the user to open the inbox first.
+async function checkUnreadDmsOnStartup() {
+  if (!currentUser) return;
+  try {
+    // Get conversation IDs I'm in
+    const { data: myParts } = await supabase
+      .from('conversation_participants')
+      .select('conversation_id, last_read_at')
+      .eq('user_id', currentUser.id);
+    if (!myParts?.length) return;
+
+    const convIds = myParts.map(r => r.conversation_id);
+    const readMap = {};
+    myParts.forEach(r => { readMap[r.conversation_id] = r.last_read_at; });
+
+    // Count messages sent by others after my last_read_at
+    const { data: unreadMsgs } = await supabase
+      .from('messages')
+      .select('conversation_id, created_at')
+      .in('conversation_id', convIds)
+      .neq('sender_id', currentUser.id)
+      .is('deleted_at', null);
+
+    let total = 0;
+    (unreadMsgs || []).forEach(m => {
+      const readAt = readMap[m.conversation_id];
+      if (!readAt || new Date(m.created_at) > new Date(readAt)) total++;
+    });
+
+    updateDmDot(total);
+
+    // Also subscribe to new incoming messages so the dot updates in real-time
+    // even if the user never opens the inbox
+    supabase
+      .channel('dm-dot-realtime')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `conversation_id=in.(${convIds.join(',')})`,
+      }, payload => {
+        if (payload.new?.sender_id === currentUser.id) return;
+        const dot = document.getElementById('dm-dot');
+        const current = parseInt(dot?.textContent) || 0;
+        updateDmDot(current + 1);
+      })
+      .subscribe();
+  } catch (e) {
+    console.warn('[DM] startup unread check failed:', e);
+  }
+}
+
+// Fire as soon as Supabase is ready and user is authenticated
+window.addEventListener('supabase-ready', () => {
+  // Wait briefly for currentUser to be set by app-core.js auth flow
+  const tryCheck = (attempts = 0) => {
+    if (window.currentUser) {
+      checkUnreadDmsOnStartup();
+    } else if (attempts < 20) {
+      setTimeout(() => tryCheck(attempts + 1), 300);
+    }
+  };
+  tryCheck();
+});
 // ── Open DM from anywhere in the app ──
 async function openDM(userId) {
   if (!currentUser) { showToast('Sign in to send messages'); return; }
