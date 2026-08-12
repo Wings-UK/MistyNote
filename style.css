@@ -1482,7 +1482,6 @@
     background: var(--surface);
     border-top: 1px solid var(--border);
     padding: 10px 12px;
-    padding-bottom: max(env(safe-area-inset-bottom, 10px), 10px);
   }
   .chat-input-bar-row {
     display: flex; align-items: flex-end; gap: 8px;
@@ -2956,14 +2955,6 @@
   }
   .chat-extra-chip:active { background: var(--accent-soft); color: var(--accent2); border-color: rgba(108,71,255,0.3); }
   .chat-extra-chip.highlight { background: var(--accent-soft); color: var(--accent2); border-color: rgba(108,71,255,0.25); }
-  /* Input bar — single authoritative rule, no duplicate */
-  .chat-input-bar {
-    padding: 10px 12px;
-    padding-bottom: max(env(safe-area-inset-bottom, 0px), 10px);
-    flex-shrink: 0;
-    background: var(--surface);
-    border-top: 1px solid var(--border);
-  }
   .chat-input-bar-row { display: flex; align-items: flex-end; gap: 10px; }
   .chat-input-action {
     width: 38px; height: 38px; border-radius: 12px;
