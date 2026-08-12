@@ -1278,7 +1278,7 @@
     flex: 1; overflow-y: auto; overflow-x: hidden;
     -webkit-overflow-scrolling: touch; scrollbar-width: none;
   }
-  #page-chat .chat-messages { padding-bottom: 0 !important; }
+  #page-chat .chat-messages { padding-bottom: 0; }
   #page-chat { padding-bottom: 0 !important; }
   #page-chat .chat-input-bar { flex-shrink: 0; }
 
