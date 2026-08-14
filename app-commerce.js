@@ -2253,10 +2253,33 @@ function mktSetCat(btn) {
   loadMarketProducts(_mktCurrentCat);
 }
 
-// Override showMarket to load all sections on first visit
-const _origShowMarket = window.showMarket;
+// ── Trigger market init whenever page-market becomes active ──
+// Uses MutationObserver on the market page's classList — works regardless
+// of how navigation is triggered (navTo, direct link, back button etc.)
+function _mktObserveActivation() {
+  const page = document.getElementById('page-market');
+  if (!page) return;
+  const obs = new MutationObserver(() => {
+    if (page.classList.contains('active')) {
+      if (!_mktLoaded) {
+        _mktLoaded = true;
+        _mktInitAll();
+      } else {
+        // Already loaded — just refresh products in case category changed
+        loadMarketProducts(_mktCurrentCat);
+      }
+    }
+  });
+  obs.observe(page, { attributes: true, attributeFilter: ['class'] });
+  // Also fire immediately if market page is already active on load
+  if (page.classList.contains('active')) {
+    _mktLoaded = true;
+    _mktInitAll();
+  }
+}
+
+// Also expose showMarket as a global in case anything calls it
 window.showMarket = function() {
-  if (_origShowMarket) _origShowMarket();
   if (!_mktLoaded) {
     _mktLoaded = true;
     _mktInitAll();
@@ -2265,14 +2288,7 @@ window.showMarket = function() {
   }
 };
 
-document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(() => {
-    if (document.getElementById('page-market')?.classList.contains('active')) {
-      _mktLoaded = true;
-      _mktInitAll();
-    }
-  }, 800);
-});
+document.addEventListener('DOMContentLoaded', _mktObserveActivation);
 
 async function _mktInitAll() {
   _mktStartHero();
