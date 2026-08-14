@@ -2278,8 +2278,20 @@ function _mktObserveActivation() {
   }
 }
 
-// Also expose showMarket as a global in case anything calls it
+// Also expose showMarket as a global — must handle page activation
+// since navTo('market') calls showMarket() and returns early without
+// activating the page itself
 window.showMarket = function() {
+  // Activate the market page and nav button (mirrors what navTo does for other pages)
+  const pages = ['feed','discover','notifications','profile','market'];
+  pages.forEach(id => {
+    const el = document.getElementById('page-' + id);
+    if (el) el.classList.toggle('active', id === 'market');
+  });
+  document.querySelectorAll('.nav-btn[data-page]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.page === 'market');
+  });
+  // Load data on first visit
   if (!_mktLoaded) {
     _mktLoaded = true;
     _mktInitAll();
