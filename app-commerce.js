@@ -369,7 +369,7 @@ async function renderStorefront(storefrontId) {
   el.innerHTML = `<div class="loading-pulse" style="height:400px"></div>`;
   const [sfRes, productsRes, reviewsRes] = await Promise.all([
     supabase.from('storefronts').select('*').eq('id', storefrontId).single(),
-    supabase.from('products').select('*').eq('storefront_id', storefrontId).eq('status','active').order('created_at', { ascending: false }).limit(30),
+    supabase.from('products').select('*').eq('storefront_id', storefrontId).order('created_at', { ascending: false }).limit(30),
     supabase.from('product_reviews').select('*, reviewer:users(username,avatar)').eq('storefront_id', storefrontId).order('created_at', { ascending: false }).limit(5),
   ]);
   const sf = sfRes.data;
@@ -2358,14 +2358,11 @@ async function loadMktDeals() {
   const { data } = await supabase
     .from('products')
     .select('id, title, images, price_ngn, compare_price_ngn, storefront_id')
-    .eq('status', 'active')
-    .gt('stock', 0)
-    .not('compare_price_ngn', 'is', null)
     .gt('compare_price_ngn', 0)
     .order('created_at', { ascending: false })
     .limit(10);
 
-  if (!data?.length) return; // keep static placeholders if no real data
+  if (!data?.length) return;
 
   const gradients = [
     'linear-gradient(135deg,#667eea,#764ba2)',
@@ -2379,10 +2376,10 @@ async function loadMktDeals() {
   scroll.innerHTML = data.map((p, i) => {
     const img = p.images?.[0];
     const pct = p.compare_price_ngn > 0 ? Math.round((1 - p.price_ngn / p.compare_price_ngn) * 100) : 0;
+    if (pct <= 0) return '';
     const bg  = img ? `background:url('${escHtml(img)}') center/cover` : `background:${gradients[i % gradients.length]}`;
     return `<div class="mkt-deal-card" onclick="openProductPage('${p.id}')">
       <div class="mkt-deal-img" style="${bg}">
-        ${!img ? '' : ''}
         <span class="mkt-deal-badge">-${pct}%</span>
       </div>
       <div class="mkt-deal-info">
@@ -2391,7 +2388,7 @@ async function loadMktDeals() {
         <p class="mkt-deal-price"><span class="mkt-deal-pct">-${pct}% </span>${mktFmtNgn(p.price_ngn)}</p>
       </div>
     </div>`;
-  }).join('');
+  }).filter(Boolean).join('');
 }
 
 // ── Trending — by rating then recency ───────────────────────────────────────
@@ -2400,11 +2397,9 @@ async function loadMktTrending() {
   if (!scroll) return;
   const { data } = await supabase
     .from('products')
-    .select('id, title, images, rating, review_count')
-    .eq('status', 'active')
-    .gt('stock', 0)
-    .order('rating', { ascending: false })
-    .order('review_count', { ascending: false })
+    .select('id, title, images, rating, sales_count')
+    .order('sales_count', { ascending: false })
+    .order('rating',      { ascending: false })
     .limit(8);
 
   if (!data?.length) return;
@@ -2480,23 +2475,30 @@ async function loadMarketProducts(category) {
 
   let query = supabase
     .from('products')
-    .select('id, title, images, price_ngn, compare_price_ngn, category, stock, rating, storefront:storefronts(id, store_name, logo_url)')
-    .eq('status', 'active')
-    .gt('stock', 0)
+    .select('id, title, images, price_ngn, compare_price_ngn, category, stock, rating, sales_count, storefront:storefronts(id, store_name, logo_url)')
     .order('created_at', { ascending: false })
     .limit(60);
 
-  // Exact match against canonical DB category values
-  const catEntry = MKT_CATEGORIES.find(c => c.tab === category);
-  if (catEntry) query = query.eq('category', catEntry.db);
+  // ilike for flexible category matching — handles both old long names
+  // ("Fashion & Clothing") and new short names ("Fashion")
+  if (category && category !== 'All') {
+    const catEntry = MKT_CATEGORIES.find(c => c.tab === category);
+    if (catEntry) query = query.ilike('category', `%${catEntry.db}%`);
+  }
 
-  const { data: products } = await query;
+  const { data: products, error } = await query;
+
+  if (error) {
+    console.error('[Market] loadMarketProducts error:', error.message, error);
+    grid.innerHTML = `<div style="grid-column:1/-1;padding:40px;text-align:center;color:var(--text3)">Failed to load products. Please try again.</div>`;
+    return;
+  }
 
   if (!products?.length) {
     grid.innerHTML = `<div style="grid-column:1/-1;padding:56px 16px;text-align:center">
       <div style="font-size:48px;margin-bottom:14px">&#128717;</div>
       <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:6px">No products yet</div>
-      <div style="font-size:13px;color:var(--text3)">Be the first to list in ${catEntry?.db || 'the market'}</div>
+      <div style="font-size:13px;color:var(--text3)">Be the first to list in ${category === 'All' ? 'the market' : category}</div>
     </div>`;
     return;
   }
@@ -2580,12 +2582,11 @@ async function runMktSearch(q) {
   const [prodRes, storeRes] = await Promise.all([
     supabase.from('products')
       .select('id, title, images, price_ngn, category, storefront:storefronts(store_name)')
-      .eq('status', 'active').gt('stock', 0)
       .or(`title.ilike.${term},description.ilike.${term},category.ilike.${term}`)
       .limit(20),
     supabase.from('storefronts')
       .select('id, store_name, logo_url, category, state')
-      .or(`store_name.ilike.${term},category.ilike.${term},description.ilike.${term}`)
+      .or(`store_name.ilike.${term},category.ilike.${term}`)
       .limit(6),
   ]);
 
