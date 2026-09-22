@@ -1437,92 +1437,15 @@
       </header>
 
       <div class="moments-row" id="stories-row">
-
-        <!-- Add your moment -->
-
-        <div class="moment-add" onclick="showToast('Moments coming soon ✨')">
-
-          <div class="moment-add-plus">
-
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>
-
+        <div class="moment-add pulse-entry-card" onclick="openPredictionsPage()">
+          <div class="pulse-entry-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           </div>
-
-          <span>Add</span>
-
+          <div class="pulse-entry-live-dot"></div>
+          <span>Pulse</span>
         </div>
-
-        <!-- LIVE SALES — unseen -->
-
-        <div class="moment-card live" onclick="showToast('Moments coming soon ✨')">
-
-          <div class="moment-card-bg" style="background:linear-gradient(135deg,#ff3b5c,#ff6b9d)"></div>
-
-          <div class="moment-card-overlay"></div>
-
-          <div class="moment-card-av-wrap">
-
-            <img class="moment-card-av" src="https://api.dicebear.com/7.x/adventurer/svg?seed=ada" alt="">
-
-          </div>
-
-          <div class="moment-live-pill">● LIVE</div>
-
-          <div class="moment-card-name">AdaHandcraft</div>
-
-        </div>
-
-        <!-- Regular moment — unseen -->
-
-        <div class="moment-card" onclick="showToast('Moments coming soon ✨')">
-
-          <div class="moment-card-bg" style="background:linear-gradient(135deg,#6C47FF,#8b6fff)"></div>
-
-          <div class="moment-card-overlay"></div>
-
-          <div class="moment-card-av-wrap">
-
-            <img class="moment-card-av" src="https://api.dicebear.com/7.x/adventurer/svg?seed=catherine" alt="">
-
-          </div>
-
-          <div class="moment-card-name">catherine</div>
-
-        </div>
-
-        <!-- Product moment — unseen -->
-
-        <div class="moment-card" onclick="showToast('Moments coming soon ✨')">
-
-          <div class="moment-card-bg" style="background:linear-gradient(135deg,#43e97b,#0ba360)"></div>
-
-          <div class="moment-card-overlay"></div>
-
-          <div class="moment-card-av-wrap">
-
-            <img class="moment-card-av" src="https://api.dicebear.com/7.x/adventurer/svg?seed=zobo" alt="">
-
-          </div>
-
-          <div class="moment-type-label">🛒</div>
-
-          <div class="moment-card-name">ZoboQueen</div>
-
-        </div>
-
-        <!-- Seen — greyscale, pushed to end -->
-
-        <div class="moment-card seen" onclick="showToast('Moments coming soon ✨')">
-
-          <div class="moment-card-bg" style="background:linear-gradient(135deg,#f7971e,#ffd200)"></div>
-
-          <div class="moment-card-overlay"></div>
-
-          <div class="moment-card-av-wrap">
-
-            <img class="moment-card-av" src="https://api.dicebear.com/7.x/adventurer/svg?seed=zara" alt="">
-
-          </div>
+        <div id="pulse-moments-row" style="display:contents"></div>
+      </div>
 
           <div class="moment-card-name">zara</div>
 
@@ -5714,6 +5637,98 @@
         Buy Now
       </button>
     </div>
+
+
+    <!-- PAGE: PREDICTIONS INBOX -->
+    <section class="page slide-page no-header-page" id="page-predictions">
+      <div style="display:flex;flex-direction:column;height:100%">
+        <div style="background:var(--surface);border-bottom:1px solid var(--border);padding:max(env(safe-area-inset-top,14px),14px) 14px 0;flex-shrink:0">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+            <button class="chat-back-btn" onclick="slideBack()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+            <div style="display:flex;align-items:center;gap:7px;flex:1">
+              <div style="width:28px;height:28px;border-radius:8px;background:var(--accent);display:flex;align-items:center;justify-content:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+              <span style="font-size:20px;font-weight:900;letter-spacing:-0.4px;color:var(--text)">Pulse</span>
+              <div style="display:flex;align-items:center;gap:3px;background:rgba(244,7,82,0.08);border:1px solid rgba(244,7,82,0.2);border-radius:20px;padding:2px 8px"><div style="width:5px;height:5px;border-radius:50%;background:#f40752;animation:pulseDot 1.2s infinite"></div><span style="font-size:9px;font-weight:800;color:#f40752;letter-spacing:0.06em">LIVE</span></div>
+            </div>
+            <div id="pulse-wallet-display" style="background:var(--accent);color:white;padding:6px 11px;border-radius:20px;font-size:11px;font-weight:800;display:flex;align-items:center;gap:5px">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><path d="M20 12V22H4V12"/><path d="M22 7H2v5h20V7z"/></svg>
+              <div><div id="pulse-wallet-mp">— MP</div><div id="pulse-wallet-ngn" style="font-size:9px;opacity:0.75">≈ ₦—</div></div>
+            </div>
+          </div>
+          <div id="pulse-winners-ticker" style="display:flex;align-items:center;gap:8px;background:rgba(22,163,74,0.07);border:1px solid rgba(22,163,74,0.18);border-radius:10px;padding:7px 10px;margin-bottom:10px;overflow:hidden">
+            <span style="font-size:9px;font-weight:800;color:#16a34a;letter-spacing:0.07em;background:rgba(22,163,74,0.12);padding:2px 7px;border-radius:5px;flex-shrink:0">&#127942; WINS</span>
+            <div id="pulse-winners-text" style="font-size:11px;font-weight:600;color:#16a34a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Loading recent winners&#8230;</div>
+          </div>
+          <div style="display:flex;gap:6px;overflow-x:auto;padding:0 0 12px;scrollbar-width:none" id="pulse-cats">
+            <button class="pulse-cat active" data-tab="open" onclick="switchPredictTab('open')">All Live</button>
+            <button class="pulse-cat" data-tab="politics" onclick="switchPredictTab('politics')">Politics</button>
+            <button class="pulse-cat" data-tab="entertainment" onclick="switchPredictTab('entertainment')">Entertainment</button>
+            <button class="pulse-cat" data-tab="sports" onclick="switchPredictTab('sports')">Sports</button>
+            <button class="pulse-cat" data-tab="economy" onclick="switchPredictTab('economy')">Economy</button>
+            <button class="pulse-cat" data-tab="social" onclick="switchPredictTab('social')">Social</button>
+            <button class="pulse-cat" data-tab="mine" onclick="switchPredictTab('mine')">My Bets</button>
+            <button class="pulse-cat" data-tab="resolved" onclick="switchPredictTab('resolved')">Resolved</button>
+          </div>
+        </div>
+        <div id="predict-inbox-body" style="flex:1;overflow-y:auto;padding:14px 14px 100px;-webkit-overflow-scrolling:touch"></div>
+      </div>
+    </section>
+
+    <!-- PAGE: SINGLE PREDICTION -->
+    <section class="page slide-page no-header-page" id="page-predict">
+      <div style="display:flex;flex-direction:column;height:100%">
+        <div class="predict-topbar">
+          <button class="predict-back" onclick="slideBack()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+          <span class="predict-topbar-title" id="predict-topbar-title">Prediction</span>
+          <div style="display:flex;align-items:center;gap:3px;background:rgba(244,7,82,0.08);border:1px solid rgba(244,7,82,0.2);border-radius:20px;padding:3px 8px"><div style="width:5px;height:5px;border-radius:50%;background:#f40752;animation:pulseDot 1.2s infinite"></div><span style="font-size:9px;font-weight:800;color:#f40752">LIVE ODDS</span></div>
+        </div>
+        <div id="predict-body" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:180px"></div>
+        <!-- Stake panel -->
+        <div id="predict-stake-panel" style="display:none;position:absolute;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);padding:12px 14px max(env(safe-area-inset-bottom,14px),14px);z-index:10">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div><div style="font-size:11px;color:var(--text3);font-weight:600">Staking on</div><div id="predict-stake-option-name" style="font-size:14px;font-weight:800;color:var(--text)">Select an option</div></div>
+            <div id="predict-stake-odds-tag" style="font-size:15px;font-weight:900;color:var(--accent);background:var(--accent-soft);padding:4px 12px;border-radius:10px">—</div>
+          </div>
+          <input id="predict-stake-input" type="number" min="0.1" step="0.1" placeholder="Amount in MP" style="width:100%;padding:12px 14px;border-radius:14px;border:2px solid var(--border);background:var(--bg2);font-size:15px;font-weight:700;color:var(--text);font-family:var(--font);outline:none;margin-bottom:8px" oninput="updatePredictPotential()">
+          <div style="display:flex;gap:6px;margin-bottom:8px;overflow-x:auto;scrollbar-width:none">
+            <button onclick="setPredictQuick(0.5)" style="flex-shrink:0;padding:5px 10px;border-radius:20px;background:var(--bg2);border:1px solid var(--border);font-size:10px;font-weight:700;color:var(--text2);font-family:var(--font);text-align:center">0.5 MP<br><span style="font-size:9px;color:var(--text3)">&#8358;2,175</span></button>
+            <button onclick="setPredictQuick(1)"   style="flex-shrink:0;padding:5px 10px;border-radius:20px;background:var(--bg2);border:1px solid var(--border);font-size:10px;font-weight:700;color:var(--text2);font-family:var(--font);text-align:center">1 MP<br><span style="font-size:9px;color:var(--text3)">&#8358;4,350</span></button>
+            <button onclick="setPredictQuick(5)"   style="flex-shrink:0;padding:5px 10px;border-radius:20px;background:var(--bg2);border:1px solid var(--border);font-size:10px;font-weight:700;color:var(--text2);font-family:var(--font);text-align:center">5 MP<br><span style="font-size:9px;color:var(--text3)">&#8358;21,750</span></button>
+            <button onclick="setPredictQuick(10)"  style="flex-shrink:0;padding:5px 10px;border-radius:20px;background:var(--bg2);border:1px solid var(--border);font-size:10px;font-weight:700;color:var(--text2);font-family:var(--font);text-align:center">10 MP<br><span style="font-size:9px;color:var(--text3)">&#8358;43,500</span></button>
+            <button onclick="setPredictQuick(50)"  style="flex-shrink:0;padding:5px 10px;border-radius:20px;background:var(--bg2);border:1px solid var(--border);font-size:10px;font-weight:700;color:var(--text2);font-family:var(--font);text-align:center">50 MP<br><span style="font-size:9px;color:var(--text3)">&#8358;217,500</span></button>
+          </div>
+          <div id="predict-potential" style="font-size:12px;color:var(--text3);margin-bottom:10px">Select an option and enter amount</div>
+          <div style="display:flex;gap:8px">
+            <button id="predict-stake-submit-btn" class="predict-stake-btn" onclick="submitPredictStake()" style="flex:1">Place Stake</button>
+            <button onclick="addToAccaFromPanel()" style="width:44px;height:44px;border-radius:12px;background:var(--accent-soft);color:var(--accent);border:1.5px solid rgba(108,71,255,0.2);font-size:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:var(--font)">+</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ACCA SLIP PANEL -->
+    <div id="predict-acca-panel" style="position:fixed;inset:0;z-index:600;background:var(--bg);display:none;flex-direction:column">
+      <div style="display:flex;align-items:center;gap:10px;padding:max(env(safe-area-inset-top,14px),14px) 14px 12px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
+        <button class="predict-back" onclick="closeAccaSlip()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M19 12H5M12 19l-7-7 7-7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+        <span style="font-size:16px;font-weight:800;color:var(--text);flex:1">Acca Slip</span>
+        <button onclick="clearAccaSlip()" style="font-size:13px;font-weight:700;color:var(--red);font-family:var(--font)">Clear all</button>
+      </div>
+      <div id="predict-acca-list" style="flex:1;overflow-y:auto;padding:12px 16px"></div>
+      <div style="padding:14px 16px max(env(safe-area-inset-bottom,14px),14px);background:var(--surface);border-top:1px solid var(--border);flex-shrink:0">
+        <div style="display:flex;justify-content:space-between;margin-bottom:10px"><span style="font-size:13px;color:var(--text3)">Combined odds</span><span id="predict-acca-combined-odds" style="font-size:18px;font-weight:900;color:var(--accent)">—</span></div>
+        <input id="predict-acca-stake" type="number" min="0.1" step="0.1" placeholder="Stake in MP" style="width:100%;padding:11px 13px;border-radius:13px;border:2px solid var(--border);background:var(--bg2);font-size:14px;font-weight:700;color:var(--text);font-family:var(--font);outline:none;margin-bottom:8px" oninput="_updateAccaSummary()">
+        <div id="predict-acca-potential" style="font-size:13px;color:var(--text3);margin-bottom:10px">Enter stake to see potential return</div>
+        <button id="predict-acca-submit-btn" onclick="submitAcca()" style="width:100%;padding:14px;border-radius:14px;background:var(--accent);color:white;font-size:15px;font-weight:800;font-family:var(--font)">Place Acca</button>
+      </div>
+    </div>
+
+    <!-- ACCA FAB -->
+    <div id="predict-acca-fab" class="predict-acca-fab" onclick="openAccaSlip()">
+      <div style="font-size:17px;font-weight:900;line-height:1" id="predict-acca-fab-count">0</div>
+      <div style="font-size:9px;font-weight:700;opacity:0.85">ACCA</div>
+    </div>
+
+    <script src="/app-predict.js"></script>
 
 </body>
 
