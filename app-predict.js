@@ -938,71 +938,84 @@ function switchMyBetsView(view, btn) {
 
 function renderBetTickets(stakes, type) {
   if (!stakes.length) {
-    return `<div class="mybets-empty" style="padding:40px 20px">
-      <div class="mybets-empty-title">No ${type} bets</div>
-    </div>`;
+    return '<div class="mybets-empty" style="padding:40px 20px">' +
+      '<div class="mybets-empty-title">No ' + type + ' bets</div></div>';
   }
 
-  return stakes.map(s => {
-    const pred   = s.prediction || {};
-    const option = s.option || {};
-    const status = s.status || 'pending';
-    const stake  = Number(s.amount_mp || 0);
-    const odds   = Number(s.odds_at_stake || 0);
-    const potential = (stake * odds).toFixed(2);
-    const actual = Number(s.actual_return || 0).toFixed(2);
+  return stakes.map(function(s) {
+    var pred   = s.prediction || {};
+    var option = s.option || {};
+    var status = s.status || 'pending';
+    var stake  = Number(s.amount_mp || 0);
+    var odds   = Number(s.odds_at_stake || 0);
+    var potential = (stake * odds).toFixed(2);
+    var actual = Number(s.actual_return || 0).toFixed(2);
 
-    const statusLabel = {
-      pending:  'ACTIVE',
-      won:      'WON ✓',
-      lost:     'LOST',
-      refunded: 'REFUNDED'
-    }[status] || status.toUpperCase();
+    var statusLabel = 'ACTIVE';
+    if (status === 'won') statusLabel = 'WON ✓';
+    else if (status === 'lost') statusLabel = 'LOST';
+    else if (status === 'refunded') statusLabel = 'REFUNDED';
 
-    const timeText = status === 'pending'
-      ? (pred.closes_at ? 'Closes ' + fmtCountdown(pred.closes_at) : '')
-      : timeAgo(s.created_at);
+    var timeText = '';
+    if (status === 'pending') {
+      timeText = pred.closes_at ? 'Closes ' + fmtCountdown(pred.closes_at) : '';
+    } else {
+      timeText = timeAgo(s.created_at);
+    }
 
-    return `
-      <div class="bet-ticket" onclick="openPrediction('${pred.id}')">
-        <div class="bet-ticket-stripe ${status}"></div>
-        <div class="bet-ticket-body">
-          <div class="bet-ticket-top">
-            <span class="bet-ticket-cat">${escHtml(pred.category || 'General')}</span>
-            <span class="bet-ticket-status \( {status}"> \){statusLabel}</span>
-          </div>
+    // Naira equivalents
+    var stakeNgn     = fmtNgn(mpToNgn(stake));
+    var potentialNgn = fmtNgn(mpToNgn(potential));
+    var actualNgn    = fmtNgn(mpToNgn(actual));
 
-          <div class="bet-ticket-title">${escHtml(pred.title || 'Prediction')}</div>
+    var returnValue = '';
+    var returnClass = '';
+    if (status === 'pending') {
+      returnValue = potential + ' MP';
+      returnClass = '';
+    } else if (status === 'won') {
+      returnValue = '+' + actual + ' MP';
+      returnClass = 'green';
+    } else {
+      returnValue = actual + ' MP';
+      returnClass = status === 'lost' ? 'red' : '';
+    }
 
-          <div class="bet-ticket-pick">
-            <div class="bet-ticket-pick-label">Your Pick</div>
-            <div class="bet-ticket-pick-value">${escHtml(option.label || '—')}</div>
-          </div>
+    return '<div class="bet-ticket" onclick="openPrediction(\'' + pred.id + '\')">' +
+      '<div class="bet-ticket-stripe ' + status + '"></div>' +
+      '<div class="bet-ticket-body">' +
+        '<div class="bet-ticket-top">' +
+          '<span class="bet-ticket-cat">' + escHtml(pred.category || 'General') + '</span>' +
+          '<span class="bet-ticket-status ' + status + '">' + statusLabel + '</span>' +
+        '</div>' +
 
-          <div class="bet-ticket-stats">
-            <div class="bet-ticket-stat">
-              <div class="bet-ticket-stat-val">${stake.toFixed(1)} MP</div>
-              <div class="bet-ticket-stat-label">Stake</div>
-            </div>
-            <div class="bet-ticket-stat">
-              <div class="bet-ticket-stat-val">${odds ? odds.toFixed(2) + 'x' : '—'}</div>
-              <div class="bet-ticket-stat-label">Odds</div>
-            </div>
-            <div class="bet-ticket-stat">
-              <div class="bet-ticket-stat-val ${status === 'won' ? 'green' : status === 'lost' ? 'red' : ''}">
-                ${status === 'pending' ? potential : status === 'won' ? '+' + actual : actual} MP
-              </div>
-              <div class="bet-ticket-stat-label">${status === 'pending' ? 'Potential' : 'Return'}</div>
-            </div>
-          </div>
-        </div>
+        '<div class="bet-ticket-title">' + escHtml(pred.title || 'Prediction') + '</div>' +
 
-        <div class="bet-ticket-footer">
-          <span class="bet-ticket-time">${timeText}</span>
-          <span class="bet-ticket-view">View →</span>
-        </div>
-      </div>
-    `;
+        '<div class="bet-ticket-pick">' +
+          '<div class="bet-ticket-pick-label">Your Pick</div>' +
+          '<div class="bet-ticket-pick-value">' + escHtml(option.label || '—') + '</div>' +
+        '</div>' +
+
+        '<div class="bet-ticket-stats">' +
+          '<div class="bet-ticket-stat">' +
+            '<div class="bet-ticket-stat-val">' + stake.toFixed(1) + ' MP</div>' +
+            '<div class="bet-ticket-stat-label">' + stakeNgn + '</div>' +
+          '</div>' +
+          '<div class="bet-ticket-stat">' +
+            '<div class="bet-ticket-stat-val">' + (odds ? odds.toFixed(2) + 'x' : '—') + '</div>' +
+            '<div class="bet-ticket-stat-label">Odds</div>' +
+          '</div>' +
+          '<div class="bet-ticket-stat">' +
+            '<div class="bet-ticket-stat-val ' + returnClass + '">' + returnValue + '</div>' +
+            '<div class="bet-ticket-stat-label">' + (status === 'pending' ? potentialNgn : actualNgn) + '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="bet-ticket-footer">' +
+        '<span class="bet-ticket-time">' + timeText + '</span>' +
+      '</div>' +
+    '</div>';
   }).join('');
 }
 
