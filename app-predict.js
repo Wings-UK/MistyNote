@@ -671,50 +671,74 @@ async function loadPulseMoments() {
   if (!row) return;
 
   const { data: preds } = await supabase
-    .from('predictions').select('id, title, category, total_pool, prize_pool, closes_at, prediction_options(*)')
-    .eq('status','open').gt('closes_at', new Date().toISOString())
-    .order('total_pool', { ascending: false }).limit(5);
+    .from('predictions')
+    .select('id, title, category, total_pool, prize_pool, closes_at, prediction_options(*)')
+    .eq('status', 'open')
+    .gt('closes_at', new Date().toISOString())
+    .order('total_pool', { ascending: false })
+    .limit(5);
 
   if (!preds?.length) {
-    row.innerHTML = `<div class="moment-card pulse-moment-placeholder" onclick="openPredictionsPage()">
-      <div class="moment-card-bg" style="background:linear-gradient(135deg,#6C47FF,#a855f7)"></div>
-      <div class="moment-card-overlay"></div>
-      <div class="pulse-moment-icon">&#127919;</div>
-      <div class="moment-card-name">Predict</div>
-    </div>`;
+    row.innerHTML = `
+      <div class="moment-card pulse-moment-placeholder" onclick="openPredictionsPage()">
+        <div class="moment-card-bg" style="background:linear-gradient(135deg,#6C47FF,#a855f7)"></div>
+        <div class="moment-card-overlay"></div>
+        <div class="pulse-moment-icon">🎯</div>
+        <div class="moment-card-name">Predict</div>
+      </div>`;
     return;
   }
 
-  const catBg = { 'Politics':'linear-gradient(135deg,#3d1f8a,#6C47FF)', 'Entertainment':'linear-gradient(135deg,#8a1f5c,#f0385a)', 'Sports':'linear-gradient(135deg,#1f5c2d,#22c55e)', 'Economy':'linear-gradient(135deg,#5c4d1f,#f5a623)', 'Social':'linear-gradient(135deg,#1f3a5c,#4facfe)', 'General':'linear-gradient(135deg,#3d1f8a,#6C47FF)' };
-  const catEm = { 'Politics':'&#127963;', 'Entertainment':'&#127908;', 'Sports':'&#9917;', 'Economy':'&#128200;', 'Social':'&#128172;', 'General':'&#127919;' };
+  const catBg = {
+    'Politics':      'linear-gradient(135deg,#3d1f8a,#6C47FF)',
+    'Entertainment': 'linear-gradient(135deg,#8a1f5c,#f0385a)',
+    'Sports':        'linear-gradient(135deg,#1f5c2d,#22c55e)',
+    'Economy':       'linear-gradient(135deg,#5c4d1f,#f5a623)',
+    'Social':        'linear-gradient(135deg,#1f3a5c,#4facfe)',
+    'General':       'linear-gradient(135deg,#3d1f8a,#6C47FF)'
+  };
+  const catEm = {
+    'Politics': '🏛', 'Entertainment': '🎤', 'Sports': '⚽',
+    'Economy': '📈', 'Social': '💬', 'General': '🎯'
+  };
 
   row.innerHTML = preds.map(pred => {
     const options   = pred.prediction_options || [];
     const totalPool = pred.total_pool || 0;
     const prizePool = pred.prize_pool || (totalPool * 0.92);
     const bg        = catBg[pred.category] || catBg['General'];
-    const emoji     = catEm[pred.category] || '&#127919;';
-    const top2      = options.sort((a,b)=>b.total_staked-a.total_staked).slice(0,2);
-    const title     = pred.title.length > 40 ? pred.title.slice(0,38)+'\u2026' : pred.title;
+    const emoji     = catEm[pred.category] || '🎯';
+    const top2      = [...options].sort((a,b) => b.total_staked - a.total_staked).slice(0, 2);
+    const title     = pred.title.length > 52 ? pred.title.slice(0, 50) + '…' : pred.title;
 
     const oddsHTML = top2.map(opt => {
       const odds = prizePool > 0 && opt.total_staked > 0
-        ? Math.max(1.01, prizePool/opt.total_staked).toFixed(2) : '\u2014';
-      return `<div class="pulse-moment-opt">
-        <span class="pulse-moment-opt-label">${escHtml(opt.label)}</span>
-        <span class="pulse-moment-opt-odds">${odds}x</span>
-      </div>`;
+        ? Math.max(1.01, prizePool / opt.total_staked).toFixed(2)
+        : '—';
+      return `
+        <div class="pulse-moment-opt">
+          <span class="pulse-moment-opt-label">${escHtml(opt.label)}</span>
+          <span class="pulse-moment-opt-odds">${odds}x</span>
+        </div>`;
     }).join('');
 
-    return `<div class="moment-card pulse-moment-card" onclick="openPrediction('${pred.id}')">
-      <div class="moment-card-bg" style="background:${bg}"></div>
-      <div class="moment-card-overlay"></div>
-      <div class="pulse-moment-live-dot"></div>
-      <div class="pulse-moment-cat">${emoji}</div>
-      <div class="pulse-moment-title">${escHtml(title)}</div>
-      <div class="pulse-moment-odds-wrap">${oddsHTML}</div>
-      <div class="pulse-moment-pool">${Number(totalPool).toFixed(1)} MP</div>
-    </div>`;
+    return `
+      <div class="moment-card pulse-moment-card" onclick="openPrediction('${pred.id}')">
+        <div class="moment-card-bg" style="background:${bg}"></div>
+        <div class="moment-card-overlay"></div>
+        <div class="pulse-moment-live-dot"></div>
+
+        <div class="pulse-moment-top">
+          <span class="pulse-moment-cat">${emoji} ${escHtml(pred.category || 'General')}</span>
+          <span class="pulse-moment-pool">${Number(totalPool).toFixed(1)} MP</span>
+        </div>
+
+        <div class="pulse-moment-title">${escHtml(title)}</div>
+
+        <div class="pulse-moment-odds-wrap">
+          ${oddsHTML}
+        </div>
+      </div>`;
   }).join('');
 }
 
