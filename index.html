@@ -1436,40 +1436,21 @@
 
       </header>
 
-      <div class="moments-row" id="stories-row">
-        <div class="moment-add pulse-entry-card" onclick="openPredictionsPage()">
-          <div class="pulse-entry-icon">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-          </div>
-          <div class="pulse-entry-live-dot"></div>
-          <span>Pulse</span>
-        </div>
-        <div id="pulse-moments-row" style="display:contents"></div>
-      </div>
+<div class="moments-row" id="stories-row">
+  <!-- Pulse entry card -->
+  <div class="moment-add pulse-entry-card" onclick="openPredictionsPage()">
+    <div class="pulse-entry-icon">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>
+    </div>
+    <div class="pulse-entry-live-dot"></div>
+    <span>Pulse</span>
+  </div>
 
-          <div class="moment-card-name">zara</div>
-
-        </div>
-
-        <!-- Seen — greyscale -->
-
-        <div class="moment-card seen" onclick="showToast('Moments coming soon ✨')">
-
-          <div class="moment-card-bg" style="background:linear-gradient(135deg,#c850c0,#4158d0)"></div>
-
-          <div class="moment-card-overlay"></div>
-
-          <div class="moment-card-av-wrap">
-
-            <img class="moment-card-av" src="https://api.dicebear.com/7.x/adventurer/svg?seed=amara" alt="">
-
-          </div>
-
-          <div class="moment-card-name">amara</div>
-
-        </div>
-
-      </div>
+  <!-- Live prediction cards will be injected here by app-predict.js -->
+  <div id="pulse-moments-row" style="display:contents"></div>
+</div>
 
       <div class="feed-list" id="feed-list">
 
