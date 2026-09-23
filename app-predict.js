@@ -840,28 +840,31 @@ async function loadMyBets() {
   </div>`;
 
   const { data: stakes, error } = await supabase
-    .from('prediction_stakes')
-    .select(`
+  .from('prediction_stakes')
+  .select(`
+    id,
+    amount_mp,
+    odds_at_stake,
+    status,
+    actual_return,
+    created_at,
+    prediction:predictions (
       id,
-      amount_mp,
-      odds_at_stake,
+      title,
+      category,
       status,
-      actual_return,
-      created_at,
-      prediction:predictions (
-        id,
-        title,
-        category,
-        status,
-        closes_at
-      ),
-      option:prediction_options (
-        id,
-        label
-      )
-    `)
-    .eq('user_id', currentUser.id)
-    .order('created_at', { ascending: false });
+      closes_at,
+      prize_pool,
+      total_pool
+    ),
+    option:prediction_options (
+      id,
+      label,
+      total_staked
+    )
+  `)
+  .eq('user_id', currentUser.id)
+  .order('created_at', { ascending: false });
 
   if (error) {
     console.error('[MyBets]', error);
@@ -920,6 +923,7 @@ async function loadMyBets() {
 
   window._myBetsActive  = active;
   window._myBetsSettled = settled;
+  subscribeMyBetsLive(stakes);
 }
 
 function switchMyBetsView(view, btn) {
@@ -938,50 +942,43 @@ function switchMyBetsView(view, btn) {
 
 function renderBetTickets(stakes, type) {
   if (!stakes.length) {
-    return '<div class="mybets-empty" style="padding:40px 20px">' +
-      '<div class="mybets-empty-title">No ' + type + ' bets</div></div>';
+    return '<div class="mybets-empty" style="padding:40px 20px"><div class="mybets-empty-title">No ' + type + ' bets</div></div>';
   }
 
   return stakes.map(function(s) {
-    var pred   = s.prediction || {};
-    var option = s.option || {};
-    var status = s.status || 'pending';
-    var stake  = Number(s.amount_mp || 0);
-    var odds   = Number(s.odds_at_stake || 0);
+    var pred      = s.prediction || {};
+    var option    = s.option || {};
+    var status    = s.status || 'pending';
+    var stake     = Number(s.amount_mp || 0);
+    var odds      = Number(s.odds_at_stake || 0);
     var potential = (stake * odds).toFixed(2);
-    var actual = Number(s.actual_return || 0).toFixed(2);
+    var actual    = Number(s.actual_return || 0).toFixed(2);
+    var prizePool = Number(pred.prize_pool || (pred.total_pool || 0) * 0.92 || 0);
 
     var statusLabel = 'ACTIVE';
     if (status === 'won') statusLabel = 'WON ✓';
     else if (status === 'lost') statusLabel = 'LOST';
     else if (status === 'refunded') statusLabel = 'REFUNDED';
 
-    var timeText = '';
-    if (status === 'pending') {
-      timeText = pred.closes_at ? 'Closes ' + fmtCountdown(pred.closes_at) : '';
-    } else {
-      timeText = timeAgo(s.created_at);
-    }
+    var timeText = status === 'pending'
+      ? (pred.closes_at ? 'Closes ' + fmtCountdown(pred.closes_at) : '')
+      : timeAgo(s.created_at);
 
-    // Naira equivalents
     var stakeNgn     = fmtNgn(mpToNgn(stake));
     var potentialNgn = fmtNgn(mpToNgn(potential));
     var actualNgn    = fmtNgn(mpToNgn(actual));
 
-    var returnValue = '';
-    var returnClass = '';
-    if (status === 'pending') {
-      returnValue = potential + ' MP';
-      returnClass = '';
-    } else if (status === 'won') {
-      returnValue = '+' + actual + ' MP';
-      returnClass = 'green';
-    } else {
-      returnValue = actual + ' MP';
-      returnClass = status === 'lost' ? 'red' : '';
-    }
+    var returnValue = status === 'pending' ? potential + ' MP' :
+                      status === 'won'     ? '+' + actual + ' MP' : actual + ' MP';
+    var returnClass = status === 'won' ? 'green' : (status === 'lost' ? 'red' : '');
 
-    return '<div class="bet-ticket" onclick="openPrediction(\'' + pred.id + '\')">' +
+    return '<div class="bet-ticket" ' +
+      'data-stake-id="' + s.id + '" ' +
+      'data-option-id="' + (option.id || '') + '" ' +
+      'data-stake-amount="' + stake + '" ' +
+      'data-prize-pool="' + prizePool + '" ' +
+      'onclick="openPrediction(\'' + (pred.id || '') + '\')">' +
+
       '<div class="bet-ticket-stripe ' + status + '"></div>' +
       '<div class="bet-ticket-body">' +
         '<div class="bet-ticket-top">' +
@@ -1002,12 +999,12 @@ function renderBetTickets(stakes, type) {
             '<div class="bet-ticket-stat-label">' + stakeNgn + '</div>' +
           '</div>' +
           '<div class="bet-ticket-stat">' +
-            '<div class="bet-ticket-stat-val">' + (odds ? odds.toFixed(2) + 'x' : '—') + '</div>' +
+            '<div class="bet-ticket-stat-val js-ticket-odds">' + (odds ? odds.toFixed(2) + 'x' : '—') + '</div>' +
             '<div class="bet-ticket-stat-label">Odds</div>' +
           '</div>' +
           '<div class="bet-ticket-stat">' +
-            '<div class="bet-ticket-stat-val ' + returnClass + '">' + returnValue + '</div>' +
-            '<div class="bet-ticket-stat-label">' + (status === 'pending' ? potentialNgn : actualNgn) + '</div>' +
+            '<div class="bet-ticket-stat-val js-ticket-potential ' + returnClass + '">' + returnValue + '</div>' +
+            '<div class="bet-ticket-stat-label js-ticket-potential-ngn">' + (status === 'pending' ? potentialNgn : actualNgn) + '</div>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -1017,6 +1014,71 @@ function renderBetTickets(stakes, type) {
       '</div>' +
     '</div>';
   }).join('');
+}
+
+let _myBetsChannel = null;
+
+function subscribeMyBetsLive(stakes) {
+  if (_myBetsChannel) {
+    supabase.removeChannel(_myBetsChannel);
+    _myBetsChannel = null;
+  }
+
+  var active = (stakes || []).filter(function(s) {
+    return s.status === 'pending';
+  });
+  if (!active.length) return;
+
+  var predIds = [];
+  active.forEach(function(s) {
+    if (s.prediction && s.prediction.id) {
+      predIds.push(s.prediction.id);
+    }
+  });
+  predIds = [...new Set(predIds)];
+  if (!predIds.length) return;
+
+  _myBetsChannel = supabase
+    .channel('mybets-live')
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'prediction_options',
+      filter: 'prediction_id=in.(' + predIds.join(',') + ')'
+    }, function(payload) {
+      var opt = payload.new;
+      var newTotal = Number(opt.total_staked || 0);
+
+      var tickets = document.querySelectorAll('.bet-ticket[data-option-id="' + opt.id + '"]');
+
+      tickets.forEach(function(ticket) {
+        var stakeAmount = Number(ticket.dataset.stakeAmount || 0);
+        var prizePool   = Number(ticket.dataset.prizePool || 0);
+
+        if (stakeAmount <= 0 || prizePool <= 0 || newTotal <= 0) return;
+
+        var newOdds = Math.max(1.01, prizePool / newTotal);
+        var newPotential = (stakeAmount * newOdds).toFixed(2);
+        var newPotentialNgn = fmtNgn(mpToNgn(newPotential));
+
+        // Update odds
+        var oddsEl = ticket.querySelector('.js-ticket-odds');
+        if (oddsEl) {
+          oddsEl.textContent = newOdds.toFixed(2) + 'x';
+          oddsEl.classList.remove('odds-flash');
+          void oddsEl.offsetWidth;
+          oddsEl.classList.add('odds-flash');
+        }
+
+        // Update potential
+        var potEl = ticket.querySelector('.js-ticket-potential');
+        if (potEl) potEl.textContent = newPotential + ' MP';
+
+        var potNgnEl = ticket.querySelector('.js-ticket-potential-ngn');
+        if (potNgnEl) potNgnEl.textContent = newPotentialNgn;
+      });
+    })
+    .subscribe();
 }
 
 // ── Helper ────────────────────────────────────────────
