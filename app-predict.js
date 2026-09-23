@@ -86,15 +86,22 @@ function openPredictionsPage() {
 // ══════════════════════════════════════════════════════
 async function _loadPulseWallet() {
   if (!currentUser) return;
-  const { data } = await supabase
-    .from('users').select('mp_balance').eq('id', currentUser.id).single();
-  if (!data) return;
-  const mp  = data.mp_balance || 0;
-  const ngn = mpToNgn(mp);
-  const mpEl  = document.getElementById('pulse-wallet-mp');
-  const ngnEl = document.getElementById('pulse-wallet-ngn');
-  if (mpEl)  mpEl.textContent  = fmtMP(mp).replace(/&[^;]+;/g,'');
-  if (ngnEl) ngnEl.innerHTML   = '&#8776; ' + fmtNgn(ngn);
+  try {
+    const { data } = await supabase
+      .from('wallets')
+      .select('available')
+      .eq('user_id', currentUser.id)
+      .maybeSingle();
+
+    const mp = data?.available ?? 0;
+    const ngn = mpToNgn(mp);
+    const mpEl  = document.getElementById('pulse-wallet-mp');
+    const ngnEl = document.getElementById('pulse-wallet-ngn');
+    if (mpEl)  mpEl.textContent  = fmtMP(mp).replace(/&[^;]+;/g,'');
+    if (ngnEl) ngnEl.innerHTML   = '≈ ' + fmtNgn(ngn);
+  } catch (e) {
+    console.warn('[Pulse] wallet load failed', e);
+  }
 }
 
 // ══════════════════════════════════════════════════════
