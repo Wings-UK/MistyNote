@@ -422,13 +422,22 @@ function handlePhysicalBack() {
 
   if (emoji) { emoji.remove(); return; }
 
-  // P2: Slide stack
+// P2: Slide stack
+if (slideStack.length > 0) {
+  slideBack();
 
-  if (slideStack.length > 0) {
+  // ✅ After sliding back, if we landed on the feed, refresh Pulse cards
+  setTimeout(() => {
+    const feedPage = document.getElementById('page-feed');
+    if (feedPage && feedPage.classList.contains('active')) {
+      if (typeof loadPulseMoments === 'function') {
+        loadPulseMoments();
+      }
+    }
+  }, 350); // wait for the slide animation to finish
 
-    slideBack(); return;
-
-  }
+  return;
+}
 
   // P3: Main page sub-tab logic
 
