@@ -672,7 +672,7 @@ async function loadPulseMoments() {
   const row = document.getElementById('pulse-moments-row');
   if (!row) return;
 
-  // Clean previous realtime channel
+  // Remove old realtime channel
   if (_pulseMomentsChannel) {
     supabase.removeChannel(_pulseMomentsChannel);
     _pulseMomentsChannel = null;
@@ -686,14 +686,13 @@ async function loadPulseMoments() {
     .order('total_pool', { ascending: false })
     .limit(5);
 
-  if (!preds?.length) {
-    row.innerHTML = `
-      <div class="moment-card pulse-moment-placeholder" onclick="openPredictionsPage()">
-        <div class="moment-card-bg" style="background:linear-gradient(135deg,#6C47FF,#a855f7)"></div>
-        <div class="moment-card-overlay"></div>
-        <div class="pulse-moment-icon">🎯</div>
-        <div class="moment-card-name">Predict</div>
-      </div>`;
+  if (!preds || !preds.length) {
+    row.innerHTML = '<div class="moment-card pulse-moment-placeholder" onclick="openPredictionsPage()">' +
+      '<div class="moment-card-bg" style="background:linear-gradient(135deg,#6C47FF,#a855f7)"></div>' +
+      '<div class="moment-card-overlay"></div>' +
+      '<div class="pulse-moment-icon">🎯</div>' +
+      '<div class="moment-card-name">Predict</div>' +
+      '</div>';
     return;
   }
 
@@ -710,52 +709,56 @@ async function loadPulseMoments() {
     'Economy': '📈', 'Social': '💬', 'General': '🎯'
   };
 
-  // Keep a local map so realtime can update easily
   const predMap = {};
+  let html = '';
 
-  row.innerHTML = preds.map(pred => {
+  preds.forEach(function(pred) {
     const options   = pred.prediction_options || [];
     const totalPool = pred.total_pool || 0;
     const prizePool = pred.prize_pool || (totalPool * 0.92);
     const bg        = catBg[pred.category] || catBg['General'];
     const emoji     = catEm[pred.category] || '🎯';
-    const top2      = [...options].sort((a,b) => b.total_staked - a.total_staked).slice(0, 2);
-    const title     = pred.title.length > 52 ? pred.title.slice(0, 50) + '…' : pred.title;
+    const top2      = options.slice().sort(function(a, b) {
+      return (b.total_staked || 0) - (a.total_staked || 0);
+    }).slice(0, 2);
 
-    predMap[pred.id] = { totalPool, prizePool, options };
+    const title = pred.title.length > 52 ? pred.title.slice(0, 50) + '…' : pred.title;
 
-    const oddsHTML = top2.map(opt => {
-      const odds = prizePool > 0 && opt.total_staked > 0
-        ? Math.max(1.01, prizePool / opt.total_staked).toFixed(2)
-        : '—';
-      return `
-        <div class="pulse-moment-opt" data-opt-id="${opt.id}">
-          <span class="pulse-moment-opt-label">${escHtml(opt.label)}</span>
-          <span class="pulse-moment-opt-odds" id="pm-odds-\( {opt.id}"> \){odds}x</span>
-        </div>`;
-    }).join('');
+    predMap[pred.id] = {
+      totalPool: totalPool,
+      prizePool: prizePool,
+      options: options
+    };
 
-    return `
-      <div class="moment-card pulse-moment-card" data-pred-id="\( {pred.id}" onclick="openPrediction(' \){pred.id}')">
-        <div class="moment-card-bg" style="background:${bg}"></div>
-        <div class="moment-card-overlay"></div>
-        <div class="pulse-moment-live-dot"></div>
+    let oddsHTML = '';
+    top2.forEach(function(opt) {
+      let odds = '—';
+      if (prizePool > 0 && opt.total_staked > 0) {
+        odds = Math.max(1.01, prizePool / opt.total_staked).toFixed(2);
+      }
+      oddsHTML += '<div class="pulse-moment-opt" data-opt-id="' + opt.id + '">' +
+        '<span class="pulse-moment-opt-label">' + escHtml(opt.label) + '</span>' +
+        '<span class="pulse-moment-opt-odds" id="pm-odds-' + opt.id + '">' + odds + 'x</span>' +
+        '</div>';
+    });
 
-        <div class="pulse-moment-top">
-          <span class="pulse-moment-cat">${emoji} ${escHtml(pred.category || 'General')}</span>
-          <span class="pulse-moment-pool" id="pm-pool-\( {pred.id}"> \){Number(totalPool).toFixed(1)} MP</span>
-        </div>
+    html += '<div class="moment-card pulse-moment-card" data-pred-id="' + pred.id + '" onclick="openPrediction(\'' + pred.id + '\')">' +
+      '<div class="moment-card-bg" style="background:' + bg + '"></div>' +
+      '<div class="moment-card-overlay"></div>' +
+      '<div class="pulse-moment-live-dot"></div>' +
+      '<div class="pulse-moment-top">' +
+        '<span class="pulse-moment-cat">' + emoji + ' ' + escHtml(pred.category || 'General') + '</span>' +
+        '<span class="pulse-moment-pool" id="pm-pool-' + pred.id + '">' + Number(totalPool).toFixed(1) + ' MP</span>' +
+      '</div>' +
+      '<div class="pulse-moment-title">' + escHtml(title) + '</div>' +
+      '<div class="pulse-moment-odds-wrap">' + oddsHTML + '</div>' +
+      '</div>';
+  });
 
-        <div class="pulse-moment-title">${escHtml(title)}</div>
+  row.innerHTML = html;
 
-        <div class="pulse-moment-odds-wrap">
-          ${oddsHTML}
-        </div>
-      </div>`;
-  }).join('');
-
-  // ── Realtime: update odds when anyone stakes ──
-  const predIds = preds.map(p => p.id);
+  // Realtime updates
+  const predIds = preds.map(function(p) { return p.id; });
   if (!predIds.length) return;
 
   _pulseMomentsChannel = supabase
@@ -764,41 +767,51 @@ async function loadPulseMoments() {
       event: 'UPDATE',
       schema: 'public',
       table: 'prediction_options',
-      filter: `prediction_id=in.(${predIds.join(',')})`
-    }, (payload) => {
+      filter: 'prediction_id=in.(' + predIds.join(',') + ')'
+    }, function(payload) {
       const opt = payload.new;
       const predId = opt.prediction_id;
-      const card = document.querySelector(`.pulse-moment-card[data-pred-id="${predId}"]`);
-      if (!card) return;
-
-      // Update local map
       const info = predMap[predId];
       if (!info) return;
 
-      const optIndex = info.options.findIndex(o => o.id === opt.id);
-      if (optIndex > -1) info.options[optIndex].total_staked = opt.total_staked;
+      // Update local option
+      for (let i = 0; i < info.options.length; i++) {
+        if (info.options[i].id === opt.id) {
+          info.options[i].total_staked = opt.total_staked;
+          break;
+        }
+      }
 
-      // Recalculate pool & prize
-      const newTotal = info.options.reduce((s, o) => s + Number(o.total_staked || 0), 0);
+      // Recalculate pool
+      let newTotal = 0;
+      info.options.forEach(function(o) {
+        newTotal += Number(o.total_staked || 0);
+      });
       info.totalPool = newTotal;
       info.prizePool = newTotal * 0.92;
 
       // Update pool text
-      const poolEl = document.getElementById(`pm-pool-${predId}`);
+      const poolEl = document.getElementById('pm-pool-' + predId);
       if (poolEl) poolEl.textContent = Number(newTotal).toFixed(1) + ' MP';
 
-      // Update the two visible odds + flash animation
-      const top2 = [...info.options].sort((a,b) => b.total_staked - a.total_staked).slice(0, 2);
-      top2.forEach(o => {
-        const oddsEl = document.getElementById(`pm-odds-${o.id}`);
+      // Update top 2 odds + flash
+      const top2 = info.options.slice().sort(function(a, b) {
+        return (b.total_staked || 0) - (a.total_staked || 0);
+      }).slice(0, 2);
+
+      top2.forEach(function(o) {
+        const oddsEl = document.getElementById('pm-odds-' + o.id);
         if (!oddsEl) return;
-        const newOdds = info.prizePool > 0 && o.total_staked > 0
-          ? Math.max(1.01, info.prizePool / o.total_staked).toFixed(2)
-          : '—';
+
+        let newOdds = '—';
+        if (info.prizePool > 0 && o.total_staked > 0) {
+          newOdds = Math.max(1.01, info.prizePool / o.total_staked).toFixed(2);
+        }
+
         if (oddsEl.textContent !== newOdds + 'x') {
           oddsEl.textContent = newOdds + 'x';
           oddsEl.classList.remove('odds-flash');
-          void oddsEl.offsetWidth; // restart animation
+          void oddsEl.offsetWidth;
           oddsEl.classList.add('odds-flash');
         }
       });
