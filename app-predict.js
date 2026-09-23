@@ -201,16 +201,10 @@ async function loadPredictionsInbox(tab) {
   else if (tab === 'sports')      query = query.eq('status','open').ilike('category','%Sports%');
   else if (tab === 'economy')     query = query.eq('status','open').ilike('category','%Economy%');
   else if (tab === 'social')      query = query.eq('status','open').ilike('category','%Social%');
-  else if (tab === 'mine' && currentUser) {
-    const { data: staked } = await supabase
-      .from('prediction_stakes').select('prediction_id').eq('user_id', currentUser.id);
-    const ids = [...new Set((staked||[]).map(s=>s.prediction_id))];
-    if (!ids.length) {
-      body.innerHTML = `<div style="padding:56px;text-align:center;color:var(--text3)"><div style="font-size:40px;margin-bottom:12px">&#127919;</div><p style="font-weight:700">No bets yet</p><p style="font-size:13px;margin-top:6px">Go stake on a prediction to see your bets here</p></div>`;
-      return;
-    }
-    query = supabase.from('predictions').select('*, prediction_options(*)').in('id', ids).order('created_at', { ascending: false });
-  }
+  else if (tab === 'mine') {
+  loadMyBets();
+  return;
+}
 
   const { data: preds, error } = await query;
 
@@ -833,6 +827,184 @@ window.addEventListener('supabase-ready', () => {
   tryLoad();
 });
 document.addEventListener('feedTabActivated', loadPulseMoments);
+
+// ══════════════════════════════════════════════════════
+// MY BETS — Premium Ticket View
+// ══════════════════════════════════════════════════════
+async function loadMyBets() {
+  const body = document.getElementById('predict-inbox-body');
+  if (!body || !currentUser) return;
+
+  body.innerHTML = `<div style="padding:48px;text-align:center;color:var(--text3)">
+    <div style="font-size:28px;margin-bottom:10px">⏳</div>Loading your bets…
+  </div>`;
+
+  const { data: stakes, error } = await supabase
+    .from('prediction_stakes')
+    .select(`
+      id,
+      amount_mp,
+      odds_at_stake,
+      status,
+      actual_return,
+      created_at,
+      prediction:predictions (
+        id,
+        title,
+        category,
+        status,
+        closes_at
+      ),
+      option:prediction_options (
+        id,
+        label
+      )
+    `)
+    .eq('user_id', currentUser.id)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('[MyBets]', error);
+    body.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text3)">Failed to load bets</div>`;
+    return;
+  }
+
+  if (!stakes || !stakes.length) {
+    body.innerHTML = `
+      <div class="mybets-empty">
+        <div class="mybets-empty-icon">🎯</div>
+        <div class="mybets-empty-title">No bets yet</div>
+        <div class="mybets-empty-sub">Place your first prediction and<br>it will appear here.</div>
+        <button onclick="switchPredictTab('open')" style="
+          background:var(--accent);color:white;border:none;border-radius:12px;
+          padding:12px 24px;font-size:14px;font-weight:700;font-family:var(--font)">
+          Explore Live Predictions
+        </button>
+      </div>`;
+    return;
+  }
+
+  const active  = stakes.filter(s => s.status === 'pending');
+  const settled = stakes.filter(s => s.status !== 'pending');
+
+  const totalStaked = active.reduce((s, b) => s + Number(b.amount_mp || 0), 0);
+  const totalWon    = settled
+    .filter(s => s.status === 'won')
+    .reduce((s, b) => s + Number(b.actual_return || 0), 0);
+
+  body.innerHTML = `
+    <div class="mybets-summary">
+      <div class="mybets-summary-card">
+        <div class="mybets-summary-val accent">${active.length}</div>
+        <div class="mybets-summary-label">Active</div>
+      </div>
+      <div class="mybets-summary-card">
+        <div class="mybets-summary-val">${Number(totalStaked).toFixed(1)}</div>
+        <div class="mybets-summary-label">Staked (MP)</div>
+      </div>
+      <div class="mybets-summary-card">
+        <div class="mybets-summary-val green">${Number(totalWon).toFixed(1)}</div>
+        <div class="mybets-summary-label">Won (MP)</div>
+      </div>
+    </div>
+
+    <div class="mybets-tabs">
+      <div class="mybets-tab active" onclick="switchMyBetsView('active', this)">Active (${active.length})</div>
+      <div class="mybets-tab" onclick="switchMyBetsView('settled', this)">Settled (${settled.length})</div>
+    </div>
+
+    <div id="mybets-list">
+      ${renderBetTickets(active, 'active')}
+    </div>
+  `;
+
+  window._myBetsActive  = active;
+  window._myBetsSettled = settled;
+}
+
+function switchMyBetsView(view, btn) {
+  document.querySelectorAll('.mybets-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+
+  const list = document.getElementById('mybets-list');
+  if (!list) return;
+
+  if (view === 'active') {
+    list.innerHTML = renderBetTickets(window._myBetsActive || [], 'active');
+  } else {
+    list.innerHTML = renderBetTickets(window._myBetsSettled || [], 'settled');
+  }
+}
+
+function renderBetTickets(stakes, type) {
+  if (!stakes.length) {
+    return `<div class="mybets-empty" style="padding:40px 20px">
+      <div class="mybets-empty-title">No ${type} bets</div>
+    </div>`;
+  }
+
+  return stakes.map(s => {
+    const pred   = s.prediction || {};
+    const option = s.option || {};
+    const status = s.status || 'pending';
+    const stake  = Number(s.amount_mp || 0);
+    const odds   = Number(s.odds_at_stake || 0);
+    const potential = (stake * odds).toFixed(2);
+    const actual = Number(s.actual_return || 0).toFixed(2);
+
+    const statusLabel = {
+      pending:  'ACTIVE',
+      won:      'WON ✓',
+      lost:     'LOST',
+      refunded: 'REFUNDED'
+    }[status] || status.toUpperCase();
+
+    const timeText = status === 'pending'
+      ? (pred.closes_at ? 'Closes ' + fmtCountdown(pred.closes_at) : '')
+      : timeAgo(s.created_at);
+
+    return `
+      <div class="bet-ticket" onclick="openPrediction('${pred.id}')">
+        <div class="bet-ticket-stripe ${status}"></div>
+        <div class="bet-ticket-body">
+          <div class="bet-ticket-top">
+            <span class="bet-ticket-cat">${escHtml(pred.category || 'General')}</span>
+            <span class="bet-ticket-status \( {status}"> \){statusLabel}</span>
+          </div>
+
+          <div class="bet-ticket-title">${escHtml(pred.title || 'Prediction')}</div>
+
+          <div class="bet-ticket-pick">
+            <div class="bet-ticket-pick-label">Your Pick</div>
+            <div class="bet-ticket-pick-value">${escHtml(option.label || '—')}</div>
+          </div>
+
+          <div class="bet-ticket-stats">
+            <div class="bet-ticket-stat">
+              <div class="bet-ticket-stat-val">${stake.toFixed(1)} MP</div>
+              <div class="bet-ticket-stat-label">Stake</div>
+            </div>
+            <div class="bet-ticket-stat">
+              <div class="bet-ticket-stat-val">${odds ? odds.toFixed(2) + 'x' : '—'}</div>
+              <div class="bet-ticket-stat-label">Odds</div>
+            </div>
+            <div class="bet-ticket-stat">
+              <div class="bet-ticket-stat-val ${status === 'won' ? 'green' : status === 'lost' ? 'red' : ''}">
+                ${status === 'pending' ? potential : status === 'won' ? '+' + actual : actual} MP
+              </div>
+              <div class="bet-ticket-stat-label">${status === 'pending' ? 'Potential' : 'Return'}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bet-ticket-footer">
+          <span class="bet-ticket-time">${timeText}</span>
+          <span class="bet-ticket-view">View →</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
 
 // ── Helper ────────────────────────────────────────────
 function timeAgo(ts) {
