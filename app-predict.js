@@ -505,6 +505,11 @@ async function submitPredictStake() {
   updatePredictPotential();
   _loadPulseWallet();
 
+// ✅ Force homepage Pulse cards to refresh immediately
+if (typeof loadPulseMoments === 'function') {
+  loadPulseMoments();
+}
+
   // Refresh
   const { data: refreshed } = await supabase
     .from('predictions').select('*, prediction_options(*)').eq('id', _pred.currentId).single();
