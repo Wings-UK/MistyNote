@@ -950,10 +950,23 @@ function renderBetTickets(stakes, type) {
     var option    = s.option || {};
     var status    = s.status || 'pending';
     var stake     = Number(s.amount_mp || 0);
-    var odds      = Number(s.odds_at_stake || 0);
-    var potential = (stake * odds).toFixed(2);
     var actual    = Number(s.actual_return || 0).toFixed(2);
     var prizePool = Number(pred.prize_pool || (pred.total_pool || 0) * 0.92 || 0);
+    var optionTotal = Number(option.total_staked || 0);
+
+    // ── KEY FIX: Use LIVE odds for active bets ──
+    var odds = 0;
+    if (status === 'pending') {
+      // Always calculate current live odds
+      odds = (prizePool > 0 && optionTotal > 0)
+        ? Math.max(1.01, prizePool / optionTotal)
+        : 0;
+    } else {
+      // Settled bets keep the odds they had
+      odds = Number(s.odds_at_stake || 0);
+    }
+
+    var potential = (stake * odds).toFixed(2);
 
     var statusLabel = 'ACTIVE';
     if (status === 'won') statusLabel = 'WON ✓';
