@@ -831,6 +831,48 @@ document.addEventListener('feedTabActivated', loadPulseMoments);
 // ══════════════════════════════════════════════════════
 // MY BETS — Premium Ticket View
 // ══════════════════════════════════════════════════════
+// Aggregate multiple stakes on the same prediction + option into one ticket.
+// Amounts (and actual_return for settled) are summed so top-ups increase the
+// single ticket instead of creating duplicate tickets.
+function aggregateMyBets(stakesList) {
+  const map = new Map();
+  (stakesList || []).forEach(s => {
+    const predId = s.prediction?.id || '';
+    const optId  = s.option?.id || '';
+    if (!predId || !optId) return;
+    const key = predId + '_' + optId + '_' + (s.status || 'pending');
+    if (!map.has(key)) {
+      map.set(key, {
+        id: s.id,
+        amount_mp: 0,
+        odds_at_stake: s.odds_at_stake,
+        status: s.status,
+        actual_return: 0,
+        created_at: s.created_at,
+        prediction: s.prediction,
+        option: s.option,
+        _stakeIds: [],
+      });
+    }
+    const agg = map.get(key);
+    agg.amount_mp = Number(agg.amount_mp) + Number(s.amount_mp || 0);
+    agg.actual_return = Number(agg.actual_return) + Number(s.actual_return || 0);
+    agg._stakeIds.push(s.id);
+    // Keep the most recent created_at for the ticket timestamp
+    if (new Date(s.created_at) > new Date(agg.created_at)) {
+      agg.created_at = s.created_at;
+      // Prefer the odds from the latest stake for settled display
+      if (s.status !== 'pending' && s.odds_at_stake) {
+        agg.odds_at_stake = s.odds_at_stake;
+      }
+    }
+  });
+  // Sort by most recent first
+  return Array.from(map.values()).sort(
+    (a, b) => new Date(b.created_at) - new Date(a.created_at)
+  );
+}
+
 async function loadMyBets() {
   const body = document.getElementById('predict-inbox-body');
   if (!body || !currentUser) return;
@@ -887,8 +929,12 @@ async function loadMyBets() {
     return;
   }
 
-  const active  = stakes.filter(s => s.status === 'pending');
-  const settled = stakes.filter(s => s.status !== 'pending');
+  const activeRaw  = stakes.filter(s => s.status === 'pending');
+  const settledRaw = stakes.filter(s => s.status !== 'pending');
+
+  // Merge same prediction + option into one ticket (amounts add up)
+  const active  = aggregateMyBets(activeRaw);
+  const settled = aggregateMyBets(settledRaw);
 
   const totalStaked = active.reduce((s, b) => s + Number(b.amount_mp || 0), 0);
   const totalWon    = settled
@@ -923,6 +969,7 @@ async function loadMyBets() {
 
   window._myBetsActive  = active;
   window._myBetsSettled = settled;
+  // Pass original stakes for realtime (so we still subscribe to every pending option)
   subscribeMyBetsLive(stakes);
 }
 
@@ -985,8 +1032,9 @@ function renderBetTickets(stakes, type) {
                       status === 'won'     ? '+' + actual + ' MP' : actual + ' MP';
     var returnClass = status === 'won' ? 'green' : (status === 'lost' ? 'red' : '');
 
+    var stakeIds = (s._stakeIds && s._stakeIds.length) ? s._stakeIds.join(',') : (s.id || '');
     return '<div class="bet-ticket" ' +
-      'data-stake-id="' + s.id + '" ' +
+      'data-stake-id="' + stakeIds + '" ' +
       'data-option-id="' + (option.id || '') + '" ' +
       'data-stake-amount="' + stake + '" ' +
       'data-prize-pool="' + prizePool + '" ' +
