@@ -110,12 +110,22 @@ async function _loadPulseWallet() {
 async function _loadPulseWinnersTicker() {
   const el = document.getElementById('pulse-winners-text');
   if (!el) return;
-  const { data } = await supabase
+  // Prefer newest settled wins; fall back if settled_at missing
+  let { data, error } = await supabase
     .from('prediction_stakes')
-    .select('actual_return, user:users(username), prediction:predictions(title)')
+    .select('actual_return, settled_at, created_at, user:users(username), prediction:predictions(title)')
     .eq('status', 'won')
-    .order('actual_return', { ascending: false })
-    .limit(10);
+    .order('settled_at', { ascending: false })
+    .limit(12);
+  if (error || !data?.length) {
+    const res = await supabase
+      .from('prediction_stakes')
+      .select('actual_return, created_at, user:users(username), prediction:predictions(title)')
+      .eq('status', 'won')
+      .order('actual_return', { ascending: false })
+      .limit(12);
+    data = res.data;
+  }
   if (!data?.length) { el.textContent = 'Be the first to win on Pulse!'; return; }
   const parts = data.map(s => {
     const u = s.user?.username || 'someone';
@@ -147,39 +157,51 @@ async function loadPredictionsInbox(tab) {
   body.innerHTML = `<div style="padding:48px;text-align:center;color:var(--text3)">
     <div style="font-size:32px;margin-bottom:10px">&#127939;</div>Loading&hellip;</div>`;
 
-  // Winners section (always shown on All tab)
+  // Recent winners (Open + Resolved tabs)
   let winnersHTML = '';
-  if (tab === 'open') {
-    const { data: wins } = await supabase
+  if (tab === 'open' || tab === 'resolved') {
+    let wins = null;
+    let wRes = await supabase
       .from('prediction_stakes')
-      .select('actual_return, created_at, user:users(id,username,avatar), prediction:predictions(title), option:prediction_options(label)')
+      .select('actual_return, settled_at, created_at, user:users(id,username,avatar), prediction:predictions(title), option:prediction_options(label)')
       .eq('status', 'won')
-      .order('actual_return', { ascending: false })
-      .limit(6);
+      .order('settled_at', { ascending: false })
+      .limit(8);
+    wins = wRes.data;
+    if (wRes.error || !wins?.length) {
+      wRes = await supabase
+        .from('prediction_stakes')
+        .select('actual_return, created_at, user:users(id,username,avatar), prediction:predictions(title), option:prediction_options(label)')
+        .eq('status', 'won')
+        .order('actual_return', { ascending: false })
+        .limit(8);
+      wins = wRes.data;
+    }
 
     if (wins?.length) {
       const grads = ['linear-gradient(135deg,#f5a623,#f093fb)','linear-gradient(135deg,#4facfe,#00f2fe)','linear-gradient(135deg,#43e97b,#38f9d7)','linear-gradient(135deg,#f0385a,#f093fb)','linear-gradient(135deg,#6C47FF,#a855f7)','linear-gradient(135deg,#f6d365,#fda085)'];
       winnersHTML = `
         <div style="margin-bottom:18px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-            <span style="font-size:15px;font-weight:800;color:var(--text)">&#127942; Recent Winners</span>
+            <span style="font-size:15px;font-weight:800;color:var(--text)">🏆 Recent Winners</span>
           </div>
           <div style="display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:4px">
             ${wins.map((w,i) => {
               const mp  = Number(w.actual_return||0).toFixed(2);
               const ngn = mpToNgn(mp);
+              const when = w.settled_at || w.created_at;
               const av  = w.user?.avatar
                 ? `<img src="${escHtml(w.user.avatar)}" style="width:30px;height:30px;border-radius:50%;object-fit:cover">`
                 : `<div class="pulse-winner-av" style="background:${grads[i%grads.length]}">${(w.user?.username||'?')[0].toUpperCase()}</div>`;
               return `<div class="pulse-winner-card" onclick="showUserProfile('${w.user?.id||''}',this)">
                 <div style="display:flex;align-items:center;gap:7px;margin-bottom:7px">${av}
                   <div><div style="font-size:12px;font-weight:700;color:var(--text)">${escHtml(w.user?.username||'')}</div>
-                  <div style="font-size:10px;color:var(--text3)">${timeAgo(w.created_at)}</div></div>
+                  <div style="font-size:10px;color:var(--text3)">${timeAgo(when)}</div></div>
                 </div>
                 <div class="pulse-winner-amount">+${mp} MP</div>
-                <div class="pulse-winner-ngn">&#8776; ${fmtNgn(ngn)} won</div>
+                <div class="pulse-winner-ngn">≈ ${fmtNgn(ngn)} won</div>
                 <div class="pulse-winner-q">${escHtml(w.prediction?.title||'')}</div>
-                <div class="pulse-winner-pick">&#10003; ${escHtml(w.option?.label||'')}</div>
+                <div class="pulse-winner-pick">✓ ${escHtml(w.option?.label||'')}</div>
               </div>`;
             }).join('')}
           </div>
@@ -229,13 +251,15 @@ async function loadPredictionsInbox(tab) {
 
 // ── Build a single prediction card (sports-betting style) ──
 function _buildInboxCard(pred) {
-  const isOpen    = pred.status === 'open' && new Date(pred.closes_at) > new Date();
-  const totalPool = pred.total_pool || 0;
-  const prizePool = pred.prize_pool || (totalPool * (1 - PREDICT_PLATFORM_CUT));
-  const options   = (pred.prediction_options || []).sort((a,b) => b.total_staked - a.total_staked);
-  const cat       = (pred.category || 'General').toLowerCase();
-  const catLabel  = pred.category || 'General';
-  const emoji     = CAT_EMOJI[pred.category] || '&#127919;';
+  const isOpen     = pred.status === 'open' && new Date(pred.closes_at) > new Date();
+  const isResolved = pred.status === 'resolved';
+  const totalPool  = pred.total_pool || 0;
+  const prizePool  = pred.prize_pool || (totalPool * (1 - PREDICT_PLATFORM_CUT));
+  const options    = (pred.prediction_options || []).sort((a,b) => b.total_staked - a.total_staked);
+  const cat        = (pred.category || 'General').toLowerCase();
+  const catLabel   = pred.category || 'General';
+  const emoji      = CAT_EMOJI[pred.category] || '&#127919;';
+  const winLabel   = options.find(o => o.id === pred.resolved_option_id)?.label;
 
   const optionsHTML = options.slice(0,3).map((opt, i) => {
     const pct  = totalPool > 0 ? Math.round((opt.total_staked / totalPool) * 100) : Math.round(100/options.length);
@@ -243,23 +267,36 @@ function _buildInboxCard(pred) {
       ? Math.max(1.01, prizePool / opt.total_staked).toFixed(2)
       : (options.length > 0 ? (1/options.length * (1/(1-PREDICT_PLATFORM_CUT))).toFixed(2) : '1.00');
     const barColor = BAR_COLORS[i % BAR_COLORS.length];
-    return `<div class="pred-inbox-option">
+    const isWin = isResolved && opt.id === pred.resolved_option_id;
+    return `<div class="pred-inbox-option" style="${isWin ? 'border:1.5px solid rgba(22,163,74,0.45);border-radius:10px;background:rgba(22,163,74,0.06)' : ''}">
       <div class="pred-inbox-option-body">
         <div class="pred-inbox-option-row">
-          <span class="pred-inbox-option-label">${escHtml(opt.label)}</span>
+          <span class="pred-inbox-option-label">${escHtml(opt.label)}${isWin ? ' <span style="color:#16a34a;font-size:10px;font-weight:800">✓ WIN</span>' : ''}</span>
           <span class="pred-inbox-option-pct">${pct}%</span>
         </div>
-        <div class="pred-inbox-bar-bg"><div class="pred-inbox-bar-fill" style="width:${pct}%;background:${barColor}"></div></div>
+        <div class="pred-inbox-bar-bg"><div class="pred-inbox-bar-fill" style="width:${pct}%;background:${isWin ? '#16a34a' : barColor}"></div></div>
       </div>
       <div class="pred-inbox-odds-pill">
-        <div class="pred-inbox-odds-num">${odds}<span style="font-size:10px">x</span></div>
+        <div class="pred-inbox-odds-num" style="${isWin ? 'color:#16a34a' : ''}">${odds}<span style="font-size:10px">x</span></div>
         <div class="pred-inbox-odds-lbl">ODDS</div>
       </div>
     </div>`;
   }).join('');
 
-  const countdown = isOpen ? fmtCountdown(pred.closes_at) : 'Closed';
+  const countdown = isOpen ? fmtCountdown(pred.closes_at) : (isResolved ? 'Resolved' : 'Closed');
   const ngnPool   = mpToNgn(totalPool);
+  const statusPill = isOpen
+    ? `<div class="pred-inbox-live"><div class="pred-inbox-live-dot"></div>LIVE</div>`
+    : isResolved
+      ? `<div style="font-size:10px;font-weight:800;color:#16a34a;background:rgba(22,163,74,0.12);padding:3px 8px;border-radius:8px;flex-shrink:0">RESOLVED</div>`
+      : `<div style="font-size:10px;font-weight:700;color:var(--text3);background:var(--bg2);padding:3px 8px;border-radius:8px;flex-shrink:0">CLOSED</div>`;
+
+  const bottomRight = isOpen
+    ? `<div class="pred-inbox-acca-btn" onclick="event.stopPropagation();_addToAccaFromCard('${pred.id}','${escHtml(pred.title)}')">+</div>
+       <div class="pred-inbox-stake-btn" onclick="event.stopPropagation();openPrediction('${pred.id}')">Stake</div>`
+    : isResolved
+      ? `<div style="font-size:12px;font-weight:800;color:#16a34a">Winner: ${escHtml(winLabel || '—')}</div>`
+      : `<div style="font-size:13px;font-weight:600;color:var(--text3)">Prediction closed</div>`;
 
   return `<div class="pred-inbox-card" onclick="openPrediction('${pred.id}')">
     <div class="pred-inbox-cat-strip ${cat}"></div>
@@ -268,7 +305,7 @@ function _buildInboxCard(pred) {
         <div style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:3px 8px;border-radius:6px;margin-bottom:5px;background:rgba(108,71,255,0.08);color:var(--accent)">${emoji} ${escHtml(catLabel)}</div>
         <div class="pred-inbox-title">${escHtml(pred.title)}</div>
       </div>
-      ${isOpen ? `<div class="pred-inbox-live"><div class="pred-inbox-live-dot"></div>LIVE</div>` : `<div style="font-size:10px;font-weight:700;color:var(--text3);background:var(--bg2);padding:3px 8px;border-radius:8px;flex-shrink:0">CLOSED</div>`}
+      ${statusPill}
     </div>
     <div class="pred-inbox-stats">
       <div class="pred-inbox-stat">
@@ -277,7 +314,7 @@ function _buildInboxCard(pred) {
       </div>
       <div class="pred-inbox-stat">
         <span class="pred-inbox-stat-val">${totalPool > 0 ? fmtNgn(ngnPool).replace(/&[^;]+;/g,'₦') : '—'}</span>
-        <span class="pred-inbox-stat-label">&#8776; Naira</span>
+        <span class="pred-inbox-stat-label">≈ Naira</span>
       </div>
       <div class="pred-inbox-stat">
         <span class="pred-inbox-stat-val">${pred.stake_count || 0}</span>
@@ -285,19 +322,16 @@ function _buildInboxCard(pred) {
       </div>
       <div class="pred-inbox-stat">
         <span class="pred-inbox-stat-val countdown" id="cd-${pred.id}">${countdown}</span>
-        <span class="pred-inbox-stat-label">Closes</span>
+        <span class="pred-inbox-stat-label">${isResolved ? 'Status' : 'Closes'}</span>
       </div>
     </div>
     <div class="pred-inbox-options">${optionsHTML}</div>
     <div class="pred-inbox-bottom">
       <div class="pred-inbox-pool">
-        <div class="pred-inbox-pool-mp">Min: 0.1 MP</div>
-        <div class="pred-inbox-pool-ngn">&#8776; ₦${Math.round(0.1 * getMPRate()).toLocaleString()} &middot; Rate: &#8358;${getMPRate().toLocaleString()}/MP</div>
+        <div class="pred-inbox-pool-mp">${isResolved ? 'Final pool' : 'Min: 0.1 MP'}</div>
+        <div class="pred-inbox-pool-ngn">${isResolved ? fmtNgn(ngnPool).replace(/&[^;]+;/g,'₦') : '≈ ₦' + Math.round(0.1 * getMPRate()).toLocaleString()}</div>
       </div>
-      ${isOpen ? `
-        <div class="pred-inbox-acca-btn" onclick="event.stopPropagation();_addToAccaFromCard('${pred.id}','${escHtml(pred.title)}')">+</div>
-        <div class="pred-inbox-stake-btn" onclick="event.stopPropagation();openPrediction('${pred.id}')">Stake</div>
-      ` : `<div style="font-size:13px;font-weight:600;color:var(--text3)">Prediction closed</div>`}
+      ${bottomRight}
     </div>
   </div>`;
 }
@@ -324,7 +358,18 @@ async function openPrediction(predictionId) {
 
     if (error || !pred) { showToast('Could not load prediction'); slideBack(); return; }
     _pred.currentData = pred;
+    _pred.myStakes = [];
     if (title) title.textContent = pred.title;
+
+    // This user's stakes on this market (win/loss banner)
+    if (typeof currentUser !== 'undefined' && currentUser) {
+      const { data: mine } = await supabase
+        .from('prediction_stakes')
+        .select('id, amount_mp, status, actual_return, option_id, option:prediction_options(label)')
+        .eq('prediction_id', predictionId)
+        .eq('user_id', currentUser.id);
+      _pred.myStakes = mine || [];
+    }
 
     // Increment views
     supabase.from('predictions').update({ view_count: (pred.view_count||0)+1 }).eq('id', predictionId).then(()=>{});
@@ -347,12 +392,60 @@ function _renderPredictionPage(pred) {
   if (!body) return;
 
   const isOpen    = pred.status === 'open' && new Date(pred.closes_at) > new Date();
+  const isResolved = pred.status === 'resolved';
   const totalPool = pred.total_pool || 0;
   const prizePool = pred.prize_pool || (totalPool * (1-PREDICT_PLATFORM_CUT));
   const options   = (pred.prediction_options||[]).sort((a,b) => b.total_staked - a.total_staked);
-  const cat       = (pred.category||'General').toLowerCase();
   const catGrad   = CAT_GRADIENT[pred.category] || CAT_GRADIENT['General'];
   const emoji     = CAT_EMOJI[pred.category]    || '&#127919;';
+  const winOptId  = pred.resolved_option_id;
+  const winLabel  = options.find(o => o.id === winOptId)?.label || 'Unknown';
+
+  // Aggregate this user's result on this market
+  const myStakes = _pred.myStakes || [];
+  let myStaked = 0, myReturn = 0, myWon = false, myLost = false, myRefunded = false, myPickLabels = [];
+  myStakes.forEach(s => {
+    myStaked += Number(s.amount_mp || 0);
+    myReturn += Number(s.actual_return || 0);
+    if (s.status === 'won') myWon = true;
+    if (s.status === 'lost') myLost = true;
+    if (s.status === 'refunded') myRefunded = true;
+    if (s.option?.label) myPickLabels.push(s.option.label);
+  });
+  const myProfit = myReturn - myStaked;
+
+  let personalHTML = '';
+  if (isResolved && myStakes.length) {
+    if (myWon) {
+      personalHTML = `
+        <div style="margin:12px 14px;padding:16px;border-radius:16px;background:linear-gradient(135deg,rgba(22,163,74,0.15),rgba(56,249,215,0.08));border:1.5px solid rgba(22,163,74,0.35);text-align:center">
+          <div style="font-size:28px;margin-bottom:6px">🎉</div>
+          <div style="font-size:18px;font-weight:900;color:#16a34a;margin-bottom:4px">You won!</div>
+          <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Pick: ${escHtml([...new Set(myPickLabels)].join(', '))}</div>
+          <div style="display:flex;justify-content:center;gap:18px">
+            <div><div style="font-size:11px;color:var(--text3)">Staked</div><div style="font-size:15px;font-weight:800">${myStaked.toFixed(2)} MP</div></div>
+            <div><div style="font-size:11px;color:var(--text3)">Payout</div><div style="font-size:15px;font-weight:800;color:#16a34a">+${myReturn.toFixed(2)} MP</div></div>
+            <div><div style="font-size:11px;color:var(--text3)">Profit</div><div style="font-size:15px;font-weight:800;color:#16a34a">+${myProfit.toFixed(2)} MP</div></div>
+          </div>
+          <div style="font-size:12px;color:var(--text3);margin-top:10px">≈ ${fmtNgn(mpToNgn(myReturn)).replace(/&[^;]+;/g,'₦')} credited to your wallet</div>
+        </div>`;
+    } else if (myRefunded && !myLost && !myWon) {
+      personalHTML = `
+        <div style="margin:12px 14px;padding:14px;border-radius:14px;background:var(--bg2);border:1px solid var(--border);text-align:center">
+          <div style="font-size:15px;font-weight:800;color:var(--text)">Refunded</div>
+          <div style="font-size:13px;color:var(--text2);margin-top:4px">${myStaked.toFixed(2)} MP returned to your wallet</div>
+        </div>`;
+    } else if (myLost) {
+      personalHTML = `
+        <div style="margin:12px 14px;padding:16px;border-radius:16px;background:rgba(239,68,68,0.08);border:1.5px solid rgba(239,68,68,0.25);text-align:center">
+          <div style="font-size:28px;margin-bottom:6px">😔</div>
+          <div style="font-size:18px;font-weight:900;color:#ef4444;margin-bottom:4px">You lost</div>
+          <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Pick: ${escHtml([...new Set(myPickLabels)].join(', '))}</div>
+          <div style="font-size:15px;font-weight:800;color:#ef4444">−${myStaked.toFixed(2)} MP</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:6px">≈ ${fmtNgn(mpToNgn(myStaked)).replace(/&[^;]+;/g,'₦')} · Winner was ${escHtml(winLabel)}</div>
+        </div>`;
+    }
+  }
 
   const optionsHTML = options.map((opt, i) => {
     const pct  = totalPool > 0 ? Math.round((opt.total_staked/totalPool)*100) : Math.round(100/options.length);
@@ -360,34 +453,43 @@ function _renderPredictionPage(pred) {
       ? Math.max(1.01, prizePool/opt.total_staked).toFixed(2)
       : (options.length > 0 ? (1/options.length*(1/(1-PREDICT_PLATFORM_CUT))).toFixed(2) : '1.00');
     const barColor = BAR_COLORS[i % BAR_COLORS.length];
-    return `<div class="predict-option" id="popt-${opt.id}" onclick="selectPredictOption('${opt.id}','${escHtml(opt.label)}',${odds})">
+    const isWinner = isResolved && opt.id === winOptId;
+    const click = isOpen ? `onclick="selectPredictOption('${opt.id}','${escHtml(opt.label)}',${odds})"` : '';
+    const border = isWinner
+      ? 'border:2px solid #16a34a;background:rgba(22,163,74,0.08)'
+      : (isResolved ? 'border:1.5px solid var(--border);opacity:0.72' : '');
+    return `<div class="predict-option${isWinner ? ' winner-opt' : ''}" id="popt-${opt.id}" ${click} style="${border};border-radius:14px;overflow:hidden">
       <div style="display:flex;align-items:center">
         <div style="flex:1;padding:12px 14px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-            <span style="font-size:15px;font-weight:700;color:var(--text)">${escHtml(opt.label)}</span>
+            <span style="font-size:15px;font-weight:700;color:var(--text)">${escHtml(opt.label)}${isWinner ? ' <span style="font-size:11px;color:#16a34a;font-weight:800">✓ WINNER</span>' : ''}</span>
             <span style="font-size:12px;color:var(--text3);font-weight:500">${pct}% backed</span>
           </div>
           <div style="height:4px;background:var(--border);border-radius:2px">
-            <div id="pbar-${opt.id}" style="height:100%;border-radius:2px;width:${pct}%;background:${barColor};transition:width 0.5s"></div>
+            <div id="pbar-${opt.id}" style="height:100%;border-radius:2px;width:${pct}%;background:${isWinner ? '#16a34a' : barColor};transition:width 0.5s"></div>
           </div>
           <div style="font-size:11px;color:var(--text3);margin-top:4px">${fmtMP(opt.total_staked)} staked</div>
         </div>
         <div style="padding:0 14px;border-left:1.5px solid var(--border);min-width:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">
-          <div id="podds-${opt.id}" style="font-size:20px;font-weight:900;color:var(--accent);line-height:1;font-variant-numeric:tabular-nums">${odds}<span style="font-size:11px">x</span></div>
+          <div id="podds-${opt.id}" style="font-size:20px;font-weight:900;color:${isWinner ? '#16a34a' : 'var(--accent)'};line-height:1;font-variant-numeric:tabular-nums">${odds}<span style="font-size:11px">x</span></div>
           <div style="font-size:9px;color:var(--text3);font-weight:600">ODDS</div>
         </div>
       </div>
     </div>`;
   }).join('');
 
+  const resolvedBanner = isResolved ? `
+    <div style="margin:0 14px 12px;padding:14px;border-radius:14px;background:rgba(22,163,74,0.08);border:1px solid rgba(22,163,74,0.2);font-size:15px;font-weight:800;color:#16a34a;text-align:center">
+      ✓ Resolved — <strong>${escHtml(winLabel)}</strong> won
+    </div>` : '';
+
   body.innerHTML = `
-    <!-- Banner -->
     <div style="padding:18px 16px 16px;background:${catGrad};position:relative;overflow:hidden;min-height:120px;display:flex;flex-direction:column;justify-content:flex-end">
       <div style="position:absolute;top:12px;left:12px;display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,0.15);color:white;font-size:10px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;padding:3px 10px;border-radius:20px;border:1px solid rgba(255,255,255,0.2)">${emoji} ${escHtml(pred.category||'General')}</div>
+      ${isResolved ? '<div style="position:absolute;top:12px;right:12px;background:rgba(0,0,0,0.25);color:white;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px">RESOLVED</div>' : ''}
       <div style="font-size:20px;font-weight:900;color:white;line-height:1.25;letter-spacing:-0.3px;position:relative;z-index:1">${escHtml(pred.title)}</div>
     </div>
 
-    <!-- Stats strip -->
     <div style="display:flex;border-bottom:1px solid var(--border);background:var(--surface)">
       <div style="flex:1;padding:10px 0;text-align:center;border-right:1px solid var(--border)">
         <div style="font-size:14px;font-weight:900;color:var(--accent)">${Number(totalPool).toFixed(2)} MP</div>
@@ -395,33 +497,34 @@ function _renderPredictionPage(pred) {
       </div>
       <div style="flex:1;padding:10px 0;text-align:center;border-right:1px solid var(--border)">
         <div style="font-size:13px;font-weight:900;color:var(--text)">${fmtNgn(mpToNgn(totalPool)).replace(/&[^;]+;/g,'₦')}</div>
-        <div style="font-size:9px;color:var(--text3);font-weight:500;margin-top:1px">&#8776; Naira</div>
+        <div style="font-size:9px;color:var(--text3);font-weight:500;margin-top:1px">≈ Naira</div>
       </div>
       <div style="flex:1;padding:10px 0;text-align:center;border-right:1px solid var(--border)">
         <div style="font-size:14px;font-weight:900;color:var(--text)">${pred.stake_count||0}</div>
         <div style="font-size:9px;color:var(--text3);font-weight:500;margin-top:1px">Stakers</div>
       </div>
       <div style="flex:1;padding:10px 0;text-align:center">
-        <div id="pcd-${pred.id}" style="font-size:12px;font-weight:900;color:var(--red);font-variant-numeric:tabular-nums">${fmtCountdown(pred.closes_at)}</div>
-        <div style="font-size:9px;color:var(--text3);font-weight:500;margin-top:1px">Closes</div>
+        <div id="pcd-${pred.id}" style="font-size:12px;font-weight:900;color:${isResolved ? '#16a34a' : 'var(--red)'};font-variant-numeric:tabular-nums">${isResolved ? 'Done' : fmtCountdown(pred.closes_at)}</div>
+        <div style="font-size:9px;color:var(--text3);font-weight:500;margin-top:1px">${isResolved ? 'Status' : 'Closes'}</div>
       </div>
     </div>
 
+    ${personalHTML}
+    ${resolvedBanner}
+
     ${pred.description ? `<div style="padding:12px 16px;font-size:14px;color:var(--text2);line-height:1.5;border-bottom:1px solid var(--border)">${escHtml(pred.description)}</div>` : ''}
 
-    <!-- Options -->
     <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">${optionsHTML}</div>
 
-    <!-- Prize pool info -->
+    ${!isResolved ? `
     <div style="margin:0 14px 12px;padding:12px 14px;border-radius:14px;background:var(--bg2);border:1px solid var(--border)">
       <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:4px">How payouts work</div>
-      <div style="font-size:12px;color:var(--text3);line-height:1.5">Winners share the prize pool of <strong>${Number(prizePool).toFixed(2)} MP</strong> (&#8776; ${fmtNgn(mpToNgn(prizePool)).replace(/&[^;]+;/g,'₦')}). Your payout = your stake &divide; total on winning option &times; prize pool. Odds shown are live estimates and update as more people stake.</div>
-    </div>
-
-    ${pred.status === 'resolved' ? `
-      <div style="margin:0 14px 16px;padding:14px;border-radius:14px;background:rgba(22,163,74,0.08);border:1px solid rgba(22,163,74,0.2);font-size:15px;font-weight:800;color:#16a34a;text-align:center">
-        &#10003; Resolved &mdash; ${escHtml(options.find(o=>o.id===pred.resolved_option_id)?.label||'Unknown')} won
-      </div>` : ''}
+      <div style="font-size:12px;color:var(--text3);line-height:1.5">Winners share the prize pool of <strong>${Number(prizePool).toFixed(2)} MP</strong> (≈ ${fmtNgn(mpToNgn(prizePool)).replace(/&[^;]+;/g,'₦')}). Your payout = your stake ÷ total on winning option × prize pool.</div>
+    </div>` : `
+    <div style="margin:0 14px 16px;padding:12px 14px;border-radius:14px;background:var(--bg2);border:1px solid var(--border)">
+      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:4px">Final prize pool</div>
+      <div style="font-size:12px;color:var(--text3);line-height:1.5"><strong>${Number(prizePool).toFixed(2)} MP</strong> (≈ ${fmtNgn(mpToNgn(prizePool)).replace(/&[^;]+;/g,'₦')}) shared among winners on <strong>${escHtml(winLabel)}</strong>.</div>
+    </div>`}
   `;
 
   if (panel) panel.style.display = isOpen ? 'block' : 'none';
