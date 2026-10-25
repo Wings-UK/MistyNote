@@ -28,6 +28,27 @@ function fmtOdds(odds) {
   if (!odds || odds <= 0) return '&mdash;';
   return Number(odds).toFixed(2) + 'x';
 }
+
+/** Live parimutuel odds, or opening prior when pool is empty */
+function calcOptionOdds(opt, pred, options) {
+  const cut = PREDICT_PLATFORM_CUT;
+  const totalPool = Number(pred.total_pool || 0);
+  const prizePool = Number(pred.prize_pool != null ? pred.prize_pool : totalPool * (1 - cut));
+  const staked = Number(opt.total_staked || 0);
+  if (totalPool > 0 && staked > 0) {
+    return Math.max(1.01, prizePool / staked);
+  }
+  const p = Number(opt.opening_prob);
+  if (p > 0 && p <= 1) {
+    return Math.max(1.01, (1 - cut) / p);
+  }
+  const n = Math.max((options && options.length) || 2, 2);
+  return Math.max(1.01, (1 - cut) / n);
+}
+
+function isUsingOpeningOdds(pred) {
+  return !(Number(pred.total_pool || 0) > 0);
+}
 function fmtCountdown(closesAt) {
   const diff = new Date(closesAt) - new Date();
   if (diff <= 0) return 'Closed';
@@ -262,10 +283,9 @@ function _buildInboxCard(pred) {
   const winLabel   = options.find(o => o.id === pred.resolved_option_id)?.label;
 
   const optionsHTML = options.slice(0,3).map((opt, i) => {
-    const pct  = totalPool > 0 ? Math.round((opt.total_staked / totalPool) * 100) : Math.round(100/options.length);
-    const odds = prizePool > 0 && opt.total_staked > 0
-      ? Math.max(1.01, prizePool / opt.total_staked).toFixed(2)
-      : (options.length > 0 ? (1/options.length * (1/(1-PREDICT_PLATFORM_CUT))).toFixed(2) : '1.00');
+    const pct  = totalPool > 0 ? Math.round((opt.total_staked / totalPool) * 100)
+      : (opt.opening_prob > 0 ? Math.round(Number(opt.opening_prob) * 100) : Math.round(100/options.length));
+    const odds = calcOptionOdds(opt, pred, options).toFixed(2);
     const barColor = BAR_COLORS[i % BAR_COLORS.length];
     const isWin = isResolved && opt.id === pred.resolved_option_id;
     return `<div class="pred-inbox-option" style="${isWin ? 'border:1.5px solid rgba(22,163,74,0.45);border-radius:10px;background:rgba(22,163,74,0.06)' : ''}">
@@ -448,10 +468,9 @@ function _renderPredictionPage(pred) {
   }
 
   const optionsHTML = options.map((opt, i) => {
-    const pct  = totalPool > 0 ? Math.round((opt.total_staked/totalPool)*100) : Math.round(100/options.length);
-    const odds = prizePool > 0 && opt.total_staked > 0
-      ? Math.max(1.01, prizePool/opt.total_staked).toFixed(2)
-      : (options.length > 0 ? (1/options.length*(1/(1-PREDICT_PLATFORM_CUT))).toFixed(2) : '1.00');
+    const pct  = totalPool > 0 ? Math.round((opt.total_staked/totalPool)*100)
+      : (opt.opening_prob > 0 ? Math.round(Number(opt.opening_prob) * 100) : Math.round(100/options.length));
+    const odds = calcOptionOdds(opt, pred, options).toFixed(2);
     const barColor = BAR_COLORS[i % BAR_COLORS.length];
     const isWinner = isResolved && opt.id === winOptId;
     const click = isOpen ? `onclick="selectPredictOption('${opt.id}','${escHtml(opt.label)}',${odds})"` : '';
@@ -515,6 +534,11 @@ function _renderPredictionPage(pred) {
     ${pred.description ? `<div style="padding:12px 16px;font-size:14px;color:var(--text2);line-height:1.5;border-bottom:1px solid var(--border)">${escHtml(pred.description)}</div>` : ''}
 
     <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">${optionsHTML}</div>
+
+    ${!isResolved && isUsingOpeningOdds(pred) ? `
+    <div style="margin:0 14px 10px;padding:10px 14px;border-radius:12px;background:rgba(108,71,255,0.08);border:1px solid rgba(108,71,255,0.22);font-size:12px;color:var(--text2);line-height:1.45">
+      <strong style="color:var(--accent)">Opening odds</strong> — set from current priors. They move as real stakes come in. Final payout is always parimutuel (share of the prize pool).
+    </div>` : ''}
 
     ${!isResolved ? `
     <div style="margin:0 14px 12px;padding:12px 14px;border-radius:14px;background:var(--bg2);border:1px solid var(--border)">
@@ -834,10 +858,7 @@ async function loadPulseMoments() {
 
     let oddsHTML = '';
     top2.forEach(function(opt) {
-      let odds = '—';
-      if (prizePool > 0 && opt.total_staked > 0) {
-        odds = Math.max(1.01, prizePool / opt.total_staked).toFixed(2);
-      }
+      let odds = calcOptionOdds(opt, pred, options).toFixed(2);
       oddsHTML += '<div class="pulse-moment-opt" data-opt-id="' + opt.id + '">' +
         '<span class="pulse-moment-opt-label">' + escHtml(opt.label) + '</span>' +
         '<span class="pulse-moment-opt-odds" id="pm-odds-' + opt.id + '">' + odds + 'x</span>' +
