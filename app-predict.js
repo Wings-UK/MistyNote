@@ -140,8 +140,16 @@ function openPredictionsPage() {
   slideTo('predictions', () => {
     _loadPulseWallet();
     _loadPulseWinnersTicker();
-    loadPredictionsInbox(_predictTab);
+    loadPredictionsInbox(_predictTab || 'open');
+    _pulseInboxDirty = false;
   });
+}
+
+/** Call when returning from a prediction detail so homepage is not stale */
+function onPulseHomeVisible() {
+  if (_pulseInboxDirty) {
+    refreshPulseInboxIfVisible();
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -310,6 +318,77 @@ async function loadPredictionsInbox(tab) {
 
   const cardsHTML = preds.map(p => _buildInboxCard(p)).join('');
   body.innerHTML  = winnersHTML + cardsHTML;
+
+  // Cache + live odds on homepage cards
+  _inboxPredMap = {};
+  (preds || []).forEach(p => { _inboxPredMap[p.id] = p; });
+  _subscribeInboxLive(Object.keys(_inboxPredMap));
+}
+
+let _inboxPredMap = {};
+let _inboxChannel = null;
+let _pulseInboxDirty = false;
+
+function _subscribeInboxLive(predIds) {
+  if (_inboxChannel) {
+    try { supabase.removeChannel(_inboxChannel); } catch (e) {}
+    _inboxChannel = null;
+  }
+  if (!predIds || !predIds.length) return;
+
+  const filter = 'prediction_id=in.(' + predIds.join(',') + ')';
+  _inboxChannel = supabase
+    .channel('pulse-inbox-live')
+    .on('postgres_changes', {
+      event: 'UPDATE', schema: 'public', table: 'prediction_options', filter
+    }, function(payload) {
+      const opt = payload.new;
+      const pred = _inboxPredMap[opt.prediction_id];
+      if (!pred) return;
+      const opts = pred.prediction_options || [];
+      const i = opts.findIndex(o => o.id === opt.id);
+      if (i >= 0) opts[i] = Object.assign({}, opts[i], opt);
+      else opts.push(opt);
+      pred.prediction_options = opts;
+      let sum = 0;
+      opts.forEach(o => { sum += Number(o.total_staked || 0); });
+      pred.total_pool = sum;
+      pred.prize_pool = sum * (1 - PREDICT_PLATFORM_CUT);
+      _patchInboxCard(pred);
+      if (typeof loadPulseMoments === 'function') {
+        // keep moments in sync lightly
+      }
+    })
+    .on('postgres_changes', {
+      event: 'UPDATE', schema: 'public', table: 'predictions',
+      filter: 'id=in.(' + predIds.join(',') + ')'
+    }, function(payload) {
+      const row = payload.new;
+      const pred = _inboxPredMap[row.id];
+      if (!pred) return;
+      Object.assign(pred, row);
+      _patchInboxCard(pred);
+    })
+    .subscribe();
+}
+
+function _patchInboxCard(pred) {
+  if (!pred || !pred.id) return;
+  _inboxPredMap[pred.id] = pred;
+  const el = document.querySelector('.pred-inbox-card[data-pred-id="' + pred.id + '"]');
+  if (!el) { _pulseInboxDirty = true; return; }
+  const wrap = document.createElement('div');
+  wrap.innerHTML = _buildInboxCard(pred);
+  const next = wrap.firstElementChild;
+  if (next) el.replaceWith(next);
+}
+
+function refreshPulseInboxIfVisible() {
+  const body = document.getElementById('predict-inbox-body');
+  if (!body) return;
+  // If inbox is in DOM, reload current tab
+  loadPredictionsInbox(_predictTab || 'open');
+  _pulseInboxDirty = false;
 }
 
 // ── Build a single prediction card (sports-betting style) ──
@@ -360,7 +439,7 @@ function _buildInboxCard(pred) {
       ? `<div style="font-size:12px;font-weight:800;color:#16a34a">Winner: ${escHtml(winLabel || '—')}</div>`
       : `<div style="font-size:13px;font-weight:600;color:var(--text3)">Prediction closed</div>`;
 
-  return `<div class="pred-inbox-card" onclick="openPrediction('${pred.id}')">
+  return `<div class="pred-inbox-card" data-pred-id="${pred.id}" onclick="openPrediction('${pred.id}')">
     <div class="pred-inbox-cat-strip ${cat}"></div>
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:12px 14px 8px">
       <div>
@@ -682,6 +761,9 @@ if (typeof loadPulseMoments === 'function') {
     const label = picked?.label || document.getElementById('predict-stake-option-name')?.textContent || '';
     const freshOdds = picked ? calcOptionOdds(picked, refreshed, opts) : 0;
     selectPredictOption(optId, label, freshOdds);
+    // Homepage card should match immediately when user goes back
+    _patchInboxCard(refreshed);
+    _pulseInboxDirty = true;
   }
 }
 
@@ -1362,3 +1444,29 @@ function timeAgo(ts) {
   if (m>0) return m+'m ago';
   return 'just now';
 }
+
+
+// When user leaves prediction detail, refresh homepage if stakes changed
+(function _pulseNavHook() {
+  const wrap = (name) => {
+    const orig = window[name];
+    if (typeof orig !== 'function' || orig._pulseWrapped) return;
+    const wrapped = function() {
+      const ret = orig.apply(this, arguments);
+      setTimeout(function() {
+        try {
+          if (typeof _pulseInboxDirty !== 'undefined' && _pulseInboxDirty &&
+              typeof onPulseHomeVisible === 'function') {
+            onPulseHomeVisible();
+          }
+        } catch (e) {}
+      }, 120);
+      return ret;
+    };
+    wrapped._pulseWrapped = true;
+    window[name] = wrapped;
+  };
+  wrap('slideBack');
+  // Some builds use goBack / navBack
+  wrap('goBack');
+})();
