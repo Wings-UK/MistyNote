@@ -330,13 +330,13 @@ function _buildInboxCard(pred) {
     const odds = calcOptionOdds(opt, pred, options).toFixed(2);
     const barColor = BAR_COLORS[i % BAR_COLORS.length];
     const isWin = isResolved && opt.id === pred.resolved_option_id;
+    const impliedPct = Math.min(95, Math.max(8, Math.round((100 * (1 - PREDICT_PLATFORM_CUT)) / parseFloat(odds))));
     return `<div class="pred-inbox-option" style="${isWin ? 'border:1.5px solid rgba(22,163,74,0.45);border-radius:10px;background:rgba(22,163,74,0.06)' : ''}">
       <div class="pred-inbox-option-body">
         <div class="pred-inbox-option-row">
           <span class="pred-inbox-option-label">${escHtml(opt.label)}${isWin ? ' <span style="color:#16a34a;font-size:10px;font-weight:800">✓ WIN</span>' : ''}</span>
-          <span class="pred-inbox-option-pct">${pct}%</span>
         </div>
-        <div class="pred-inbox-bar-bg"><div class="pred-inbox-bar-fill" style="width:${pct}%;background:${isWin ? '#16a34a' : barColor}"></div></div>
+        <div class="pred-inbox-bar-bg"><div class="pred-inbox-bar-fill" style="width:${impliedPct}%;background:${isWin ? '#16a34a' : barColor}"></div></div>
       </div>
       <div class="pred-inbox-odds-pill">
         <div class="pred-inbox-odds-num" style="${isWin ? 'color:#16a34a' : ''}">${odds}<span style="font-size:10px">x</span></div>
@@ -457,7 +457,15 @@ function _renderPredictionPage(pred) {
   const isResolved = pred.status === 'resolved';
   const totalPool = pred.total_pool || 0;
   const prizePool = pred.prize_pool || (totalPool * (1-PREDICT_PLATFORM_CUT));
-  const options   = (pred.prediction_options||[]).sort((a,b) => b.total_staked - a.total_staked);
+  const options   = (pred.prediction_options||[]).slice().sort((a,b) => {
+    if (pred.status === 'resolved') {
+      if (a.id === pred.resolved_option_id) return -1;
+      if (b.id === pred.resolved_option_id) return 1;
+    }
+    const pa = Number(a.opening_prob || 0), pb = Number(b.opening_prob || 0);
+    if (pb !== pa) return pb - pa;
+    return String(a.label||'').localeCompare(String(b.label||''));
+  });
   const catGrad   = CAT_GRADIENT[pred.category] || CAT_GRADIENT['General'];
   const emoji     = CAT_EMOJI[pred.category]    || '&#127919;';
   const winOptId  = pred.resolved_option_id;
@@ -519,20 +527,20 @@ function _renderPredictionPage(pred) {
     const border = isWinner
       ? 'border:2px solid #16a34a;background:rgba(22,163,74,0.08)'
       : (isResolved ? 'border:1.5px solid var(--border);opacity:0.72' : '');
+    // Implied strength from odds only (no stake amounts leaked)
+    const impliedPct = Math.min(95, Math.max(8, Math.round((100 * (1 - PREDICT_PLATFORM_CUT)) / parseFloat(odds))));
     return `<div class="predict-option${isWinner ? ' winner-opt' : ''}" id="popt-${opt.id}" ${click} style="${border};border-radius:14px;overflow:hidden">
       <div style="display:flex;align-items:center">
         <div style="flex:1;padding:12px 14px">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
             <span style="font-size:15px;font-weight:700;color:var(--text)">${escHtml(opt.label)}${isWinner ? ' <span style="font-size:11px;color:#16a34a;font-weight:800">✓ WINNER</span>' : ''}</span>
-            <span style="font-size:12px;color:var(--text3);font-weight:500">${pct}% backed</span>
           </div>
           <div style="height:4px;background:var(--border);border-radius:2px">
-            <div id="pbar-${opt.id}" style="height:100%;border-radius:2px;width:${pct}%;background:${isWinner ? '#16a34a' : barColor};transition:width 0.5s"></div>
+            <div id="pbar-${opt.id}" style="height:100%;border-radius:2px;width:${impliedPct}%;background:${isWinner ? '#16a34a' : barColor};transition:width 0.5s"></div>
           </div>
-          <div style="font-size:11px;color:var(--text3);margin-top:4px">${fmtMP(opt.total_staked)} staked</div>
         </div>
-        <div style="padding:0 14px;border-left:1.5px solid var(--border);min-width:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">
-          <div id="podds-${opt.id}" style="font-size:20px;font-weight:900;color:${isWinner ? '#16a34a' : 'var(--accent)'};line-height:1;font-variant-numeric:tabular-nums">${odds}<span style="font-size:11px">x</span></div>
+        <div style="padding:0 14px;border-left:1.5px solid var(--border);min-width:72px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">
+          <div id="podds-${opt.id}" style="font-size:22px;font-weight:900;color:${isWinner ? '#16a34a' : 'var(--accent)'};line-height:1;font-variant-numeric:tabular-nums">${odds}<span style="font-size:11px">x</span></div>
           <div style="font-size:9px;color:var(--text3);font-weight:600">ODDS</div>
         </div>
       </div>
@@ -573,28 +581,14 @@ function _renderPredictionPage(pred) {
     ${personalHTML}
     ${resolvedBanner}
 
-    ${pred.description ? `<div style="padding:12px 16px;font-size:14px;color:var(--text2);line-height:1.5;border-bottom:1px solid var(--border)">${escHtml(pred.description)}</div>` : ''}
+    ${pred.description ? `<div class="predict-desc" style="padding:12px 16px;font-size:14px;color:var(--text2);line-height:1.55;border-bottom:1px solid var(--border);white-space:pre-line">${escHtml(pred.description)}</div>` : ''}
 
     <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">${optionsHTML}</div>
 
-    ${!isResolved ? `
-    <div style="margin:0 14px 10px;padding:10px 14px;border-radius:12px;background:rgba(108,71,255,0.08);border:1px solid rgba(108,71,255,0.22);font-size:12px;color:var(--text2);line-height:1.45">
-      <strong style="color:var(--accent)">${oddsDisplayLabel(pred)}</strong>
-      ${isUsingOpeningOdds(pred)
-        ? ' — early market uses opening priors + real stakes so a small bet does not flatten odds. '
-        : ' — based on real money in the pool. '}
-      <strong>Payout is always your share of the final prize pool</strong> (not a fixed bookie price). Odds on screen are live estimates until the market settles.
+    ${isResolved ? `
+    <div style="margin:0 14px 16px;padding:12px 14px;border-radius:14px;background:var(--bg2);border:1px solid var(--border);font-size:13px;color:var(--text2);line-height:1.45;text-align:center">
+      Final pool <strong>${Number(prizePool).toFixed(2)} MP</strong> · Winner: <strong>${escHtml(winLabel)}</strong>
     </div>` : ''}
-
-    ${!isResolved ? `
-    <div style="margin:0 14px 12px;padding:12px 14px;border-radius:14px;background:var(--bg2);border:1px solid var(--border)">
-      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:4px">How payouts work</div>
-      <div style="font-size:12px;color:var(--text3);line-height:1.5">Winners share the prize pool of <strong>${Number(prizePool).toFixed(2)} MP</strong> (≈ ${fmtNgn(mpToNgn(prizePool)).replace(/&[^;]+;/g,'₦')}). Your payout = your stake ÷ total on winning option × prize pool.</div>
-    </div>` : `
-    <div style="margin:0 14px 16px;padding:12px 14px;border-radius:14px;background:var(--bg2);border:1px solid var(--border)">
-      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:4px">Final prize pool</div>
-      <div style="font-size:12px;color:var(--text3);line-height:1.5"><strong>${Number(prizePool).toFixed(2)} MP</strong> (≈ ${fmtNgn(mpToNgn(prizePool)).replace(/&[^;]+;/g,'₦')}) shared among winners on <strong>${escHtml(winLabel)}</strong>.</div>
-    </div>`}
   `;
 
   if (panel) panel.style.display = isOpen ? 'block' : 'none';
@@ -624,8 +618,8 @@ function updatePredictPotential() {
   const est    = amount * odds;
   const ngnEst = mpToNgn(est);
   potEl.innerHTML = amount > 0 && odds > 0
-    ? `Est. return: <strong>${est.toFixed(2)} MP</strong> (&#8776; ${fmtNgn(ngnEst).replace(/&[^;]+;/g,'₦')}) &mdash; live odds, final may vary`
-    : 'Enter amount to see estimated return';
+    ? `Est. return <strong>${est.toFixed(2)} MP</strong> · ${fmtNgn(ngnEst).replace(/&[^;]+;/g,'₦')}`
+    : '';
 }
 
 function setPredictQuick(amount) {
