@@ -29,10 +29,11 @@ function fmtOdds(odds) {
   return Number(odds).toFixed(2) + 'x';
 }
 
-/** Virtual liquidity (MP) blended with opening_prob so early stakes don't nuke odds to 1.01x */
-const OPENING_VIRTUAL_SEED = 8;
+/** Virtual liquidity (MP) blended with opening_prob so early stakes don't nuke odds to 1.01x.
+ *  Lower = real stakes move odds faster. Higher = stickier opening priors. */
+const OPENING_VIRTUAL_SEED = 4;
 /** Above this real pool (MP), display pure market odds only */
-const ODDS_PURE_THRESHOLD = 10;
+const ODDS_PURE_THRESHOLD = 6;
 
 /**
  * Display odds for an option.
