@@ -674,7 +674,15 @@ if (typeof loadPulseMoments === 'function') {
   // Refresh
   const { data: refreshed } = await supabase
     .from('predictions').select('*, prediction_options(*)').eq('id', _pred.currentId).single();
-  if (refreshed) { _pred.currentData = refreshed; _renderPredictionPage(refreshed); selectPredictOption(optId, document.getElementById('predict-stake-option-name')?.textContent, parseFloat(panel.dataset.odds)); }
+  if (refreshed) {
+    _pred.currentData = refreshed;
+    _renderPredictionPage(refreshed);
+    const opts = refreshed.prediction_options || [];
+    const picked = opts.find(o => o.id === optId);
+    const label = picked?.label || document.getElementById('predict-stake-option-name')?.textContent || '';
+    const freshOdds = picked ? calcOptionOdds(picked, refreshed, opts) : 0;
+    selectPredictOption(optId, label, freshOdds);
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -812,21 +820,60 @@ function _subscribePredictionLive(predId) {
   if (_predChannel) supabase.removeChannel(_predChannel);
   _predChannel = supabase.channel(`pred-live-${predId}`)
     .on('postgres_changes', { event:'UPDATE', schema:'public', table:'prediction_options', filter:`prediction_id=eq.${predId}` }, payload => {
-      const opt    = payload.new;
-      const total  = _pred.currentData?.total_pool || 1;
-      const prize  = _pred.currentData?.prize_pool || (total * 0.92);
-      const odds   = prize > 0 && opt.total_staked > 0
-        ? Math.max(1.01, prize / opt.total_staked).toFixed(2) : '1.00';
-      const pct    = total > 0 ? Math.round((opt.total_staked / total) * 100) : 0;
-      const oddsEl = document.getElementById(`podds-${opt.id}`);
-      const barEl  = document.getElementById(`pbar-${opt.id}`);
-      if (oddsEl) { oddsEl.innerHTML = odds + '<span style="font-size:11px">x</span>'; oddsEl.style.animation='none'; setTimeout(()=>{ oddsEl.style.animation=''; },50); }
-      if (barEl)  barEl.style.width = pct + '%';
+      const incoming = payload.new;
+      if (!_pred.currentData) return;
+      const opts = _pred.currentData.prediction_options || [];
+      const idx = opts.findIndex(o => o.id === incoming.id);
+      if (idx >= 0) opts[idx] = { ...opts[idx], ...incoming };
+      else opts.push(incoming);
+      _pred.currentData.prediction_options = opts;
+      // Keep pool in sync from options if prediction row lags
+      const sum = opts.reduce((s, o) => s + Number(o.total_staked || 0), 0);
+      if (sum > Number(_pred.currentData.total_pool || 0)) {
+        _pred.currentData.total_pool = sum;
+        _pred.currentData.prize_pool = sum * (1 - PREDICT_PLATFORM_CUT);
+      }
+      _applyLiveOddsToDom(_pred.currentData);
     })
     .on('postgres_changes', { event:'UPDATE', schema:'public', table:'predictions', filter:`id=eq.${predId}` }, payload => {
       if (_pred.currentData) Object.assign(_pred.currentData, payload.new);
+      if (_pred.currentData) _applyLiveOddsToDom(_pred.currentData);
     })
     .subscribe();
+}
+
+/** Update all option odds/bars on the open prediction page using calcOptionOdds (soft blend). */
+function _applyLiveOddsToDom(pred) {
+  const options = pred.prediction_options || [];
+  options.forEach(opt => {
+    const odds = calcOptionOdds(opt, pred, options);
+    const oddsStr = odds.toFixed(2);
+    const impliedPct = Math.min(95, Math.max(8, Math.round((100 * (1 - PREDICT_PLATFORM_CUT)) / odds)));
+    const oddsEl = document.getElementById('podds-' + opt.id);
+    const barEl  = document.getElementById('pbar-' + opt.id);
+    if (oddsEl) {
+      const next = oddsStr + '<span style="font-size:11px">x</span>';
+      if (oddsEl.innerHTML !== next) {
+        oddsEl.innerHTML = next;
+        oddsEl.style.animation = 'none';
+        setTimeout(() => { oddsEl.style.animation = ''; }, 50);
+      }
+    }
+    if (barEl) barEl.style.width = impliedPct + '%';
+  });
+  // Keep stake panel in sync with selected option's live odds
+  const panel = document.getElementById('predict-stake-panel');
+  const sel = _pred.selectedOptId || panel?.dataset?.optId;
+  if (sel && panel) {
+    const opt = options.find(o => o.id === sel);
+    if (opt) {
+      const odds = calcOptionOdds(opt, pred, options);
+      panel.dataset.odds = odds;
+      const oddsEl = document.getElementById('predict-stake-odds-tag');
+      if (oddsEl) oddsEl.textContent = odds.toFixed(2) + 'x';
+      updatePredictPotential();
+    }
+  }
 }
 
 // ══════════════════════════════════════════════════════
@@ -966,10 +1013,8 @@ async function loadPulseMoments() {
         const oddsEl = document.getElementById('pm-odds-' + o.id);
         if (!oddsEl) return;
 
-        let newOdds = '—';
-        if (info.prizePool > 0 && o.total_staked > 0) {
-          newOdds = Math.max(1.01, info.prizePool / o.total_staked).toFixed(2);
-        }
+        const fakePred = { total_pool: info.totalPool, prize_pool: info.prizePool, status: 'open', closes_at: new Date(Date.now()+86400000).toISOString(), prediction_options: info.options };
+        const newOdds = calcOptionOdds(o, fakePred, info.options).toFixed(2);
 
         if (oddsEl.textContent !== newOdds + 'x') {
           oddsEl.textContent = newOdds + 'x';
