@@ -29,25 +29,66 @@ function fmtOdds(odds) {
   return Number(odds).toFixed(2) + 'x';
 }
 
-/** Live parimutuel odds, or opening prior when pool is empty */
+/** Virtual liquidity (MP) blended with opening_prob so early stakes don't nuke odds to 1.01x */
+const OPENING_VIRTUAL_SEED = 8;
+/** Above this real pool (MP), display pure market odds only */
+const ODDS_PURE_THRESHOLD = 10;
+
+/**
+ * Display odds for an option.
+ * - Open + thin pool: blend virtual seed from opening_prob with real stakes
+ * - Open + deep pool, or closed/resolved: pure parimutuel on real money only
+ * Settlement is ALWAYS pure parimutuel on real pool (never pays virtual seed).
+ */
 function calcOptionOdds(opt, pred, options) {
   const cut = PREDICT_PLATFORM_CUT;
   const totalPool = Number(pred.total_pool || 0);
-  const prizePool = Number(pred.prize_pool != null ? pred.prize_pool : totalPool * (1 - cut));
   const staked = Number(opt.total_staked || 0);
-  if (totalPool > 0 && staked > 0) {
-    return Math.max(1.01, prizePool / staked);
+  const status = pred.status || 'open';
+  const isOpen = status === 'open' && new Date(pred.closes_at) > new Date();
+  const usePure = !isOpen || totalPool >= ODDS_PURE_THRESHOLD;
+
+  if (usePure) {
+    const prizePool = Number(pred.prize_pool != null ? pred.prize_pool : totalPool * (1 - cut));
+    if (totalPool > 0 && staked > 0) {
+      return Math.max(1.01, prizePool / staked);
+    }
+    // Closed/empty or pure mode but this side has 0 — fall back to opening for display only
+    const p = Number(opt.opening_prob);
+    if (p > 0 && p <= 1) return Math.max(1.01, (1 - cut) / p);
+    const n = Math.max((options && options.length) || 2, 2);
+    return Math.max(1.01, (1 - cut) / n);
   }
-  const p = Number(opt.opening_prob);
-  if (p > 0 && p <= 1) {
-    return Math.max(1.01, (1 - cut) / p);
-  }
-  const n = Math.max((options && options.length) || 2, 2);
-  return Math.max(1.01, (1 - cut) / n);
+
+  // Soft blend: virtual seed split by opening_prob + real stakes
+  const opts = options || [];
+  let effectivePool = 0;
+  const effective = opts.map(o => {
+    const real = Number(o.total_staked || 0);
+    let prior = Number(o.opening_prob);
+    if (!(prior > 0 && prior <= 1)) prior = 1 / Math.max(opts.length, 2);
+    const virt = OPENING_VIRTUAL_SEED * prior;
+    const eff = real + virt;
+    effectivePool += eff;
+    return { id: o.id, eff };
+  });
+  const my = effective.find(e => e.id === opt.id);
+  const myEff = my ? my.eff : (staked + OPENING_VIRTUAL_SEED / Math.max(opts.length, 2));
+  const prizeEff = effectivePool * (1 - cut);
+  if (myEff <= 0) return 1.01;
+  return Math.max(1.01, prizeEff / myEff);
 }
 
 function isUsingOpeningOdds(pred) {
-  return !(Number(pred.total_pool || 0) > 0);
+  const totalPool = Number(pred.total_pool || 0);
+  const isOpen = (pred.status || 'open') === 'open' && new Date(pred.closes_at) > new Date();
+  return isOpen && totalPool < ODDS_PURE_THRESHOLD;
+}
+
+function oddsDisplayLabel(pred) {
+  if ((pred.status || '') === 'resolved') return 'Final market odds';
+  if (isUsingOpeningOdds(pred)) return 'Opening blend · moves with stakes';
+  return 'Live market odds';
 }
 function fmtCountdown(closesAt) {
   const diff = new Date(closesAt) - new Date();
@@ -535,9 +576,13 @@ function _renderPredictionPage(pred) {
 
     <div style="padding:12px 14px;display:flex;flex-direction:column;gap:8px">${optionsHTML}</div>
 
-    ${!isResolved && isUsingOpeningOdds(pred) ? `
+    ${!isResolved ? `
     <div style="margin:0 14px 10px;padding:10px 14px;border-radius:12px;background:rgba(108,71,255,0.08);border:1px solid rgba(108,71,255,0.22);font-size:12px;color:var(--text2);line-height:1.45">
-      <strong style="color:var(--accent)">Opening odds</strong> — set from current priors. They move as real stakes come in. Final payout is always parimutuel (share of the prize pool).
+      <strong style="color:var(--accent)">${oddsDisplayLabel(pred)}</strong>
+      ${isUsingOpeningOdds(pred)
+        ? ' — early market uses opening priors + real stakes so a small bet does not flatten odds. '
+        : ' — based on real money in the pool. '}
+      <strong>Payout is always your share of the final prize pool</strong> (not a fixed bookie price). Odds on screen are live estimates until the market settles.
     </div>` : ''}
 
     ${!isResolved ? `
