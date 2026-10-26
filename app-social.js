@@ -3134,23 +3134,8 @@ async function _cSubmit() {
         const buffer = _c.fileBuffer;
         if (!buffer) throw new Error('Video buffer lost — please try again');
         console.log('[MistyNote] using buffered video, size:', (buffer.byteLength / 1024 / 1024).toFixed(2) + 'MB');
-        const uploadUrl = `${SUPA_URL}/storage/v1/object/videos/${path}`;
-        const res = await fetch(uploadUrl, {
-          method:  'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'apikey':        SUPA_KEY,
-            'Content-Type':  _c.fileType || 'video/mp4',
-            'x-upsert':      'true',
-          },
-          body: buffer,
-        });
-        if (!res.ok) {
-          const errText = await res.text().catch(() => res.statusText);
-          console.error('[MistyNote] ❌ video upload failed:', res.status, errText);
-          throw new Error(`Video upload failed (${res.status}): ${errText}`);
-        }
-        videoUrl = `${SUPA_URL}/storage/v1/object/public/videos/${path}`;
+        const videoBlob = new Blob([buffer], { type: _c.fileType || 'video/mp4' });
+        videoUrl = await uploadToR2(videoBlob, 'videos', path.split('/').pop() || ('video_' + Date.now() + '.mp4'));
         console.log('[MistyNote] ✅ video uploaded:', videoUrl);
       } else {
         // Compress via canvas using the preview img element directly —
@@ -3178,15 +3163,7 @@ async function _cSubmit() {
           );
         });
         console.log('[MistyNote] compressed to', (blob.size/1024).toFixed(0)+'KB, uploading...');
-        const { error: upErr } = await supabase.storage
-          .from('avatars')
-          .upload(path, blob, { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
-        if (upErr) {
-          console.error('[MistyNote] ❌ upload error:', upErr.statusCode, upErr.message);
-          throw new Error('Upload failed: ' + upErr.message);
-        }
-        const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-        imageUrl = urlData.publicUrl;
+        imageUrl = await uploadToR2(blob, 'posts', 'post_' + Date.now() + '.jpg');
         console.log('[MistyNote] ✅ uploaded:', imageUrl);
       }
     }
@@ -3231,11 +3208,8 @@ async function _cSubmit() {
           ctx.drawImage(imgEl, 0, 0, w, h);
           canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 0.82);
         });
-        const { error: upErr } = await supabase.storage
-          .from('avatars').upload(path, blob, { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
-        if (upErr) throw new Error('Image ' + (i + 1) + ' upload failed: ' + upErr.message);
-        const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-        imagesArr.push(urlData.publicUrl);
+        const imgUrl = await uploadToR2(blob, 'posts', 'post_' + Date.now() + '_' + i + '.jpg');
+        imagesArr.push(imgUrl);
       }
       // First image also goes to image column for backwards compat
       imageUrl = imagesArr[0];
