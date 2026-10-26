@@ -18,6 +18,33 @@
 
 'use strict';
 
+// ── R2 MEDIA UPLOAD (Cloudflare Worker) ───────────────────
+const R2_UPLOAD_URL = 'https://mistynote-upload.jeremiahabraham47.workers.dev';
+
+/**
+ * Upload a File or Blob to Cloudflare R2 via Worker.
+ * Returns public URL string. Throws on failure.
+ * @param {File|Blob} fileOrBlob
+ * @param {string} folder e.g. 'avatars' | 'posts' | 'videos' | 'covers'
+ * @param {string} [filename]
+ */
+async function uploadToR2(fileOrBlob, folder, filename) {
+  if (!fileOrBlob) throw new Error('No file to upload');
+  const form = new FormData();
+  const name = filename || fileOrBlob.name || ('file_' + Date.now() + '.jpg');
+  form.append('file', fileOrBlob, name);
+  form.append('folder', folder || 'uploads');
+  const res = await fetch(R2_UPLOAD_URL, { method: 'POST', body: form });
+  let data = {};
+  try { data = await res.json(); } catch (e) {}
+  if (!res.ok || !data.publicUrl) {
+    throw new Error(data.error || ('Upload failed (' + res.status + ')'));
+  }
+  return data.publicUrl;
+}
+
+
+
 // ── CONTENT PROTECTION ─────────────────────────────────────
 
 // Block right-click context menu globally
@@ -1309,15 +1336,7 @@ async function obSaveProfile() {
 
       const path = 'avatars/' + currentUser.id + '.' + ext;
 
-      const { data: upData } = await supabase.storage.from('avatars').upload(path, obAvatarFile, { upsert: true });
-
-      if (upData) {
-
-        const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-
-        obAvatarUrl = urlData?.publicUrl || '';
-
-      }
+      obAvatarUrl = await uploadToR2(obAvatarFile, 'avatars', currentUser.id + '.' + ext);
 
     } catch(e) { console.warn('Avatar upload failed:', e); }
 
