@@ -3138,80 +3138,27 @@ async function _cSubmit() {
         videoUrl = await uploadToR2(videoBlob, 'videos', path.split('/').pop() || ('video_' + Date.now() + '.mp4'));
         console.log('[MistyNote] ✅ video uploaded:', videoUrl);
       } else {
-        // Compress via canvas using the preview img element directly —
-        // no new object URLs, no FileReader, works on all mobile browsers
-        const path = `${currentUser.id}/post_${Date.now()}.jpg`;
-        console.log('[MistyNote] compressing via canvas...');
-        const blob = await new Promise((resolve, reject) => {
-          // Grab the already-rendered img element in the composer preview
-          const previewImg = document.getElementById('mnc-img');
-          if (!previewImg || !previewImg.complete || !previewImg.naturalWidth) {
-            reject(new Error('Preview image not ready')); return;
-          }
-          const maxPx = 1200;
-          const scale = Math.min(1, maxPx / Math.max(previewImg.naturalWidth, previewImg.naturalHeight));
-          const w = Math.max(1, Math.round(previewImg.naturalWidth * scale));
-          const h = Math.max(1, Math.round(previewImg.naturalHeight * scale));
-          const canvas = document.createElement('canvas');
-          canvas.width = w; canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) { reject(new Error('No canvas context')); return; }
-          ctx.drawImage(previewImg, 0, 0, w, h);
-          canvas.toBlob(
-            b => b ? resolve(b) : reject(new Error('canvas.toBlob returned null')),
-            'image/jpeg', 0.82
-          );
-        });
-        console.log('[MistyNote] compressed to', (blob.size/1024).toFixed(0)+'KB, uploading...');
-        imageUrl = await uploadToR2(blob, 'posts', 'post_' + Date.now() + '.jpg');
+        console.log('[MistyNote] compressing image from file...');
+        imageUrl = await uploadImageToR2(_c.file, 'posts', 'post_' + Date.now() + '.jpg');
         console.log('[MistyNote] ✅ uploaded:', imageUrl);
       }
     }
     // STEP 4: Upload multiple images if present
     let imagesArr = [];
-    if (_c.files.length > 0) {
+        if (_c.files.length > 0) {
       for (let i = 0; i < _c.files.length; i++) {
         const item = _c.files[i];
-        const path = `${currentUser.id}/post_${Date.now()}_${i}.jpg`;
-        const imgEl = document.querySelectorAll('.mnc-img-thumb img')[i];
-        const blob = await new Promise((resolve, reject) => {
-          if (!imgEl || !imgEl.complete || !imgEl.naturalWidth) {
-            // fallback: read directly from file
-            const reader = new FileReader();
-            reader.onload = e => {
-              const tmp = new Image();
-              tmp.onload = () => {
-                const maxPx = 1200;
-                const scale = Math.min(1, maxPx / Math.max(tmp.naturalWidth, tmp.naturalHeight));
-                const w = Math.round(tmp.naturalWidth * scale);
-                const h = Math.round(tmp.naturalHeight * scale);
-                const cv = document.createElement('canvas');
-                cv.width = w; cv.height = h;
-                cv.getContext('2d').drawImage(tmp, 0, 0, w, h);
-                cv.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 0.82);
-              };
-              tmp.onerror = reject;
-              tmp.src = e.target.result;
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(item.file);
-            return;
-          }
-          const maxPx = 1200;
-          const scale = Math.min(1, maxPx / Math.max(imgEl.naturalWidth, imgEl.naturalHeight));
-          const w = Math.max(1, Math.round(imgEl.naturalWidth * scale));
-          const h = Math.max(1, Math.round(imgEl.naturalHeight * scale));
-          const canvas = document.createElement('canvas');
-          canvas.width = w; canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) { reject(new Error('No canvas context')); return; }
-          ctx.drawImage(imgEl, 0, 0, w, h);
-          canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 0.82);
-        });
-        const imgUrl = await uploadToR2(blob, 'posts', 'post_' + Date.now() + '_' + i + '.jpg');
-        imagesArr.push(imgUrl);
+        const file = item.file || item;
+        console.log('[MistyNote] uploading image', (i + 1) + '/' + _c.files.length);
+        try {
+          const imgUrl = await uploadImageToR2(file, 'posts', 'post_' + Date.now() + '_' + i + '.jpg');
+          imagesArr.push(imgUrl);
+          console.log('[MistyNote] ✅ image', (i + 1), imgUrl);
+        } catch (imgErr) {
+          console.error('[MistyNote] image', (i + 1), 'failed:', imgErr);
+          throw new Error('Photo ' + (i + 1) + ' failed to upload. Check your connection and try again.');
+        }
       }
-      // First image also goes to image column for backwards compat
       imageUrl = imagesArr[0];
     }
     // STEP 5: Insert post row
