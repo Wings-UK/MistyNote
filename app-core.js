@@ -30,17 +30,120 @@ const R2_UPLOAD_URL = 'https://mistynote-upload.jeremiahabraham47.workers.dev';
  */
 async function uploadToR2(fileOrBlob, folder, filename) {
   if (!fileOrBlob) throw new Error('No file to upload');
-  const form = new FormData();
   const name = filename || fileOrBlob.name || ('file_' + Date.now() + '.jpg');
-  form.append('file', fileOrBlob, name);
-  form.append('folder', folder || 'uploads');
-  const res = await fetch(R2_UPLOAD_URL, { method: 'POST', body: form });
-  let data = {};
-  try { data = await res.json(); } catch (e) {}
-  if (!res.ok || !data.publicUrl) {
-    throw new Error(data.error || ('Upload failed (' + res.status + ')'));
+  const folderName = folder || 'uploads';
+  const maxAttempts = 3;
+  let lastErr = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const form = new FormData();
+      form.append('file', fileOrBlob, name);
+      form.append('folder', folderName);
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 90000); // 90s
+      let res;
+      try {
+        res = await fetch(R2_UPLOAD_URL, {
+          method: 'POST',
+          body: form,
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+
+      let data = {};
+      try { data = await res.json(); } catch (e) {}
+      if (!res.ok || !data.publicUrl) {
+        throw new Error(data.error || ('Upload failed (' + res.status + ')'));
+      }
+      return data.publicUrl;
+    } catch (e) {
+      lastErr = e;
+      console.warn('[R2] attempt ' + attempt + ' failed:', e.message || e);
+      if (attempt < maxAttempts) {
+        await new Promise(r => setTimeout(r, 600 * attempt));
+      }
+    }
   }
-  return data.publicUrl;
+  throw lastErr || new Error('Upload failed');
+}
+
+/**
+ * Compress any image File/Blob to JPEG for reliable mobile upload.
+ * Does NOT depend on DOM preview elements.
+ */
+async function compressImageFile(fileOrBlob, maxPx = 1200, quality = 0.82) {
+  if (!fileOrBlob) throw new Error('No image');
+
+  // Prefer createImageBitmap (handles more formats, less memory)
+  let bitmap = null;
+  try {
+    if (typeof createImageBitmap === 'function') {
+      bitmap = await createImageBitmap(fileOrBlob);
+    }
+  } catch (e) {
+    bitmap = null;
+  }
+
+  const drawToBlob = (w0, h0, drawFn) => new Promise((resolve, reject) => {
+    const scale = Math.min(1, maxPx / Math.max(w0, h0));
+    const w = Math.max(1, Math.round(w0 * scale));
+    const h = Math.max(1, Math.round(h0 * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) { reject(new Error('No canvas')); return; }
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, w, h);
+    drawFn(ctx, w, h);
+    canvas.toBlob(
+      b => b ? resolve(b) : reject(new Error('toBlob failed')),
+      'image/jpeg',
+      quality
+    );
+  });
+
+  if (bitmap) {
+    try {
+      const blob = await drawToBlob(bitmap.width, bitmap.height, (ctx, w, h) => {
+        ctx.drawImage(bitmap, 0, 0, w, h);
+      });
+      try { bitmap.close(); } catch (e) {}
+      return blob;
+    } catch (e) {
+      try { bitmap.close(); } catch (e2) {}
+    }
+  }
+
+  // FileReader + Image fallback
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Could not read image'));
+    reader.readAsDataURL(fileOrBlob);
+  });
+
+  const img = await new Promise((resolve, reject) => {
+    const i = new Image();
+    i.onload = () => resolve(i);
+    i.onerror = () => reject(new Error('Could not decode image (try JPG/PNG)'));
+    i.src = dataUrl;
+  });
+
+  return drawToBlob(img.naturalWidth || img.width, img.naturalHeight || img.height, (ctx, w, h) => {
+    ctx.drawImage(img, 0, 0, w, h);
+  });
+}
+
+/** Compress then upload image with retries — use this for posts/avatars */
+async function uploadImageToR2(fileOrBlob, folder, filename) {
+  const blob = await compressImageFile(fileOrBlob, 1200, 0.82);
+  const name = filename || ('img_' + Date.now() + '.jpg');
+  return uploadToR2(blob, folder || 'posts', name.endsWith('.jpg') ? name : name + '.jpg');
 }
 
 
