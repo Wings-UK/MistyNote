@@ -71,79 +71,134 @@ async function uploadToR2(fileOrBlob, folder, filename) {
   throw lastErr || new Error('Upload failed');
 }
 
+/** Guess media kind when mobile browsers leave file.type empty */
+function guessMediaKind(file) {
+  const t = (file && file.type || '').toLowerCase();
+  if (t.startsWith('image/')) return 'image';
+  if (t.startsWith('video/')) return 'video';
+  const name = (file && file.name || '').toLowerCase();
+  if (/\.(jpe?g|png|gif|webp|heic|heif|bmp|avif)$/.test(name)) return 'image';
+  if (/\.(mp4|mov|webm|m4v|3gp|mkv)$/.test(name)) return 'video';
+  return '';
+}
+
 /**
- * Compress any image File/Blob to JPEG for reliable mobile upload.
- * Does NOT depend on DOM preview elements.
+ * Compress image to JPEG when the browser can decode it.
+ * Returns null if decode fails (HEIC on some Android Chrome, etc.) —
+ * caller should upload the original file instead.
  */
 async function compressImageFile(fileOrBlob, maxPx = 1200, quality = 0.82) {
   if (!fileOrBlob) throw new Error('No image');
 
-  // Prefer createImageBitmap (handles more formats, less memory)
-  let bitmap = null;
+  const drawToBlob = (w0, h0, drawFn) => new Promise((resolve, reject) => {
+    try {
+      const scale = Math.min(1, maxPx / Math.max(w0, h0, 1));
+      const w = Math.max(1, Math.round(w0 * scale));
+      const h = Math.max(1, Math.round(h0 * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { reject(new Error('No canvas')); return; }
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, w, h);
+      drawFn(ctx, w, h);
+      if (canvas.toBlob) {
+        canvas.toBlob(
+          b => b ? resolve(b) : reject(new Error('toBlob failed')),
+          'image/jpeg',
+          quality
+        );
+      } else {
+        try {
+          const dataUrl = canvas.toDataURL('image/jpeg', quality);
+          fetch(dataUrl).then(r => r.blob()).then(resolve).catch(reject);
+        } catch (e) { reject(e); }
+      }
+    } catch (e) { reject(e); }
+  });
+
+  // 1) createImageBitmap
   try {
     if (typeof createImageBitmap === 'function') {
-      bitmap = await createImageBitmap(fileOrBlob);
+      const bitmap = await createImageBitmap(fileOrBlob);
+      try {
+        const blob = await drawToBlob(bitmap.width, bitmap.height, (ctx, w, h) => {
+          ctx.drawImage(bitmap, 0, 0, w, h);
+        });
+        try { bitmap.close(); } catch (e) {}
+        return blob;
+      } catch (e) {
+        try { bitmap.close(); } catch (e2) {}
+      }
     }
+  } catch (e) { /* fall through */ }
+
+  // 2) FileReader + Image
+  try {
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('read fail'));
+      reader.readAsDataURL(fileOrBlob);
+    });
+    const img = await new Promise((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error('decode fail'));
+      i.src = dataUrl;
+    });
+    return await drawToBlob(img.naturalWidth || img.width, img.naturalHeight || img.height, (ctx, w, h) => {
+      ctx.drawImage(img, 0, 0, w, h);
+    });
   } catch (e) {
-    bitmap = null;
+    return null; // signal: upload original
   }
-
-  const drawToBlob = (w0, h0, drawFn) => new Promise((resolve, reject) => {
-    const scale = Math.min(1, maxPx / Math.max(w0, h0));
-    const w = Math.max(1, Math.round(w0 * scale));
-    const h = Math.max(1, Math.round(h0 * scale));
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) { reject(new Error('No canvas')); return; }
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(0, 0, w, h);
-    drawFn(ctx, w, h);
-    canvas.toBlob(
-      b => b ? resolve(b) : reject(new Error('toBlob failed')),
-      'image/jpeg',
-      quality
-    );
-  });
-
-  if (bitmap) {
-    try {
-      const blob = await drawToBlob(bitmap.width, bitmap.height, (ctx, w, h) => {
-        ctx.drawImage(bitmap, 0, 0, w, h);
-      });
-      try { bitmap.close(); } catch (e) {}
-      return blob;
-    } catch (e) {
-      try { bitmap.close(); } catch (e2) {}
-    }
-  }
-
-  // FileReader + Image fallback
-  const dataUrl = await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error('Could not read image'));
-    reader.readAsDataURL(fileOrBlob);
-  });
-
-  const img = await new Promise((resolve, reject) => {
-    const i = new Image();
-    i.onload = () => resolve(i);
-    i.onerror = () => reject(new Error('Could not decode image (try JPG/PNG)'));
-    i.src = dataUrl;
-  });
-
-  return drawToBlob(img.naturalWidth || img.width, img.naturalHeight || img.height, (ctx, w, h) => {
-    ctx.drawImage(img, 0, 0, w, h);
-  });
 }
 
-/** Compress then upload image with retries — use this for posts/avatars */
+/**
+ * Upload image: compress when possible, otherwise upload original bytes.
+ * Preview success is NOT required.
+ */
 async function uploadImageToR2(fileOrBlob, folder, filename) {
-  const blob = await compressImageFile(fileOrBlob, 1200, 0.82);
-  const name = filename || ('img_' + Date.now() + '.jpg');
-  return uploadToR2(blob, folder || 'posts', name.endsWith('.jpg') ? name : name + '.jpg');
+  const base = filename || ('img_' + Date.now());
+  let blob = null;
+  try {
+    blob = await compressImageFile(fileOrBlob, 1200, 0.82);
+  } catch (e) {
+    blob = null;
+  }
+  if (blob && blob.size > 0) {
+    return uploadToR2(blob, folder || 'posts', base.endsWith('.jpg') ? base : base + '.jpg');
+  }
+  // Mobile couldn't decode (HEIC etc.) — still upload original file
+  console.warn('[R2] compress skipped, uploading original');
+  const origName = (fileOrBlob && fileOrBlob.name) || (base + '.jpg');
+  return uploadToR2(fileOrBlob, folder || 'posts', origName);
+}
+
+/** Snapshot a File so mobile Chrome cannot invalidate it after the picker closes */
+async function snapshotFile(file) {
+  if (!file) return null;
+  try {
+    const buf = await file.arrayBuffer();
+    const type = file.type || (guessMediaKind(file) === 'video' ? 'video/mp4' : 'application/octet-stream');
+    return {
+      blob: new Blob([buf], { type }),
+      name: file.name || ('file_' + Date.now()),
+      type,
+      size: buf.byteLength,
+    };
+  } catch (e) {
+    // Fallback: slice copy
+    const type = file.type || 'application/octet-stream';
+    return {
+      blob: file.slice(0, file.size, type),
+      name: file.name || ('file_' + Date.now()),
+      type,
+      size: file.size,
+    };
+  }
 }
 
 
