@@ -320,6 +320,76 @@
     border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+
+/* ── Desktop gate — mobile UI unchanged ── */
+#desktop-gate {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 999999;
+  background: #0b0b12;
+  color: #fff;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px;
+  text-align: center;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+#desktop-gate.show {
+  display: flex;
+}
+#desktop-gate .dg-card {
+  max-width: 380px;
+}
+#desktop-gate .dg-logo {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin-bottom: 12px;
+  background: linear-gradient(135deg, #6C47FF, #a855f7);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+#desktop-gate .dg-title {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 10px;
+  line-height: 1.25;
+}
+#desktop-gate .dg-msg {
+  font-size: 15px;
+  line-height: 1.55;
+  color: rgba(255,255,255,0.65);
+  margin: 0 0 28px;
+}
+#desktop-gate .dg-hint {
+  font-size: 13px;
+  color: rgba(255,255,255,0.4);
+  margin-top: 20px;
+}
+#desktop-gate .dg-url {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: rgba(108,71,255,0.2);
+  border: 1px solid rgba(108,71,255,0.4);
+  color: #c4b5fd;
+  font-size: 13px;
+  font-weight: 600;
+  word-break: break-all;
+}
+body.desktop-blocked #app,
+body.desktop-blocked #auth-screen,
+body.desktop-blocked #username-picker-screen,
+body.desktop-blocked #username-picker {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
   
   /* ══════════════════════════════════════════
      APP SHELL
