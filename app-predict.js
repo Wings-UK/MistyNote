@@ -962,185 +962,206 @@ function _applyLiveOddsToDom(pred) {
 // PULSE MOMENTS ROW — top predictions in feed strip
 // ══════════════════════════════════════════════════════
 let _pulseMomentsChannel = null;
+let _pulseMomentsGen = 0;
+let _pulseMomentsTimer = null;
 
-async function loadPulseMoments() {
-  const row = document.getElementById('pulse-moments-row');
-  if (!row) return;
+/** Debounced entry — avoids double cards when many callers fire at once */
+function loadPulseMoments() {
+  if (_pulseMomentsTimer) clearTimeout(_pulseMomentsTimer);
+  _pulseMomentsTimer = setTimeout(function() {
+    _pulseMomentsTimer = null;
+    _loadPulseMomentsNow();
+  }, 80);
+}
 
-  // Prevent concurrent double-renders (causes duplicate cards)
-  if (loadPulseMoments._loading) return;
-  loadPulseMoments._loading = true;
+async function _loadPulseMomentsNow() {
+  // Prefer a single canonical row; remove extra rows with same id (invalid HTML duplicates)
+  const rows = document.querySelectorAll('#pulse-moments-row, .pulse-moments-row');
+  if (!rows.length) return;
+  const row = rows[0];
+  for (let i = 1; i < rows.length; i++) {
+    try { rows[i].remove(); } catch (e) {}
+  }
 
+  const gen = ++_pulseMomentsGen;
+
+  // Clear immediately so old cards never stack with new ones
+  row.innerHTML = '';
+
+  if (_pulseMomentsChannel) {
+    try { supabase.removeChannel(_pulseMomentsChannel); } catch (e) {}
+    _pulseMomentsChannel = null;
+  }
+
+  let rawPreds = null;
   try {
-    if (_pulseMomentsChannel) {
-      try { supabase.removeChannel(_pulseMomentsChannel); } catch (e) {}
-      _pulseMomentsChannel = null;
-    }
-
-    const { data: rawPreds } = await supabase
+    const res = await supabase
       .from('predictions')
       .select('id, title, category, total_pool, prize_pool, closes_at, status, prediction_options(*)')
       .eq('status', 'open')
       .gt('closes_at', new Date().toISOString())
       .order('total_pool', { ascending: false })
       .limit(8);
+    rawPreds = res.data;
+  } catch (e) {
+    console.warn('[Pulse moments] fetch failed', e);
+    return;
+  }
 
-    // Dedupe by id (guards against join quirks / double fetch)
-    const seen = new Set();
-    const preds = [];
-    (rawPreds || []).forEach(function(p) {
-      if (!p || !p.id || seen.has(p.id)) return;
-      seen.add(p.id);
-      preds.push(p);
+  // Stale response after a newer load started
+  if (gen !== _pulseMomentsGen) return;
+  if (!document.body.contains(row)) return;
+
+  const seen = new Set();
+  const preds = [];
+  (rawPreds || []).forEach(function(p) {
+    if (!p || !p.id || seen.has(p.id)) return;
+    seen.add(p.id);
+    preds.push(p);
+  });
+
+  if (!preds.length) {
+    row.innerHTML = '<div class="moment-card pulse-moment-placeholder" onclick="openPredictionsPage()">' +
+      '<div class="moment-card-bg" style="background:linear-gradient(135deg,#6C47FF,#a855f7)"></div>' +
+      '<div class="moment-card-overlay"></div>' +
+      '<div class="pulse-moment-icon">🎯</div>' +
+      '<div class="moment-card-name">Predict</div>' +
+      '</div>';
+    return;
+  }
+
+  const catBg = {
+    'Politics':      'linear-gradient(135deg,#3d1f8a,#6C47FF)',
+    'Entertainment': 'linear-gradient(135deg,#8a1f5c,#f0385a)',
+    'Sports':        'linear-gradient(135deg,#1f5c2d,#22c55e)',
+    'Economy':       'linear-gradient(135deg,#5c4d1f,#f5a623)',
+    'Social':        'linear-gradient(135deg,#1f3a5c,#4facfe)',
+    'General':       'linear-gradient(135deg,#3d1f8a,#6C47FF)'
+  };
+  const catEm = {
+    'Politics': '🏛', 'Entertainment': '🎤', 'Sports': '⚽',
+    'Economy': '📈', 'Social': '💬', 'General': '🎯'
+  };
+
+  window._pulseMomentsMap = {};
+  let html = '';
+
+  preds.forEach(function(pred) {
+    const options   = pred.prediction_options || [];
+    const totalPool = Number(pred.total_pool || 0);
+    const prizePool = Number(pred.prize_pool != null ? pred.prize_pool : totalPool * (1 - PREDICT_PLATFORM_CUT));
+    const bg        = catBg[pred.category] || catBg['General'];
+    const emoji     = catEm[pred.category] || '🎯';
+    const top2 = options.slice().sort(function(a, b) {
+      const pa = Number(a.opening_prob || 0), pb = Number(b.opening_prob || 0);
+      if (pb !== pa) return pb - pa;
+      return String(a.label || '').localeCompare(String(b.label || ''));
+    }).slice(0, 2);
+
+    const title = (pred.title || '').length > 52 ? pred.title.slice(0, 50) + '…' : (pred.title || '');
+
+    window._pulseMomentsMap[pred.id] = {
+      pred: pred,
+      totalPool: totalPool,
+      prizePool: prizePool,
+      options: options
+    };
+
+    let oddsHTML = '';
+    top2.forEach(function(opt) {
+      const odds = calcOptionOdds(opt, pred, options).toFixed(2);
+      oddsHTML += '<div class="pulse-moment-opt" data-opt-id="' + opt.id + '">' +
+        '<span class="pulse-moment-opt-label">' + escHtml(opt.label) + '</span>' +
+        '<span class="pulse-moment-opt-odds" id="pm-odds-' + pred.id + '-' + opt.id + '">' + odds + 'x</span>' +
+        '</div>';
     });
 
-    if (!preds.length) {
-      row.innerHTML = '<div class="moment-card pulse-moment-placeholder" onclick="openPredictionsPage()">' +
-        '<div class="moment-card-bg" style="background:linear-gradient(135deg,#6C47FF,#a855f7)"></div>' +
-        '<div class="moment-card-overlay"></div>' +
-        '<div class="pulse-moment-icon">🎯</div>' +
-        '<div class="moment-card-name">Predict</div>' +
-        '</div>';
-      return;
-    }
+    html += '<div class="moment-card pulse-moment-card" data-pred-id="' + pred.id + '" onclick="openPrediction(\'' + pred.id + '\')">' +
+      '<div class="moment-card-bg" style="background:' + bg + '"></div>' +
+      '<div class="moment-card-overlay"></div>' +
+      '<div class="pulse-moment-live-dot"></div>' +
+      '<div class="pulse-moment-top">' +
+        '<span class="pulse-moment-cat">' + emoji + ' ' + escHtml(pred.category || 'General') + '</span>' +
+        '<span class="pulse-moment-pool" id="pm-pool-' + pred.id + '">' + Number(totalPool).toFixed(1) + ' MP</span>' +
+      '</div>' +
+      '<div class="pulse-moment-title">' + escHtml(title) + '</div>' +
+      '<div class="pulse-moment-odds-wrap">' + oddsHTML + '</div>' +
+      '</div>';
+  });
 
-    const catBg = {
-      'Politics':      'linear-gradient(135deg,#3d1f8a,#6C47FF)',
-      'Entertainment': 'linear-gradient(135deg,#8a1f5c,#f0385a)',
-      'Sports':        'linear-gradient(135deg,#1f5c2d,#22c55e)',
-      'Economy':       'linear-gradient(135deg,#5c4d1f,#f5a623)',
-      'Social':        'linear-gradient(135deg,#1f3a5c,#4facfe)',
-      'General':       'linear-gradient(135deg,#3d1f8a,#6C47FF)'
-    };
-    const catEm = {
-      'Politics': '🏛', 'Entertainment': '🎤', 'Sports': '⚽',
-      'Economy': '📈', 'Social': '💬', 'General': '🎯'
-    };
+  if (gen !== _pulseMomentsGen) return;
+  row.innerHTML = html;
 
-    window._pulseMomentsMap = {};
-    let html = '';
+  // Final safety: one card per prediction id inside this row
+  const seenDom = new Set();
+  Array.from(row.querySelectorAll('.pulse-moment-card[data-pred-id]')).forEach(function(el) {
+    const id = el.getAttribute('data-pred-id');
+    if (seenDom.has(id)) el.remove();
+    else seenDom.add(id);
+  });
 
-    preds.forEach(function(pred) {
-      const options   = pred.prediction_options || [];
-      const totalPool = Number(pred.total_pool || 0);
-      const prizePool = Number(pred.prize_pool != null ? pred.prize_pool : totalPool * (1 - PREDICT_PLATFORM_CUT));
-      const bg        = catBg[pred.category] || catBg['General'];
-      const emoji     = catEm[pred.category] || '🎯';
-      // Prefer opening order for Yes/No stability; else by stake
-      const top2 = options.slice().sort(function(a, b) {
-        const pa = Number(a.opening_prob || 0), pb = Number(b.opening_prob || 0);
-        if (pb !== pa) return pb - pa;
-        return (b.total_staked || 0) - (a.total_staked || 0);
-      }).slice(0, 2);
+  const predIds = preds.map(function(p) { return p.id; });
+  if (!predIds.length) return;
 
-      const title = (pred.title || '').length > 52 ? pred.title.slice(0, 50) + '…' : (pred.title || '');
+  _pulseMomentsChannel = supabase
+    .channel('pulse-moments-live-' + gen)
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'prediction_options',
+      filter: 'prediction_id=in.(' + predIds.join(',') + ')'
+    }, function(payload) {
+      if (gen !== _pulseMomentsGen) return;
+      const opt = payload.new;
+      const predId = opt.prediction_id;
+      const info = window._pulseMomentsMap && window._pulseMomentsMap[predId];
+      if (!info) return;
 
-      window._pulseMomentsMap[pred.id] = {
-        pred: pred,
-        totalPool: totalPool,
-        prizePool: prizePool,
-        options: options
+      const options = info.options || [];
+      let found = false;
+      for (let i = 0; i < options.length; i++) {
+        if (options[i].id === opt.id) {
+          options[i] = Object.assign({}, options[i], opt);
+          found = true;
+          break;
+        }
+      }
+      if (!found) options.push(opt);
+      info.options = options;
+
+      let newTotal = 0;
+      options.forEach(function(o) { newTotal += Number(o.total_staked || 0); });
+      info.totalPool = newTotal;
+      info.prizePool = newTotal * (1 - PREDICT_PLATFORM_CUT);
+      if (info.pred) {
+        info.pred.total_pool = newTotal;
+        info.pred.prize_pool = info.prizePool;
+        info.pred.prediction_options = options;
+      }
+
+      const poolEl = document.getElementById('pm-pool-' + predId);
+      if (poolEl) poolEl.textContent = Number(newTotal).toFixed(1) + ' MP';
+
+      const fakePred = info.pred || {
+        total_pool: info.totalPool,
+        prize_pool: info.prizePool,
+        status: 'open',
+        closes_at: new Date(Date.now() + 86400000).toISOString(),
+        prediction_options: options
       };
 
-      let oddsHTML = '';
-      top2.forEach(function(opt) {
-        const odds = calcOptionOdds(opt, pred, options).toFixed(2);
-        oddsHTML += '<div class="pulse-moment-opt" data-opt-id="' + opt.id + '">' +
-          '<span class="pulse-moment-opt-label">' + escHtml(opt.label) + '</span>' +
-          '<span class="pulse-moment-opt-odds" id="pm-odds-' + opt.id + '">' + odds + 'x</span>' +
-          '</div>';
+      options.forEach(function(o) {
+        const odds = calcOptionOdds(o, fakePred, options).toFixed(2);
+        const oddsEl = document.getElementById('pm-odds-' + predId + '-' + o.id);
+        if (oddsEl && oddsEl.textContent !== odds + 'x') {
+          oddsEl.textContent = odds + 'x';
+          oddsEl.classList.remove('odds-flash');
+          void oddsEl.offsetWidth;
+          oddsEl.classList.add('odds-flash');
+        }
       });
-
-      html += '<div class="moment-card pulse-moment-card" data-pred-id="' + pred.id + '" onclick="openPrediction(\'' + pred.id + '\')">' +
-        '<div class="moment-card-bg" style="background:' + bg + '"></div>' +
-        '<div class="moment-card-overlay"></div>' +
-        '<div class="pulse-moment-live-dot"></div>' +
-        '<div class="pulse-moment-top">' +
-          '<span class="pulse-moment-cat">' + emoji + ' ' + escHtml(pred.category || 'General') + '</span>' +
-          '<span class="pulse-moment-pool" id="pm-pool-' + pred.id + '">' + Number(totalPool).toFixed(1) + ' MP</span>' +
-        '</div>' +
-        '<div class="pulse-moment-title">' + escHtml(title) + '</div>' +
-        '<div class="pulse-moment-odds-wrap">' + oddsHTML + '</div>' +
-        '</div>';
-    });
-
-    row.innerHTML = html;
-
-    // Strip any accidental duplicate cards (same prediction id)
-    const seenDom = new Set();
-    row.querySelectorAll('.pulse-moment-card[data-pred-id]').forEach(function(el) {
-      const id = el.getAttribute('data-pred-id');
-      if (seenDom.has(id)) el.remove();
-      else seenDom.add(id);
-    });
-
-    const predIds = preds.map(function(p) { return p.id; });
-    if (!predIds.length) return;
-
-    _pulseMomentsChannel = supabase
-      .channel('pulse-moments-live-' + Date.now())
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'prediction_options',
-        filter: 'prediction_id=in.(' + predIds.join(',') + ')'
-      }, function(payload) {
-        const opt = payload.new;
-        const predId = opt.prediction_id;
-        const info = window._pulseMomentsMap && window._pulseMomentsMap[predId];
-        if (!info) return;
-
-        const options = info.options || [];
-        let found = false;
-        for (let i = 0; i < options.length; i++) {
-          if (options[i].id === opt.id) {
-            options[i] = Object.assign({}, options[i], opt);
-            found = true;
-            break;
-          }
-        }
-        if (!found) options.push(opt);
-        info.options = options;
-
-        let newTotal = 0;
-        options.forEach(function(o) { newTotal += Number(o.total_staked || 0); });
-        info.totalPool = newTotal;
-        info.prizePool = newTotal * (1 - PREDICT_PLATFORM_CUT);
-        if (info.pred) {
-          info.pred.total_pool = newTotal;
-          info.pred.prize_pool = info.prizePool;
-          info.pred.prediction_options = options;
-        }
-
-        // Update pool — all matching nodes (no duplicates expected)
-        document.querySelectorAll('#pm-pool-' + predId).forEach(function(poolEl) {
-          poolEl.textContent = Number(newTotal).toFixed(1) + ' MP';
-        });
-
-        const fakePred = info.pred || {
-          total_pool: info.totalPool,
-          prize_pool: info.prizePool,
-          status: 'open',
-          closes_at: new Date(Date.now() + 86400000).toISOString(),
-          prediction_options: options
-        };
-
-        options.forEach(function(o) {
-          const odds = calcOptionOdds(o, fakePred, options).toFixed(2);
-          document.querySelectorAll('#pm-odds-' + o.id).forEach(function(oddsEl) {
-            if (oddsEl.textContent !== odds + 'x') {
-              oddsEl.textContent = odds + 'x';
-              oddsEl.classList.remove('odds-flash');
-              void oddsEl.offsetWidth;
-              oddsEl.classList.add('odds-flash');
-            }
-          });
-        });
-      })
-      .subscribe();
-  } finally {
-    loadPulseMoments._loading = false;
-  }
+    })
+    .subscribe();
 }
 
 // Auto-load when feed is ready
