@@ -2819,13 +2819,13 @@ function _cWire(root) {
 }
 // ── File picker — bulletproof ──────────────────────────────────
 function _cPickFile() {
-  // Remove any stale input
   const old = document.getElementById('mnc-file-input');
   if (old) old.remove();
   const inp = document.createElement('input');
   inp.id = 'mnc-file-input';
   inp.type = 'file';
-  inp.accept = 'image/*,video/*';
+  // Broad accept — mobile often omits MIME; still allows gallery picks
+  inp.accept = 'image/*,video/*,.jpg,.jpeg,.png,.webp,.heic,.heif,.gif,.mp4,.mov,.webm,.m4v';
   inp.multiple = true;
   Object.assign(inp.style, {
     position: 'fixed', top: '0', left: '0',
@@ -2837,19 +2837,37 @@ function _cPickFile() {
     const files = Array.from(inp.files || []);
     inp.remove();
     if (!files.length) return;
-    // If first file is video — single video, existing flow
-    if (files[0].type.startsWith('video/')) {
+
+    const kind0 = typeof guessMediaKind === 'function' ? guessMediaKind(files[0]) : (files[0].type || '');
+    if (kind0 === 'video' || (files[0].type || '').startsWith('video/')) {
       await _cHandleFile(files[0]);
       return;
     }
-    // Images — multi-image flow
-    const imgFiles = files.filter(f => f.type.startsWith('image/'));
-    if (!imgFiles.length) { showToast('Please select images'); return; }
+
+    const imgFiles = files.filter(f => {
+      const k = typeof guessMediaKind === 'function' ? guessMediaKind(f) : '';
+      return k === 'image' || (f.type || '').startsWith('image/');
+    });
+    if (!imgFiles.length) { showToast('Please select photos or a video'); return; }
     const remaining = _C_MAX_IMAGES - _c.files.length;
-    if (remaining <= 0) { showToast(`Max ${_C_MAX_IMAGES} images`); return; }
+    if (remaining <= 0) { showToast('Max ' + _C_MAX_IMAGES + ' images'); return; }
+
     for (const f of imgFiles.slice(0, remaining)) {
       if (f.size > 20 * 1024 * 1024) { showToast('Max 20MB per image'); continue; }
-      _c.files.push({ file: f, preview: URL.createObjectURL(f) });
+      // Snapshot bytes so mobile cannot invalidate File after picker closes
+      let snap = null;
+      try {
+        snap = await snapshotFile(f);
+      } catch (e) {
+        console.warn('[composer] snapshot failed', e);
+      }
+      const blob = snap ? snap.blob : f;
+      const preview = URL.createObjectURL(blob);
+      _c.files.push({
+        file: blob,
+        name: (snap && snap.name) || f.name || 'photo.jpg',
+        preview,
+      });
     }
     if (_c.files.length > 0) _cRenderImageStrip();
     _cSync();
@@ -2876,7 +2894,7 @@ function _cRenderImageStrip() {
     const thumb = document.createElement('div');
     thumb.className = 'mnc-img-thumb';
     thumb.innerHTML = `
-      <img src="${item.preview}" alt="">
+      <img src="${item.preview}" alt="" onerror="this.style.background='var(--bg3,#eee)';this.style.objectFit='none';this.alt='Photo';this.removeAttribute('src');">
       <button class="mnc-img-thumb-remove" data-idx="${i}" aria-label="Remove">
         <svg width="9" height="9" viewBox="0 0 24 24" fill="none"
              stroke="currentColor" stroke-width="3" stroke-linecap="round">
@@ -2939,46 +2957,67 @@ function _cRemoveMedia() {
   _cSync();
 }
 async function _cHandleFile(file) {
-  const isImg = file.type.startsWith('image/');
-  const isVid = file.type.startsWith('video/');
+  const kind = typeof guessMediaKind === 'function' ? guessMediaKind(file) : '';
+  const isImg = kind === 'image' || (file.type || '').startsWith('image/');
+  const isVid = kind === 'video' || (file.type || '').startsWith('video/');
   if (!isImg && !isVid) { showToast('Please select an image or video'); return; }
-  const maxMB = isVid ? 200 : 20;
+  const maxMB = isVid ? 100 : 20;
   if (file.size > maxMB * 1024 * 1024) {
-    showToast(`Max ${maxMB}MB for ${isVid ? 'videos' : 'images'}`);
+    showToast('Max ' + maxMB + 'MB for ' + (isVid ? 'videos' : 'images'));
     return;
   }
   if (_c.preview) URL.revokeObjectURL(_c.preview);
-  // Buffer video bytes immediately before any async gap invalidates the File ref
+
+  // Copy bytes immediately — mobile Chrome often invalidates File after picker
+  let snap = null;
+  try {
+    snap = await snapshotFile(file);
+  } catch (e) {
+    console.error('[MistyNote] snapshot failed', e);
+    showToast('Could not read that file. Try another photo/video.');
+    return;
+  }
+  const blob = snap.blob;
+  _c.file       = blob;
+  _c.fileName   = snap.name;
+  _c.fileType   = snap.type;
+  _c.fileBuffer = null;
   if (isVid) {
     try {
-      _c.fileBuffer = await file.arrayBuffer();
-      _c.fileType   = file.type || 'video/mp4';
-      _c.fileName   = file.name || 'video.mp4';
-      console.log('[MistyNote] ✅ video buffered:', (_c.fileBuffer.byteLength / 1024 / 1024).toFixed(2) + 'MB');
+      _c.fileBuffer = await blob.arrayBuffer();
     } catch (e) {
-      console.error('[MistyNote] ❌ could not buffer video:', e);
-      showToast('Could not read video file. Please try again.');
-      return;
+      // still keep blob for upload
+      console.warn('[MistyNote] video arrayBuffer optional fail', e);
     }
   }
-  _c.file    = file;
-  _c.preview = URL.createObjectURL(file);
+
+  _c.preview = URL.createObjectURL(blob);
   const wrap = document.getElementById('mnc-media-wrap');
   const img  = document.getElementById('mnc-img');
   const vid  = document.getElementById('mnc-vid');
-  img.style.display = 'none';
-  vid.style.display = 'none';
-  if (isImg) {
+  if (img) img.style.display = 'none';
+  if (vid) vid.style.display = 'none';
+  if (isImg && img) {
+    img.onerror = function() {
+      // Broken preview is OK — file is still held for upload
+      img.style.background = 'var(--bg3,#e5e7eb)';
+      img.alt = 'Photo ready to post';
+      img.removeAttribute('src');
+      img.style.display = 'block';
+      img.style.minHeight = '120px';
+    };
+    img.onload = function() { img.style.display = 'block'; };
     img.src = _c.preview;
     img.style.display = 'block';
-  } else {
-    // Restore original video element preview
+  } else if (vid) {
+    vid.onerror = function() {
+      console.warn('[MistyNote] video preview unsupported — upload still allowed');
+      showToast('Preview limited on this phone — you can still post');
+    };
     vid.src = _c.preview;
     vid.style.display = 'block';
-    vid.onloadeddata = () => console.log('[MistyNote] ✅ video preview loaded');
-    vid.onerror = () => console.warn('[MistyNote] ⚠️ video preview failed, codec may be unsupported');
   }
-  wrap.style.display = 'block';
+  if (wrap) wrap.style.display = 'block';
   setTimeout(() => {
     const body = document.getElementById('mnc-body');
     if (body) body.scrollTop = body.scrollHeight;
@@ -3114,8 +3153,9 @@ async function _cSubmit() {
     let imageUrl = null;
     let videoUrl = null;
     if (_c.file) {
-      const isVid = _c.file.type.startsWith('video/');
-      console.log(`[MistyNote] uploading ${isVid ? 'video' : 'image'}:`, _c.file.name, _c.file.type);
+      const isVid = (_c.fileType || _c.file.type || '').startsWith('video/')
+        || (typeof guessMediaKind === 'function' && guessMediaKind({ name: _c.fileName || '', type: _c.fileType || '' }) === 'video');
+      console.log('[MistyNote] uploading ' + (isVid ? 'video' : 'image') + ':', _c.fileName || _c.file.name, _c.fileType || _c.file.type);
       if (isVid) {
         const rawExt  = (_c.fileName || _c.file.name || '').split('.').pop().toLowerCase();
         const safeExt = (rawExt && rawExt.length >= 2 && rawExt.length <= 5) ? rawExt : 'mp4';
@@ -3131,10 +3171,14 @@ async function _cSubmit() {
         });
         console.log('[MistyNote] 🚀 starting video upload via raw fetch...');
         // Use the pre-buffered ArrayBuffer — file reference may be stale by now
-        const buffer = _c.fileBuffer;
-        if (!buffer) throw new Error('Video buffer lost — please try again');
-        console.log('[MistyNote] using buffered video, size:', (buffer.byteLength / 1024 / 1024).toFixed(2) + 'MB');
-        const videoBlob = new Blob([buffer], { type: _c.fileType || 'video/mp4' });
+        let videoBlob = null;
+        if (_c.fileBuffer) {
+          videoBlob = new Blob([_c.fileBuffer], { type: _c.fileType || 'video/mp4' });
+        } else if (_c.file) {
+          videoBlob = _c.file; // already a Blob snapshot
+        }
+        if (!videoBlob) throw new Error('Video data lost — pick the video again');
+        console.log('[MistyNote] uploading video, size:', ((videoBlob.size || 0) / 1024 / 1024).toFixed(2) + 'MB');
         videoUrl = await uploadToR2(videoBlob, 'videos', path.split('/').pop() || ('video_' + Date.now() + '.mp4'));
         console.log('[MistyNote] ✅ video uploaded:', videoUrl);
       } else {
