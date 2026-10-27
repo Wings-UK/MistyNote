@@ -201,7 +201,36 @@ async function snapshotFile(file) {
   }
 }
 
+(function blockDesktop() {
+  function isDesktopClient() {
+    // Wide screen + mouse/trackpad = laptop/desktop
+    const wide = window.matchMedia('(min-width: 900px)').matches;
+    const fine = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+    // Optional: classic desktop UA hint
+    const ua = navigator.userAgent || '';
+    const mobileUA = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+    return wide && fine && !mobileUA;
+  }
 
+  function apply() {
+    const gate = document.getElementById('desktop-gate');
+    if (!gate) return;
+    if (isDesktopClient()) {
+      document.body.classList.add('desktop-blocked');
+      gate.classList.add('show');
+      gate.setAttribute('aria-hidden', 'false');
+      const urlEl = document.getElementById('dg-url');
+      if (urlEl) urlEl.textContent = window.location.href;
+    } else {
+      document.body.classList.remove('desktop-blocked');
+      gate.classList.remove('show');
+      gate.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  apply();
+  window.addEventListener('resize', apply);
+})();
 
 // ── CONTENT PROTECTION ─────────────────────────────────────
 
