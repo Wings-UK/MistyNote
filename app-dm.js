@@ -338,12 +338,41 @@ function restoreChatStatus() {
   updateChatStatus(location || 'MistyNote');
 }
 // ── Update chat topbar status ──
+function ensureChatTypingWaves() {
+  let el = document.getElementById('chat-typing-waves');
+  if (el) return el;
+  const bar = document.getElementById('chat-input-bar');
+  if (!bar) return null;
+  el = document.createElement('div');
+  el.id = 'chat-typing-waves';
+  el.className = 'chat-typing-waves';
+  el.setAttribute('aria-hidden', 'true');
+  el.innerHTML =
+    '<span class="chat-wave chat-wave-red"></span>' +
+    '<span class="chat-wave chat-wave-purple"></span>';
+  bar.insertBefore(el, bar.firstChild);
+  return el;
+}
+function setChatTypingWaves(on) {
+  const el = ensureChatTypingWaves();
+  if (!el) return;
+  el.classList.toggle('active', !!on);
+  el.setAttribute('aria-hidden', on ? 'false' : 'true');
+}
 function updateChatStatus(text, typing = false) {
   const statusEl = document.getElementById('chat-topbar-status');
   const onlineDot = document.getElementById('chat-topbar-online');
+  // Waves above input = typing signal (no "typing..." text)
+  setChatTypingWaves(!!typing);
   if (statusEl) {
-    statusEl.textContent = typing ? '· typing...' : text;
-    statusEl.className = 'chat-topbar-status' + (typing ? ' typing' : '');
+    if (typing) {
+      // Keep name area calm — optional soft label
+      statusEl.textContent = text || (activeChatUser?.location || 'MistyNote');
+      statusEl.className = 'chat-topbar-status';
+    } else {
+      statusEl.textContent = text;
+      statusEl.className = 'chat-topbar-status';
+    }
   }
   if (onlineDot) onlineDot.style.display = 'none';
 }
@@ -421,6 +450,7 @@ function wireChatTyping() {
 function stopPresence() {
   clearTimeout(typingTimeout);
   isCurrentlyTyping = false;
+  if (typeof setChatTypingWaves === 'function') setChatTypingWaves(false);
   if (presenceChannel) {
     presenceChannel.untrack().catch(() => {});
     supabase.removeChannel(presenceChannel);
