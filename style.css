@@ -1784,7 +1784,7 @@ body.desktop-blocked #username-picker {
     flex: 1; overflow-y: auto; overflow-x: hidden;
     -webkit-overflow-scrolling: touch; scrollbar-width: none;
   }
-  #page-chat .chat-messages { padding-bottom: 0; }
+  #page-chat .chat-messages { padding-bottom: 20px; }
   #page-chat { padding-bottom: 0 !important; }
   #page-chat .chat-input-bar { flex-shrink: 0; }
 
@@ -9102,7 +9102,7 @@ body.desktop-blocked #username-picker {
   flex: 1;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 20px 18px 28px;
+  padding: 20px 18px 20px; /* 20px above input so last message is never clipped */
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -9443,4 +9443,18 @@ body.desktop-blocked #username-picker {
   gap: 4px;
   overflow-y: auto;
   justify-content: flex-start;
+}
+
+/* Keyboard emoji-only messages (no letters) — 20px */
+#page-chat .chat-bubble.chat-bubble-emoji-sm {
+  padding: 6px 12px !important;
+  border: 1px solid #efeeea !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+  line-height: 1.2 !important;
+}
+#page-chat .chat-emoji-md {
+  font-size: 20px;
+  line-height: 1.3;
+  letter-spacing: 2px;
 }
