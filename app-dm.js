@@ -623,7 +623,7 @@ function buildMessageEl(msg, prevSenderId) {
       bubble.innerHTML = '<span class="chat-emoji-xl">' + text + '</span>';
     } else if (emojiOnly) {
       bubble.className = 'chat-bubble chat-bubble-emoji-sm';
-      bubble.innerHTML = '<span class="chat-emoji-md">' + text + '</span>';
+      bubble.innerHTML = '<span class="chat-emoji-md" style="font-size:20px;line-height:1.3;letter-spacing:2px">' + text + '</span>';
     } else {
       // CRITICAL: always set chat-bubble so white card CSS applies
       bubble.className = 'chat-bubble';
@@ -646,6 +646,7 @@ function buildMessageEl(msg, prevSenderId) {
     );
   }
   row.appendChild(bubble);
+  applyChatBubbleWidth(row, bubble);
   return row;
 }
 
@@ -1341,15 +1342,20 @@ function _emojiGraphemes(str) {
   return Array.from(s);
 }
 function _isEmojiGrapheme(g) {
-  if (!g || !g.trim()) return false; // whitespace-only segment not emoji
+  if (!g) return false;
+  const t = g.trim();
+  if (!t) return false;
   try {
-    // Must contain a pictographic; allow ZWJ / FE0F / skin tones inside the grapheme
-    if (!/\p{Extended_Pictographic}/u.test(g)) return false;
-    // Reject if it contains letters or numbers
-    if (/\p{L}|\p{N}/u.test(g)) return false;
-    return true;
-  } catch (e) {
+    if (/\p{L}|\p{N}/u.test(t)) return false; // any letter/number → not pure emoji
+    // Emoji presentation or extended pictographic (covers most keyboard emoji)
+    if (/\p{Extended_Pictographic}/u.test(t)) return true;
+    if (/\p{Emoji_Presentation}/u.test(t)) return true;
+    // Some symbols only count as emoji with FE0F
+    if (/\p{Emoji}/u.test(t) && /\uFE0F/.test(t)) return true;
     return false;
+  } catch (e) {
+    // Very old engines: rough fallback
+    return t.length <= 8 && !/[A-Za-z0-9]/.test(t);
   }
 }
 /** Exactly one emoji (in-app quick send → 50px) */
@@ -1357,11 +1363,45 @@ function isSingleEmojiOnly(str) {
   const parts = _emojiGraphemes(str).filter(g => g.trim().length);
   return parts.length === 1 && _isEmojiGrapheme(parts[0]);
 }
-/** One or more emojis, no letters/other text (keyboard → 20px) */
+/** One or more emojis only — no letters (keyboard → 20px) */
 function isEmojiOnlyMessage(str) {
-  const parts = _emojiGraphemes(str).filter(g => g.trim().length);
+  const s = String(str || '').trim();
+  if (!s) return false;
+  // Fast reject if Latin letters/digits present
+  try {
+    if (/\p{L}|\p{N}/u.test(s)) return false;
+  } catch (e) {
+    if (/[A-Za-z0-9]/.test(s)) return false;
+  }
+  const parts = _emojiGraphemes(s).filter(g => g.trim().length);
   if (!parts.length) return false;
   return parts.every(_isEmojiGrapheme);
+}
+
+/** After paint: short text = hug content; longer than half screen = full width */
+function applyChatBubbleWidth(row, bubble) {
+  if (!row || !bubble) return;
+  if (bubble.classList.contains('chat-bubble-emoji')) return; // 50px emoji stays compact
+  requestAnimationFrame(function() {
+    try {
+      const half = Math.floor(window.innerWidth * 0.5);
+      // Measure unconstrained
+      bubble.style.width = 'fit-content';
+      bubble.style.maxWidth = '100%';
+      row.style.width = 'auto';
+      row.style.maxWidth = '100%';
+      const w = bubble.offsetWidth || bubble.scrollWidth;
+      if (w >= half) {
+        row.style.width = '100%';
+        row.style.maxWidth = '100%';
+        bubble.style.width = '100%';
+        bubble.style.maxWidth = '100%';
+        bubble.classList.add('chat-bubble-full');
+      } else {
+        bubble.classList.remove('chat-bubble-full');
+      }
+    } catch (e) {}
+  });
 }
 
 /** Tap from emoji picker: empty field → instant send at 50px; else append to text */
