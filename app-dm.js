@@ -709,6 +709,20 @@ function buildMessageEl(msg, prevSenderId) {
   } else if (type === 'gift' || type === 'mp_gift') {
     bubble.className = 'chat-bubble';
     bubble.innerHTML = `${replyQuoteHtml}🎁 ${escHtml(content || 'Sent MistyPoints')}`;
+  } else if (type === 'voice' || type === 'audio') {
+    const vb = buildVoiceBubble(msg, isSent, timeStr);
+    // buildVoiceBubble returns a chat-bubble already
+    if (isNewSender) {
+      vb.insertAdjacentHTML('afterbegin',
+        '<div class="chat-msg-label-row">' +
+          '<span class="chat-msg-label">' + escHtml(label) + '</span>' +
+          '<span class="chat-msg-time">' + timeStr + '</span>' +
+        '</div>'
+      );
+    }
+    row.appendChild(vb);
+    applyChatBubbleWidth(row, vb);
+    return row;
   } else {
     const text = content;
     // 50px = single emoji only; 20px = emoji-only (no letters), any count; else normal
@@ -1177,26 +1191,29 @@ function buildProductBubble(msg, isSent, timeStr) {
   return div;
 }
 function buildVoiceBubble(msg, isSent, timeStr) {
-  const waveId = 'wv-' + msg.id.slice(0,8);
-  const dur    = msg.media_duration || 0;
-  const durStr = dur < 60 ? `0:${String(dur).padStart(2,'0')}` : `${Math.floor(dur/60)}:${String(dur%60).padStart(2,'0')}`;
+  const id = String(msg.id || Date.now());
+  const waveId = 'wv-' + id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
+  const dur = Number(msg.media_duration || 0);
+  const durStr = _voiceFmt ? _voiceFmt(dur) : (dur < 60 ? '0:' + String(dur).padStart(2, '0') : Math.floor(dur / 60) + ':' + String(dur % 60).padStart(2, '0'));
+  const url = msg.media_url || '';
   const bubble = document.createElement('div');
-  bubble.className = 'chat-bubble';
-  bubble.innerHTML = `
-    <div class="chat-voice-bubble">
-      <button class="chat-voice-play" onclick="chatPlayVoice(this,'${waveId}')">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg>
-      </button>
-      <div class="chat-voice-waveform" id="${waveId}"></div>
-      <span class="chat-voice-dur">${durStr}</span>
-    </div>
-    <div class="chat-bubble-meta"><span>${timeStr}</span></div>`;
-  // Build waveform bars after insert
-  setTimeout(() => {
+  bubble.className = 'chat-bubble chat-bubble-voice';
+  if (url) bubble.setAttribute('data-voice-url', url);
+  bubble.innerHTML =
+    '<div class="chat-voice-bubble">' +
+      '<button type="button" class="chat-voice-play" data-src="' + (url || '').replace(/"/g, '') + '" onclick="chatPlayVoice(this,\'' + waveId + '\')">' +
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg>' +
+      '</button>' +
+      '<div class="chat-voice-waveform" id="' + waveId + '"></div>' +
+      '<span class="chat-voice-dur">' + durStr + '</span>' +
+    '</div>';
+  setTimeout(function() {
     const wv = document.getElementById(waveId);
     if (!wv) return;
-    const heights = [4,8,14,10,18,12,22,16,20,14,8,18,24,16,12,20,10,16,8,12];
-    wv.innerHTML = heights.map(h => `<div class="chat-voice-bar" style="height:${h}px"></div>`).join('');
+    const heights = [4, 8, 14, 10, 18, 12, 22, 16, 20, 14, 8, 18, 24, 16, 12, 20, 10, 16, 8, 12];
+    wv.innerHTML = heights.map(function(h) {
+      return '<div class="chat-voice-bar" style="height:' + h + 'px"></div>';
+    }).join('');
   }, 0);
   return bubble;
 }
@@ -1806,43 +1823,49 @@ function openDMGiftModal() {
   var existing = document.getElementById('dm-gift-modal');
   if (existing) existing.remove();
   var r       = walletState.selectedGiftRecipient;
+  if (!r) return;
   var balance = walletState.points || 0;
   var modal   = document.createElement('div');
   modal.id = 'dm-gift-modal';
-  modal.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,0.55);backdrop-filter:blur(4px);';
+  modal.className = 'dm-gift-overlay';
   modal.innerHTML =
-    '<div style="width:100%;max-width:480px;background:var(--surface,#1a1a2e);border-radius:24px 24px 0 0;padding:24px 20px 44px;box-shadow:0 -8px 40px rgba(0,0,0,0.4);">' +
-      '<div style="width:40px;height:4px;border-radius:2px;background:var(--border,rgba(255,255,255,0.15));margin:0 auto 20px;"></div>' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">' +
-        '<h3 style="font-size:18px;font-weight:800;color:var(--text,#fff);margin:0;">Gift MistyPoints</h3>' +
-        '<button onclick="closeDMGiftModal()" style="background:var(--bg2,rgba(255,255,255,0.08));border:none;color:var(--text2,rgba(255,255,255,0.6));width:32px;height:32px;border-radius:50%;font-size:20px;cursor:pointer;line-height:1;">×</button>' +
-      '</div>' +
-      '<div style="display:flex;align-items:center;gap:12px;background:var(--bg2,rgba(255,255,255,0.06));border-radius:14px;padding:12px;margin-bottom:16px;">' +
-        '<img src="' + (r.avatarUrl || 'https://api.dicebear.com/7.x/adventurer/svg?seed=' + r.id) + '" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" alt="">' +
-        '<div>' +
-          '<div style="font-size:14px;font-weight:700;color:var(--text,#fff);">' + escHtml(r.name) + '</div>' +
-          '<div style="font-size:12px;color:var(--text3,rgba(255,255,255,0.4));">Balance: MP ' + balance.toLocaleString('en-NG', {maximumFractionDigits:4}) + '</div>' +
+    '<div class="dm-gift-sheet" role="dialog" aria-label="Send MP">' +
+      '<div class="dm-gift-handle"></div>' +
+      '<div class="dm-gift-head">' +
+        '<div class="dm-gift-user">' +
+          '<img class="dm-gift-av" src="' + (r.avatarUrl || '') + '" alt="" onerror="this.style.display=\'none\'">' +
+          '<div class="dm-gift-user-meta">' +
+            '<div class="dm-gift-to">To ' + escHtml(r.name) + '</div>' +
+            '<div class="dm-gift-bal">MP ' + balance.toLocaleString('en-NG', { maximumFractionDigits: 4 }) + ' available</div>' +
+          '</div>' +
         '</div>' +
+        '<button type="button" class="dm-gift-x" onclick="closeDMGiftModal()" aria-label="Close">×</button>' +
       '</div>' +
-      '<div style="display:flex;align-items:center;gap:10px;background:var(--bg2,rgba(255,255,255,0.06));border-radius:14px;padding:14px 16px;margin-bottom:12px;">' +
-        '<span style="font-size:15px;font-weight:700;color:var(--text3,rgba(255,255,255,0.5));">MP</span>' +
-        '<input id="dm-gift-amount" type="tel" inputmode="decimal" placeholder="0" oninput="dmGiftPreview(this.value)" ' +
-          'style="flex:1;background:none;border:none;outline:none;font-size:30px;font-weight:800;color:var(--text,#fff);font-family:inherit;">' +
+      '<div class="dm-gift-amount-row">' +
+        '<span class="dm-gift-mp-label">MP</span>' +
+        '<input id="dm-gift-amount" class="dm-gift-amount" type="tel" inputmode="decimal" placeholder="0" oninput="dmGiftPreview(this.value)">' +
       '</div>' +
-      '<div id="dm-gift-preview" style="font-size:12px;color:var(--text3,rgba(255,255,255,0.45));text-align:center;margin-bottom:14px;">Enter amount to gift</div>' +
-      '<div style="display:flex;align-items:center;gap:10px;background:var(--bg2,rgba(255,255,255,0.06));border-radius:14px;padding:12px 16px;margin-bottom:20px;">' +
-        '<span style="font-size:18px;">🎁</span>' +
-        '<input id="dm-gift-note" type="text" placeholder="Add a message..." maxlength="100" ' +
-          'style="flex:1;background:none;border:none;outline:none;font-size:14px;color:var(--text,#fff);font-family:inherit;">' +
+      '<div class="dm-gift-quick">' +
+        '<button type="button" class="dm-gift-chip" onclick="dmGiftQuick(0.5)">0.5</button>' +
+        '<button type="button" class="dm-gift-chip" onclick="dmGiftQuick(1)">1</button>' +
+        '<button type="button" class="dm-gift-chip" onclick="dmGiftQuick(5)">5</button>' +
+        '<button type="button" class="dm-gift-chip" onclick="dmGiftQuick(10)">10</button>' +
       '</div>' +
-      '<button id="dm-gift-btn" onclick="confirmDMGift()" disabled ' +
-        'style="width:100%;padding:16px;border-radius:14px;border:none;background:linear-gradient(135deg,#6c47ff,#a78bfa);color:#fff;font-size:16px;font-weight:700;cursor:pointer;opacity:0.5;font-family:inherit;transition:opacity 0.2s;">' +
-        'Gift Points' +
-      '</button>' +
+      '<div id="dm-gift-preview" class="dm-gift-preview">Enter amount</div>' +
+      '<input id="dm-gift-note" class="dm-gift-note" type="text" placeholder="Note (optional)" maxlength="80">' +
+      '<button id="dm-gift-btn" class="dm-gift-submit" onclick="confirmDMGift()" disabled>Send MP</button>' +
     '</div>';
-  modal.addEventListener('click', function(e) { if (e.target === modal) closeDMGiftModal(); });
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal) closeDMGiftModal();
+  });
   document.body.appendChild(modal);
-  setTimeout(function() { var i = document.getElementById('dm-gift-amount'); if (i) i.focus(); }, 100);
+  // Don't autofocus amount — avoids keyboard shoving sheet up; user taps field if needed
+}
+function dmGiftQuick(n) {
+  var el = document.getElementById('dm-gift-amount');
+  if (!el) return;
+  el.value = String(n);
+  dmGiftPreview(el.value);
 }
 function dmGiftPreview(val) {
   var pts  = parseFloat(val) || 0;
@@ -1902,9 +1925,199 @@ function chatMakeOffer() {
 function chatSendInvoice() {
   showToast('Invoice generator — coming soon 🧾');
 }
-function chatRecordVoice() {
-  showToast('Voice notes — coming soon 🎙');
+
+// ── Voice notes ────────────────────────────────────────────
+let _voiceRec = {
+  recording: false,
+  mediaRecorder: null,
+  chunks: [],
+  stream: null,
+  startedAt: 0,
+  timer: null,
+};
+let _voiceAudio = null; // currently playing Audio element
+
+function _voiceFmt(sec) {
+  sec = Math.max(0, Math.floor(sec || 0));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return m + ':' + String(s).padStart(2, '0');
 }
+
+function _voiceSetBtnRecording(on) {
+  const btn = document.getElementById('chat-voice-btn');
+  if (!btn) return;
+  btn.classList.toggle('recording', !!on);
+  if (on) {
+    btn.setAttribute('aria-label', 'Stop recording');
+  } else {
+    btn.setAttribute('aria-label', 'Voice note');
+  }
+}
+
+async function chatRecordVoice() {
+  if (!activeChatId || !currentUser) {
+    showToast('Open a chat first');
+    return;
+  }
+  // Toggle: if already recording → stop & send
+  if (_voiceRec.recording) {
+    _voiceStopAndSend();
+    return;
+  }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showToast('Voice notes not supported on this browser');
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    _voiceRec.stream = stream;
+    _voiceRec.chunks = [];
+    let mime = '';
+    if (window.MediaRecorder) {
+      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) mime = 'audio/webm;codecs=opus';
+      else if (MediaRecorder.isTypeSupported('audio/webm')) mime = 'audio/webm';
+      else if (MediaRecorder.isTypeSupported('audio/mp4')) mime = 'audio/mp4';
+    }
+    const mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    _voiceRec.mediaRecorder = mr;
+    _voiceRec.startedAt = Date.now();
+    mr.ondataavailable = function(e) {
+      if (e.data && e.data.size > 0) _voiceRec.chunks.push(e.data);
+    };
+    mr.onstop = function() {
+      // handled in _voiceStopAndSend after stop
+    };
+    mr.start(250);
+    _voiceRec.recording = true;
+    _voiceSetBtnRecording(true);
+    showToast('Recording… tap again to send');
+    // Auto-stop at 60s
+    clearTimeout(_voiceRec.timer);
+    _voiceRec.timer = setTimeout(function() {
+      if (_voiceRec.recording) _voiceStopAndSend();
+    }, 60000);
+  } catch (err) {
+    console.warn('mic error', err);
+    showToast('Microphone permission needed');
+    _voiceCleanupStream();
+  }
+}
+
+function _voiceCleanupStream() {
+  try {
+    (_voiceRec.stream && _voiceRec.stream.getTracks() || []).forEach(function(t) { t.stop(); });
+  } catch (e) {}
+  _voiceRec.stream = null;
+  _voiceRec.mediaRecorder = null;
+  _voiceRec.recording = false;
+  clearTimeout(_voiceRec.timer);
+  _voiceSetBtnRecording(false);
+}
+
+async function _voiceStopAndSend() {
+  if (!_voiceRec.mediaRecorder) {
+    _voiceCleanupStream();
+    return;
+  }
+  const mr = _voiceRec.mediaRecorder;
+  const durationSec = Math.max(1, Math.round((Date.now() - _voiceRec.startedAt) / 1000));
+  const blob = await new Promise(function(resolve) {
+    mr.onstop = function() {
+      const type = mr.mimeType || 'audio/webm';
+      resolve(new Blob(_voiceRec.chunks, { type: type }));
+    };
+    try { mr.stop(); } catch (e) { resolve(new Blob(_voiceRec.chunks, { type: 'audio/webm' })); }
+  });
+  _voiceCleanupStream();
+
+  if (!blob || blob.size < 100) {
+    showToast('Recording too short');
+    return;
+  }
+  if (durationSec < 1) {
+    showToast('Hold a bit longer');
+    return;
+  }
+
+  const ext = (blob.type || '').indexOf('mp4') >= 0 ? 'm4a' : 'webm';
+  const localUrl = URL.createObjectURL(blob);
+
+  // Optimistic UI
+  const msgsEl = document.getElementById('chat-messages');
+  const lastRow = msgsEl && msgsEl.querySelector('.chat-msg-row:last-child');
+  const lastSenderId = lastRow
+    ? (lastRow.classList.contains('sent') ? currentUser.id : activeChatUserId)
+    : null;
+  const tmpId = 'tmp-voice-' + Date.now();
+  const tmpMsg = {
+    id: tmpId,
+    type: 'voice',
+    content: '',
+    media_url: localUrl,
+    media_duration: durationSec,
+    sender_id: currentUser.id,
+    created_at: new Date().toISOString(),
+    sender: currentProfile,
+  };
+  const el = buildMessageEl(tmpMsg, lastSenderId);
+  if (el && msgsEl) {
+    msgsEl.appendChild(el);
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+  }
+  if (typeof updateInboxRow === 'function') {
+    updateInboxRow(activeChatId, '🎙 Voice note', tmpMsg.created_at);
+  }
+
+  // Upload
+  showToast('Sending voice…');
+  const path = 'chat/' + activeChatId + '/' + currentUser.id + '-voice-' + Date.now() + '.' + ext;
+  let publicUrl = null;
+  try {
+    const { data: uploadData, error: uploadErr } = await supabase.storage
+      .from('media')
+      .upload(path, blob, { contentType: blob.type || 'audio/webm', upsert: false });
+    if (uploadErr) throw uploadErr;
+    const { data: urlData } = supabase.storage.from('media').getPublicUrl(path);
+    publicUrl = urlData && urlData.publicUrl;
+  } catch (upErr) {
+    console.warn('voice upload', upErr);
+    // Try R2 worker if present (same as images)
+    try {
+      if (typeof uploadToR2 === 'function') {
+        publicUrl = await uploadToR2(blob, path);
+      }
+    } catch (e2) {}
+  }
+
+  if (!publicUrl) {
+    showToast('Voice upload failed');
+    el && el.remove();
+    return;
+  }
+
+  const { error: insertErr } = await supabase.from('messages').insert({
+    conversation_id: activeChatId,
+    sender_id: currentUser.id,
+    type: 'voice',
+    media_url: publicUrl,
+    media_duration: durationSec,
+    content: '',
+  });
+  if (insertErr) {
+    console.warn(insertErr);
+    showToast('Could not send voice note');
+    el && el.remove();
+    return;
+  }
+  // Point optimistic bubble at permanent URL
+  const playBtn = el && el.querySelector('.chat-voice-play');
+  if (playBtn) playBtn.dataset.src = publicUrl;
+  if (el) el.dataset.mediaUrl = publicUrl;
+  markConvRead(activeChatId);
+  showToast('Voice sent');
+}
+
 function chatAttach() {
   // Now handled via hidden file input in HTML
   document.getElementById('chat-img-input')?.click();
@@ -1991,18 +2204,74 @@ function chatMoreOptions() {
   showToast('More options — coming soon');
 }
 function chatPlayVoice(btn, waveId) {
+  const row = btn.closest('.chat-msg-row');
+  const src = btn.dataset.src
+    || row?.dataset?.mediaUrl
+    || row?.querySelector('.chat-bubble')?.dataset?.mediaUrl
+    || btn.getAttribute('data-src');
+  // Resolve media_url from nearest bubble dataset set at build time
+  let url = src;
+  if (!url && row) {
+    const b = row.querySelector('[data-voice-url]');
+    if (b) url = b.getAttribute('data-voice-url');
+  }
+  if (!url) {
+    // last resort: find from buildVoiceBubble data attribute on bubble
+    const bubble = btn.closest('.chat-bubble');
+    url = bubble && bubble.getAttribute('data-voice-url');
+  }
+  if (!url) {
+    showToast('Audio unavailable');
+    return;
+  }
+
+  // Stop previous
+  if (_voiceAudio) {
+    try { _voiceAudio.pause(); } catch (e) {}
+    _voiceAudio = null;
+  }
+
   const bars = document.getElementById(waveId)?.querySelectorAll('.chat-voice-bar');
-  if (!bars?.length) return;
-  let idx = 0;
-  btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="6" y="4" width="4" height="16" fill="currentColor"/><rect x="14" y="4" width="4" height="16" fill="currentColor"/></svg>`;
-  const iv = setInterval(() => {
-    if (idx < bars.length) { bars[idx].classList.add('played'); idx++; }
-    else {
-      clearInterval(iv);
-      bars.forEach(b => b.classList.remove('played'));
-      btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg>`;
+  const playIcon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg>';
+  const pauseIcon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="6" y="4" width="4" height="16" fill="currentColor"/><rect x="14" y="4" width="4" height="16" fill="currentColor"/></svg>';
+
+  const audio = new Audio(url);
+  _voiceAudio = audio;
+  btn.innerHTML = pauseIcon;
+  if (bars) bars.forEach(function(b) { b.classList.remove('played'); });
+
+  audio.play().catch(function() {
+    showToast('Could not play');
+    btn.innerHTML = playIcon;
+  });
+
+  audio.ontimeupdate = function() {
+    if (!bars || !bars.length || !audio.duration) return;
+    const n = Math.floor((audio.currentTime / audio.duration) * bars.length);
+    bars.forEach(function(b, i) {
+      b.classList.toggle('played', i < n);
+    });
+  };
+  audio.onended = function() {
+    btn.innerHTML = playIcon;
+    if (bars) bars.forEach(function(b) { b.classList.remove('played'); });
+    if (_voiceAudio === audio) _voiceAudio = null;
+  };
+  // Tap again to pause
+  btn.onclick = function(ev) {
+    ev.stopPropagation();
+    if (_voiceAudio === audio && !audio.paused) {
+      audio.pause();
+      btn.innerHTML = playIcon;
+      _voiceAudio = null;
+      btn.onclick = function(e) {
+        e.stopPropagation();
+        chatPlayVoice(btn, waveId);
+      };
+      return;
     }
-  }, 200);
+    chatPlayVoice(btn, waveId);
+  };
 }
 async function chatRespondOffer(msgId, status) {
   await supabase.from('messages').update({ offer_status: status }).eq('id', msgId);
@@ -2029,20 +2298,39 @@ function msgSearch(val) {
 let _stickerPickerTarget = 'dm';
 function openStickerPicker(target) {
   _stickerPickerTarget = target || 'dm';
+
+  // Backdrop — tap outside closes
+  let backdrop = document.getElementById('sticker-picker-backdrop');
+  if (!backdrop) {
+    backdrop = document.createElement('div');
+    backdrop.id = 'sticker-picker-backdrop';
+    backdrop.className = 'sticker-picker-backdrop';
+    backdrop.addEventListener('click', function() { closeStickerPicker(); });
+    document.body.appendChild(backdrop);
+  }
+  backdrop.classList.add('open');
+
   let panel = document.getElementById('sticker-picker');
   if (!panel) {
     panel = document.createElement('div');
     panel.id = 'sticker-picker';
     panel.className = 'sticker-picker';
-    panel.innerHTML = '<div class="sticker-picker-body"><div class="emoji-grid" id="sp-emoji-grid"></div></div>';
+    panel.innerHTML =
+      '<div class="sticker-picker-head">' +
+        '<span class="sticker-picker-title">Emoji</span>' +
+        '<button type="button" class="sticker-picker-close" onclick="closeStickerPicker()" aria-label="Close">×</button>' +
+      '</div>' +
+      '<div class="sticker-picker-body"><div class="emoji-grid" id="sp-emoji-grid"></div></div>';
+    // stop clicks inside panel from hitting backdrop
+    panel.addEventListener('click', function(e) { e.stopPropagation(); });
     document.body.appendChild(panel);
   }
   const grid = document.getElementById('sp-emoji-grid');
   if (grid && !grid.dataset.filled) {
-    const emojis = ['😀','😂','🥰','😍','😎','😭','🔥','❤️','💯','👍','🙏','👏','🎉','😮','😢','💪','🤝','✨','🫂','💋','🥺','😤','🤔','👀','💬','🇳🇬','⚽','🎵','🍕','☕'];
-    grid.innerHTML = emojis.map(e =>
-      '<button type="button" class="sp-emoji-btn" data-emoji="' + e + '">' + e + '</button>'
-    ).join('');
+    const emojis = ['😀','😂','🥰','😍','😎','😭','🔥','❤️','💯','👍','🙏','👏','🎉','😮','😢','💪','🤝','✨','🫂','💋','🥺','😤','🤔','👀','💬','🇳🇬','⚽','🎵','🍕','☕','🙌','😊','😘','🤩','😴','😡'];
+    grid.innerHTML = emojis.map(function(e) {
+      return '<button type="button" class="sp-emoji-btn" data-emoji="' + e + '">' + e + '</button>';
+    }).join('');
     grid.dataset.filled = '1';
     grid.addEventListener('click', function(ev) {
       const btn = ev.target.closest('.sp-emoji-btn');
@@ -2055,13 +2343,23 @@ function openStickerPicker(target) {
   panel.classList.remove('hidden');
   panel.classList.add('open');
   panel.style.display = 'flex';
+
+  if (!window._stickerEscWired) {
+    window._stickerEscWired = true;
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closeStickerPicker();
+    });
+  }
 }
 function closeStickerPicker() {
   const panel = document.getElementById('sticker-picker');
-  if (!panel) return;
-  panel.classList.add('hidden');
-  panel.classList.remove('open');
-  panel.style.display = 'none';
+  if (panel) {
+    panel.classList.add('hidden');
+    panel.classList.remove('open');
+    panel.style.display = 'none';
+  }
+  const backdrop = document.getElementById('sticker-picker-backdrop');
+  if (backdrop) backdrop.classList.remove('open');
 }
 
 document.addEventListener('DOMContentLoaded', function() {
