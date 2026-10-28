@@ -9151,14 +9151,21 @@ body.desktop-blocked #username-picker {
   align-items: flex-start !important;
   flex-direction: column !important;
 }
-/* Gap = margin-top only (avoids collapse fighting bottom margins) */
-#page-chat .chat-msg-row.new-sender {
-  margin-top: 10px !important; /* different user than previous */
+/* Gap: same user 3px, switch user 10px — sibling selectors (reliable) */
+#page-chat .chat-msg-row {
+  margin-top: 0 !important;
   margin-bottom: 0 !important;
 }
-#page-chat .chat-msg-row.same-sender {
-  margin-top: 3px !important; /* same user in a row */
-  margin-bottom: 0 !important;
+#page-chat .chat-msg-row + .chat-msg-row {
+  margin-top: 10px !important; /* default: different thread break */
+}
+#page-chat .chat-msg-row.sent + .chat-msg-row.sent,
+#page-chat .chat-msg-row.recv + .chat-msg-row.recv {
+  margin-top: 3px !important; /* same user consecutive */
+}
+#page-chat .chat-msg-row.sent + .chat-msg-row.recv,
+#page-chat .chat-msg-row.recv + .chat-msg-row.sent {
+  margin-top: 10px !important; /* user switch */
 }
 #page-chat .chat-msg-row:first-child {
   margin-top: 0 !important;
@@ -9501,9 +9508,9 @@ body.desktop-blocked #username-picker {
 }
 
 
+
 /* ══════════════════════════════════════════
-   TYPING WAVES — above chat input
-   Two thin lines (Misty red + purple), opposite phase
+   TYPING WAVES — curly sea lines above input
 ══════════════════════════════════════════ */
 #page-chat .chat-typing-waves {
   position: relative;
@@ -9511,45 +9518,50 @@ body.desktop-blocked #username-picker {
   opacity: 0;
   overflow: hidden;
   pointer-events: none;
-  margin: 0 -4px 0;
-  transition: height 0.25s ease, opacity 0.25s ease, margin 0.25s ease;
+  margin: 0;
+  transition: height 0.28s ease, opacity 0.28s ease, margin 0.28s ease;
 }
 #page-chat .chat-typing-waves.active {
-  height: 16px;
+  height: 22px;
   opacity: 1;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
-#page-chat .chat-wave {
-  position: absolute;
-  left: 8%;
-  right: 8%;
-  height: 1.5px;
-  border-radius: 2px;
-  transform-origin: center;
-  will-change: transform, opacity;
+#page-chat .chat-typing-waves svg {
+  display: block;
+  width: 100%;
+  height: 22px;
+  overflow: visible;
 }
-#page-chat .chat-wave-red {
-  top: 4px;
-  background: linear-gradient(90deg, transparent 0%, var(--red, #f0385a) 20%, var(--red, #f0385a) 80%, transparent 100%);
+#page-chat .chat-wave-path {
+  fill: none;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+#page-chat .chat-wave-path.red {
+  stroke: var(--red, #f0385a);
   opacity: 0.85;
-  animation: mistyWaveRed 1.35s ease-in-out infinite;
+  animation: mistySeaWave1 1.6s ease-in-out infinite;
 }
-#page-chat .chat-wave-purple {
-  top: 10px;
-  background: linear-gradient(90deg, transparent 0%, var(--accent, #6c47ff) 20%, var(--accent, #6c47ff) 80%, transparent 100%);
+#page-chat .chat-wave-path.purple {
+  stroke: var(--accent, #6c47ff);
   opacity: 0.9;
-  animation: mistyWavePurple 1.35s ease-in-out infinite;
+  animation: mistySeaWave2 1.6s ease-in-out infinite;
 }
-/* Opposite phase — like two sea lines */
-@keyframes mistyWaveRed {
-  0%, 100% { transform: translateY(5px) scaleX(0.92); opacity: 0.45; }
-  50%      { transform: translateY(-4px) scaleX(1);    opacity: 0.95; }
+/* Curvy motion — opposite phase */
+@keyframes mistySeaWave1 {
+  0%, 100% { transform: translateY(3px); }
+  50%      { transform: translateY(-3px); }
 }
-@keyframes mistyWavePurple {
-  0%, 100% { transform: translateY(-4px) scaleX(1);    opacity: 0.95; }
-  50%      { transform: translateY(5px) scaleX(0.92); opacity: 0.45; }
+@keyframes mistySeaWave2 {
+  0%, 100% { transform: translateY(-3px); }
+  50%      { transform: translateY(3px); }
+}
+#page-chat .chat-typing-waves svg .chat-wave-path {
+  transform-box: fill-box;
+  transform-origin: center;
 }
 @media (prefers-reduced-motion: reduce) {
-  #page-chat .chat-wave-red,
-  #page-chat .chat-wave-purple { animation: none; opacity: 0.7; transform: none; }
+  #page-chat .chat-wave-path.red,
+  #page-chat .chat-wave-path.purple { animation: none; }
 }
