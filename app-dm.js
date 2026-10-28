@@ -347,9 +347,12 @@ function ensureChatTypingWaves() {
   el.id = 'chat-typing-waves';
   el.className = 'chat-typing-waves';
   el.setAttribute('aria-hidden', 'true');
+  // Two curly sea paths — red & purple, opposite animation phase via CSS
   el.innerHTML =
-    '<span class="chat-wave chat-wave-red"></span>' +
-    '<span class="chat-wave chat-wave-purple"></span>';
+    '<svg viewBox="0 0 320 22" preserveAspectRatio="none" aria-hidden="true">' +
+      '<path class="chat-wave-path red" d="M0 11 C40 4, 80 18, 120 11 S200 4, 240 11 S300 18, 320 11"/>' +
+      '<path class="chat-wave-path purple" d="M0 11 C40 18, 80 4, 120 11 S200 18, 240 11 S300 4, 320 11"/>' +
+    '</svg>';
   bar.insertBefore(el, bar.firstChild);
   return el;
 }
