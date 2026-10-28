@@ -1,3 +1,65 @@
+
+// ── Rebuild chat composer to Snap-style bar (MP · input · voice · emoji · gallery) ──
+function rebuildChatComposer() {
+  const bar = document.getElementById('chat-input-bar');
+  if (!bar || bar.dataset.composerV2 === '1') return;
+  bar.dataset.composerV2 = '1';
+
+  const tray = document.getElementById('chat-extras-tray');
+  if (tray) tray.style.display = 'none';
+
+  const row = bar.querySelector('.chat-input-bar-row');
+  if (!row) return;
+
+  row.innerHTML = [
+    '<button type="button" class="chat-mp-fab" id="chat-mp-fab" onclick="chatSendMP()" aria-label="Send MP">',
+    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">',
+    '<path d="M12 2v20M7 7h7.5a3.5 3.5 0 010 7H9a3.5 3.5 0 000 7h8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
+    '</svg></button>',
+    '<div class="chat-input-wrap" id="chat-input-wrap">',
+    '<textarea id="chat-input-field" class="chat-input-field" placeholder="Send a chat" rows="1" ',
+    'oninput="chatInputResize(this);if(typeof syncChatSendBtn===\'function\')syncChatSendBtn();" ',
+    'onkeydown="chatInputKeydown(event)"></textarea>',
+    '<button type="button" class="chat-voice-btn" id="chat-voice-btn" onclick="chatRecordVoice()" aria-label="Voice note">',
+    '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">',
+    '<rect x="4" y="8" width="2.2" height="8" rx="1.1" fill="currentColor"/>',
+    '<rect x="8.5" y="5" width="2.2" height="14" rx="1.1" fill="currentColor"/>',
+    '<rect x="13" y="7" width="2.2" height="10" rx="1.1" fill="currentColor"/>',
+    '<rect x="17.5" y="9" width="2.2" height="6" rx="1.1" fill="currentColor"/>',
+    '</svg></button></div>',
+    '<button type="button" class="chat-side-btn" id="dm-emoji-btn" onclick="openStickerPicker(\'dm\')" aria-label="Emoji">',
+    '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">',
+    '<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01M15 9h.01"/>',
+    '</svg></button>',
+    '<button type="button" class="chat-side-btn" id="chat-gallery-btn" onclick="document.getElementById(\'chat-media-input\').click()" aria-label="Gallery">',
+    '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">',
+    '<rect x="3" y="5" width="14" height="14" rx="2"/><path d="M7 19h12a2 2 0 002-2V7"/>',
+    '<circle cx="9" cy="10" r="1.5" fill="currentColor" stroke="none"/><path d="M7 15l3-3 2 2 3-4 3 5"/>',
+    '</svg></button>',
+    '<input type="file" id="chat-media-input" accept="image/*,video/*" style="display:none" onchange="chatImageSelected(this)">',
+    '<button type="button" class="chat-send-btn" id="chat-send-btn" onclick="chatSend()" aria-label="Send">',
+    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    '</button>'
+  ].join('');
+
+  const input = document.getElementById('chat-input-field');
+  if (input) {
+    input._typingWired = false;
+    if (typeof wireChatTyping === 'function') wireChatTyping();
+  }
+  if (typeof syncChatSendBtn === 'function') syncChatSendBtn();
+}
+
+function syncChatSendBtn() {
+  const input = document.getElementById('chat-input-field');
+  const btn = document.getElementById('chat-send-btn');
+  if (!btn) return;
+  const has = !!(input && input.value.trim()) || !!window.chatPendingImage;
+  btn.classList.toggle('ready', has);
+  btn.classList.toggle('chat-send-visible', has);
+}
+
+
 /* ═══════════════════════════════════════════
    MISTYNOTE — app-dm.js
    Messaging, conversations, typing indicators,
@@ -466,6 +528,7 @@ function openChat(convId, otherUser) {
   activeChatId     = convId;
   activeChatUserId = otherUser.id;
   activeChatUser   = otherUser;
+  try { rebuildChatComposer(); } catch (e) {}
   // Set topbar
   const nameEl   = document.getElementById('chat-topbar-name');
   const statusEl = document.getElementById('chat-topbar-status');
@@ -2000,3 +2063,7 @@ function closeStickerPicker() {
   panel.classList.remove('open');
   panel.style.display = 'none';
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+  try { rebuildChatComposer(); } catch (e) {}
+});
