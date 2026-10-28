@@ -613,9 +613,12 @@ function buildMessageEl(msg, prevSenderId) {
     bubble.className = 'chat-bubble';
     bubble.innerHTML = `${replyQuoteHtml}🎁 ${escHtml(content || 'Sent MistyPoints')}`;
   } else {
-    bubble.className = 'chat-bubble';
     const text = content;
-    if (typeof linkifyText === 'function') {
+    const bigEmoji = !replyQuoteHtml && typeof isSingleEmojiOnly === 'function' && isSingleEmojiOnly(text);
+    bubble.className = bigEmoji ? 'chat-bubble chat-bubble-emoji' : 'chat-bubble';
+    if (bigEmoji) {
+      bubble.innerHTML = `<span class="chat-emoji-xl">${text}</span>`;
+    } else if (typeof linkifyText === 'function') {
       bubble.innerHTML = `${replyQuoteHtml}${linkifyText(text)}`;
     } else {
       bubble.textContent = '';
@@ -1315,12 +1318,59 @@ function showSeenIndicator() {
   seen.textContent = 'Seen';
   lastSent.after(seen);
 }
-async function chatSend() {
+
+// ── Single-emoji auto-send (50px card) ─────────────────────
+function isSingleEmojiOnly(str) {
+  if (!str) return false;
+  const s = String(str).trim();
+  if (!s) return false;
+  try {
+    if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+      const parts = [...new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(s)].map(p => p.segment);
+      if (parts.length !== 1) return false;
+      return /\p{Extended_Pictographic}/u.test(parts[0]);
+    }
+  } catch (e) {}
+  // Fallback: one extended pictographic (+ optional ZWJ sequences / FE0F)
+  try {
+    return /^\p{Extended_Pictographic}(\uFE0F|\u200D\p{Extended_Pictographic})*$/u.test(s);
+  } catch (e2) {
+    return false;
+  }
+}
+
+/** Tap from emoji picker: empty field → instant send at 50px; else append to text */
+function chatPickEmoji(emoji) {
+  if (!emoji) return;
+  const field = document.getElementById('chat-input-field');
+  const current = (field?.value || '').trim();
+  if (!current) {
+    // Standalone emoji → send immediately (one emoji only)
+    if (field) field.value = emoji;
+    chatSend({ forceEmoji: true });
+    return;
+  }
+  // Already typing letters → normal insert
+  if (field) {
+    const start = field.selectionStart ?? field.value.length;
+    const end = field.selectionEnd ?? field.value.length;
+    const v = field.value;
+    field.value = v.slice(0, start) + emoji + v.slice(end);
+    field.focus();
+    const pos = start + emoji.length;
+    try { field.setSelectionRange(pos, pos); } catch (e) {}
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+}
+
+async function chatSend(opts) {
+  opts = opts || {};
   const field = document.getElementById('chat-input-field');
   const text  = field?.value?.trim();
   const hasImage = !!chatPendingImage;
   if (!text && !hasImage) return;
   if (!activeChatId || !currentUser) return;
+  const isBigEmoji = !hasImage && (opts.forceEmoji || isSingleEmojiOnly(text));
   // Capture reply & image state then clear immediately
   const replySnapshot = chatReplyTo ? { ...chatReplyTo } : null;
   const imageSnapshot = chatPendingImage ? { ...chatPendingImage } : null;
@@ -1811,4 +1861,44 @@ function msgSearch(val) {
     const name = r.querySelector('.msg-conv-name')?.textContent?.toLowerCase() || '';
     r.style.display = name.includes(val.toLowerCase()) ? '' : 'none';
   });
+}
+
+
+// ── Emoji / sticker picker (DM + comments) ─────────────────
+let _stickerPickerTarget = 'dm';
+function openStickerPicker(target) {
+  _stickerPickerTarget = target || 'dm';
+  let panel = document.getElementById('sticker-picker');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'sticker-picker';
+    panel.className = 'sticker-picker';
+    panel.innerHTML = '<div class="sticker-picker-body"><div class="emoji-grid" id="sp-emoji-grid"></div></div>';
+    document.body.appendChild(panel);
+  }
+  const grid = document.getElementById('sp-emoji-grid');
+  if (grid && !grid.dataset.filled) {
+    const emojis = ['😀','😂','🥰','😍','😎','😭','🔥','❤️','💯','👍','🙏','👏','🎉','😮','😢','💪','🤝','✨','🫂','💋','🥺','😤','🤔','👀','💬','🇳🇬','⚽','🎵','🍕','☕'];
+    grid.innerHTML = emojis.map(e =>
+      '<button type="button" class="sp-emoji-btn" data-emoji="' + e + '">' + e + '</button>'
+    ).join('');
+    grid.dataset.filled = '1';
+    grid.addEventListener('click', function(ev) {
+      const btn = ev.target.closest('.sp-emoji-btn');
+      if (!btn) return;
+      const em = btn.dataset.emoji;
+      closeStickerPicker();
+      if (_stickerPickerTarget === 'dm') chatPickEmoji(em);
+    });
+  }
+  panel.classList.remove('hidden');
+  panel.classList.add('open');
+  panel.style.display = 'flex';
+}
+function closeStickerPicker() {
+  const panel = document.getElementById('sticker-picker');
+  if (!panel) return;
+  panel.classList.add('hidden');
+  panel.classList.remove('open');
+  panel.style.display = 'none';
 }
