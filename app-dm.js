@@ -254,6 +254,9 @@ async function loadMessages() {
     const isActive  = lastMsgMs < 5 * 60 * 1000;   // 5 min
     const isRecent  = lastMsgMs < 60 * 60 * 1000;   // 1 hour
     if (unread) row.classList.add('has-unread');
+    const statusLine = unread
+      ? ('New · ' + (timeStr || 'now'))
+      : (isActive ? 'Active now' : (preview ? escHtml(preview.slice(0, 42)) : 'Tap to chat'));
     row.innerHTML = `
       <div class="msg-conv-av-wrap">
         <img class="msg-conv-av" src="${otherUser.avatar||''}" onerror="this.style.background='var(--bg3)';this.removeAttribute('src')" alt="">
@@ -262,12 +265,16 @@ async function loadMessages() {
       <div class="msg-conv-body">
         <div class="msg-conv-name-row">
           <span class="msg-conv-name">${escHtml(otherUser.username||'')}</span>
-          <span class="msg-conv-time"${isActive ? ' style="color:var(--accent);font-weight:700"' : ''}>${isActive ? 'Active' : timeStr}</span>
         </div>
         <div class="msg-conv-preview-row">
-          <span class="msg-conv-preview${unread ? ' unread' : ''}">${escHtml(preview)}</span>
+          <span class="msg-conv-preview${unread ? ' unread' : ''}">${statusLine}</span>
           ${unread ? `<div class="msg-conv-unread-badge">${unread > 9 ? '9+' : unread}</div>` : ''}
         </div>
+      </div>
+      <div class="msg-conv-action" aria-hidden="true">
+        ${unread
+          ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg><span>Open</span>'
+          : '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>'}
       </div>`;
     row.addEventListener('click', () => openChat(conv.id, otherUser));
     list.appendChild(row);
@@ -569,101 +576,64 @@ function assignClusterClasses(container) {
 }
 // ── Build a message element ──
 function buildMessageEl(msg, prevSenderId) {
-  const isSent     = msg.sender_id === currentUser?.id;
-  const isNewSender = prevSenderId !== null && msg.sender_id !== prevSenderId;
-  const timeStr    = msgFormatTime(msg.created_at);
+  if (!msg || msg.deleted_at) return null;
+  const isSent = msg.sender_id === currentUser?.id;
+  const isNewSender = !prevSenderId || prevSenderId !== msg.sender_id;
   const row = document.createElement('div');
-  row.className = `chat-msg-row ${isSent ? 'sent' : 'recv'}${isNewSender ? ' new-sender' : ''}`;
-  row.dataset.msgId = msg.id;
-  // ── Tap to show Snapchat-style popup ──
-  attachTapPopup(row, msg);
-  // ── Reply quote ──
+  row.className = `chat-msg-row ${isSent ? 'sent' : 'recv'}${isNewSender ? ' new-sender' : ' same-sender'}`;
+  row.dataset.msgId = msg.id || '';
+  row.dataset.senderId = msg.sender_id || '';
+
+  const timeStr = msg.created_at ? msgFormatTime(msg.created_at) : '';
+  const label = isSent ? 'ME' : (msg.sender?.username || activeChatUser?.username || 'Them');
+
+  const labelRow = document.createElement('div');
+  labelRow.className = 'chat-msg-label-row';
+  labelRow.innerHTML = `<span class="chat-msg-label">${escHtml(label)}</span><span class="chat-msg-time">${timeStr}</span>`;
+
+  const type = msg.type || 'text';
+  const content = msg.content || '';
+  const timeHtml = ''; // time in label row
+
+  // Reply quote
   let replyQuoteHtml = '';
-  const replyData = msg._replySnapshot || null;
-  if (replyData || msg.reply_to_id) {
-    // Use embedded snapshot for optimistic messages, or fetch for loaded ones
-    if (replyData) {
-      replyQuoteHtml = buildReplyQuoteHtml(replyData.senderName, replyData.content, replyData.mediaUrl);
-    } else if (msg.reply_to_id) {
-      // Will be populated async below
-    }
+  if (msg.reply_to_id && msg.reply_to) {
+    const rName = msg.reply_to.sender_id === currentUser?.id ? 'You' : (msg.reply_to.sender?.username || 'Reply');
+    const rText = (msg.reply_to.content || 'Message').slice(0, 60);
+    replyQuoteHtml = `<div class="chat-reply-quote"><strong>${escHtml(rName)}</strong> ${escHtml(rText)}</div>`;
   }
-  // Build bubble based on type
-  let bubbleEl;
-  if (msg.type === 'image') {
-    const bubble = document.createElement('div');
+
+  const bubble = document.createElement('div');
+
+  if (type === 'image' || (msg.media_url && type !== 'text')) {
     bubble.className = 'chat-bubble img-bubble';
-    const imgSrc = escHtml(msg.media_url || '');
-    bubble.innerHTML = `
-      ${replyQuoteHtml}
-      <img class="chat-bubble-img" src="${imgSrc}" alt="photo" loading="lazy"
-        onclick="chatViewImage('${imgSrc}')"
-        onerror="this.style.opacity='0.3'">
-      ${msg.content ? `<div style="font-size:14px;margin-top:6px;padding:0 2px">${escHtml(msg.content)}</div>` : ''}
-      <span class="chat-bubble-meta">${timeStr}</span>`;
-    bubbleEl = bubble;
-  } else if (msg.type === 'cash') {
-    bubbleEl = buildCashBubble(msg, isSent, timeStr);
-  } else if (msg.type === 'product') {
-    bubbleEl = buildProductBubble(msg, isSent, timeStr);
-  } else if (msg.type === 'voice') {
-    bubbleEl = buildVoiceBubble(msg, isSent, timeStr);
-  } else if (msg.type === 'offer') {
-    bubbleEl = buildOfferBubble(msg, isSent, timeStr);
-  } else if (msg.type === 'order_update') {
-    bubbleEl = buildOrderBubble(msg, timeStr);
+    const imgSrc = msg.media_url || content;
+    bubble.innerHTML = `${replyQuoteHtml}<img class="chat-bubble-img" src="${escHtml(imgSrc)}" alt="photo" loading="lazy">`;
+  } else if (type === 'gift' || type === 'mp_gift') {
+    bubble.className = 'chat-bubble';
+    bubble.innerHTML = `${replyQuoteHtml}🎁 ${escHtml(content || 'Sent MistyPoints')}`;
   } else {
-    const content  = msg.content || '';
-    const url      = extractFirstUrl(content);
-    const isUrlOnly = url && content.trim() === url.trim();
-    if (url) {
-      const msgCol = document.createElement('div');
-      msgCol.className = `chat-url-col ${isSent ? 'sent' : 'recv'}`;
-      row.appendChild(msgCol);
-      if (!isUrlOnly) {
-        const textOnly = content.replace(url, '').trim();
-        if (textOnly) {
-          const textBubble = document.createElement('div');
-          textBubble.className = 'chat-bubble';
-          textBubble.innerHTML = `${replyQuoteHtml}${linkifyText(textOnly)}<span class="chat-bubble-meta">${timeStr}${isSent ? `` : ''}</span>`;
-          msgCol.appendChild(textBubble);
-        }
-      }
-      const previewCard = document.createElement('div');
-      previewCard.className = `chat-og-outer ${isSent ? 'sent' : 'recv'}`;
-      previewCard.innerHTML = `<div class="chat-og-shimmer"><div class="chat-og-shimmer-img"></div><div class="chat-og-shimmer-lines"><div></div><div></div></div></div>`;
-      msgCol.appendChild(previewCard);
-      fetchOgPreview(url).then(og => {
-        if (!og) {
-          previewCard.remove();
-          const fallback = document.createElement('div');
-          fallback.className = 'chat-bubble';
-          fallback.innerHTML = `${replyQuoteHtml}<a href="${escHtml(url)}" target="_blank" rel="noopener noreferrer" class="post-link" onclick="event.stopPropagation()">${escHtml(url)}</a><span class="chat-bubble-meta">${timeStr}${isSent ? `` : ''}</span>`;
-          msgCol.appendChild(fallback);
-          return;
-        }
-        previewCard.innerHTML = buildOgCard(og, url, isSent, timeStr, isUrlOnly);
-      }).catch(() => {
-        previewCard.remove();
-      });
-      return row;
+    bubble.className = 'chat-bubble';
+    const text = content;
+    if (typeof linkifyText === 'function') {
+      bubble.innerHTML = `${replyQuoteHtml}${linkifyText(text)}`;
     } else {
-      const bubble = document.createElement('div');
-      bubble.className = 'chat-bubble';
-      bubble.innerHTML = `${replyQuoteHtml}${linkifyText(content)}<span class="chat-bubble-meta">${timeStr}${isSent ? `` : ''}</span>`;
-      bubbleEl = bubble;
+      bubble.textContent = '';
+      if (replyQuoteHtml) bubble.innerHTML = replyQuoteHtml;
+      bubble.appendChild(document.createTextNode(text));
     }
   }
-  if (bubbleEl) {
-    row.appendChild(bubbleEl);
-    // Async: fetch reply context if reply_to_id exists but no snapshot
-    if (msg.reply_to_id && !msg._replySnapshot) {
-      fetchAndInjectReplyQuote(row, bubbleEl, msg.reply_to_id, isSent);
-    }
+
+  if (isNewSender) row.appendChild(labelRow);
+  else {
+    // still show time for stacked? Snap hides label for same sender sometimes
+    // keep compact: no label for same-sender
   }
+  row.appendChild(bubble);
   return row;
 }
-// ── Fetch reply context from DB and inject into bubble ──
+
+
 async function fetchAndInjectReplyQuote(row, bubbleEl, replyToId, isSent) {
   const { data: orig } = await supabase
     .from('messages')
