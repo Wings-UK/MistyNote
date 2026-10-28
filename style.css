@@ -2175,11 +2175,11 @@ body.desktop-blocked #username-picker {
     transition: transform 0.1s;
   }
   .chat-bubble:active { transform: scale(0.98); }
-  /* ── SENT bubble — flat accent, no gradient, no shadow ── */
+  /* ── SENT bubble (legacy) — neutralised; #page-chat uses white cards ── */
   .chat-msg-row.sent .chat-bubble {
-    background: var(--accent);
-    color: #ffffff;
-    border-radius: 20px 20px 6px 20px;
+    background: #ffffff;
+    color: var(--text);
+    border-radius: 8px;
   }
   /* Cluster shaping — sent */
   .chat-msg-row.sent.cluster-top .chat-bubble    { border-radius: 20px 20px 6px 20px; }
@@ -9457,4 +9457,28 @@ body.desktop-blocked #username-picker {
   font-size: 20px;
   line-height: 1.3;
   letter-spacing: 2px;
+}
+
+/* ══════════════════════════════════════════
+   CHAT CARDS — force white (do not remove)
+══════════════════════════════════════════ */
+#page-chat .chat-bubble:not(.chat-bubble-emoji):not(.img-bubble) {
+  background: #ffffff !important;
+  color: var(--text) !important;
+  border: 1px solid #efeeea !important;
+  box-shadow: none !important;
+}
+#page-chat .chat-msg-row.sent .chat-bubble:not(.chat-bubble-emoji):not(.img-bubble),
+#page-chat .chat-msg-row.recv .chat-bubble:not(.chat-bubble-emoji):not(.img-bubble) {
+  background: #ffffff !important;
+  color: var(--text) !important;
+}
+/* Single in-app emoji stays borderless; multi keyboard emoji keeps white card */
+#page-chat .chat-bubble.chat-bubble-emoji {
+  background: transparent !important;
+  border: none !important;
+}
+#page-chat .chat-bubble.chat-bubble-emoji-sm {
+  background: #ffffff !important;
+  border: 1px solid #efeeea !important;
 }
