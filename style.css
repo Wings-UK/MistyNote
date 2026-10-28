@@ -9136,13 +9136,20 @@ body.desktop-blocked #username-picker {
 #page-chat .chat-msg-row {
   display: flex !important;
   flex-direction: column !important;
-  align-items: stretch !important;
-  align-self: stretch !important;
-  width: 100%;
+  align-items: flex-start !important;
+  align-self: flex-start !important;
+  width: auto;
   max-width: 100%;
-  margin: 0 !important; /* spacing only via top margin below */
+  margin: 0 !important;
   padding: 0;
   gap: 0;
+}
+/* Both sides same stream — no left/right split */
+#page-chat .chat-msg-row.sent,
+#page-chat .chat-msg-row.recv {
+  align-self: flex-start !important;
+  align-items: flex-start !important;
+  flex-direction: column !important;
 }
 /* Gap = margin-top only (avoids collapse fighting bottom margins) */
 #page-chat .chat-msg-row.new-sender {
@@ -9156,21 +9163,19 @@ body.desktop-blocked #username-picker {
 #page-chat .chat-msg-row:first-child {
   margin-top: 0 !important;
 }
-#page-chat .chat-msg-row.sent,
-#page-chat .chat-msg-row.recv {
-  flex-direction: column !important;
-  align-self: stretch !important;
-}
+
 
 /* Label row inside the card header area */
 #page-chat .chat-msg-label-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
+  gap: 10px; /* minimum 10px between name and time */
   padding: 0;
   margin: 0 0 4px 0;
-  width: 100%;
+  width: max-content; /* drives card min width when label is present */
+  min-width: 100%; /* when bubble is wider than label, still span card */
+  box-sizing: border-box;
 }
 
 #page-chat .chat-msg-label {
@@ -9198,32 +9203,32 @@ body.desktop-blocked #username-picker {
  * not full-bleed bands. Subtle shadow, soft radius.
  */
 #page-chat .chat-bubble {
-  display: block;
-  width: 100%;
-  max-width: 100% !important;
+  display: inline-block;
+  width: fit-content;          /* short text → narrow card */
+  max-width: 100%;             /* long text wraps → can use full column width */
   box-sizing: border-box;
   margin: 0;
-  padding: 5px 14px; /* top & bottom 5px */
-  border-radius: 8px !important; /* tighter radius */
-  border: 1px solid #efeeea !important; /* lighter grey outline */
+  padding: 5px 14px;
+  border-radius: 8px !important;
+  border: 1px solid #efeeea !important;
   border-left: 1px solid #efeeea !important;
   background: #ffffff !important;
   color: var(--text) !important;
-  /* Match homepage .post-text */
   font-family: var(--font) !important;
   font-size: 16px !important;
   font-weight: 400;
   line-height: 1.6;
   letter-spacing: normal;
   word-break: break-word;
-  box-shadow: none !important; /* no heavy shadow — border only */
+  box-shadow: none !important;
+  min-width: min-content;      /* at least name + 10px + time when label present */
 }
 
 /* Same card language for both sides — only label colour differs */
 #page-chat .chat-msg-row.sent .chat-bubble,
 #page-chat .chat-msg-row.recv .chat-bubble {
   background: #ffffff !important;
-  color: #1c1b19 !important;
+  color: var(--text) !important;
 }
 
 [data-theme="dark"] #page-chat .chat-bubble {
