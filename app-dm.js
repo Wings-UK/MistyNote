@@ -173,6 +173,7 @@ async function openDM(userId) {
 }
 // ── Open messages inbox (from feed header DM button) ──
 function openMessagesInbox() {
+  msgInboxLoaded = false; // always refresh list for live unread/previews
   slideTo('messages', () => {
     loadMessages();
   });
@@ -252,6 +253,7 @@ async function loadMessages() {
     const lastMsgMs = conv.last_message_at ? Date.now() - new Date(conv.last_message_at).getTime() : Infinity;
     const isActive  = lastMsgMs < 5 * 60 * 1000;   // 5 min
     const isRecent  = lastMsgMs < 60 * 60 * 1000;   // 1 hour
+    if (unread) row.classList.add('has-unread');
     row.innerHTML = `
       <div class="msg-conv-av-wrap">
         <img class="msg-conv-av" src="${otherUser.avatar||''}" onerror="this.style.background='var(--bg3)';this.removeAttribute('src')" alt="">
@@ -260,7 +262,7 @@ async function loadMessages() {
       <div class="msg-conv-body">
         <div class="msg-conv-name-row">
           <span class="msg-conv-name">${escHtml(otherUser.username||'')}</span>
-          <span class="msg-conv-time"${isActive ? ' style="color:var(--accent);font-weight:700"' : ''}>${isActive ? 'Active now' : timeStr}</span>
+          <span class="msg-conv-time"${isActive ? ' style="color:var(--accent);font-weight:700"' : ''}>${isActive ? 'Active' : timeStr}</span>
         </div>
         <div class="msg-conv-preview-row">
           <span class="msg-conv-preview${unread ? ' unread' : ''}">${escHtml(preview)}</span>
@@ -379,7 +381,14 @@ function wireChatTyping() {
   const input = document.getElementById('chat-input-field');
   if (!input || input._typingWired) return;
   input._typingWired = true;
+  const syncSend = () => {
+    const btn = document.querySelector('.chat-send-btn, #chat-send-btn');
+    if (!btn) return;
+    const has = (input.value || '').trim().length > 0 || !!chatPendingImage;
+    btn.classList.toggle('ready', has);
+  };
   input.addEventListener('input', () => {
+    syncSend();
     // Send typing=true on every keystroke
     if (!isCurrentlyTyping) {
       broadcastTyping(true);
