@@ -9847,3 +9847,52 @@ body.desktop-blocked #username-picker {
   min-width: 180px;
   max-width: min(85vw, 280px);
 }
+
+
+/* Gallery → Send morph (same slot) */
+#page-chat .chat-action-btn {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  transition: background 0.2s ease, transform 0.15s ease, color 0.2s ease;
+}
+#page-chat .chat-action-btn .chat-action-icon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+#page-chat .chat-action-btn .chat-action-gallery {
+  opacity: 1;
+  transform: scale(1);
+  color: #222;
+}
+#page-chat .chat-action-btn .chat-action-send {
+  opacity: 0;
+  transform: scale(0.6);
+  pointer-events: none;
+}
+#page-chat .chat-action-btn.is-send {
+  background: var(--accent, #6c47ff);
+  color: #fff;
+}
+#page-chat .chat-action-btn.is-send .chat-action-gallery {
+  opacity: 0;
+  transform: scale(0.6);
+  pointer-events: none;
+}
+#page-chat .chat-action-btn.is-send .chat-action-send {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+#page-chat .chat-action-btn.is-send:active {
+  transform: scale(0.92);
+}
+[data-theme="dark"] #page-chat .chat-action-btn .chat-action-gallery {
+  color: var(--text);
+}
