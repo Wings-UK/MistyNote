@@ -8759,8 +8759,9 @@ body.desktop-blocked #username-picker {
    Does not force dark mode. Uses theme tokens.
 ═══════════════════════════════════════════════════════════ */
 
-#page-messages,
-#page-chat {
+/* Only style when active — never force display on inactive pages */
+#page-messages.active,
+#page-chat.active {
   background: var(--bg) !important;
 }
 
@@ -8972,12 +8973,17 @@ body.desktop-blocked #username-picker {
 }
 
 /* ── CHAT THREAD ── */
-#page-chat {
-  display: flex;
+/* CRITICAL: only when .active — otherwise chat covers the whole app after login */
+#page-chat.active {
+  display: flex !important;
   flex-direction: column;
   background:
     radial-gradient(ellipse 120% 80% at 50% -20%, rgba(108,71,255,0.07), transparent 55%),
     var(--bg) !important;
+}
+#page-messages.active {
+  display: flex !important;
+  flex-direction: column;
 }
 
 .chat-topbar {
