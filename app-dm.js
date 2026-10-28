@@ -2,8 +2,8 @@
 // ── Rebuild chat composer to Snap-style bar (MP · input · voice · emoji · gallery) ──
 function rebuildChatComposer() {
   const bar = document.getElementById('chat-input-bar');
-  if (!bar || bar.dataset.composerV2 === '1') return;
-  bar.dataset.composerV2 = '1';
+  if (!bar || bar.dataset.composerV3 === '1') return;
+  bar.dataset.composerV3 = '1';
 
   const tray = document.getElementById('chat-extras-tray');
   if (tray) tray.style.display = 'none';
@@ -31,15 +31,16 @@ function rebuildChatComposer() {
     '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">',
     '<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01M15 9h.01"/>',
     '</svg></button>',
-    '<button type="button" class="chat-side-btn" id="chat-gallery-btn" onclick="document.getElementById(\'chat-media-input\').click()" aria-label="Gallery">',
+    '<button type="button" class="chat-side-btn chat-action-btn" id="chat-action-btn" data-mode="gallery" onclick="chatActionBtnTap()" aria-label="Gallery">',
+    '<span class="chat-action-icon chat-action-gallery" aria-hidden="true">',
     '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">',
     '<rect x="3" y="5" width="14" height="14" rx="2"/><path d="M7 19h12a2 2 0 002-2V7"/>',
     '<circle cx="9" cy="10" r="1.5" fill="currentColor" stroke="none"/><path d="M7 15l3-3 2 2 3-4 3 5"/>',
-    '</svg></button>',
-    '<input type="file" id="chat-media-input" accept="image/*,video/*" style="display:none" onchange="chatImageSelected(this)">',
-    '<button type="button" class="chat-send-btn" id="chat-send-btn" onclick="chatSend()" aria-label="Send">',
-    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    '</button>'
+    '</svg></span>',
+    '<span class="chat-action-icon chat-action-send" aria-hidden="true">',
+    '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    '</span></button>',
+    '<input type="file" id="chat-media-input" accept="image/*,video/*" style="display:none" onchange="chatImageSelected(this)">'
   ].join('');
 
   const input = document.getElementById('chat-input-field');
@@ -50,14 +51,32 @@ function rebuildChatComposer() {
   if (typeof syncChatSendBtn === 'function') syncChatSendBtn();
 }
 
-function syncChatSendBtn() {
-  const input = document.getElementById('chat-input-field');
-  const btn = document.getElementById('chat-send-btn');
+function chatActionBtnTap() {
+  const btn = document.getElementById('chat-action-btn');
   if (!btn) return;
-  const has = !!(input && input.value.trim()) || !!window.chatPendingImage;
-  btn.classList.toggle('ready', has);
-  btn.classList.toggle('chat-send-visible', has);
+  if (btn.dataset.mode === 'send') {
+    chatSend();
+    return;
+  }
+  const input = document.getElementById('chat-media-input');
+  if (input) input.click();
 }
+
+/** Gallery ↔ Send: text or pending image → send mode; else gallery */
+function syncChatActionBtn() {
+  const input = document.getElementById('chat-input-field');
+  const btn = document.getElementById('chat-action-btn');
+  if (!btn) return;
+  const hasText = !!(input && input.value.trim());
+  const hasMedia = !!(typeof chatPendingImage !== 'undefined' && chatPendingImage);
+  const sendMode = hasText || hasMedia;
+  btn.dataset.mode = sendMode ? 'send' : 'gallery';
+  btn.classList.toggle('is-send', sendMode);
+  btn.setAttribute('aria-label', sendMode ? 'Send' : 'Gallery');
+}
+// Back-compat alias
+function syncChatSendBtn() { syncChatActionBtn(); }
+
 
 
 /* ═══════════════════════════════════════════
@@ -1554,6 +1573,7 @@ async function chatSend(opts) {
   const imageSnapshot = chatPendingImage ? { ...chatPendingImage } : null;
   field.value = '';
   field.style.height = 'auto';
+  if (typeof syncChatActionBtn === 'function') syncChatActionBtn();
   chatCancelReply();
   chatCancelImage();
   const msgsEl = document.getElementById('chat-messages');
@@ -2164,6 +2184,7 @@ function chatImageSelected(input) {
     const thumb = document.getElementById('chat-img-preview-thumb');
     if (bar) bar.style.display = 'block';
     if (thumb) thumb.src = e.target.result;
+    if (typeof syncChatActionBtn === 'function') syncChatActionBtn();
   };
   reader.readAsDataURL(file);
   input.value = '';
@@ -2172,6 +2193,7 @@ function chatCancelImage() {
   chatPendingImage = null;
   const bar = document.getElementById('chat-img-preview-bar');
   if (bar) bar.style.display = 'none';
+  if (typeof syncChatActionBtn === 'function') syncChatActionBtn();
 }
 // ── Compress image via canvas (handles landscape, HEIC, EXIF rotation) ──
 function compressChatImage(file) {
