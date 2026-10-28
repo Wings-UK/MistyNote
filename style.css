@@ -9149,7 +9149,7 @@ body.desktop-blocked #username-picker {
   margin-bottom: 0 !important;
 }
 #page-chat .chat-msg-row.same-sender {
-  margin-top: 5px !important; /* same user in a row */
+  margin-top: 2px !important; /* same user in a row */
   margin-bottom: 0 !important;
 }
 #page-chat .chat-msg-row:first-child {
