@@ -9139,14 +9139,22 @@ body.desktop-blocked #username-picker {
   align-self: stretch !important;
   width: 100%;
   max-width: 100%;
-  margin: 0 0 10px 0 !important;
+  margin: 0 !important; /* spacing only via top margin below */
   padding: 0;
   gap: 0;
 }
-/* Different user → 10px gap; same user in a row → 5px */
-#page-chat .chat-msg-row.new-sender { margin-top: 10px !important; margin-bottom: 10px !important; }
-#page-chat .chat-msg-row.same-sender { margin-top: 5px !important; margin-bottom: 5px !important; }
-#page-chat .chat-msg-row:first-child { margin-top: 0 !important; }
+/* Gap = margin-top only (avoids collapse fighting bottom margins) */
+#page-chat .chat-msg-row.new-sender {
+  margin-top: 10px !important; /* different user than previous */
+  margin-bottom: 0 !important;
+}
+#page-chat .chat-msg-row.same-sender {
+  margin-top: 5px !important; /* same user in a row */
+  margin-bottom: 0 !important;
+}
+#page-chat .chat-msg-row:first-child {
+  margin-top: 0 !important;
+}
 #page-chat .chat-msg-row.sent,
 #page-chat .chat-msg-row.recv {
   flex-direction: column !important;
