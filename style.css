@@ -9149,7 +9149,7 @@ body.desktop-blocked #username-picker {
   margin-bottom: 0 !important;
 }
 #page-chat .chat-msg-row.same-sender {
-  margin-top: 2px !important; /* same user in a row */
+  margin-top: 3px !important; /* same user in a row */
   margin-bottom: 0 !important;
 }
 #page-chat .chat-msg-row:first-child {
@@ -9204,8 +9204,8 @@ body.desktop-blocked #username-picker {
   margin: 0;
   padding: 5px 14px; /* top & bottom 5px */
   border-radius: 8px !important; /* tighter radius */
-  border: 1px solid #e5e2dc !important; /* thin long-grey outline */
-  border-left: 1px solid #e5e2dc !important;
+  border: 1px solid #efeeea !important; /* lighter grey outline */
+  border-left: 1px solid #efeeea !important;
   background: #ffffff !important;
   color: #1c1b19 !important;
   font-size: 15.5px;
