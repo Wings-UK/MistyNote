@@ -624,12 +624,16 @@ function buildMessageEl(msg, prevSenderId) {
     } else if (emojiOnly) {
       bubble.className = 'chat-bubble chat-bubble-emoji-sm';
       bubble.innerHTML = '<span class="chat-emoji-md">' + text + '</span>';
-    } else if (typeof linkifyText === 'function') {
-      bubble.innerHTML = `${replyQuoteHtml}${linkifyText(text)}`;
     } else {
-      bubble.textContent = '';
-      if (replyQuoteHtml) bubble.innerHTML = replyQuoteHtml;
-      bubble.appendChild(document.createTextNode(text));
+      // CRITICAL: always set chat-bubble so white card CSS applies
+      bubble.className = 'chat-bubble';
+      if (typeof linkifyText === 'function') {
+        bubble.innerHTML = `${replyQuoteHtml}${linkifyText(text)}`;
+      } else {
+        bubble.textContent = '';
+        if (replyQuoteHtml) bubble.innerHTML = replyQuoteHtml;
+        bubble.appendChild(document.createTextNode(text));
+      }
     }
   }
 
