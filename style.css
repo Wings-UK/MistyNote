@@ -9139,12 +9139,14 @@ body.desktop-blocked #username-picker {
   align-self: stretch !important;
   width: 100%;
   max-width: 100%;
-  margin: 0 0 14px 0 !important;
+  margin: 0 0 10px 0 !important;
   padding: 0;
   gap: 0;
 }
-#page-chat .chat-msg-row.new-sender { margin-top: 6px !important; }
-#page-chat .chat-msg-row.same-sender { margin-top: 0 !important; margin-bottom: 14px !important; }
+/* Different user → 10px gap; same user in a row → 5px */
+#page-chat .chat-msg-row.new-sender { margin-top: 10px !important; margin-bottom: 10px !important; }
+#page-chat .chat-msg-row.same-sender { margin-top: 5px !important; margin-bottom: 5px !important; }
+#page-chat .chat-msg-row:first-child { margin-top: 0 !important; }
 #page-chat .chat-msg-row.sent,
 #page-chat .chat-msg-row.recv {
   flex-direction: column !important;
@@ -9158,7 +9160,8 @@ body.desktop-blocked #username-picker {
   justify-content: space-between;
   gap: 10px;
   padding: 0;
-  margin: 0;
+  margin: 0 0 4px 0;
+  width: 100%;
 }
 
 #page-chat .chat-msg-label {
@@ -9168,10 +9171,10 @@ body.desktop-blocked #username-picker {
   text-transform: uppercase;
 }
 #page-chat .chat-msg-row.sent .chat-msg-label {
-  color: var(--accent); /* Misty purple for ME */
+  color: var(--accent); /* ME — Misty purple */
 }
 #page-chat .chat-msg-row.recv .chat-msg-label {
-  color: #5b8def; /* calm blue for them — readable, not loud */
+  color: var(--red, #f0385a); /* other user — MistyNote red */
 }
 #page-chat .chat-msg-time {
   font-size: 11px;
@@ -9191,10 +9194,10 @@ body.desktop-blocked #username-picker {
   max-width: 100% !important;
   box-sizing: border-box;
   margin: 0;
-  padding: 12px 16px 14px;
-  border-radius: 16px !important;
-  border: 1px solid rgba(0,0,0,0.04) !important;
-  border-left: 1px solid rgba(0,0,0,0.04) !important;
+  padding: 5px 14px; /* top & bottom 5px */
+  border-radius: 8px !important; /* tighter radius */
+  border: 1px solid #e5e2dc !important; /* thin long-grey outline */
+  border-left: 1px solid #e5e2dc !important;
   background: #ffffff !important;
   color: #1c1b19 !important;
   font-size: 15.5px;
@@ -9202,7 +9205,7 @@ body.desktop-blocked #username-picker {
   line-height: 1.55;
   letter-spacing: -0.15px;
   word-break: break-word;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.03) !important;
+  box-shadow: none !important; /* no heavy shadow — border only */
 }
 
 /* Same card language for both sides — only label colour differs */
@@ -9216,7 +9219,7 @@ body.desktop-blocked #username-picker {
   background: var(--surface) !important;
   color: var(--text) !important;
   border-color: var(--border) !important;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.25) !important;
+  box-shadow: none !important;
 }
 [data-theme="dark"] #page-chat .chat-msg-row.sent .chat-bubble,
 [data-theme="dark"] #page-chat .chat-msg-row.recv .chat-bubble {
@@ -9224,13 +9227,9 @@ body.desktop-blocked #username-picker {
   color: var(--text) !important;
 }
 
-/* Put label + time inside the card visually: structure is label row then bubble.
-   Tighten so they read as one unit: label sits just above card with small gap */
-#page-chat .chat-msg-label-row {
-  padding: 0 4px 6px 4px;
-}
+/* Label lives inside the card; hide when same user continues */
 #page-chat .chat-msg-row.same-sender .chat-msg-label-row {
-  display: none; /* continuous flow: no repeated labels */
+  display: none;
 }
 
 #page-chat .chat-bubble-meta { display: none !important; }
