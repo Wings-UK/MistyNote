@@ -625,10 +625,6 @@ function buildMessageEl(msg, prevSenderId) {
   }
 
   if (isNewSender) row.appendChild(labelRow);
-  else {
-    // still show time for stacked? Snap hides label for same sender sometimes
-    // keep compact: no label for same-sender
-  }
   row.appendChild(bubble);
   return row;
 }
