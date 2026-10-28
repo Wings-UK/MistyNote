@@ -312,7 +312,8 @@ async function loadMessages() {
     const visibleH  = vv.height + vv.offsetTop;
     const keyboardH = Math.max(0, fullH - visibleH);
     // Shrink messages area so input bar rises above keyboard
-    msgsEl.style.paddingBottom = keyboardH > 0 ? `${keyboardH}px` : '0px';
+    // Always keep ≥20px between last message and input bar
+    msgsEl.style.paddingBottom = (keyboardH > 0 ? keyboardH + 20 : 20) + 'px';
     // Scroll to bottom immediately and again after animation completes
     scrollToBottom(msgsEl);
     if (keyboardH !== _lastKeyboardH) {
@@ -614,10 +615,15 @@ function buildMessageEl(msg, prevSenderId) {
     bubble.innerHTML = `${replyQuoteHtml}🎁 ${escHtml(content || 'Sent MistyPoints')}`;
   } else {
     const text = content;
-    const bigEmoji = !replyQuoteHtml && typeof isSingleEmojiOnly === 'function' && isSingleEmojiOnly(text);
-    bubble.className = bigEmoji ? 'chat-bubble chat-bubble-emoji' : 'chat-bubble';
-    if (bigEmoji) {
-      bubble.innerHTML = `<span class="chat-emoji-xl">${text}</span>`;
+    // 50px = single emoji only; 20px = emoji-only (no letters), any count; else normal
+    const singleEmoji = !replyQuoteHtml && typeof isSingleEmojiOnly === 'function' && isSingleEmojiOnly(text);
+    const emojiOnly = !replyQuoteHtml && !singleEmoji && typeof isEmojiOnlyMessage === 'function' && isEmojiOnlyMessage(text);
+    if (singleEmoji) {
+      bubble.className = 'chat-bubble chat-bubble-emoji';
+      bubble.innerHTML = '<span class="chat-emoji-xl">' + text + '</span>';
+    } else if (emojiOnly) {
+      bubble.className = 'chat-bubble chat-bubble-emoji-sm';
+      bubble.innerHTML = '<span class="chat-emoji-md">' + text + '</span>';
     } else if (typeof linkifyText === 'function') {
       bubble.innerHTML = `${replyQuoteHtml}${linkifyText(text)}`;
     } else {
@@ -1320,23 +1326,38 @@ function showSeenIndicator() {
 }
 
 // ── Single-emoji auto-send (50px card) ─────────────────────
-function isSingleEmojiOnly(str) {
-  if (!str) return false;
-  const s = String(str).trim();
-  if (!s) return false;
+function _emojiGraphemes(str) {
+  const s = String(str || '').trim();
+  if (!s) return [];
   try {
     if (typeof Intl !== 'undefined' && Intl.Segmenter) {
-      const parts = [...new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(s)].map(p => p.segment);
-      if (parts.length !== 1) return false;
-      return /\p{Extended_Pictographic}/u.test(parts[0]);
+      return [...new Intl.Segmenter('en', { granularity: 'grapheme' }).segment(s)].map(p => p.segment);
     }
   } catch (e) {}
-  // Fallback: one extended pictographic (+ optional ZWJ sequences / FE0F)
+  return Array.from(s);
+}
+function _isEmojiGrapheme(g) {
+  if (!g || !g.trim()) return false; // whitespace-only segment not emoji
   try {
-    return /^\p{Extended_Pictographic}(\uFE0F|\u200D\p{Extended_Pictographic})*$/u.test(s);
-  } catch (e2) {
+    // Must contain a pictographic; allow ZWJ / FE0F / skin tones inside the grapheme
+    if (!/\p{Extended_Pictographic}/u.test(g)) return false;
+    // Reject if it contains letters or numbers
+    if (/\p{L}|\p{N}/u.test(g)) return false;
+    return true;
+  } catch (e) {
     return false;
   }
+}
+/** Exactly one emoji (in-app quick send → 50px) */
+function isSingleEmojiOnly(str) {
+  const parts = _emojiGraphemes(str).filter(g => g.trim().length);
+  return parts.length === 1 && _isEmojiGrapheme(parts[0]);
+}
+/** One or more emojis, no letters/other text (keyboard → 20px) */
+function isEmojiOnlyMessage(str) {
+  const parts = _emojiGraphemes(str).filter(g => g.trim().length);
+  if (!parts.length) return false;
+  return parts.every(_isEmojiGrapheme);
 }
 
 /** Tap from emoji picker: empty field → instant send at 50px; else append to text */
