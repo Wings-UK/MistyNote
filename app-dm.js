@@ -624,7 +624,14 @@ function buildMessageEl(msg, prevSenderId) {
     }
   }
 
-  if (isNewSender) row.appendChild(labelRow);
+  if (isNewSender) {
+    bubble.insertAdjacentHTML('afterbegin',
+      '<div class="chat-msg-label-row">' +
+        '<span class="chat-msg-label">' + escHtml(label) + '</span>' +
+        '<span class="chat-msg-time">' + timeStr + '</span>' +
+      '</div>'
+    );
+  }
   row.appendChild(bubble);
   return row;
 }
