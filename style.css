@@ -10102,7 +10102,7 @@ body.desktop-blocked #username-picker {
   width: fit-content;
   max-width: min(90vw, 340px);
   min-width: 260px;
-  padding: 5px 14px 10px !important;
+  padding: 5px 14px 12px !important;
   border-radius: 8px !important;
   border: 1px solid #efeeea !important;
   background: #ffffff !important;
@@ -10110,22 +10110,23 @@ body.desktop-blocked #username-picker {
   white-space: normal !important;
 }
 #page-chat .chat-bubble.chat-bubble-voice .chat-msg-label-row {
-  margin: 0 0 5px 0 !important; /* 5px below name */
+  margin: 0 0 5px 0 !important; /* name stays same size; 5px below */
   padding: 0 !important;
   width: 100%;
 }
 
-/* Inner rectangular player */
+/* Inner player — larger controls */
 #page-chat .vn-player {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
   box-sizing: border-box;
-  padding: 8px 10px;
+  padding: 14px 14px;
   border-radius: 5px;
   border: 1px solid #d9d6d0;
   background: #fafaf9;
+  min-height: 56px;
 }
 #page-chat .vn-player.is-playing {
   border-color: #cfcbc4;
@@ -10134,8 +10135,8 @@ body.desktop-blocked #username-picker {
 
 #page-chat .vn-play {
   flex-shrink: 0;
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   border: none;
   padding: 0;
   background: transparent;
@@ -10155,12 +10156,12 @@ body.desktop-blocked #username-picker {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  height: 28px;
+  gap: 3px;
+  height: 36px;
 }
 #page-chat .vn-bar {
   display: block;
-  width: 2.5px;
+  width: 3.5px;
   border-radius: 2px;
   background: rgba(240, 56, 90, 0.28);
   flex-shrink: 0;
@@ -10174,23 +10175,23 @@ body.desktop-blocked #username-picker {
   border: none;
   background: #eceae6;
   color: #3a3a3a;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
   font-family: var(--font);
-  padding: 4px 8px;
-  border-radius: 6px;
+  padding: 7px 11px;
+  border-radius: 8px;
   line-height: 1;
   cursor: pointer;
 }
 
 #page-chat .vn-time {
   flex-shrink: 0;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 650;
   font-variant-numeric: tabular-nums;
   font-family: var(--font);
   color: #5c5a56;
-  min-width: 2.6em;
+  min-width: 3em;
   text-align: right;
 }
 #page-chat .vn-player.is-playing .vn-time {
