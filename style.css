@@ -9211,8 +9211,8 @@ body.desktop-blocked #username-picker {
  */
 #page-chat .chat-bubble {
   display: inline-block;
-  width: fit-content;          /* short text → narrow card */
-  max-width: 100%;             /* long text wraps → can use full column width */
+  width: fit-content;
+  max-width: 100%;
   box-sizing: border-box;
   margin: 0;
   padding: 5px 14px;
@@ -9227,8 +9227,9 @@ body.desktop-blocked #username-picker {
   line-height: 1.6;
   letter-spacing: normal;
   word-break: break-word;
+  white-space: pre-wrap; /* keep Enter / newlines when message is shown */
   box-shadow: none !important;
-  min-width: min-content;      /* at least name + 10px + time when label present */
+  min-width: min-content;
 }
 
 /* Same card language for both sides — only label colour differs */
@@ -9897,9 +9898,12 @@ body.desktop-blocked #username-picker {
   color: var(--text);
 }
 
-/* Equal 10px rhythm on composer */
+/* Composer gaps: 10px after MP, 7px between input · emoji · send/gallery */
 #page-chat .chat-input-bar-row {
-  gap: 10px !important;
+  gap: 7px !important;
+}
+#page-chat .chat-input-bar-row > .chat-mp-fab {
+  margin-right: 3px !important; /* 7+3 ≈ 10px visual from MP to input */
 }
 #page-chat .chat-input-bar-row > .chat-mp-fab,
 #page-chat .chat-input-bar-row > .chat-input-wrap,
