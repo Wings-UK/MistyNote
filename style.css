@@ -10268,24 +10268,66 @@ body.desktop-blocked #username-picker {
 }
 .chat-popup-float-msg {
   position: fixed;
-  left: 50%;
-  top: 12vh;
-  transform: translateX(-50%) scale(0.96);
+  left: 20px;              /* permanent: 20px from left edge */
+  right: auto;
+  /* JS sets top = sheet.top - 20 - height; left fixed at 20px */
+  top: 20vh;
+  bottom: auto;
+  transform: none;
   z-index: 12010;
-  max-width: min(88vw, 360px);
+  max-width: min(calc(100vw - 40px), 360px);
   width: max-content;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.2s ease, transform 0.22s ease;
-  filter: drop-shadow(0 12px 28px rgba(0,0,0,0.25));
+  transition: opacity 0.2s ease;
+  filter: drop-shadow(0 10px 24px rgba(0,0,0,0.22));
 }
 .chat-popup-float-msg.visible {
   opacity: 1;
-  transform: translateX(-50%) scale(1);
+}
+/* Clone row must look like real chat cards */
+.chat-popup-float-msg .chat-popup-float-clone {
+  display: block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: max-content !important;
+  max-width: min(calc(100vw - 40px), 360px) !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+.chat-popup-float-msg .chat-msg-label-row {
+  display: flex !important;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  margin: 0 0 5px 0 !important;
+  padding: 0 2px !important;
+}
+.chat-popup-float-msg .chat-msg-label {
+  flex-shrink: 0;
+}
+.chat-popup-float-msg .chat-msg-time {
+  flex-shrink: 0;
+  margin-left: auto;
 }
 .chat-popup-float-msg .chat-bubble,
 .chat-popup-float-msg .vn-card {
   margin: 0 !important;
+  width: max-content !important;
+  max-width: min(calc(100vw - 40px), 340px) !important;
+  display: block !important;
+  background: #ffffff !important;
+  border: 1px solid #efeeea !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  white-space: pre-wrap !important;
+  word-break: break-word;
+}
+/* Cap sheet height so bottom calc stays predictable */
+.chat-msg-action-sheet {
+  max-height: 62vh;
 }
 
 .chat-msg-action-sheet {
