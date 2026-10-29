@@ -9984,3 +9984,110 @@ body.desktop-blocked #username-picker {
 #sticker-picker-backdrop {
   display: none !important;
 }
+
+
+/* ── Voice note panels (record + preview above composer) ── */
+#page-chat .chat-voice-panel {
+  display: none;
+  padding: 0 0 8px;
+}
+#page-chat .chat-voice-panel.open {
+  display: block;
+}
+#page-chat .chat-voice-panel-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid #efeeea;
+}
+[data-theme="dark"] #page-chat .chat-voice-panel-inner {
+  background: var(--surface);
+  border-color: var(--border);
+}
+#page-chat .chat-voice-rec-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--red, #f0385a);
+  animation: voicePulse 1s ease-in-out infinite;
+  flex-shrink: 0;
+}
+#page-chat .chat-voice-rec-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+#page-chat .chat-voice-rec-timer {
+  margin-left: auto;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--red, #f0385a);
+}
+#page-chat .chat-voice-preview-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+#page-chat .chat-voice-preview-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+#page-chat .chat-voice-preview-dur {
+  font-size: 11px;
+  color: var(--text3);
+}
+#page-chat .chat-voice-panel-btn {
+  border: none;
+  border-radius: 10px;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+#page-chat .chat-voice-panel-btn.stop {
+  background: var(--red, #f0385a);
+  color: #fff;
+}
+#page-chat .chat-voice-panel-btn.primary {
+  background: var(--accent, #6c47ff);
+  color: #fff;
+}
+#page-chat .chat-voice-panel-btn.danger {
+  background: transparent;
+  color: var(--red, #f0385a);
+  border: 1px solid rgba(240,56,90,0.25);
+}
+#page-chat .chat-voice-panel-btn.icon {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--accent-soft, rgba(108,71,255,0.12));
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#page-chat .chat-input-bar-row.voice-ui-hidden {
+  display: none !important;
+}
+#page-chat .chat-bubble.chat-bubble-voice {
+  min-width: 180px;
+  max-width: min(85vw, 280px);
+  white-space: normal;
+}
+#page-chat .chat-voice-bubble {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 160px;
+}
