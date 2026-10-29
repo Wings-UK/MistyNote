@@ -10092,193 +10092,123 @@ body.desktop-blocked #username-picker {
   min-width: 160px;
 }
 
+
+
 /* ══════════════════════════════════════════
-   VOICE NOTE CARD — premium standalone design
+   VOICE — chat card + player row (screenshot layout)
 ══════════════════════════════════════════ */
-#page-chat .vn-card {
+#page-chat .chat-bubble.chat-bubble-voice {
   display: block;
   width: fit-content;
-  max-width: min(86vw, 320px);
-  min-width: 240px;
-  border-radius: 22px;
-  padding: 0;
-  border: none !important;
+  max-width: min(90vw, 340px);
+  min-width: 260px;
+  padding: 5px 14px 10px !important;
+  border-radius: 8px !important;
+  border: 1px solid #efeeea !important;
+  background: #ffffff !important;
   box-shadow: none !important;
-  background: transparent !important;
-  overflow: visible;
   white-space: normal !important;
 }
-#page-chat .vn-inner {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 16px 12px 12px;
-  border-radius: 22px;
-  position: relative;
-  isolation: isolate;
-}
-/* Sent — soft Misty violet glass */
-#page-chat .vn-card-sent .vn-inner {
-  background:
-    linear-gradient(145deg, rgba(108,71,255,0.14) 0%, rgba(167,139,250,0.10) 50%, rgba(255,255,255,0.92) 100%);
-  border: 1px solid rgba(108,71,255,0.18);
-  box-shadow:
-    0 1px 0 rgba(255,255,255,0.8) inset,
-    0 8px 24px rgba(108,71,255,0.10),
-    0 2px 6px rgba(0,0,0,0.04);
-}
-/* Received — warm neutral glass */
-#page-chat .vn-card-recv .vn-inner {
-  background:
-    linear-gradient(145deg, #ffffff 0%, #f6f5f8 100%);
-  border: 1px solid rgba(0,0,0,0.06);
-  box-shadow:
-    0 1px 0 rgba(255,255,255,0.9) inset,
-    0 8px 22px rgba(0,0,0,0.05);
-}
-#page-chat .vn-card.is-playing .vn-inner {
-  border-color: rgba(108,71,255,0.35);
-  box-shadow:
-    0 0 0 3px rgba(108,71,255,0.10),
-    0 10px 28px rgba(108,71,255,0.12);
+#page-chat .chat-bubble.chat-bubble-voice .chat-msg-label-row {
+  margin: 0 0 5px 0 !important; /* 5px below name */
+  padding: 0 !important;
+  width: 100%;
 }
 
-/* Play button */
+/* Inner rectangular player */
+#page-chat .vn-player {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border-radius: 5px;
+  border: 1px solid #d9d6d0;
+  background: #fafaf9;
+}
+#page-chat .vn-player.is-playing {
+  border-color: #cfcbc4;
+  background: #fff;
+}
+
 #page-chat .vn-play {
-  position: relative;
-  width: 44px;
-  height: 44px;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
   border: none;
   padding: 0;
-  flex-shrink: 0;
   background: transparent;
-  cursor: pointer;
-}
-#page-chat .vn-play-ring {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: conic-gradient(from 210deg, #6c47ff, #a78bfa, #6c47ff);
-  opacity: 0.95;
-}
-#page-chat .vn-card-recv .vn-play-ring {
-  background: conic-gradient(from 210deg, #1a1a1a, #555, #1a1a1a);
-}
-#page-chat .vn-play-core {
-  position: absolute;
-  inset: 3px;
-  border-radius: 50%;
-  background: #fff;
-  color: #6c47ff;
+  color: var(--red, #f0385a);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  cursor: pointer;
 }
-#page-chat .vn-card-recv .vn-play-core {
-  color: #111;
-}
-#page-chat .vn-play.is-playing .vn-play-ring {
-  animation: vnRingSpin 1.2s linear infinite;
-  background: conic-gradient(from 0deg, #f0385a, #6c47ff, #f0385a);
-}
-#page-chat .vn-play.is-playing .vn-play-core {
-  color: #f0385a;
-}
-@keyframes vnRingSpin {
-  to { transform: rotate(360deg); }
-}
-#page-chat .vn-play:active .vn-play-core {
-  transform: scale(0.94);
+#page-chat .vn-play.is-playing {
+  color: var(--accent, #6c47ff);
 }
 
-/* Waveform */
-#page-chat .vn-body {
+#page-chat .vn-wave {
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-#page-chat .vn-wave {
-  display: flex;
   align-items: center;
-  gap: 2.5px;
-  height: 32px;
-  width: 100%;
+  justify-content: center;
+  gap: 2px;
+  height: 28px;
 }
 #page-chat .vn-bar {
   display: block;
-  flex: 1;
-  height: var(--h, 12px);
-  max-width: 3.5px;
-  border-radius: 99px;
-  background: rgba(108,71,255,0.18);
-  transition: background 0.15s ease, transform 0.15s ease;
-}
-#page-chat .vn-card-recv .vn-bar {
-  background: rgba(0,0,0,0.10);
+  width: 2.5px;
+  border-radius: 2px;
+  background: rgba(240, 56, 90, 0.28);
+  flex-shrink: 0;
 }
 #page-chat .vn-bar.played {
-  background: linear-gradient(180deg, #8b6fff, #6c47ff);
-  transform: scaleY(1.05);
-}
-#page-chat .vn-card-recv .vn-bar.played {
-  background: linear-gradient(180deg, #333, #111);
-}
-#page-chat .vn-card.is-playing .vn-bar:not(.played) {
-  opacity: 0.55;
+  background: var(--red, #f0385a);
 }
 
-/* Times */
-#page-chat .vn-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+#page-chat .vn-speed {
+  flex-shrink: 0;
+  border: none;
+  background: #eceae6;
+  color: #3a3a3a;
+  font-size: 12px;
+  font-weight: 700;
   font-family: var(--font);
-  font-size: 11px;
-  font-weight: 650;
+  padding: 4px 8px;
+  border-radius: 6px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+#page-chat .vn-time {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
-  color: rgba(0,0,0,0.38);
+  font-family: var(--font);
+  color: #5c5a56;
+  min-width: 2.6em;
+  text-align: right;
 }
-#page-chat .vn-elapsed {
-  color: #6c47ff;
-  min-width: 2.4em;
-}
-#page-chat .vn-card-recv .vn-elapsed {
-  color: #111;
-}
-#page-chat .vn-dot {
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: rgba(0,0,0,0.2);
-}
-#page-chat .vn-total {
-  color: rgba(0,0,0,0.38);
+#page-chat .vn-player.is-playing .vn-time {
+  color: var(--red, #f0385a);
 }
 
-/* Label above voice card */
-#page-chat .vn-card .chat-msg-label-row {
-  padding: 0 4px 6px;
-  margin: 0;
-  width: 100%;
-  box-sizing: border-box;
+[data-theme="dark"] #page-chat .chat-bubble.chat-bubble-voice {
+  background: var(--surface) !important;
+  border-color: var(--border) !important;
 }
-
-[data-theme="dark"] #page-chat .vn-card-sent .vn-inner {
-  background: linear-gradient(145deg, rgba(108,71,255,0.28), rgba(30,30,40,0.95));
-  border-color: rgba(108,71,255,0.3);
-}
-[data-theme="dark"] #page-chat .vn-card-recv .vn-inner {
-  background: var(--surface);
+[data-theme="dark"] #page-chat .vn-player {
+  background: rgba(255,255,255,0.04);
   border-color: var(--border);
 }
-[data-theme="dark"] #page-chat .vn-play-core {
-  background: #1a1a22;
+[data-theme="dark"] #page-chat .vn-speed {
+  background: rgba(255,255,255,0.08);
+  color: var(--text);
 }
-[data-theme="dark"] #page-chat .vn-meta,
-[data-theme="dark"] #page-chat .vn-total {
-  color: rgba(255,255,255,0.4);
+[data-theme="dark"] #page-chat .vn-time {
+  color: var(--text2);
 }
