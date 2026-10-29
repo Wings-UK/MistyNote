@@ -1212,31 +1212,44 @@ function buildProductBubble(msg, isSent, timeStr) {
 }
 function buildVoiceBubble(msg, isSent, timeStr) {
   const id = String(msg.id || Date.now());
-  const waveId = 'wv-' + id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 12);
+  const waveId = 'wv-' + id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 14);
   const dur = Number(msg.media_duration || 0);
-  const durStr = _voiceFmt ? _voiceFmt(dur) : (dur < 60 ? '0:' + String(dur).padStart(2, '0') : Math.floor(dur / 60) + ':' + String(dur % 60).padStart(2, '0'));
+  const durStr = (typeof _voiceFmt === 'function') ? _voiceFmt(dur) : (Math.floor(dur / 60) + ':' + String(dur % 60).padStart(2, '0'));
   const url = msg.media_url || '';
   const bubble = document.createElement('div');
   bubble.className = 'chat-bubble chat-bubble-voice';
   if (url) bubble.setAttribute('data-voice-url', url);
+
+  // Deterministic fake waveform from id
+  let seed = 0;
+  for (let i = 0; i < id.length; i++) seed = (seed + id.charCodeAt(i) * (i + 1)) % 997;
+  const heights = [];
+  for (let i = 0; i < 28; i++) {
+    seed = (seed * 17 + 23) % 97;
+    heights.push(6 + (seed % 18));
+  }
+  const barsHtml = heights.map(function(h, i) {
+    return '<span class="chat-voice-bar" data-i="' + i + '" style="height:' + h + 'px"></span>';
+  }).join('');
+
   bubble.innerHTML =
-    '<div class="chat-voice-bubble">' +
-      '<button type="button" class="chat-voice-play" data-src="' + (url || '').replace(/"/g, '') + '" onclick="chatPlayVoice(this,\'' + waveId + '\')">' +
-        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg>' +
+    '<div class="chat-voice-bubble" data-voice-url="' + (url || '').replace(/"/g, '') + '">' +
+      '<button type="button" class="chat-voice-play" data-src="' + (url || '').replace(/"/g, '') + '" data-wave="' + waveId + '" data-dur="' + dur + '" onclick="chatPlayVoice(this,\'' + waveId + '\')" aria-label="Play voice note">' +
+        '<svg class="chat-voice-ic-play" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20"/></svg>' +
+        '<svg class="chat-voice-ic-pause" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="5" y="4" width="5" height="16"/><rect x="14" y="4" width="5" height="16"/></svg>' +
       '</button>' +
-      '<div class="chat-voice-waveform" id="' + waveId + '"></div>' +
-      '<span class="chat-voice-dur">' + durStr + '</span>' +
+      '<div class="chat-voice-wave-wrap">' +
+        '<div class="chat-voice-waveform" id="' + waveId + '">' + barsHtml + '</div>' +
+        '<div class="chat-voice-time-row">' +
+          '<span class="chat-voice-elapsed" data-elapsed>0:00</span>' +
+          '<span class="chat-voice-dur">' + durStr + '</span>' +
+        '</div>' +
+      '</div>' +
     '</div>';
-  setTimeout(function() {
-    const wv = document.getElementById(waveId);
-    if (!wv) return;
-    const heights = [4, 8, 14, 10, 18, 12, 22, 16, 20, 14, 8, 18, 24, 16, 12, 20, 10, 16, 8, 12];
-    wv.innerHTML = heights.map(function(h) {
-      return '<div class="chat-voice-bar" style="height:' + h + 'px"></div>';
-    }).join('');
-  }, 0);
   return bubble;
 }
+
+
 function buildOfferBubble(msg, isSent, timeStr) {
   const currency = '₦';
   const amount   = Number(msg.offer_amount || 0).toLocaleString();
@@ -2254,58 +2267,91 @@ async function voiceSendDraft() {
 }
 
 function chatPlayVoice(btn, waveId) {
-  const bubble = btn.closest('.chat-bubble');
-  const row = btn.closest('.chat-msg-row');
+  if (!btn) return;
+  const bubble = btn.closest('.chat-bubble') || btn.closest('.chat-voice-bubble');
+  const wrap = btn.closest('.chat-voice-bubble');
   let url = btn.dataset.src
-    || (bubble && bubble.getAttribute('data-voice-url'))
-    || (row && row.dataset.mediaUrl);
+    || (wrap && wrap.getAttribute('data-voice-url'))
+    || (bubble && bubble.getAttribute('data-voice-url'));
   if (!url) {
     showToast('Audio unavailable');
     return;
   }
 
-  const playIcon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg>';
-  const pauseIcon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="6" y="4" width="4" height="16" fill="currentColor"/><rect x="14" y="4" width="4" height="16" fill="currentColor"/></svg>';
-  const bars = document.getElementById(waveId) && document.getElementById(waveId).querySelectorAll('.chat-voice-bar');
+  const wave = document.getElementById(waveId) || document.getElementById(btn.dataset.wave);
+  const bars = wave ? wave.querySelectorAll('.chat-voice-bar') : [];
+  const elapsedEl = wrap && wrap.querySelector('[data-elapsed]');
+  const totalDur = Number(btn.dataset.dur || 0);
+  const icPlay = btn.querySelector('.chat-voice-ic-play');
+  const icPause = btn.querySelector('.chat-voice-ic-pause');
 
+  function setPlayingUI(on) {
+    btn.classList.toggle('is-playing', !!on);
+    btn.dataset.playing = on ? '1' : '0';
+    if (icPlay) icPlay.style.display = on ? 'none' : 'block';
+    if (icPause) icPause.style.display = on ? 'block' : 'none';
+  }
+
+  function resetBars() {
+    bars.forEach(function(b) { b.classList.remove('played'); });
+    if (elapsedEl) elapsedEl.textContent = '0:00';
+  }
+
+  // Pause if this button is already playing
   if (_voiceAudio && btn.dataset.playing === '1') {
     try { _voiceAudio.pause(); } catch (e) {}
     _voiceAudio = null;
-    btn.dataset.playing = '0';
-    btn.innerHTML = playIcon;
+    setPlayingUI(false);
     return;
   }
+
+  // Stop any other playing voice
   if (_voiceAudio) {
     try { _voiceAudio.pause(); } catch (e) {}
-    document.querySelectorAll('.chat-voice-play[data-playing="1"]').forEach(function(b) {
+    document.querySelectorAll('.chat-voice-play.is-playing').forEach(function(b) {
+      b.classList.remove('is-playing');
       b.dataset.playing = '0';
-      b.innerHTML = playIcon;
+      const p = b.querySelector('.chat-voice-ic-play');
+      const u = b.querySelector('.chat-voice-ic-pause');
+      if (p) p.style.display = 'block';
+      if (u) u.style.display = 'none';
     });
   }
 
   const audio = new Audio(url);
   _voiceAudio = audio;
-  btn.dataset.playing = '1';
-  btn.innerHTML = pauseIcon;
-  if (bars) bars.forEach(function(b) { b.classList.remove('played'); });
+  setPlayingUI(true);
+  resetBars();
 
   audio.play().catch(function() {
     showToast('Could not play');
-    btn.innerHTML = playIcon;
-    btn.dataset.playing = '0';
+    setPlayingUI(false);
+    _voiceAudio = null;
   });
+
   audio.ontimeupdate = function() {
-    if (!bars || !bars.length || !audio.duration) return;
-    const n = Math.floor((audio.currentTime / audio.duration) * bars.length);
-    bars.forEach(function(b, i) { b.classList.toggle('played', i < n); });
+    if (!_voiceAudio || _voiceAudio !== audio) return;
+    const t = audio.currentTime || 0;
+    const d = audio.duration && isFinite(audio.duration) ? audio.duration : totalDur;
+    if (elapsedEl && typeof _voiceFmt === 'function') {
+      elapsedEl.textContent = _voiceFmt(t);
+    }
+    if (bars.length && d > 0) {
+      const n = Math.floor((t / d) * bars.length);
+      bars.forEach(function(b, i) { b.classList.toggle('played', i < n); });
+    }
   };
+
   audio.onended = function() {
-    btn.innerHTML = playIcon;
-    btn.dataset.playing = '0';
-    if (bars) bars.forEach(function(b) { b.classList.remove('played'); });
+    setPlayingUI(false);
+    resetBars();
+    if (elapsedEl && typeof _voiceFmt === 'function') {
+      elapsedEl.textContent = '0:00';
+    }
     if (_voiceAudio === audio) _voiceAudio = null;
   };
 }
+
 
 async function chatRespondOffer(msgId, status) {
   await supabase.from('messages').update({ offer_status: status }).eq('id', msgId);
