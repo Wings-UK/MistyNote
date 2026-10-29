@@ -9917,3 +9917,69 @@ body.desktop-blocked #username-picker {
   min-width: 0;
   flex-shrink: 1; /* input absorbs width; icons stay fixed */
 }
+
+
+/* ══════════════════════════════════════════
+   EMOJI TRAY — docks under input (keyboard slot)
+══════════════════════════════════════════ */
+#page-chat {
+  display: flex;
+  flex-direction: column;
+}
+#page-chat .chat-emoji-tray {
+  flex-shrink: 0;
+  height: 0;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  background: #f7f7f5;
+  border-top: 1px solid rgba(0,0,0,0.06);
+  transition: max-height 0.28s ease, opacity 0.2s ease, height 0.28s ease;
+  pointer-events: none;
+}
+#page-chat .chat-emoji-tray.open {
+  height: min(38vh, 280px);
+  max-height: min(38vh, 280px);
+  opacity: 1;
+  pointer-events: auto;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+[data-theme="dark"] #page-chat .chat-emoji-tray {
+  background: var(--bg);
+  border-top-color: var(--border);
+}
+#page-chat .chat-emoji-tray-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 2px;
+  padding: 10px 8px 12px;
+  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
+}
+#page-chat .chat-emoji-tray-btn {
+  width: 16.66%;
+  max-width: 56px;
+  height: 44px;
+  border: none;
+  background: transparent;
+  font-size: 26px;
+  border-radius: 10px;
+  line-height: 1;
+}
+#page-chat .chat-emoji-tray-btn:active {
+  background: rgba(0,0,0,0.06);
+}
+#page-chat #dm-emoji-btn.active {
+  color: var(--accent);
+}
+
+/* Hide legacy floating sticker picker / backdrop */
+.sticker-picker,
+.sticker-picker-backdrop,
+#sticker-picker,
+#sticker-picker-backdrop {
+  display: none !important;
+}
