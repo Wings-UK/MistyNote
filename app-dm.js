@@ -975,6 +975,12 @@ function showMsgPopup(row, msg, bubbleEl) {
   });
   floatEl.appendChild(cloneRow);
   document.body.appendChild(floatEl);
+  // Same half-screen / full-width rule as live chat
+  const cloneBubble = cloneRow.querySelector('.chat-bubble:not(.chat-bubble-emoji)');
+  if (cloneBubble && typeof applyChatBubbleWidth === 'function') {
+    applyChatBubbleWidth(cloneRow, cloneBubble);
+  }
+
 
   // 3. Bottom options sheet (static for now)
   const sheet = document.createElement('div');
