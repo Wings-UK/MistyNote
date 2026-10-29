@@ -10135,25 +10135,26 @@ body.desktop-blocked #username-picker {
 
 #page-chat .vn-play {
   flex-shrink: 0;
-  width: 42px;
-  height: 42px;
+  width: 45px;
+  height: 45px;
   border: none;
   padding: 0;
-  border-radius: 50%; /* round edges */
-  background: rgba(240, 56, 90, 0.1);
-  color: var(--red, #f0385a);
+  border-radius: 0;
+  background: transparent !important; /* no circle behind icon */
+  color: var(--red, #f0385a) !important;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  box-shadow: none !important;
 }
 #page-chat .vn-play.is-playing {
-  background: rgba(108, 71, 255, 0.12);
-  color: var(--accent, #6c47ff);
+  background: transparent !important;
+  color: var(--red, #f0385a) !important; /* stay Misty red while playing */
 }
 #page-chat .vn-play svg {
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
 }
 
 #page-chat .vn-wave {
