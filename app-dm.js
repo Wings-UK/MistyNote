@@ -2313,73 +2313,121 @@ function msgSearch(val) {
 }
 
 
-// ── Emoji / sticker picker (DM + comments) ─────────────────
+
+// ── Emoji tray (keyboard-slot, toggles, docks under input) ──
 let _stickerPickerTarget = 'dm';
+let _emojiTrayOpen = false;
+
+function _emojiTrayEl() {
+  return document.getElementById('chat-emoji-tray');
+}
+
+function ensureChatEmojiTray() {
+  let tray = _emojiTrayEl();
+  if (tray) return tray;
+  const page = document.getElementById('page-chat');
+  if (!page) return null;
+  tray = document.createElement('div');
+  tray.id = 'chat-emoji-tray';
+  tray.className = 'chat-emoji-tray';
+  tray.setAttribute('aria-hidden', 'true');
+  const emojis = ['😀','😂','🥰','😍','😎','😭','🔥','❤️','💯','👍','🙏','👏','🎉','😮','😢','💪','🤝','✨','🫂','💋','🥺','😤','🤔','👀','💬','🇳🇬','⚽','🎵','🍕','☕','🙌','😊','😘','🤩','😴','😡','🫶','😅','🤣','😌'];
+  tray.innerHTML =
+    '<div class="chat-emoji-tray-grid">' +
+      emojis.map(function(e) {
+        return '<button type="button" class="chat-emoji-tray-btn" data-emoji="' + e + '">' + e + '</button>';
+      }).join('') +
+    '</div>';
+  tray.addEventListener('click', function(ev) {
+    const btn = ev.target.closest('.chat-emoji-tray-btn');
+    if (!btn) return;
+    const em = btn.dataset.emoji;
+    if (_stickerPickerTarget === 'dm') {
+      // insert into field (do not auto-send from tray — user sends with Send)
+      const field = document.getElementById('chat-input-field');
+      if (field) {
+        const start = field.selectionStart ?? field.value.length;
+        const end = field.selectionEnd ?? field.value.length;
+        const v = field.value;
+        // If field empty and single emoji quick-send still wanted via chatPickEmoji:
+        if (!v.trim() && typeof chatPickEmoji === 'function') {
+          chatPickEmoji(em);
+        } else {
+          field.value = v.slice(0, start) + em + v.slice(end);
+          field.focus();
+          const pos = start + em.length;
+          try { field.setSelectionRange(pos, pos); } catch (err) {}
+          field.dispatchEvent(new Event('input', { bubbles: true }));
+          if (typeof syncChatActionBtn === 'function') syncChatActionBtn();
+        }
+      }
+    }
+  });
+  // Insert after input bar so tray sits where keyboard would
+  const bar = document.getElementById('chat-input-bar');
+  if (bar && bar.parentNode) {
+    bar.parentNode.insertBefore(tray, bar.nextSibling);
+  } else {
+    page.appendChild(tray);
+  }
+  return tray;
+}
+
+function openChatEmojiTray() {
+  const tray = ensureChatEmojiTray();
+  if (!tray) return;
+  // Dismiss soft keyboard so tray occupies that space
+  const field = document.getElementById('chat-input-field');
+  if (field) field.blur();
+  tray.classList.add('open');
+  tray.setAttribute('aria-hidden', 'false');
+  _emojiTrayOpen = true;
+  document.getElementById('page-chat')?.classList.add('emoji-tray-open');
+  document.getElementById('dm-emoji-btn')?.classList.add('active');
+  // Scroll messages so last stays visible above input+tray
+  const msgs = document.getElementById('chat-messages');
+  if (msgs) {
+    requestAnimationFrame(function() {
+      msgs.scrollTop = msgs.scrollHeight;
+    });
+  }
+}
+
+function closeChatEmojiTray() {
+  const tray = _emojiTrayEl();
+  if (tray) {
+    tray.classList.remove('open');
+    tray.setAttribute('aria-hidden', 'true');
+  }
+  _emojiTrayOpen = false;
+  document.getElementById('page-chat')?.classList.remove('emoji-tray-open');
+  document.getElementById('dm-emoji-btn')?.classList.remove('active');
+}
+
+function toggleChatEmojiTray() {
+  if (_emojiTrayOpen) closeChatEmojiTray();
+  else openChatEmojiTray();
+}
+
+/** Public API used by emoji button — replaces old floating sticker picker for DM */
 function openStickerPicker(target) {
   _stickerPickerTarget = target || 'dm';
-
-  // Backdrop — tap outside closes
-  let backdrop = document.getElementById('sticker-picker-backdrop');
-  if (!backdrop) {
-    backdrop = document.createElement('div');
-    backdrop.id = 'sticker-picker-backdrop';
-    backdrop.className = 'sticker-picker-backdrop';
-    backdrop.addEventListener('click', function() { closeStickerPicker(); });
-    document.body.appendChild(backdrop);
+  if (target && target !== 'dm') {
+    // comments / other: fall back to simple tray toggle still
   }
-  backdrop.classList.add('open');
-
-  let panel = document.getElementById('sticker-picker');
-  if (!panel) {
-    panel = document.createElement('div');
-    panel.id = 'sticker-picker';
-    panel.className = 'sticker-picker';
-    panel.innerHTML =
-      '<div class="sticker-picker-head">' +
-        '<span class="sticker-picker-title">Emoji</span>' +
-        '<button type="button" class="sticker-picker-close" onclick="closeStickerPicker()" aria-label="Close">×</button>' +
-      '</div>' +
-      '<div class="sticker-picker-body"><div class="emoji-grid" id="sp-emoji-grid"></div></div>';
-    // stop clicks inside panel from hitting backdrop
-    panel.addEventListener('click', function(e) { e.stopPropagation(); });
-    document.body.appendChild(panel);
-  }
-  const grid = document.getElementById('sp-emoji-grid');
-  if (grid && !grid.dataset.filled) {
-    const emojis = ['😀','😂','🥰','😍','😎','😭','🔥','❤️','💯','👍','🙏','👏','🎉','😮','😢','💪','🤝','✨','🫂','💋','🥺','😤','🤔','👀','💬','🇳🇬','⚽','🎵','🍕','☕','🙌','😊','😘','🤩','😴','😡'];
-    grid.innerHTML = emojis.map(function(e) {
-      return '<button type="button" class="sp-emoji-btn" data-emoji="' + e + '">' + e + '</button>';
-    }).join('');
-    grid.dataset.filled = '1';
-    grid.addEventListener('click', function(ev) {
-      const btn = ev.target.closest('.sp-emoji-btn');
-      if (!btn) return;
-      const em = btn.dataset.emoji;
-      closeStickerPicker();
-      if (_stickerPickerTarget === 'dm') chatPickEmoji(em);
-    });
-  }
-  panel.classList.remove('hidden');
-  panel.classList.add('open');
-  panel.style.display = 'flex';
-
-  if (!window._stickerEscWired) {
-    window._stickerEscWired = true;
-    document.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') closeStickerPicker();
-    });
-  }
+  toggleChatEmojiTray();
 }
+
 function closeStickerPicker() {
-  const panel = document.getElementById('sticker-picker');
-  if (panel) {
-    panel.classList.add('hidden');
-    panel.classList.remove('open');
-    panel.style.display = 'none';
-  }
-  const backdrop = document.getElementById('sticker-picker-backdrop');
-  if (backdrop) backdrop.classList.remove('open');
+  closeChatEmojiTray();
 }
+
+// When user focuses the text field, close emoji tray (keyboard takes over)
+document.addEventListener('focusin', function(e) {
+  if (e.target && e.target.id === 'chat-input-field') {
+    closeChatEmojiTray();
+  }
+});
 
 document.addEventListener('DOMContentLoaded', function() {
   try { rebuildChatComposer(); } catch (e) {}
