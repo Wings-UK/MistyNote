@@ -10091,3 +10091,95 @@ body.desktop-blocked #username-picker {
   gap: 10px;
   min-width: 160px;
 }
+
+
+/* ══════════════════════════════════════════
+   VOICE BUBBLE — clear play + waveform + times
+══════════════════════════════════════════ */
+#page-chat .chat-bubble.chat-bubble-voice {
+  min-width: 220px;
+  max-width: min(88vw, 300px);
+  padding: 10px 12px !important;
+  white-space: normal !important;
+  background: #ffffff !important;
+  border: 1px solid #efeeea !important;
+}
+#page-chat .chat-voice-bubble {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+#page-chat .chat-voice-play {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent, #6c47ff);
+  color: #fff;
+  padding: 0;
+  box-shadow: 0 2px 8px rgba(108,71,255,0.25);
+}
+#page-chat .chat-voice-play:active {
+  transform: scale(0.94);
+}
+#page-chat .chat-voice-play.is-playing {
+  background: var(--red, #f0385a);
+  box-shadow: 0 2px 8px rgba(240,56,90,0.25);
+}
+#page-chat .chat-voice-wave-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#page-chat .chat-voice-waveform {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 28px;
+  width: 100%;
+}
+#page-chat .chat-voice-bar {
+  flex: 1;
+  min-width: 2px;
+  max-width: 4px;
+  border-radius: 2px;
+  background: rgba(108,71,255,0.22);
+  transition: background 0.12s;
+  align-self: center;
+}
+#page-chat .chat-voice-bar.played {
+  background: var(--accent, #6c47ff);
+}
+#page-chat .chat-voice-time-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text3, #9a9690);
+}
+#page-chat .chat-voice-elapsed {
+  color: var(--accent, #6c47ff);
+}
+#page-chat .chat-msg-row.recv .chat-voice-play {
+  background: #111;
+  box-shadow: none;
+}
+#page-chat .chat-msg-row.recv .chat-voice-bar {
+  background: rgba(0,0,0,0.12);
+}
+#page-chat .chat-msg-row.recv .chat-voice-bar.played {
+  background: #111;
+}
+#page-chat .chat-msg-row.recv .chat-voice-elapsed {
+  color: #111;
+}
