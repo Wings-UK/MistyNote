@@ -10092,94 +10092,193 @@ body.desktop-blocked #username-picker {
   min-width: 160px;
 }
 
-
 /* ══════════════════════════════════════════
-   VOICE BUBBLE — clear play + waveform + times
+   VOICE NOTE CARD — premium standalone design
 ══════════════════════════════════════════ */
-#page-chat .chat-bubble.chat-bubble-voice {
-  min-width: 220px;
-  max-width: min(88vw, 300px);
-  padding: 10px 12px !important;
+#page-chat .vn-card {
+  display: block;
+  width: fit-content;
+  max-width: min(86vw, 320px);
+  min-width: 240px;
+  border-radius: 22px;
+  padding: 0;
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  overflow: visible;
   white-space: normal !important;
-  background: #ffffff !important;
-  border: 1px solid #efeeea !important;
 }
-#page-chat .chat-voice-bubble {
+#page-chat .vn-inner {
   display: flex;
   align-items: center;
-  gap: 12px;
-  width: 100%;
-  min-width: 0;
+  gap: 14px;
+  padding: 12px 16px 12px 12px;
+  border-radius: 22px;
+  position: relative;
+  isolation: isolate;
 }
-#page-chat .chat-voice-play {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
+/* Sent — soft Misty violet glass */
+#page-chat .vn-card-sent .vn-inner {
+  background:
+    linear-gradient(145deg, rgba(108,71,255,0.14) 0%, rgba(167,139,250,0.10) 50%, rgba(255,255,255,0.92) 100%);
+  border: 1px solid rgba(108,71,255,0.18);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.8) inset,
+    0 8px 24px rgba(108,71,255,0.10),
+    0 2px 6px rgba(0,0,0,0.04);
+}
+/* Received — warm neutral glass */
+#page-chat .vn-card-recv .vn-inner {
+  background:
+    linear-gradient(145deg, #ffffff 0%, #f6f5f8 100%);
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.9) inset,
+    0 8px 22px rgba(0,0,0,0.05);
+}
+#page-chat .vn-card.is-playing .vn-inner {
+  border-color: rgba(108,71,255,0.35);
+  box-shadow:
+    0 0 0 3px rgba(108,71,255,0.10),
+    0 10px 28px rgba(108,71,255,0.12);
+}
+
+/* Play button */
+#page-chat .vn-play {
+  position: relative;
+  width: 44px;
+  height: 44px;
   border: none;
+  padding: 0;
   flex-shrink: 0;
+  background: transparent;
+  cursor: pointer;
+}
+#page-chat .vn-play-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 210deg, #6c47ff, #a78bfa, #6c47ff);
+  opacity: 0.95;
+}
+#page-chat .vn-card-recv .vn-play-ring {
+  background: conic-gradient(from 210deg, #1a1a1a, #555, #1a1a1a);
+}
+#page-chat .vn-play-core {
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: #fff;
+  color: #6c47ff;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--accent, #6c47ff);
-  color: #fff;
-  padding: 0;
-  box-shadow: 0 2px 8px rgba(108,71,255,0.25);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
-#page-chat .chat-voice-play:active {
+#page-chat .vn-card-recv .vn-play-core {
+  color: #111;
+}
+#page-chat .vn-play.is-playing .vn-play-ring {
+  animation: vnRingSpin 1.2s linear infinite;
+  background: conic-gradient(from 0deg, #f0385a, #6c47ff, #f0385a);
+}
+#page-chat .vn-play.is-playing .vn-play-core {
+  color: #f0385a;
+}
+@keyframes vnRingSpin {
+  to { transform: rotate(360deg); }
+}
+#page-chat .vn-play:active .vn-play-core {
   transform: scale(0.94);
 }
-#page-chat .chat-voice-play.is-playing {
-  background: var(--red, #f0385a);
-  box-shadow: 0 2px 8px rgba(240,56,90,0.25);
-}
-#page-chat .chat-voice-wave-wrap {
+
+/* Waveform */
+#page-chat .vn-body {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
-#page-chat .chat-voice-waveform {
+#page-chat .vn-wave {
   display: flex;
   align-items: center;
-  gap: 2px;
-  height: 28px;
+  gap: 2.5px;
+  height: 32px;
   width: 100%;
 }
-#page-chat .chat-voice-bar {
+#page-chat .vn-bar {
+  display: block;
   flex: 1;
-  min-width: 2px;
-  max-width: 4px;
-  border-radius: 2px;
-  background: rgba(108,71,255,0.22);
-  transition: background 0.12s;
-  align-self: center;
+  height: var(--h, 12px);
+  max-width: 3.5px;
+  border-radius: 99px;
+  background: rgba(108,71,255,0.18);
+  transition: background 0.15s ease, transform 0.15s ease;
 }
-#page-chat .chat-voice-bar.played {
-  background: var(--accent, #6c47ff);
+#page-chat .vn-card-recv .vn-bar {
+  background: rgba(0,0,0,0.10);
 }
-#page-chat .chat-voice-time-row {
+#page-chat .vn-bar.played {
+  background: linear-gradient(180deg, #8b6fff, #6c47ff);
+  transform: scaleY(1.05);
+}
+#page-chat .vn-card-recv .vn-bar.played {
+  background: linear-gradient(180deg, #333, #111);
+}
+#page-chat .vn-card.is-playing .vn-bar:not(.played) {
+  opacity: 0.55;
+}
+
+/* Times */
+#page-chat .vn-meta {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 6px;
+  font-family: var(--font);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 650;
   font-variant-numeric: tabular-nums;
-  color: var(--text3, #9a9690);
+  letter-spacing: 0.02em;
+  color: rgba(0,0,0,0.38);
 }
-#page-chat .chat-voice-elapsed {
-  color: var(--accent, #6c47ff);
+#page-chat .vn-elapsed {
+  color: #6c47ff;
+  min-width: 2.4em;
 }
-#page-chat .chat-msg-row.recv .chat-voice-play {
-  background: #111;
-  box-shadow: none;
-}
-#page-chat .chat-msg-row.recv .chat-voice-bar {
-  background: rgba(0,0,0,0.12);
-}
-#page-chat .chat-msg-row.recv .chat-voice-bar.played {
-  background: #111;
-}
-#page-chat .chat-msg-row.recv .chat-voice-elapsed {
+#page-chat .vn-card-recv .vn-elapsed {
   color: #111;
+}
+#page-chat .vn-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.2);
+}
+#page-chat .vn-total {
+  color: rgba(0,0,0,0.38);
+}
+
+/* Label above voice card */
+#page-chat .vn-card .chat-msg-label-row {
+  padding: 0 4px 6px;
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+[data-theme="dark"] #page-chat .vn-card-sent .vn-inner {
+  background: linear-gradient(145deg, rgba(108,71,255,0.28), rgba(30,30,40,0.95));
+  border-color: rgba(108,71,255,0.3);
+}
+[data-theme="dark"] #page-chat .vn-card-recv .vn-inner {
+  background: var(--surface);
+  border-color: var(--border);
+}
+[data-theme="dark"] #page-chat .vn-play-core {
+  background: #1a1a22;
+}
+[data-theme="dark"] #page-chat .vn-meta,
+[data-theme="dark"] #page-chat .vn-total {
+  color: rgba(255,255,255,0.4);
 }
