@@ -2048,7 +2048,7 @@ body.desktop-blocked #username-picker {
     -webkit-backdrop-filter: blur(8px);
   }
   .chat-popup-float-msg {
-    position: fixed; z-index: 8001;
+    position: fixed; z-index: 12010;
     pointer-events: none;
   }
   .chat-msg-popup {
@@ -10267,23 +10267,24 @@ body.desktop-blocked #username-picker {
   -webkit-backdrop-filter: blur(6px);
 }
 .chat-popup-float-msg {
-  position: fixed;
-  left: 20px;              /* permanent: 20px from left edge */
-  right: auto;
-  /* JS sets top = sheet.top - 20 - height; left fixed at 20px */
-  top: 20vh;
-  bottom: auto;
-  transform: none;
-  z-index: 12010;
+  position: fixed !important;
+  left: 20px !important;
+  right: auto !important;
+  top: 80px;
+  bottom: auto !important;
+  transform: none !important;
+  z-index: 12050 !important; /* above backdrop + sheet chrome */
   max-width: min(calc(100vw - 40px), 360px);
   width: max-content;
-  opacity: 0;
+  min-height: 40px;
+  opacity: 1; /* never stay invisible */
   pointer-events: none;
-  transition: opacity 0.2s ease;
   filter: drop-shadow(0 10px 24px rgba(0,0,0,0.22));
+  visibility: visible !important;
 }
 .chat-popup-float-msg.visible {
-  opacity: 1;
+  opacity: 1 !important;
+  visibility: visible !important;
 }
 /* Clone = same rules as #page-chat chat cards */
 .chat-popup-float-msg .chat-popup-float-clone {
