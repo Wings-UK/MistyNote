@@ -721,16 +721,9 @@ function buildMessageEl(msg, prevSenderId) {
 
   const bubble = document.createElement('div');
 
-  if (type === 'image' || (msg.media_url && type !== 'text')) {
-    bubble.className = 'chat-bubble img-bubble';
-    const imgSrc = msg.media_url || content;
-    bubble.innerHTML = `${replyQuoteHtml}<img class="chat-bubble-img" src="${escHtml(imgSrc)}" alt="photo" loading="lazy">`;
-  } else if (type === 'gift' || type === 'mp_gift') {
-    bubble.className = 'chat-bubble';
-    bubble.innerHTML = `${replyQuoteHtml}🎁 ${escHtml(content || 'Sent MistyPoints')}`;
-  } else if (type === 'voice' || type === 'audio') {
+  // Voice BEFORE image — media_url alone must not force image UI
+  if (type === 'voice' || type === 'audio') {
     const vb = buildVoiceBubble(msg, isSent, timeStr);
-    // buildVoiceBubble returns a chat-bubble already
     if (isNewSender) {
       vb.insertAdjacentHTML('afterbegin',
         '<div class="chat-msg-label-row">' +
@@ -742,6 +735,14 @@ function buildMessageEl(msg, prevSenderId) {
     row.appendChild(vb);
     applyChatBubbleWidth(row, vb);
     return row;
+  } else if (type === 'image' || type === 'photo' || (msg.media_url && (type === 'image' || type === 'photo' || (!type || type === 'text') && /\.(jpe?g|png|gif|webp)/i.test(msg.media_url || '')))) {
+    // only treat as image when type says so, or URL looks like an image
+    bubble.className = 'chat-bubble img-bubble';
+    const imgSrc = msg.media_url || content;
+    bubble.innerHTML = `${replyQuoteHtml}<img class="chat-bubble-img" src="${escHtml(imgSrc)}" alt="photo" loading="lazy">`;
+  } else if (type === 'gift' || type === 'mp_gift') {
+    bubble.className = 'chat-bubble';
+    bubble.innerHTML = `${replyQuoteHtml}🎁 ${escHtml(content || 'Sent MistyPoints')}`;
   } else {
     const text = content;
     // 50px = single emoji only; 20px = emoji-only (no letters), any count; else normal
