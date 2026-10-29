@@ -1943,47 +1943,117 @@ function chatSendInvoice() {
   showToast('Invoice generator — coming soon 🧾');
 }
 
-// ── Voice notes ────────────────────────────────────────────
+
+// ══════════════════════════════════════════════════════════
+// VOICE NOTES — record → preview (play / delete / send) → R2 → chat
+// ══════════════════════════════════════════════════════════
 let _voiceRec = {
   recording: false,
   mediaRecorder: null,
   chunks: [],
   stream: null,
   startedAt: 0,
-  timer: null,
+  tickTimer: null,
+  maxTimer: null,
 };
-let _voiceAudio = null; // currently playing Audio element
+let _voiceDraft = null; // { blob, url, durationSec, mime }
+let _voiceAudio = null;
 
 function _voiceFmt(sec) {
-  sec = Math.max(0, Math.floor(sec || 0));
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return m + ':' + String(s).padStart(2, '0');
+  sec = Math.max(0, Math.floor(Number(sec) || 0));
+  return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
 }
 
-function _voiceSetBtnRecording(on) {
-  const btn = document.getElementById('chat-voice-btn');
-  if (!btn) return;
-  btn.classList.toggle('recording', !!on);
-  if (on) {
-    btn.setAttribute('aria-label', 'Stop recording');
-  } else {
-    btn.setAttribute('aria-label', 'Voice note');
+function ensureVoicePanels() {
+  const bar = document.getElementById('chat-input-bar');
+  if (!bar) return null;
+  let rec = document.getElementById('chat-voice-recording');
+  if (!rec) {
+    rec = document.createElement('div');
+    rec.id = 'chat-voice-recording';
+    rec.className = 'chat-voice-panel chat-voice-recording';
+    rec.innerHTML =
+      '<div class="chat-voice-panel-inner">' +
+        '<span class="chat-voice-rec-dot" aria-hidden="true"></span>' +
+        '<span class="chat-voice-rec-label">Recording</span>' +
+        '<span class="chat-voice-rec-timer" id="chat-voice-rec-timer">0:00</span>' +
+        '<button type="button" class="chat-voice-panel-btn stop" onclick="voiceStopRecording()" aria-label="Stop">Stop</button>' +
+      '</div>';
+    bar.insertBefore(rec, bar.firstChild);
   }
+  let prev = document.getElementById('chat-voice-preview');
+  if (!prev) {
+    prev = document.createElement('div');
+    prev.id = 'chat-voice-preview';
+    prev.className = 'chat-voice-panel chat-voice-preview';
+    prev.innerHTML =
+      '<div class="chat-voice-panel-inner">' +
+        '<button type="button" class="chat-voice-panel-btn icon" id="chat-voice-preview-play" onclick="voicePreviewTogglePlay()" aria-label="Play">' +
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>' +
+        '</button>' +
+        '<div class="chat-voice-preview-meta">' +
+          '<span class="chat-voice-preview-title">Voice note</span>' +
+          '<span class="chat-voice-preview-dur" id="chat-voice-preview-dur">0:00</span>' +
+        '</div>' +
+        '<button type="button" class="chat-voice-panel-btn danger" onclick="voiceDiscardDraft()" aria-label="Delete">Delete</button>' +
+        '<button type="button" class="chat-voice-panel-btn primary" onclick="voiceSendDraft()" aria-label="Send">Send</button>' +
+      '</div>';
+    bar.insertBefore(prev, bar.firstChild);
+  }
+  return { rec: rec, prev: prev };
 }
 
+function voiceShowRecordingUI(on) {
+  ensureVoicePanels();
+  const rec = document.getElementById('chat-voice-recording');
+  const prev = document.getElementById('chat-voice-preview');
+  const row = document.querySelector('#chat-input-bar .chat-input-bar-row');
+  if (rec) rec.classList.toggle('open', !!on);
+  if (prev && on) prev.classList.remove('open');
+  if (row) row.classList.toggle('voice-ui-hidden', !!on);
+  document.getElementById('chat-voice-btn')?.classList.toggle('recording', !!on);
+}
+
+function voiceShowPreviewUI(on) {
+  ensureVoicePanels();
+  const rec = document.getElementById('chat-voice-recording');
+  const prev = document.getElementById('chat-voice-preview');
+  const row = document.querySelector('#chat-input-bar .chat-input-bar-row');
+  if (prev) prev.classList.toggle('open', !!on);
+  if (rec) rec.classList.remove('open');
+  if (row) row.classList.toggle('voice-ui-hidden', !!on);
+  document.getElementById('chat-voice-btn')?.classList.remove('recording');
+}
+
+function voiceCleanupMic() {
+  try {
+    (_voiceRec.stream && _voiceRec.stream.getTracks() || []).forEach(function(t) { t.stop(); });
+  } catch (e) {}
+  _voiceRec.stream = null;
+  _voiceRec.mediaRecorder = null;
+  _voiceRec.recording = false;
+  clearInterval(_voiceRec.tickTimer);
+  clearTimeout(_voiceRec.maxTimer);
+  _voiceRec.tickTimer = null;
+  _voiceRec.maxTimer = null;
+}
+
+/** Tap wave icon: start recording (or ignore if draft open) */
 async function chatRecordVoice() {
   if (!activeChatId || !currentUser) {
     showToast('Open a chat first');
     return;
   }
-  // Toggle: if already recording → stop & send
-  if (_voiceRec.recording) {
-    _voiceStopAndSend();
+  if (_voiceDraft) {
+    showToast('Send or delete the voice note first');
     return;
   }
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    showToast('Voice notes not supported on this browser');
+  if (_voiceRec.recording) {
+    voiceStopRecording();
+    return;
+  }
+  if (!navigator.mediaDevices || !window.MediaRecorder) {
+    showToast('Voice notes not supported here');
     return;
   }
   try {
@@ -1991,76 +2061,132 @@ async function chatRecordVoice() {
     _voiceRec.stream = stream;
     _voiceRec.chunks = [];
     let mime = '';
-    if (window.MediaRecorder) {
-      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) mime = 'audio/webm;codecs=opus';
-      else if (MediaRecorder.isTypeSupported('audio/webm')) mime = 'audio/webm';
-      else if (MediaRecorder.isTypeSupported('audio/mp4')) mime = 'audio/mp4';
-    }
+    if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) mime = 'audio/webm;codecs=opus';
+    else if (MediaRecorder.isTypeSupported('audio/webm')) mime = 'audio/webm';
+    else if (MediaRecorder.isTypeSupported('audio/mp4')) mime = 'audio/mp4';
     const mr = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
     _voiceRec.mediaRecorder = mr;
     _voiceRec.startedAt = Date.now();
     mr.ondataavailable = function(e) {
       if (e.data && e.data.size > 0) _voiceRec.chunks.push(e.data);
     };
-    mr.onstop = function() {
-      // handled in _voiceStopAndSend after stop
-    };
-    mr.start(250);
+    mr.start(200);
     _voiceRec.recording = true;
-    _voiceSetBtnRecording(true);
-    showToast('Recording… tap again to send');
-    // Auto-stop at 60s
-    clearTimeout(_voiceRec.timer);
-    _voiceRec.timer = setTimeout(function() {
-      if (_voiceRec.recording) _voiceStopAndSend();
+    voiceShowRecordingUI(true);
+    const timerEl = document.getElementById('chat-voice-rec-timer');
+    if (timerEl) timerEl.textContent = '0:00';
+    _voiceRec.tickTimer = setInterval(function() {
+      const s = Math.floor((Date.now() - _voiceRec.startedAt) / 1000);
+      const el = document.getElementById('chat-voice-rec-timer');
+      if (el) el.textContent = _voiceFmt(s);
+    }, 250);
+    _voiceRec.maxTimer = setTimeout(function() {
+      if (_voiceRec.recording) voiceStopRecording();
     }, 60000);
   } catch (err) {
-    console.warn('mic error', err);
-    showToast('Microphone permission needed');
-    _voiceCleanupStream();
+    console.warn('[voice] mic', err);
+    showToast('Allow microphone to record');
+    voiceCleanupMic();
+    voiceShowRecordingUI(false);
   }
 }
 
-function _voiceCleanupStream() {
-  try {
-    (_voiceRec.stream && _voiceRec.stream.getTracks() || []).forEach(function(t) { t.stop(); });
-  } catch (e) {}
-  _voiceRec.stream = null;
-  _voiceRec.mediaRecorder = null;
-  _voiceRec.recording = false;
-  clearTimeout(_voiceRec.timer);
-  _voiceSetBtnRecording(false);
-}
-
-async function _voiceStopAndSend() {
-  if (!_voiceRec.mediaRecorder) {
-    _voiceCleanupStream();
+/** Stop recording → build draft → preview UI (play / delete / send) */
+function voiceStopRecording() {
+  if (!_voiceRec.mediaRecorder || !_voiceRec.recording) {
+    voiceCleanupMic();
+    voiceShowRecordingUI(false);
     return;
   }
   const mr = _voiceRec.mediaRecorder;
   const durationSec = Math.max(1, Math.round((Date.now() - _voiceRec.startedAt) / 1000));
-  const blob = await new Promise(function(resolve) {
-    mr.onstop = function() {
-      const type = mr.mimeType || 'audio/webm';
-      resolve(new Blob(_voiceRec.chunks, { type: type }));
-    };
-    try { mr.stop(); } catch (e) { resolve(new Blob(_voiceRec.chunks, { type: 'audio/webm' })); }
-  });
-  _voiceCleanupStream();
+  const mime = mr.mimeType || 'audio/webm';
 
-  if (!blob || blob.size < 100) {
-    showToast('Recording too short');
+  const finish = function(blob) {
+    voiceCleanupMic();
+    voiceShowRecordingUI(false);
+    if (!blob || blob.size < 80) {
+      showToast('Recording too short');
+      return;
+    }
+    if (_voiceDraft && _voiceDraft.url) {
+      try { URL.revokeObjectURL(_voiceDraft.url); } catch (e) {}
+    }
+    const url = URL.createObjectURL(blob);
+    _voiceDraft = { blob: blob, url: url, durationSec: durationSec, mime: mime };
+    const durEl = document.getElementById('chat-voice-preview-dur');
+    if (durEl) durEl.textContent = _voiceFmt(durationSec);
+    voiceShowPreviewUI(true);
+  };
+
+  mr.onstop = function() {
+    finish(new Blob(_voiceRec.chunks, { type: mime }));
+  };
+  try {
+    mr.stop();
+  } catch (e) {
+    finish(new Blob(_voiceRec.chunks, { type: mime }));
+  }
+}
+
+function voicePreviewTogglePlay() {
+  if (!_voiceDraft || !_voiceDraft.url) return;
+  const btn = document.getElementById('chat-voice-preview-play');
+  if (_voiceAudio && !_voiceAudio.paused) {
+    _voiceAudio.pause();
+    _voiceAudio = null;
+    if (btn) btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>';
     return;
   }
-  if (durationSec < 1) {
-    showToast('Hold a bit longer');
+  if (_voiceAudio) {
+    try { _voiceAudio.pause(); } catch (e) {}
+  }
+  const audio = new Audio(_voiceDraft.url);
+  _voiceAudio = audio;
+  if (btn) btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+  audio.play().catch(function() { showToast('Could not play'); });
+  audio.onended = function() {
+    if (btn) btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>';
+    if (_voiceAudio === audio) _voiceAudio = null;
+  };
+}
+
+function voiceDiscardDraft() {
+  if (_voiceAudio) {
+    try { _voiceAudio.pause(); } catch (e) {}
+    _voiceAudio = null;
+  }
+  if (_voiceDraft && _voiceDraft.url) {
+    try { URL.revokeObjectURL(_voiceDraft.url); } catch (e) {}
+  }
+  _voiceDraft = null;
+  voiceShowPreviewUI(false);
+  const row = document.querySelector('#chat-input-bar .chat-input-bar-row');
+  if (row) row.classList.remove('voice-ui-hidden');
+}
+
+async function voiceSendDraft() {
+  if (!_voiceDraft || !activeChatId || !currentUser) return;
+  if (typeof uploadToR2 !== 'function') {
+    showToast('Upload not ready');
     return;
   }
+  const draft = _voiceDraft;
+  const durationSec = draft.durationSec;
+  const blob = draft.blob;
+  const mime = draft.mime || blob.type || 'audio/webm';
+  const ext = mime.indexOf('mp4') >= 0 ? 'm4a' : 'webm';
 
-  const ext = (blob.type || '').indexOf('mp4') >= 0 ? 'm4a' : 'webm';
-  const localUrl = URL.createObjectURL(blob);
+  // Hide preview, restore composer
+  if (_voiceAudio) {
+    try { _voiceAudio.pause(); } catch (e) {}
+    _voiceAudio = null;
+  }
+  _voiceDraft = null;
+  voiceShowPreviewUI(false);
+  const row = document.querySelector('#chat-input-bar .chat-input-bar-row');
+  if (row) row.classList.remove('voice-ui-hidden');
 
-  // Optimistic UI
   const msgsEl = document.getElementById('chat-messages');
   const lastRow = msgsEl && msgsEl.querySelector('.chat-msg-row:last-child');
   const lastSenderId = lastRow
@@ -2071,11 +2197,11 @@ async function _voiceStopAndSend() {
     id: tmpId,
     type: 'voice',
     content: '',
-    media_url: localUrl,
+    media_url: draft.url,
     media_duration: durationSec,
     sender_id: currentUser.id,
     created_at: new Date().toISOString(),
-    sender: currentProfile,
+    sender: typeof currentProfile !== 'undefined' ? currentProfile : null,
   };
   const el = buildMessageEl(tmpMsg, lastSenderId);
   if (el && msgsEl) {
@@ -2086,212 +2212,100 @@ async function _voiceStopAndSend() {
     updateInboxRow(activeChatId, '🎙 Voice note', tmpMsg.created_at);
   }
 
-  // Upload
   showToast('Sending voice…');
-  const path = 'chat/' + activeChatId + '/' + currentUser.id + '-voice-' + Date.now() + '.' + ext;
   let publicUrl = null;
   try {
-    const { data: uploadData, error: uploadErr } = await supabase.storage
-      .from('media')
-      .upload(path, blob, { contentType: blob.type || 'audio/webm', upsert: false });
-    if (uploadErr) throw uploadErr;
-    const { data: urlData } = supabase.storage.from('media').getPublicUrl(path);
-    publicUrl = urlData && urlData.publicUrl;
-  } catch (upErr) {
-    console.warn('voice upload', upErr);
-    // Try R2 worker if present (same as images)
-    try {
-      if (typeof uploadToR2 === 'function') {
-        publicUrl = await uploadToR2(blob, path);
-      }
-    } catch (e2) {}
-  }
-
-  if (!publicUrl) {
-    showToast('Voice upload failed');
-    el && el.remove();
+    const filename = (currentUser.id || 'u') + '-' + Date.now() + '.' + ext;
+    publicUrl = await uploadToR2(blob, 'chat-voice', filename);
+  } catch (err) {
+    console.warn('[voice] R2', err);
+    showToast('Upload failed — try again');
+    if (el) el.remove();
+    try { URL.revokeObjectURL(draft.url); } catch (e) {}
     return;
   }
 
-  const { error: insertErr } = await supabase.from('messages').insert({
+  const payload = {
     conversation_id: activeChatId,
     sender_id: currentUser.id,
     type: 'voice',
     media_url: publicUrl,
     media_duration: durationSec,
     content: '',
-  });
+  };
+  const { error: insertErr } = await supabase.from('messages').insert(payload);
   if (insertErr) {
-    console.warn(insertErr);
-    showToast('Could not send voice note');
-    el && el.remove();
+    console.warn('[voice] insert', insertErr);
+    showToast(insertErr.message || 'Could not save voice note');
+    if (el) el.remove();
     return;
   }
-  // Point optimistic bubble at permanent URL
+
   const playBtn = el && el.querySelector('.chat-voice-play');
   if (playBtn) playBtn.dataset.src = publicUrl;
-  if (el) el.dataset.mediaUrl = publicUrl;
-  markConvRead(activeChatId);
+  if (el) {
+    const bubble = el.querySelector('.chat-bubble');
+    if (bubble) bubble.setAttribute('data-voice-url', publicUrl);
+  }
+  try { URL.revokeObjectURL(draft.url); } catch (e) {}
+  if (typeof markConvRead === 'function') markConvRead(activeChatId);
   showToast('Voice sent');
 }
 
-function chatAttach() {
-  // Now handled via hidden file input in HTML
-  document.getElementById('chat-img-input')?.click();
-}
-// ── Reply-to state ──
-let chatReplyTo = null; // { id, senderName, content, mediaUrl }
-function chatSetReply(msgId) {
-  const row = document.querySelector(`.chat-msg-row[data-msg-id="${msgId}"]`);
-  if (!row) return;
-  const bubble = row.querySelector('.chat-bubble');
-  if (!bubble) return;
-  const isSent = row.classList.contains('sent');
-  const name = isSent
-    ? (currentProfile?.username || 'You')
-    : (activeChatUser?.username || 'them');
-  const imgEl = bubble.querySelector('.chat-bubble-img');
-  const previewText = imgEl ? '📷 Photo' : (bubble.textContent?.trim().slice(0, 80) || '');
-  const mediaUrl = imgEl ? imgEl.src : null;
-  chatReplyTo = { id: msgId, senderName: name, content: previewText, mediaUrl };
-  const bar = document.getElementById('chat-reply-bar');
-  const nameEl = document.getElementById('chat-reply-bar-name');
-  const textEl = document.getElementById('chat-reply-bar-text');
-  if (bar) bar.style.display = 'flex';
-  if (nameEl) nameEl.textContent = name;
-  if (textEl) textEl.textContent = previewText;
-  document.getElementById('chat-input-field')?.focus();
-}
-function chatCancelReply() {
-  chatReplyTo = null;
-  const bar = document.getElementById('chat-reply-bar');
-  if (bar) bar.style.display = 'none';
-}
-// ── Image attach state ──
-let chatPendingImage = null; // { file, dataUrl }
-function chatImageSelected(input) {
-  const file = input.files?.[0];
-  if (!file) return;
-  if (!file.type.startsWith('image/')) { showToast('Please select an image'); return; }
-  if (file.size > 10 * 1024 * 1024) { showToast('Image must be under 10MB'); return; }
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    chatPendingImage = { file, dataUrl: e.target.result };
-    const bar = document.getElementById('chat-img-preview-bar');
-    const thumb = document.getElementById('chat-img-preview-thumb');
-    if (bar) bar.style.display = 'block';
-    if (thumb) thumb.src = e.target.result;
-    if (typeof syncChatActionBtn === 'function') syncChatActionBtn();
-  };
-  reader.readAsDataURL(file);
-  input.value = '';
-}
-function chatCancelImage() {
-  chatPendingImage = null;
-  const bar = document.getElementById('chat-img-preview-bar');
-  if (bar) bar.style.display = 'none';
-  if (typeof syncChatActionBtn === 'function') syncChatActionBtn();
-}
-// ── Compress image via canvas (handles landscape, HEIC, EXIF rotation) ──
-function compressChatImage(file) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const MAX = 1280;
-      let { width, height } = img;
-      if (width > MAX || height > MAX) {
-        if (width > height) { height = Math.round(height * MAX / width); width = MAX; }
-        else                { width = Math.round(width * MAX / height);  height = MAX; }
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width  = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, width, height);
-      canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', 0.82);
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
-    img.src = url;
-  });
-}
-function chatOpenProfile() {
-  if (activeChatUserId) openDM(activeChatUserId);
-}
-function chatMoreOptions() {
-  showToast('More options — coming soon');
-}
 function chatPlayVoice(btn, waveId) {
+  const bubble = btn.closest('.chat-bubble');
   const row = btn.closest('.chat-msg-row');
-  const src = btn.dataset.src
-    || row?.dataset?.mediaUrl
-    || row?.querySelector('.chat-bubble')?.dataset?.mediaUrl
-    || btn.getAttribute('data-src');
-  // Resolve media_url from nearest bubble dataset set at build time
-  let url = src;
-  if (!url && row) {
-    const b = row.querySelector('[data-voice-url]');
-    if (b) url = b.getAttribute('data-voice-url');
-  }
-  if (!url) {
-    // last resort: find from buildVoiceBubble data attribute on bubble
-    const bubble = btn.closest('.chat-bubble');
-    url = bubble && bubble.getAttribute('data-voice-url');
-  }
+  let url = btn.dataset.src
+    || (bubble && bubble.getAttribute('data-voice-url'))
+    || (row && row.dataset.mediaUrl);
   if (!url) {
     showToast('Audio unavailable');
     return;
   }
 
-  // Stop previous
-  if (_voiceAudio) {
-    try { _voiceAudio.pause(); } catch (e) {}
-    _voiceAudio = null;
-  }
-
-  const bars = document.getElementById(waveId)?.querySelectorAll('.chat-voice-bar');
   const playIcon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg>';
   const pauseIcon = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="6" y="4" width="4" height="16" fill="currentColor"/><rect x="14" y="4" width="4" height="16" fill="currentColor"/></svg>';
+  const bars = document.getElementById(waveId) && document.getElementById(waveId).querySelectorAll('.chat-voice-bar');
+
+  if (_voiceAudio && btn.dataset.playing === '1') {
+    try { _voiceAudio.pause(); } catch (e) {}
+    _voiceAudio = null;
+    btn.dataset.playing = '0';
+    btn.innerHTML = playIcon;
+    return;
+  }
+  if (_voiceAudio) {
+    try { _voiceAudio.pause(); } catch (e) {}
+    document.querySelectorAll('.chat-voice-play[data-playing="1"]').forEach(function(b) {
+      b.dataset.playing = '0';
+      b.innerHTML = playIcon;
+    });
+  }
 
   const audio = new Audio(url);
   _voiceAudio = audio;
+  btn.dataset.playing = '1';
   btn.innerHTML = pauseIcon;
   if (bars) bars.forEach(function(b) { b.classList.remove('played'); });
 
   audio.play().catch(function() {
     showToast('Could not play');
     btn.innerHTML = playIcon;
+    btn.dataset.playing = '0';
   });
-
   audio.ontimeupdate = function() {
     if (!bars || !bars.length || !audio.duration) return;
     const n = Math.floor((audio.currentTime / audio.duration) * bars.length);
-    bars.forEach(function(b, i) {
-      b.classList.toggle('played', i < n);
-    });
+    bars.forEach(function(b, i) { b.classList.toggle('played', i < n); });
   };
   audio.onended = function() {
     btn.innerHTML = playIcon;
+    btn.dataset.playing = '0';
     if (bars) bars.forEach(function(b) { b.classList.remove('played'); });
     if (_voiceAudio === audio) _voiceAudio = null;
   };
-  // Tap again to pause
-  btn.onclick = function(ev) {
-    ev.stopPropagation();
-    if (_voiceAudio === audio && !audio.paused) {
-      audio.pause();
-      btn.innerHTML = playIcon;
-      _voiceAudio = null;
-      btn.onclick = function(e) {
-        e.stopPropagation();
-        chatPlayVoice(btn, waveId);
-      };
-      return;
-    }
-    chatPlayVoice(btn, waveId);
-  };
 }
+
 async function chatRespondOffer(msgId, status) {
   await supabase.from('messages').update({ offer_status: status }).eq('id', msgId);
   showToast(status === 'accepted' ? 'Offer accepted ✓' : status === 'declined' ? 'Offer declined' : 'Counter sent');
