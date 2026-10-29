@@ -9575,7 +9575,7 @@ body.desktop-blocked #username-picker {
 #page-chat .chat-input-bar-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px; /* equal spacing: MP · input · emoji · gallery/send */
 }
 
 /* Send MP — black circle (camera position) */
@@ -9895,4 +9895,21 @@ body.desktop-blocked #username-picker {
 }
 [data-theme="dark"] #page-chat .chat-action-btn .chat-action-gallery {
   color: var(--text);
+}
+
+/* Equal 10px rhythm on composer */
+#page-chat .chat-input-bar-row {
+  gap: 10px !important;
+}
+#page-chat .chat-input-bar-row > .chat-mp-fab,
+#page-chat .chat-input-bar-row > .chat-input-wrap,
+#page-chat .chat-input-bar-row > .chat-side-btn,
+#page-chat .chat-input-bar-row > .chat-action-btn {
+  margin: 0 !important;
+  flex-shrink: 0;
+}
+#page-chat .chat-input-bar-row > .chat-input-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-shrink: 1; /* input absorbs width; icons stay fixed */
 }
