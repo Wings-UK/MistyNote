@@ -944,9 +944,8 @@ function showMsgPopup(row, msg, bubbleEl) {
   closeMsgPopup();
   const isSent = row.classList.contains('sent');
 
-  // Prefer full card (label + bubble) for the floating snapshot
-  const card = bubbleEl.closest('.chat-msg-row') || row;
-  const snapshotSrc = card.querySelector('.chat-bubble, .vn-card, .chat-product-bubble, .chat-cash-bubble, .chat-offer-bubble') || bubbleEl;
+  // Prefer full message row content (label + bubble) so highlight matches chat
+  const snapshotSrc = bubbleEl.closest('.chat-msg-row') || row;
 
   // 1. Dim backdrop
   const backdrop = document.createElement('div');
@@ -961,16 +960,20 @@ function showMsgPopup(row, msg, bubbleEl) {
   };
   backdrop.addEventListener('click', closeAll);
 
-  // 2. Floating message snapshot — top-center (cropped card look)
+  // 2. Floating snapshot — fixed: 20px from left, 20px above sheet
   const floatEl = document.createElement('div');
   floatEl.className = 'chat-popup-float-msg';
   floatEl.id = 'chat-popup-float-msg';
-  const cloneNode = snapshotSrc.cloneNode(true);
-  cloneNode.style.pointerEvents = 'none';
-  cloneNode.style.margin = '0';
-  cloneNode.style.maxWidth = '100%';
-  // strip absolute positioning quirks
-  floatEl.appendChild(cloneNode);
+  const cloneRow = snapshotSrc.cloneNode(true);
+  cloneRow.classList.add('chat-popup-float-clone');
+  cloneRow.style.pointerEvents = 'none';
+  // neutralize inline widths from fit-content measurements
+  cloneRow.querySelectorAll('.chat-bubble, .vn-card').forEach(function(el) {
+    el.style.width = '';
+    el.style.maxWidth = '';
+    el.style.minWidth = '';
+  });
+  floatEl.appendChild(cloneRow);
   document.body.appendChild(floatEl);
 
   // 3. Bottom options sheet (static for now)
@@ -1049,9 +1052,21 @@ function showMsgPopup(row, msg, bubbleEl) {
   document.body.appendChild(sheet);
   requestAnimationFrame(function() {
     sheet.classList.add('open');
-    floatEl.classList.add('visible');
+    // Permanent place: 20px from left, 20px above the dialogue sheet
+    function placeFloat() {
+      const sh = sheet.getBoundingClientRect();
+      const fh = floatEl.offsetHeight || 80;
+      floatEl.style.left = '20px';
+      floatEl.style.right = 'auto';
+      floatEl.style.top = Math.max(12, sh.top - 20 - fh) + 'px';
+      floatEl.style.bottom = 'auto';
+      floatEl.classList.add('visible');
+    }
+    placeFloat();
+    requestAnimationFrame(placeFloat);
   });
 }
+
 function closeMsgPopup() {
   const backdrop = document.getElementById('chat-popup-backdrop');
   if (backdrop) {
