@@ -10285,45 +10285,86 @@ body.desktop-blocked #username-picker {
 .chat-popup-float-msg.visible {
   opacity: 1;
 }
-/* Clone row must look like real chat cards */
+/* Clone = same rules as #page-chat chat cards */
 .chat-popup-float-msg .chat-popup-float-clone {
   display: block !important;
   margin: 0 !important;
   padding: 0 !important;
   width: max-content !important;
-  max-width: min(calc(100vw - 40px), 360px) !important;
+  max-width: min(calc(100vw - 40px), 100%) !important;
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
+}
+.chat-popup-float-msg .chat-popup-float-clone.chat-bubble-full-row,
+.chat-popup-float-msg .chat-popup-float-clone:has(.chat-bubble-full) {
+  width: min(calc(100vw - 40px), 100%) !important;
+  max-width: min(calc(100vw - 40px), 100%) !important;
 }
 .chat-popup-float-msg .chat-msg-label-row {
   display: flex !important;
   align-items: baseline;
   justify-content: space-between;
   gap: 10px;
-  width: 100%;
-  margin: 0 0 5px 0 !important;
-  padding: 0 2px !important;
+  padding: 0;
+  margin: 0 0 4px 0 !important;
+  width: max-content;
+  min-width: 100%;
+  box-sizing: border-box;
 }
 .chat-popup-float-msg .chat-msg-label {
   flex-shrink: 0;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+/* Same colours as thread: ME = purple, other = red */
+.chat-popup-float-msg .chat-msg-row.sent .chat-msg-label,
+.chat-popup-float-msg .chat-popup-float-clone.sent .chat-msg-label {
+  color: var(--accent) !important;
+}
+.chat-popup-float-msg .chat-msg-row.recv .chat-msg-label,
+.chat-popup-float-msg .chat-popup-float-clone.recv .chat-msg-label {
+  color: var(--red, #f0385a) !important;
 }
 .chat-popup-float-msg .chat-msg-time {
   flex-shrink: 0;
   margin-left: auto;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  color: #a39e97 !important;
+  letter-spacing: 0;
+  text-transform: none;
 }
-.chat-popup-float-msg .chat-bubble,
+.chat-popup-float-msg .chat-bubble {
+  display: inline-block !important;
+  width: fit-content !important;
+  max-width: 100% !important;
+  box-sizing: border-box;
+  margin: 0 !important;
+  padding: 5px 14px !important;
+  border-radius: 8px !important;
+  border: 1px solid #efeeea !important;
+  background: #ffffff !important;
+  color: var(--text) !important;
+  font-family: var(--font) !important;
+  font-size: 16px !important;
+  font-weight: 400 !important;
+  line-height: 1.6 !important;
+  letter-spacing: normal;
+  word-break: break-word;
+  white-space: pre-wrap !important;
+  box-shadow: none !important;
+}
+.chat-popup-float-msg .chat-bubble.chat-bubble-full {
+  width: 100% !important;
+  max-width: 100% !important;
+  display: block !important;
+}
 .chat-popup-float-msg .vn-card {
   margin: 0 !important;
-  width: max-content !important;
-  max-width: min(calc(100vw - 40px), 340px) !important;
-  display: block !important;
-  background: #ffffff !important;
-  border: 1px solid #efeeea !important;
-  border-radius: 8px !important;
-  box-shadow: none !important;
-  white-space: pre-wrap !important;
-  word-break: break-word;
+  max-width: 100% !important;
 }
 /* Cap sheet height so bottom calc stays predictable */
 .chat-msg-action-sheet {
