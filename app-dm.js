@@ -160,6 +160,8 @@ let activeChatUser     = null;  // the other user's profile object
 let msgRealtimeSub     = null;  // realtime subscription
 let msgTypingTimer     = null;
 let msgInboxLoaded     = false;
+let chatPendingImage   = null;  // { file, dataUrl } — MUST exist before chatSend
+let chatReplyTo        = null;  // { id, senderName, content, mediaUrl }
 // ── Helpers ──
 function msgTimeSince(iso) {
   const diff = (Date.now() - new Date(iso)) / 1000;
@@ -440,6 +442,23 @@ async function loadMessages() {
     if (text)   text.textContent  = `${requests.length} ${requests.length === 1 ? 'person wants' : 'people want'} to chat`;
   }
 }
+
+async function loadChatUserStatus(userId) {
+  // Optional: refresh topbar location / last-seen. Safe no-op if users table lacks fields.
+  if (!userId) return;
+  try {
+    const { data } = await supabase
+      .from('users')
+      .select('location,username')
+      .eq('id', userId)
+      .maybeSingle();
+    if (data && !isCurrentlyTyping) {
+      const statusEl = document.getElementById('chat-topbar-status');
+      if (statusEl) statusEl.textContent = data.location || 'MistyNote';
+    }
+  } catch (e) {}
+}
+
 // ── Open a chat ──
 // ── Push chat input above keyboard using visualViewport ──
 // Approach: only shrink the messages area, never touch the page height/transform.
@@ -642,14 +661,13 @@ function openChat(convId, otherUser) {
     markConvRead(convId);
     subscribeToPresence(convId);
     wireChatTyping();
-    // Poll other user's status every 15s
+    // Poll other user's status every 15s (optional helper)
     clearInterval(window._statusPollInterval);
     window._statusPollInterval = setInterval(() => {
-      if (activeChatUserId && !isCurrentlyTyping) {
-        loadChatUserStatus(activeChatUserId);
+      if (activeChatUserId && !isCurrentlyTyping && typeof loadChatUserStatus === 'function') {
+        try { loadChatUserStatus(activeChatUserId); } catch (e) {}
       }
-      // Also keep our own presence fresh
-        }, 15000);
+    }, 15000);
   });
 }
 // ── Close chat ──
@@ -1652,11 +1670,90 @@ function chatPickEmoji(emoji) {
   }
 }
 
+
+function chatSetReply(msgId) {
+  const row = document.querySelector('.chat-msg-row[data-msg-id="' + msgId + '"]');
+  if (!row) return;
+  const bubble = row.querySelector('.chat-bubble, .vn-card');
+  if (!bubble) return;
+  const isSent = row.classList.contains('sent');
+  const name = isSent
+    ? ((typeof currentProfile !== 'undefined' && currentProfile?.username) || 'You')
+    : (activeChatUser?.username || 'them');
+  const imgEl = bubble.querySelector('.chat-bubble-img');
+  const previewText = imgEl ? '📷 Photo' : (bubble.textContent || '').trim().slice(0, 80);
+  const mediaUrl = imgEl ? imgEl.src : null;
+  chatReplyTo = { id: msgId, senderName: name, content: previewText, mediaUrl: mediaUrl };
+  const bar = document.getElementById('chat-reply-bar');
+  const nameEl = document.getElementById('chat-reply-bar-name');
+  const textEl = document.getElementById('chat-reply-bar-text');
+  if (bar) bar.style.display = 'flex';
+  if (nameEl) nameEl.textContent = name;
+  if (textEl) textEl.textContent = previewText;
+  document.getElementById('chat-input-field')?.focus();
+}
+function chatCancelReply() {
+  chatReplyTo = null;
+  const bar = document.getElementById('chat-reply-bar');
+  if (bar) bar.style.display = 'none';
+}
+function chatImageSelected(input) {
+  const file = input && input.files && input.files[0];
+  if (!file) return;
+  if (!file.type || !file.type.startsWith('image/')) {
+    showToast('Please select an image');
+    return;
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    showToast('Image must be under 10MB');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    chatPendingImage = { file: file, dataUrl: e.target.result };
+    const bar = document.getElementById('chat-img-preview-bar');
+    const thumb = document.getElementById('chat-img-preview-thumb');
+    if (bar) bar.style.display = 'block';
+    if (thumb) thumb.src = e.target.result;
+    if (typeof syncChatActionBtn === 'function') syncChatActionBtn();
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
+}
+function chatCancelImage() {
+  chatPendingImage = null;
+  const bar = document.getElementById('chat-img-preview-bar');
+  if (bar) bar.style.display = 'none';
+  if (typeof syncChatActionBtn === 'function') syncChatActionBtn();
+}
+function compressChatImage(file) {
+  return new Promise(function(resolve) {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = function() {
+      URL.revokeObjectURL(url);
+      const MAX = 1280;
+      let width = img.width, height = img.height;
+      if (width > MAX || height > MAX) {
+        if (width > height) { height = Math.round(height * MAX / width); width = MAX; }
+        else { width = Math.round(width * MAX / height); height = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      canvas.toBlob(function(blob) { resolve(blob || file); }, 'image/jpeg', 0.82);
+    };
+    img.onerror = function() { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
 async function chatSend(opts) {
   opts = opts || {};
   const field = document.getElementById('chat-input-field');
   const text  = field?.value?.trim();
-  const hasImage = !!chatPendingImage;
+  const hasImage = !!(typeof chatPendingImage !== 'undefined' && chatPendingImage);
   if (!text && !hasImage) return;
   if (!activeChatId || !currentUser) return;
   let isBigEmoji = false;
