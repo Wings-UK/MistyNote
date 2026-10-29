@@ -10134,27 +10134,35 @@ body.desktop-blocked #username-picker {
 }
 
 #page-chat .vn-play {
+  /* Hit target = exact icon size. No padding → gap:10px is icon→wave, not box→wave */
   flex-shrink: 0;
-  width: 45px;
-  height: 45px;
-  border: none;
-  padding: 0;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  padding: 0 !important;
+  border: none !important;
   border-radius: 0;
-  background: transparent !important; /* no circle behind icon */
+  background: transparent !important;
   color: var(--red, #f0385a) !important;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  line-height: 0;
   cursor: pointer;
   box-shadow: none !important;
+  -webkit-tap-highlight-color: transparent;
 }
 #page-chat .vn-play.is-playing {
   background: transparent !important;
-  color: var(--red, #f0385a) !important; /* stay Misty red while playing */
+  color: var(--red, #f0385a) !important;
 }
 #page-chat .vn-play svg {
-  width: 28px;
-  height: 28px;
+  display: block;
+  width: 40px !important;
+  height: 40px !important;
+  margin: 0;
+  padding: 0;
+  flex-shrink: 0;
 }
 
 #page-chat .vn-wave {
