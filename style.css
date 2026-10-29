@@ -9922,8 +9922,9 @@ body.desktop-blocked #username-picker {
 /* ══════════════════════════════════════════
    EMOJI TRAY — docks under input (keyboard slot)
 ══════════════════════════════════════════ */
-#page-chat {
-  display: flex;
+/* CRITICAL: only when .active — never force #page-chat visible or it covers the app */
+#page-chat.active {
+  display: flex !important;
   flex-direction: column;
 }
 #page-chat .chat-emoji-tray {
