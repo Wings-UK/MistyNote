@@ -1044,8 +1044,8 @@ function linkifyText(text) {
     /https?:\/\/mistynote\.pages\.dev\/profile\/([a-zA-Z0-9_]+)/g,
     (match, username) => '@' + username
   );
-  // Step 2 — escape HTML
-  const escaped = escHtml(text);
+  // Step 2 — escape HTML, keep line breaks for chat display
+  const escaped = escHtml(text).replace(/\r\n|\n|\r/g, '<br>');
   // Step 3 — @username → purple tappable span
   let result = escaped.replace(
     /@([a-zA-Z0-9_]+)/g,
@@ -1818,10 +1818,7 @@ function chatInputResize(el) {
   el.style.height = Math.min(el.scrollHeight, 100) + 'px';
 }
 function chatInputKeydown(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    chatSend();
-  }
+  // Enter = new line (do not send). Use the purple send / gallery morph to send.
 }
 // ── Quick action stubs (to be built out) ──
 function chatSendCash() { chatSendMP(); } // legacy alias
