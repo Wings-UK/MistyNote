@@ -817,6 +817,7 @@ function buildMessageEl(msg, prevSenderId) {
     }
     row.appendChild(vb);
     applyChatBubbleWidth(row, vb);
+    try { attachTapPopup(row, msg); } catch (e) {}
     return row;
   } else if (type === 'image' || type === 'photo' || (msg.media_url && (type === 'image' || type === 'photo' || (!type || type === 'text') && /\.(jpe?g|png|gif|webp)/i.test(msg.media_url || '')))) {
     // only treat as image when type says so, or URL looks like an image
@@ -860,6 +861,7 @@ function buildMessageEl(msg, prevSenderId) {
   }
   row.appendChild(bubble);
   applyChatBubbleWidth(row, bubble);
+  try { attachTapPopup(row, msg); } catch (e) {}
   return row;
 }
 
@@ -900,7 +902,7 @@ function attachTapPopup(row, msg) {
     didScroll = false;
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
-    const bubble = e.target.closest('.chat-bubble, .chat-product-bubble, .chat-cash-bubble, .chat-order-bubble, .chat-offer-bubble, .chat-voice-bubble, .chat-bubble.img-bubble');
+    const bubble = e.target.closest('.chat-bubble, .chat-product-bubble, .chat-cash-bubble, .chat-order-bubble, .chat-offer-bubble, .chat-voice-bubble, .vn-card, .vn-player, .chat-bubble.img-bubble, .vn-card, .vn-player');
     if (!bubble) return;
     if (e.target.closest('a, button, .chat-reply-quote')) return;
     longPressTimer = setTimeout(() => {
@@ -932,7 +934,7 @@ function attachTapPopup(row, msg) {
   }, { passive: false });
   // Desktop fallback: right-click or long mousedown
   row.addEventListener('contextmenu', (e) => {
-    const bubble = e.target.closest('.chat-bubble, .chat-product-bubble, .chat-cash-bubble, .chat-order-bubble, .chat-offer-bubble, .chat-voice-bubble');
+    const bubble = e.target.closest('.chat-bubble, .chat-product-bubble, .chat-cash-bubble, .chat-order-bubble, .chat-offer-bubble, .chat-voice-bubble, .vn-card, .vn-player');
     if (!bubble) return;
     e.preventDefault();
     showMsgPopup(row, msg, bubble);
@@ -941,140 +943,128 @@ function attachTapPopup(row, msg) {
 function showMsgPopup(row, msg, bubbleEl) {
   closeMsgPopup();
   const isSent = row.classList.contains('sent');
-  // ── 1. Backdrop (blur layer) ──
+
+  // Prefer full card (label + bubble) for the floating snapshot
+  const card = bubbleEl.closest('.chat-msg-row') || row;
+  const snapshotSrc = card.querySelector('.chat-bubble, .vn-card, .chat-product-bubble, .chat-cash-bubble, .chat-offer-bubble') || bubbleEl;
+
+  // 1. Dim backdrop
   const backdrop = document.createElement('div');
   backdrop.className = 'chat-popup-backdrop';
   backdrop.id = 'chat-popup-backdrop';
   document.body.appendChild(backdrop);
-  // Trigger CSS transition to blur state
-  requestAnimationFrame(() => backdrop.classList.add('visible'));
-  const closeAll = (e) => {
+  requestAnimationFrame(function() { backdrop.classList.add('visible'); });
+
+  const closeAll = function(e) {
     if (e) { e.stopPropagation(); e.preventDefault(); }
     closeMsgPopup();
   };
   backdrop.addEventListener('click', closeAll);
-  backdrop.addEventListener('touchend', closeAll, { passive: false });
-  // ── 2. Float clone — snapshot the bubble position and clone it above blur ──
-  const rect = bubbleEl.getBoundingClientRect();
-  const vw   = window.innerWidth;
-  const vh   = window.innerHeight;
+
+  // 2. Floating message snapshot — top-center (cropped card look)
   const floatEl = document.createElement('div');
   floatEl.className = 'chat-popup-float-msg';
   floatEl.id = 'chat-popup-float-msg';
-  // Clone bubble's visual
-  const cloneNode = bubbleEl.cloneNode(true);
-  // Disable any inner interaction on clone
+  const cloneNode = snapshotSrc.cloneNode(true);
   cloneNode.style.pointerEvents = 'none';
+  cloneNode.style.margin = '0';
+  cloneNode.style.maxWidth = '100%';
+  // strip absolute positioning quirks
   floatEl.appendChild(cloneNode);
-  // Match exact position and size
-  floatEl.style.left   = rect.left + 'px';
-  floatEl.style.top    = rect.top  + 'px';
-  floatEl.style.width  = rect.width  + 'px';
   document.body.appendChild(floatEl);
-  // ── 3. Popup container (emoji row + actions) ──
-  const popup = document.createElement('div');
-  popup.className = 'chat-msg-popup';
-  popup.id = 'chat-msg-popup';
-  popup.addEventListener('click', e => e.stopPropagation());
-  popup.addEventListener('touchend', e => e.stopPropagation(), { passive: false });
-  // Emoji row
-  const emojis = ['❤️', '😂', '😮', '😢', '👏', '🔥'];
-  const emojiRow = document.createElement('div');
-  emojiRow.className = 'chat-popup-emojis';
-  emojis.forEach(em => {
-    const btn = document.createElement('button');
-    btn.className = 'chat-popup-emoji-btn';
-    btn.textContent = em;
-    btn.addEventListener('click', () => { showToast(`Reacted ${em}`); closeMsgPopup(); });
-    emojiRow.appendChild(btn);
+
+  // 3. Bottom options sheet (static for now)
+  const sheet = document.createElement('div');
+  sheet.className = 'chat-msg-action-sheet';
+  sheet.id = 'chat-msg-popup';
+  sheet.addEventListener('click', function(e) { e.stopPropagation(); });
+
+  // Optional reaction strip (like screenshot)
+  const reactions = document.createElement('div');
+  reactions.className = 'chat-msg-reactions';
+  ['👍','😮','❤️','😂','🔥','👎'].forEach(function(em) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chat-msg-reaction-btn';
+    b.textContent = em;
+    b.addEventListener('click', function() {
+      showToast('Reaction — coming soon');
+      closeMsgPopup();
+    });
+    reactions.appendChild(b);
   });
-  const moreBtn = document.createElement('button');
-  moreBtn.className = 'chat-popup-emoji-more';
-  moreBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/><circle cx="5" cy="12" r="1.5" fill="currentColor"/></svg>`;
-  moreBtn.addEventListener('click', () => { showToast('More reactions — coming soon'); closeMsgPopup(); });
-  emojiRow.appendChild(moreBtn);
-  popup.appendChild(emojiRow);
-  // Action rows
-  const actions = document.createElement('div');
-  actions.className = 'chat-popup-actions';
-  const chevronSvg = `<svg class="chat-popup-action-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>`;
-  const addAction = (iconSvg, label, cls, fn) => {
+  const moreR = document.createElement('button');
+  moreR.type = 'button';
+  moreR.className = 'chat-msg-reaction-more';
+  moreR.textContent = '+';
+  moreR.addEventListener('click', function() {
+    showToast('More reactions — coming soon');
+    closeMsgPopup();
+  });
+  reactions.appendChild(moreR);
+  sheet.appendChild(reactions);
+
+  const list = document.createElement('div');
+  list.className = 'chat-msg-action-list';
+
+  function addOpt(icon, label, fn) {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = `chat-popup-action${cls ? ' ' + cls : ''}`;
-    btn.innerHTML = `
-      <div class="chat-popup-action-left">
-        <span class="chat-popup-action-icon">${iconSvg}</span>
-        <span class="chat-popup-action-label">${label}</span>
-      </div>
-      ${chevronSvg}`;
-    btn.addEventListener('click', () => { closeMsgPopup(); fn(); });
-    actions.appendChild(btn);
-  };
-  addAction(
-    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17l-4-4 4-4M5 13h8a6 6 0 016 6"/></svg>`,
-    'Reply', '', () => chatSetReply(msg.id)
-  );
-  if (msg.type !== 'image' && msg.content) {
-    addAction(
-      `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`,
-      'Copy', '', () => {
-        navigator.clipboard?.writeText(msg.content).then(() => showToast('Copied')).catch(() => showToast('Could not copy'));
-      }
-    );
+    btn.className = 'chat-msg-action-item';
+    btn.innerHTML =
+      '<span class="chat-msg-action-icon" aria-hidden="true">' + icon + '</span>' +
+      '<span class="chat-msg-action-label">' + label + '</span>';
+    btn.addEventListener('click', function() {
+      closeMsgPopup();
+      if (typeof fn === 'function') fn();
+      else showToast(label + ' — coming soon');
+    });
+    list.appendChild(btn);
   }
-  if (msg.type === 'image' && msg.media_url) {
-    addAction(
-      `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`,
-      'View Photo', '', () => chatViewImage(msg.media_url)
-    );
-  }
-  addAction(
-    `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 004 4h12"/></svg>`,
-    'Forward', '', () => showToast('Forward — coming soon')
-  );
-  if (isSent) {
-    addAction(
-      `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg>`,
-      'Delete', 'danger', async () => {
-        const { error } = await supabase.from('messages').update({ deleted_at: new Date().toISOString() }).eq('id', msg.id);
-        if (!error) row.remove(); else showToast('Could not delete');
-      }
-    );
-  }
-  popup.appendChild(actions);
-  document.body.appendChild(popup);
-  // ── 4. Position popup above or below the floated bubble ──
-  const popW = Math.min(240, vw - 24);
-  popup.style.visibility = 'hidden';
-  popup.style.width = popW + 'px';
-  popup.style.left = '0px';
-  popup.style.top  = '0px';
-  requestAnimationFrame(() => {
-    const popH = popup.offsetHeight;
-    const MARGIN = 12;
-    const GAP = 10;
-    // Horizontal: align with bubble edge
-    let left = isSent ? rect.right - popW : rect.left;
-    left = Math.max(MARGIN, Math.min(left, vw - popW - MARGIN));
-    // Vertical: prefer above the bubble, fall back below
-    let top = rect.top - popH - GAP;
-    if (top < 60) top = rect.bottom + GAP;
-    top = Math.max(60, Math.min(top, vh - popH - MARGIN));
-    popup.style.left = left + 'px';
-    popup.style.top  = top  + 'px';
-    popup.style.transformOrigin = isSent ? 'right top' : 'left top';
-    popup.style.visibility = 'visible';
+
+  const icSave = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+  const icCopy = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
+  const icDel  = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>';
+  const icFwd  = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 004 4h12"/></svg>';
+  const icSnap = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>';
+  const icFlag = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>';
+
+  addOpt(icSave, 'Save in Chat', function() { showToast('Save in Chat — coming soon'); });
+  addOpt(icCopy, 'Copy', function() {
+    const t = msg.content || (msg.type === 'voice' ? 'Voice note' : '') || '';
+    if (!t) { showToast('Nothing to copy'); return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(t).then(function() { showToast('Copied'); }).catch(function() { showToast('Could not copy'); });
+    } else showToast('Could not copy');
+  });
+  addOpt(icDel, 'Delete', function() { showToast('Delete — coming soon'); });
+  addOpt(icFwd, 'Forward Message', function() { showToast('Forward — coming soon'); });
+  addOpt(icSnap, 'Snap Reply', function() {
+    if (typeof chatSetReply === 'function') chatSetReply(msg.id);
+    else showToast('Reply — coming soon');
+  });
+  addOpt(icFlag, 'Report', function() { showToast('Report — coming soon'); });
+
+  sheet.appendChild(list);
+  document.body.appendChild(sheet);
+  requestAnimationFrame(function() {
+    sheet.classList.add('open');
+    floatEl.classList.add('visible');
   });
 }
 function closeMsgPopup() {
   const backdrop = document.getElementById('chat-popup-backdrop');
   if (backdrop) {
     backdrop.classList.remove('visible');
-    setTimeout(() => backdrop.remove(), 280);
+    setTimeout(function() { backdrop.remove(); }, 280);
   }
-  document.getElementById('chat-popup-float-msg')?.remove();
-  document.getElementById('chat-msg-popup')?.remove();
+  const floatEl = document.getElementById('chat-popup-float-msg');
+  if (floatEl) floatEl.remove();
+  const sheet = document.getElementById('chat-msg-popup');
+  if (sheet) {
+    sheet.classList.remove('open');
+    setTimeout(function() { sheet.remove(); }, 220);
+  }
 }
 // ── View full-screen image ──
 function chatViewImage(src) {
@@ -1320,8 +1310,8 @@ function buildVoiceBubble(msg, isSent, timeStr) {
   bubble.innerHTML =
     '<div class="vn-player" data-voice-url="' + url + '">' +
       '<button type="button" class="vn-play" data-src="' + url + '" data-wave="' + waveId + '" data-dur="' + dur + '" onclick="chatPlayVoice(this,\'' + waveId + '\')" aria-label="Play">' +
-        '<svg class="vn-ic-play" viewBox="0 0 24 24" width="28" height="28"><path fill="currentColor" d="M8 5.2v13.6a.9.9 0 001.35.78l10.4-6.8a.9.9 0 000-1.56L9.35 4.42A.9.9 0 008 5.2z"/></svg>' +
-        '<svg class="vn-ic-pause" viewBox="0 0 24 24" width="26" height="26" style="display:none"><rect x="6" y="5" width="4.5" height="14" rx="1.2" fill="currentColor"/><rect x="13.5" y="5" width="4.5" height="14" rx="1.2" fill="currentColor"/></svg>' +
+        '<svg class="vn-ic-play" viewBox="0 0 24 24" width="40" height="40"><path fill="currentColor" d="M8 5.2v13.6a.9.9 0 001.35.78l10.4-6.8a.9.9 0 000-1.56L9.35 4.42A.9.9 0 008 5.2z"/></svg>' +
+        '<svg class="vn-ic-pause" viewBox="0 0 24 24" width="40" height="40" style="display:none"><rect x="6" y="5" width="4.5" height="14" rx="1.2" fill="currentColor"/><rect x="13.5" y="5" width="4.5" height="14" rx="1.2" fill="currentColor"/></svg>' +
       '</button>' +
       '<div class="vn-wave" id="' + waveId + '">' + barsHtml + '</div>' +
       '<button type="button" class="vn-speed" onclick="event.stopPropagation();voiceCycleSpeed(this)" data-speed="1">1x</button>' +
