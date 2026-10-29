@@ -1,37 +1,46 @@
 
 // ── Rebuild chat composer to Snap-style bar (MP · input · voice · emoji · gallery) ──
-function rebuildChatComposer() {
+function rebuildChatComposer(force) {
   const bar = document.getElementById('chat-input-bar');
-  if (!bar || bar.dataset.composerV3 === '1') return;
-  bar.dataset.composerV3 = '1';
+  if (!bar) return;
+  // Bump version so deploy always rewires the live DOM (fixes stuck gallery mode)
+  if (!force && bar.dataset.composerV4 === '1') {
+    // still re-sync send state
+    if (typeof syncChatActionBtn === 'function') syncChatActionBtn();
+    return;
+  }
+  bar.dataset.composerV4 = '1';
+  delete bar.dataset.composerV3;
 
   const tray = document.getElementById('chat-extras-tray');
   if (tray) tray.style.display = 'none';
 
-  const row = bar.querySelector('.chat-input-bar-row');
-  if (!row) return;
+  let row = bar.querySelector('.chat-input-bar-row');
+  if (!row) {
+    row = document.createElement('div');
+    row.className = 'chat-input-bar-row';
+    bar.appendChild(row);
+  }
 
   row.innerHTML = [
-    '<button type="button" class="chat-mp-fab" id="chat-mp-fab" onclick="chatSendMP()" aria-label="Send MP">',
+    '<button type="button" class="chat-mp-fab" id="chat-mp-fab" aria-label="Send MP">',
     '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">',
     '<path d="M12 2v20M7 7h7.5a3.5 3.5 0 010 7H9a3.5 3.5 0 000 7h8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
     '</svg></button>',
     '<div class="chat-input-wrap" id="chat-input-wrap">',
-    '<textarea id="chat-input-field" class="chat-input-field" placeholder="Send a chat" rows="1" ',
-    'oninput="chatInputResize(this);if(typeof syncChatSendBtn===\'function\')syncChatSendBtn();" ',
-    'onkeydown="chatInputKeydown(event)"></textarea>',
-    '<button type="button" class="chat-voice-btn" id="chat-voice-btn" onclick="chatRecordVoice()" aria-label="Voice note">',
+    '<textarea id="chat-input-field" class="chat-input-field" placeholder="Send a chat" rows="1"></textarea>',
+    '<button type="button" class="chat-voice-btn" id="chat-voice-btn" aria-label="Voice note">',
     '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">',
     '<rect x="4" y="8" width="2.2" height="8" rx="1.1" fill="currentColor"/>',
     '<rect x="8.5" y="5" width="2.2" height="14" rx="1.1" fill="currentColor"/>',
     '<rect x="13" y="7" width="2.2" height="10" rx="1.1" fill="currentColor"/>',
     '<rect x="17.5" y="9" width="2.2" height="6" rx="1.1" fill="currentColor"/>',
     '</svg></button></div>',
-    '<button type="button" class="chat-side-btn" id="dm-emoji-btn" onclick="openStickerPicker(\'dm\')" aria-label="Emoji">',
+    '<button type="button" class="chat-side-btn" id="dm-emoji-btn" aria-label="Emoji">',
     '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">',
     '<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01M15 9h.01"/>',
     '</svg></button>',
-    '<button type="button" class="chat-side-btn chat-action-btn" id="chat-action-btn" data-mode="gallery" onclick="chatActionBtnTap()" aria-label="Gallery">',
+    '<button type="button" class="chat-side-btn chat-action-btn" id="chat-action-btn" data-mode="gallery" aria-label="Gallery">',
     '<span class="chat-action-icon chat-action-gallery" aria-hidden="true">',
     '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">',
     '<rect x="3" y="5" width="14" height="14" rx="2"/><path d="M7 19h12a2 2 0 002-2V7"/>',
@@ -40,34 +49,84 @@ function rebuildChatComposer() {
     '<span class="chat-action-icon chat-action-send" aria-hidden="true">',
     '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     '</span></button>',
-    '<input type="file" id="chat-media-input" accept="image/*,video/*" style="display:none" onchange="chatImageSelected(this)">'
+    '<input type="file" id="chat-media-input" accept="image/*,video/*" style="display:none">'
   ].join('');
 
-  const input = document.getElementById('chat-input-field');
-  if (input) {
-    input._typingWired = false;
+  // Wire events in JS (reliable; no stale inline handlers)
+  const field = document.getElementById('chat-input-field');
+  const actionBtn = document.getElementById('chat-action-btn');
+  const mediaInput = document.getElementById('chat-media-input');
+  const emojiBtn = document.getElementById('dm-emoji-btn');
+  const voiceBtn = document.getElementById('chat-voice-btn');
+  const mpBtn = document.getElementById('chat-mp-fab');
+
+  if (field) {
+    field._typingWired = false;
+    field.addEventListener('input', function() {
+      if (typeof chatInputResize === 'function') chatInputResize(field);
+      syncChatActionBtn();
+    });
+    field.addEventListener('keydown', function(e) {
+      if (typeof chatInputKeydown === 'function') chatInputKeydown(e);
+    });
     if (typeof wireChatTyping === 'function') wireChatTyping();
-    input.addEventListener('input', function() {
-      if (typeof chatInputResize === 'function') chatInputResize(input);
-      if (typeof syncChatActionBtn === 'function') syncChatActionBtn();
+  }
+
+  if (actionBtn) {
+    actionBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      chatActionBtnTap();
     });
   }
-  if (typeof syncChatActionBtn === 'function') syncChatActionBtn();
+  if (mediaInput) {
+    mediaInput.addEventListener('change', function() {
+      if (typeof chatImageSelected === 'function') chatImageSelected(mediaInput);
+    });
+  }
+  if (emojiBtn) {
+    emojiBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      openStickerPicker('dm');
+    });
+  }
+  if (voiceBtn) {
+    voiceBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      if (typeof chatRecordVoice === 'function') chatRecordVoice();
+    });
+  }
+  if (mpBtn) {
+    mpBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      if (typeof chatSendMP === 'function') chatSendMP();
+    });
+  }
+
+  syncChatActionBtn();
 }
 
 function chatActionBtnTap() {
-  const btn = document.getElementById('chat-action-btn');
-  const field = document.getElementById('chat-input-field');
-  const hasText = !!(field && field.value.trim());
-  const hasMedia = !!(typeof chatPendingImage !== 'undefined' && chatPendingImage);
-  // Prefer send whenever there is something to send (don't trust mode alone)
-  if (hasText || hasMedia || (btn && btn.dataset.mode === 'send')) {
-    if (typeof syncChatActionBtn === 'function') syncChatActionBtn();
-    chatSend();
-    return;
+  try {
+    const field = document.getElementById('chat-input-field');
+    const hasText = !!(field && String(field.value || '').trim());
+    const hasMedia = !!(typeof chatPendingImage !== 'undefined' && chatPendingImage);
+    if (hasText || hasMedia) {
+      syncChatActionBtn();
+      chatSend();
+      return;
+    }
+    const btn = document.getElementById('chat-action-btn');
+    if (btn && btn.dataset.mode === 'send') {
+      chatSend();
+      return;
+    }
+    const input = document.getElementById('chat-media-input');
+    if (input) input.click();
+  } catch (err) {
+    console.error('[chatActionBtnTap]', err);
+    if (typeof showToast === 'function') showToast('Send failed — try again');
   }
-  const input = document.getElementById('chat-media-input');
-  if (input) input.click();
 }
 
 /** Gallery ↔ Send: text or pending image → send mode; else gallery */
@@ -75,16 +134,14 @@ function syncChatActionBtn() {
   const input = document.getElementById('chat-input-field');
   const btn = document.getElementById('chat-action-btn');
   if (!btn) return;
-  const hasText = !!(input && input.value.trim());
+  const hasText = !!(input && String(input.value || '').trim());
   const hasMedia = !!(typeof chatPendingImage !== 'undefined' && chatPendingImage);
   const sendMode = hasText || hasMedia;
   btn.dataset.mode = sendMode ? 'send' : 'gallery';
   btn.classList.toggle('is-send', sendMode);
   btn.setAttribute('aria-label', sendMode ? 'Send' : 'Gallery');
 }
-// Back-compat alias
 function syncChatSendBtn() { syncChatActionBtn(); }
-
 
 
 /* ═══════════════════════════════════════════
@@ -555,7 +612,7 @@ function openChat(convId, otherUser) {
   activeChatId     = convId;
   activeChatUserId = otherUser.id;
   activeChatUser   = otherUser;
-  try { rebuildChatComposer(); } catch (e) {}
+  try { rebuildChatComposer(true); } catch (e) {}
   // Set topbar
   const nameEl   = document.getElementById('chat-topbar-name');
   const statusEl = document.getElementById('chat-topbar-status');
@@ -1609,11 +1666,13 @@ async function chatSend(opts) {
   // Capture reply & image state then clear immediately
   const replySnapshot = chatReplyTo ? { ...chatReplyTo } : null;
   const imageSnapshot = chatPendingImage ? { ...chatPendingImage } : null;
-  field.value = '';
-  field.style.height = 'auto';
+  if (field) {
+    field.value = '';
+    field.style.height = 'auto';
+  }
   if (typeof syncChatActionBtn === 'function') syncChatActionBtn();
-  chatCancelReply();
-  chatCancelImage();
+  try { if (typeof chatCancelReply === 'function') chatCancelReply(); } catch (e) {}
+  try { if (typeof chatCancelImage === 'function') chatCancelImage(); } catch (e) {}
   const msgsEl = document.getElementById('chat-messages');
   const lastRow = msgsEl?.querySelector('.chat-msg-row:last-child');
   const lastSenderId = lastRow ? (lastRow.classList.contains('sent') ? currentUser.id : activeChatUserId) : null;
@@ -2435,25 +2494,10 @@ function ensureChatEmojiTray() {
     const btn = ev.target.closest('.chat-emoji-tray-btn');
     if (!btn) return;
     const em = btn.dataset.emoji;
-    if (_stickerPickerTarget === 'dm') {
-      // insert into field (do not auto-send from tray — user sends with Send)
-      const field = document.getElementById('chat-input-field');
-      if (field) {
-        const start = field.selectionStart ?? field.value.length;
-        const end = field.selectionEnd ?? field.value.length;
-        const v = field.value;
-        // If field empty and single emoji quick-send still wanted via chatPickEmoji:
-        if (!v.trim() && typeof chatPickEmoji === 'function') {
-          chatPickEmoji(em);
-        } else {
-          field.value = v.slice(0, start) + em + v.slice(end);
-          field.focus();
-          const pos = start + em.length;
-          try { field.setSelectionRange(pos, pos); } catch (err) {}
-          field.dispatchEvent(new Event('input', { bubbles: true }));
-          if (typeof syncChatActionBtn === 'function') syncChatActionBtn();
-        }
-      }
+    if (_stickerPickerTarget === 'dm' && typeof chatPickEmoji === 'function') {
+      // Empty input → auto-send emoji (same as before). Else append into text.
+      chatPickEmoji(em);
+      if (typeof syncChatActionBtn === 'function') syncChatActionBtn();
     }
   });
   // Insert after input bar so tray sits where keyboard would
@@ -2523,5 +2567,5 @@ document.addEventListener('focusin', function(e) {
 });
 
 document.addEventListener('DOMContentLoaded', function() {
-  try { rebuildChatComposer(); } catch (e) {}
+  try { rebuildChatComposer(true); } catch (e) {}
 });
