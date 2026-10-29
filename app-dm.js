@@ -47,14 +47,22 @@ function rebuildChatComposer() {
   if (input) {
     input._typingWired = false;
     if (typeof wireChatTyping === 'function') wireChatTyping();
+    input.addEventListener('input', function() {
+      if (typeof chatInputResize === 'function') chatInputResize(input);
+      if (typeof syncChatActionBtn === 'function') syncChatActionBtn();
+    });
   }
-  if (typeof syncChatSendBtn === 'function') syncChatSendBtn();
+  if (typeof syncChatActionBtn === 'function') syncChatActionBtn();
 }
 
 function chatActionBtnTap() {
   const btn = document.getElementById('chat-action-btn');
-  if (!btn) return;
-  if (btn.dataset.mode === 'send') {
+  const field = document.getElementById('chat-input-field');
+  const hasText = !!(field && field.value.trim());
+  const hasMedia = !!(typeof chatPendingImage !== 'undefined' && chatPendingImage);
+  // Prefer send whenever there is something to send (don't trust mode alone)
+  if (hasText || hasMedia || (btn && btn.dataset.mode === 'send')) {
+    if (typeof syncChatActionBtn === 'function') syncChatActionBtn();
     chatSend();
     return;
   }
@@ -1223,7 +1231,7 @@ function buildVoiceBubble(msg, isSent, timeStr) {
   for (let i = 0; i < 26; i++) {
     seed = (seed * 1103515245 + 12345) >>> 0;
     const envelope = 0.4 + 0.6 * Math.sin((i / 25) * Math.PI);
-    heights.push(Math.max(5, Math.round((6 + (seed % 14)) * envelope)));
+    heights.push(Math.max(8, Math.round((10 + (seed % 18)) * envelope)));
   }
   const barsHtml = heights.map(function(h) {
     return '<i class="vn-bar" style="height:' + h + 'px"></i>';
@@ -1237,8 +1245,8 @@ function buildVoiceBubble(msg, isSent, timeStr) {
   bubble.innerHTML =
     '<div class="vn-player" data-voice-url="' + url + '">' +
       '<button type="button" class="vn-play" data-src="' + url + '" data-wave="' + waveId + '" data-dur="' + dur + '" onclick="chatPlayVoice(this,\'' + waveId + '\')" aria-label="Play">' +
-        '<svg class="vn-ic-play" viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M8 5.2v13.6a.9.9 0 001.35.78l10.4-6.8a.9.9 0 000-1.56L9.35 4.42A.9.9 0 008 5.2z"/></svg>' +
-        '<svg class="vn-ic-pause" viewBox="0 0 24 24" width="20" height="20" style="display:none"><rect x="6" y="5" width="4.5" height="14" rx="1.2" fill="currentColor"/><rect x="13.5" y="5" width="4.5" height="14" rx="1.2" fill="currentColor"/></svg>' +
+        '<svg class="vn-ic-play" viewBox="0 0 24 24" width="28" height="28"><path fill="currentColor" d="M8 5.2v13.6a.9.9 0 001.35.78l10.4-6.8a.9.9 0 000-1.56L9.35 4.42A.9.9 0 008 5.2z"/></svg>' +
+        '<svg class="vn-ic-pause" viewBox="0 0 24 24" width="26" height="26" style="display:none"><rect x="6" y="5" width="4.5" height="14" rx="1.2" fill="currentColor"/><rect x="13.5" y="5" width="4.5" height="14" rx="1.2" fill="currentColor"/></svg>' +
       '</button>' +
       '<div class="vn-wave" id="' + waveId + '">' + barsHtml + '</div>' +
       '<button type="button" class="vn-speed" onclick="event.stopPropagation();voiceCycleSpeed(this)" data-speed="1">1x</button>' +
@@ -1594,7 +1602,10 @@ async function chatSend(opts) {
   const hasImage = !!chatPendingImage;
   if (!text && !hasImage) return;
   if (!activeChatId || !currentUser) return;
-  const isBigEmoji = !hasImage && (opts.forceEmoji || isSingleEmojiOnly(text));
+  let isBigEmoji = false;
+  try {
+    isBigEmoji = !hasImage && (opts.forceEmoji || (typeof isSingleEmojiOnly === 'function' && isSingleEmojiOnly(text)));
+  } catch (e) { isBigEmoji = !!opts.forceEmoji; }
   // Capture reply & image state then clear immediately
   const replySnapshot = chatReplyTo ? { ...chatReplyTo } : null;
   const imageSnapshot = chatPendingImage ? { ...chatPendingImage } : null;
