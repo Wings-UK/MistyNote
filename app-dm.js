@@ -1216,45 +1216,50 @@ function buildVoiceBubble(msg, isSent, timeStr) {
   const dur = Number(msg.media_duration || 0);
   const durStr = (typeof _voiceFmt === 'function') ? _voiceFmt(dur) : (Math.floor(dur / 60) + ':' + String(dur % 60).padStart(2, '0'));
   const url = (msg.media_url || '').replace(/"/g, '');
-  const side = isSent ? 'sent' : 'recv';
 
-  let seed = 7;
-  for (let i = 0; i < id.length; i++) seed = (seed * 31 + id.charCodeAt(i)) >>> 0;
+  let seed = 11;
+  for (let i = 0; i < id.length; i++) seed = (seed * 33 + id.charCodeAt(i)) >>> 0;
   const heights = [];
-  for (let i = 0; i < 32; i++) {
+  for (let i = 0; i < 26; i++) {
     seed = (seed * 1103515245 + 12345) >>> 0;
-    const n = seed % 1000;
-    // softer wave shape — peak in middle-ish
-    const envelope = 0.45 + 0.55 * Math.sin((i / 31) * Math.PI);
-    heights.push(Math.max(4, Math.round((8 + (n % 16)) * envelope)));
+    const envelope = 0.4 + 0.6 * Math.sin((i / 25) * Math.PI);
+    heights.push(Math.max(5, Math.round((6 + (seed % 14)) * envelope)));
   }
   const barsHtml = heights.map(function(h) {
-    return '<i class="vn-bar" style="--h:' + h + 'px"></i>';
+    return '<i class="vn-bar" style="height:' + h + 'px"></i>';
   }).join('');
 
+  // Standard chat card (same family as text bubbles) + inner voice row
   const bubble = document.createElement('div');
-  bubble.className = 'vn-card vn-card-' + side;
+  bubble.className = 'chat-bubble chat-bubble-voice';
   if (url) bubble.setAttribute('data-voice-url', url);
 
   bubble.innerHTML =
-    '<div class="vn-inner">' +
+    '<div class="vn-player" data-voice-url="' + url + '">' +
       '<button type="button" class="vn-play" data-src="' + url + '" data-wave="' + waveId + '" data-dur="' + dur + '" onclick="chatPlayVoice(this,\'' + waveId + '\')" aria-label="Play">' +
-        '<span class="vn-play-ring"></span>' +
-        '<span class="vn-play-core">' +
-          '<svg class="vn-ic-play" viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M8 5.14v13.72a1 1 0 001.5.86l11-6.86a1 1 0 000-1.72l-11-6.86a1 1 0 00-1.5.86z"/></svg>' +
-          '<svg class="vn-ic-pause" viewBox="0 0 24 24" width="15" height="15" style="display:none"><rect x="6" y="5" width="4.5" height="14" rx="1.5" fill="currentColor"/><rect x="13.5" y="5" width="4.5" height="14" rx="1.5" fill="currentColor"/></svg>' +
-        '</span>' +
+        '<svg class="vn-ic-play" viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M8 5.2v13.6a.9.9 0 001.35.78l10.4-6.8a.9.9 0 000-1.56L9.35 4.42A.9.9 0 008 5.2z"/></svg>' +
+        '<svg class="vn-ic-pause" viewBox="0 0 24 24" width="20" height="20" style="display:none"><rect x="6" y="5" width="4.5" height="14" rx="1.2" fill="currentColor"/><rect x="13.5" y="5" width="4.5" height="14" rx="1.2" fill="currentColor"/></svg>' +
       '</button>' +
-      '<div class="vn-body">' +
-        '<div class="vn-wave" id="' + waveId + '">' + barsHtml + '</div>' +
-        '<div class="vn-meta">' +
-          '<span class="vn-elapsed" data-elapsed>0:00</span>' +
-          '<span class="vn-dot"></span>' +
-          '<span class="vn-total">' + durStr + '</span>' +
-        '</div>' +
-      '</div>' +
+      '<div class="vn-wave" id="' + waveId + '">' + barsHtml + '</div>' +
+      '<button type="button" class="vn-speed" onclick="event.stopPropagation();voiceCycleSpeed(this)" data-speed="1">1x</button>' +
+      '<span class="vn-time" data-elapsed data-total="' + durStr + '">' + durStr + '</span>' +
     '</div>';
   return bubble;
+}
+
+function voiceCycleSpeed(btn) {
+  if (!btn) return;
+  const steps = [1, 1.5, 2];
+  let cur = parseFloat(btn.dataset.speed || '1');
+  let idx = steps.indexOf(cur);
+  if (idx < 0) idx = 0;
+  idx = (idx + 1) % steps.length;
+  const next = steps[idx];
+  btn.dataset.speed = String(next);
+  btn.textContent = next + 'x';
+  if (_voiceAudio) {
+    try { _voiceAudio.playbackRate = next; } catch (e) {}
+  }
 }
 
 
@@ -2276,64 +2281,77 @@ async function voiceSendDraft() {
 
 function chatPlayVoice(btn, waveId) {
   if (!btn) return;
-  const card = btn.closest('.vn-card') || btn.closest('.chat-bubble');
-  const wrap = btn.closest('.vn-inner') || btn.closest('.chat-voice-bubble');
+  const player = btn.closest('.vn-player');
+  const bubble = btn.closest('.chat-bubble');
   let url = btn.dataset.src
-    || (card && card.getAttribute('data-voice-url'));
+    || (player && player.getAttribute('data-voice-url'))
+    || (bubble && bubble.getAttribute('data-voice-url'));
   if (!url) {
     showToast('Audio unavailable');
     return;
   }
 
   const wave = document.getElementById(waveId) || document.getElementById(btn.dataset.wave);
-  const bars = wave ? wave.querySelectorAll('.vn-bar, .chat-voice-bar') : [];
-  const elapsedEl = (card || wrap) && (card || wrap).querySelector('[data-elapsed]');
+  const bars = wave ? wave.querySelectorAll('.vn-bar') : [];
+  const timeEl = player && player.querySelector('[data-elapsed]');
+  const totalStr = (timeEl && timeEl.getAttribute('data-total')) || (typeof _voiceFmt === 'function' ? _voiceFmt(btn.dataset.dur) : '0:00');
   const totalDur = Number(btn.dataset.dur || 0);
-  const icPlay = btn.querySelector('.vn-ic-play, .chat-voice-ic-play');
-  const icPause = btn.querySelector('.vn-ic-pause, .chat-voice-ic-pause');
+  const icPlay = btn.querySelector('.vn-ic-play');
+  const icPause = btn.querySelector('.vn-ic-pause');
+  const speedBtn = player && player.querySelector('.vn-speed');
+  const rate = speedBtn ? (parseFloat(speedBtn.dataset.speed) || 1) : 1;
 
   function setPlayingUI(on) {
     btn.classList.toggle('is-playing', !!on);
-    card && card.classList.toggle('is-playing', !!on);
+    player && player.classList.toggle('is-playing', !!on);
     btn.dataset.playing = on ? '1' : '0';
     if (icPlay) icPlay.style.display = on ? 'none' : 'block';
     if (icPause) icPause.style.display = on ? 'block' : 'none';
   }
 
-  function resetBars() {
+  function resetProgress() {
     bars.forEach(function(b) { b.classList.remove('played'); });
-    if (elapsedEl) elapsedEl.textContent = '0:00';
+    if (timeEl) timeEl.textContent = totalStr;
   }
 
   if (_voiceAudio && btn.dataset.playing === '1') {
     try { _voiceAudio.pause(); } catch (e) {}
     _voiceAudio = null;
     setPlayingUI(false);
+    // keep elapsed where paused? user asked stop → back to total
+    resetProgress();
     return;
   }
 
   if (_voiceAudio) {
     try { _voiceAudio.pause(); } catch (e) {}
-    document.querySelectorAll('.vn-play.is-playing, .chat-voice-play.is-playing').forEach(function(b) {
+    document.querySelectorAll('.vn-play.is-playing').forEach(function(b) {
       b.classList.remove('is-playing');
       b.dataset.playing = '0';
-      const c = b.closest('.vn-card');
-      if (c) c.classList.remove('is-playing');
-      const p = b.querySelector('.vn-ic-play, .chat-voice-ic-play');
-      const u = b.querySelector('.vn-ic-pause, .chat-voice-ic-pause');
-      if (p) p.style.display = 'block';
-      if (u) u.style.display = 'none';
+      const p = b.closest('.vn-player');
+      if (p) p.classList.remove('is-playing');
+      const ip = b.querySelector('.vn-ic-play');
+      const iu = b.querySelector('.vn-ic-pause');
+      if (ip) ip.style.display = 'block';
+      if (iu) iu.style.display = 'none';
+      const te = p && p.querySelector('[data-elapsed]');
+      if (te) te.textContent = te.getAttribute('data-total') || te.textContent;
+      const w = document.getElementById(b.dataset.wave);
+      if (w) w.querySelectorAll('.vn-bar').forEach(function(x) { x.classList.remove('played'); });
     });
   }
 
   const audio = new Audio(url);
+  audio.playbackRate = rate;
   _voiceAudio = audio;
   setPlayingUI(true);
-  resetBars();
+  bars.forEach(function(b) { b.classList.remove('played'); });
+  if (timeEl) timeEl.textContent = '0:00';
 
   audio.play().catch(function() {
     showToast('Could not play');
     setPlayingUI(false);
+    resetProgress();
     _voiceAudio = null;
   });
 
@@ -2341,7 +2359,7 @@ function chatPlayVoice(btn, waveId) {
     if (!_voiceAudio || _voiceAudio !== audio) return;
     const t = audio.currentTime || 0;
     const d = audio.duration && isFinite(audio.duration) ? audio.duration : totalDur;
-    if (elapsedEl && typeof _voiceFmt === 'function') elapsedEl.textContent = _voiceFmt(t);
+    if (timeEl && typeof _voiceFmt === 'function') timeEl.textContent = _voiceFmt(t);
     if (bars.length && d > 0) {
       const n = Math.floor((t / d) * bars.length);
       bars.forEach(function(b, i) { b.classList.toggle('played', i < n); });
@@ -2350,7 +2368,7 @@ function chatPlayVoice(btn, waveId) {
 
   audio.onended = function() {
     setPlayingUI(false);
-    resetBars();
+    resetProgress();
     if (_voiceAudio === audio) _voiceAudio = null;
   };
 }
