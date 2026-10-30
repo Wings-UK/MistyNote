@@ -10892,3 +10892,34 @@ body.desktop-blocked #username-picker {
   color: var(--text2);
 }
 
+
+
+/* ══════════════════════════════════════════
+   REPLY CARD — never wider than the screen (fixes reply-to-voice-note overflow)
+══════════════════════════════════════════ */
+#page-chat .chat-msg-row:has(.chat-bubble-reply) {
+  min-width: 0 !important;
+  box-sizing: border-box;
+}
+#page-chat .chat-bubble.chat-bubble-reply,
+.chat-popup-float-msg .chat-bubble.chat-bubble-reply {
+  min-width: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.chat-reply-embed {
+  min-width: 0;
+  max-width: 100%;
+}
+#page-chat .chat-reply-embed .vn-player,
+.chat-popup-float-msg .chat-reply-embed .vn-player {
+  min-width: 0;
+  max-width: 100%;
+}
+#page-chat .chat-reply-embed .vn-wave,
+.chat-popup-float-msg .chat-reply-embed .vn-wave {
+  flex: 1 1 0;       /* wave takes only the leftover space, bars are clipped */
+  min-width: 0;
+}
