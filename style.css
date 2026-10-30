@@ -10494,15 +10494,42 @@ body.desktop-blocked #username-picker {
   display: block !important;
   margin: 0 !important;
   padding: 0 !important;
-  width: max-content !important;
+  width: 100% !important;       /* always full width, short text or long */
   max-width: 100% !important;
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
   pointer-events: none;
 }
+#chat-input-bar .chat-reply-card .chat-reply-card-clone .chat-bubble,
+#chat-input-bar .chat-reply-card .chat-reply-card-clone .chat-voice-bubble,
+#chat-input-bar .chat-reply-card .chat-reply-card-clone .vn-card {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box;
+}
+#chat-input-bar .chat-reply-card .chat-reply-card-clone .chat-bubble-emoji { width: 100% !important; }
+/* Always show ME/Name + time in the preview */
+#chat-input-bar .chat-reply-card .chat-reply-card-clone .chat-msg-label-row {
+  display: flex !important;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  margin: 0 0 4px 0;
+  box-sizing: border-box;
+}
+#chat-input-bar .chat-reply-card .chat-msg-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+}
+#chat-input-bar .chat-reply-card .chat-reply-card-clone.sent .chat-msg-label { color: var(--accent); }
+#chat-input-bar .chat-reply-card .chat-reply-card-clone.recv .chat-msg-label { color: var(--red, #f0385a); }
+#chat-input-bar .chat-reply-card .chat-msg-time {
+  margin-left: auto; font-size: 11px; font-weight: 500; color: #a39e97 !important;
+  background: transparent !important; text-transform: none; letter-spacing: 0;
+}
 #chat-input-bar .chat-reply-card .vn-card { margin: 0 !important; max-width: 100% !important; }
-#chat-input-bar .chat-reply-card .chat-reply-card-clone .chat-msg-label-row { margin-bottom: 4px; }
 #chat-input-bar .chat-reply-card-close {
   position: absolute;
   top: 10px;
@@ -10520,3 +10547,7 @@ body.desktop-blocked #username-picker {
   z-index: 2;
 }
 #chat-input-bar .chat-reply-card-close:active { background: var(--border, rgba(0,0,0,0.14)); }
+
+/* Highlighted card: always show ME/Name + time */
+.chat-popup-float-msg .chat-msg-row.same-sender .chat-msg-label-row,
+.chat-popup-float-msg .chat-popup-float-clone .chat-msg-label-row { display: flex !important; }
