@@ -10270,17 +10270,18 @@ body.desktop-blocked #username-picker {
   position: fixed !important;
   left: 20px !important;
   right: auto !important;
-  top: 80px;
+  top: 0;
   bottom: auto !important;
   transform: none !important;
-  z-index: 12050 !important; /* above backdrop + sheet chrome */
+  z-index: 12050 !important;
   max-width: min(calc(100vw - 40px), 360px);
   width: max-content;
   min-height: 40px;
-  opacity: 1; /* never stay invisible */
+  opacity: 0;              /* JS reveals only after correct top is set */
+  visibility: hidden;
   pointer-events: none;
   filter: drop-shadow(0 10px 24px rgba(0,0,0,0.22));
-  visibility: visible !important;
+  transition: opacity 0.12s ease;
 }
 .chat-popup-float-msg.visible {
   opacity: 1 !important;
