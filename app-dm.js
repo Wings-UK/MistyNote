@@ -893,6 +893,7 @@ function buildReplyQuoteHtml(senderName, previewText, mediaUrl) {
 }
 // ── Tap-to-popup: attach to bubble element only ──
 function attachTapPopup(row, msg) {
+  row._chatMsg = msg;
   let longPressTimer = null;
   let didScroll = false;
   let touchStartX = 0;
@@ -940,6 +941,26 @@ function attachTapPopup(row, msg) {
     showMsgPopup(row, msg, bubble);
   });
 }
+// Make sure a cloned message card shows ME/Name + time, even when the original
+// hid it (same-sender cluster). Used by the highlight float and the reply preview.
+function chatEnsureCloneLabel(cloneRow, srcRow, msgArg) {
+  if (!cloneRow) return;
+  const msg = msgArg || (srcRow && srcRow._chatMsg) || {};
+  const isSent = srcRow ? srcRow.classList.contains('sent') : cloneRow.classList.contains('sent');
+  const label = isSent ? 'ME' : ((msg.sender && msg.sender.username) || (typeof activeChatUser !== 'undefined' && activeChatUser && activeChatUser.username) || 'Them');
+  const timeStr = msg.created_at ? msgFormatTime(msg.created_at) : '';
+  cloneRow.classList.remove('same-sender');
+  cloneRow.classList.add('new-sender');
+  const target = cloneRow.querySelector('.chat-bubble, .chat-voice-bubble, .vn-card, .chat-product-bubble, .chat-cash-bubble, .chat-order-bubble, .chat-offer-bubble');
+  if (!target) return;
+  if (target.querySelector(':scope > .chat-msg-label-row')) return;
+  target.insertAdjacentHTML('afterbegin',
+    '<div class="chat-msg-label-row">' +
+      '<span class="chat-msg-label">' + escHtml(label) + '</span>' +
+      '<span class="chat-msg-time">' + timeStr + '</span>' +
+    '</div>'
+  );
+}
 function showMsgPopup(row, msg, bubbleEl) {
   closeMsgPopup();
   const isSent = row.classList.contains('sent');
@@ -973,6 +994,7 @@ function showMsgPopup(row, msg, bubbleEl) {
     el.style.maxWidth = '';
     el.style.minWidth = '';
   });
+  chatEnsureCloneLabel(cloneRow, snapshotSrc, msg);
   floatEl.appendChild(cloneRow);
   document.body.appendChild(floatEl);
   // Same half-screen / full-width rule as live chat
@@ -1726,6 +1748,7 @@ function chatSetReply(msgId) {
     el.style.maxWidth = '';
     el.style.minWidth = '';
   });
+  chatEnsureCloneLabel(clone, row, row._chatMsg);
   wrap.appendChild(clone);
 
   const close = document.createElement('button');
@@ -1740,12 +1763,6 @@ function chatSetReply(msgId) {
   wrap.appendChild(close);
 
   inputBar.insertBefore(wrap, inputBar.firstChild);
-
-  // Same half-screen / full-width bubble rule as the live chat
-  const cloneBubble = clone.querySelector('.chat-bubble:not(.chat-bubble-emoji)');
-  if (cloneBubble && typeof applyChatBubbleWidth === 'function') {
-    applyChatBubbleWidth(clone, cloneBubble);
-  }
 
   // Keep the latest messages visible after the composer grows
   const msgs = document.getElementById('chat-messages');
