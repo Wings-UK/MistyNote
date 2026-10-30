@@ -1056,40 +1056,22 @@ function showMsgPopup(row, msg, bubbleEl) {
 
   sheet.appendChild(list);
   document.body.appendChild(sheet);
-  // Show float immediately so it never stays invisible
-  floatEl.style.left = '20px';
-  floatEl.style.right = 'auto';
-  floatEl.style.top = '80px';
-  floatEl.style.bottom = 'auto';
-  floatEl.style.opacity = '1';
+  // Position the float ONCE, synchronously, before the browser paints.
+  // The sheet's final geometry is known without waiting for its slide-in:
+  // it is pinned to bottom:0, and offsetHeight ignores CSS transforms.
+  const sheetH = sheet.offsetHeight;
+  const gap = 20, minTop = 12;
+  const maxFloatH = Math.max(60, window.innerHeight - sheetH - gap - minTop);
+  // Anchor by bottom edge so later size changes (images/fonts) can't shift it
+  floatEl.style.setProperty('left', '20px', 'important');
+  floatEl.style.setProperty('top', 'auto', 'important');
+  floatEl.style.setProperty('bottom', (sheetH + gap) + 'px', 'important');
+  floatEl.style.maxHeight = maxFloatH + 'px';
+  floatEl.style.overflow = 'hidden';
   floatEl.classList.add('visible');
 
-  requestAnimationFrame(function() {
-    sheet.classList.add('open');
-    function placeFloat() {
-      try {
-        const sh = sheet.getBoundingClientRect();
-        // After open, sheet.top is the dialogue top edge
-        const fh = Math.max(floatEl.offsetHeight || 0, floatEl.scrollHeight || 0, 60);
-        let top = sh.top - 20 - fh;
-        if (!isFinite(top) || top < 12) top = 12;
-        // If sheet not laid out yet (still off-screen), keep safe top
-        if (sh.top > window.innerHeight - 40) top = 80;
-        floatEl.style.left = '20px';
-        floatEl.style.top = top + 'px';
-        floatEl.style.opacity = '1';
-        floatEl.classList.add('visible');
-      } catch (e) {
-        floatEl.style.top = '80px';
-        floatEl.style.opacity = '1';
-        floatEl.classList.add('visible');
-      }
-    }
-    placeFloat();
-    requestAnimationFrame(placeFloat);
-    setTimeout(placeFloat, 50);
-    setTimeout(placeFloat, 280);
-  });
+  // Start the sheet slide-up on the next frame (transition needs a start state)
+  requestAnimationFrame(function() { sheet.classList.add('open'); });
 }
 
 function closeMsgPopup() {
