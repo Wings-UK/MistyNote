@@ -10270,24 +10270,21 @@ body.desktop-blocked #username-picker {
   position: fixed !important;
   left: 20px !important;
   right: auto !important;
-  top: auto;
+  top: 80px;
   bottom: auto !important;
   transform: none !important;
-  z-index: 12050 !important;
+  z-index: 12050 !important; /* above backdrop + sheet chrome */
   max-width: min(calc(100vw - 40px), 360px);
   width: max-content;
   min-height: 40px;
-  opacity: 0;
+  opacity: 1; /* never stay invisible */
   pointer-events: none;
   filter: drop-shadow(0 10px 24px rgba(0,0,0,0.22));
-  transition: opacity 0.15s ease;
+  visibility: visible !important;
 }
 .chat-popup-float-msg.visible {
   opacity: 1 !important;
-}
-/* Highlight always shows name row */
-.chat-popup-float-msg .chat-msg-label-row {
-  display: flex !important;
+  visibility: visible !important;
 }
 /* Clone = same rules as #page-chat chat cards */
 .chat-popup-float-msg .chat-popup-float-clone {
