@@ -1021,6 +1021,17 @@ function attachTapPopup(row, msg) {
 }
 // Make sure a cloned message card shows ME/Name + time, even when the original
 // hid it (same-sender cluster). Used by the highlight float and the reply preview.
+// A reply message is shown as a plain message (just its own text) when it is
+// highlighted or quoted: drop the embedded original preview and reply styling.
+function chatStripReplyEmbed(cloneRow) {
+  if (!cloneRow) return;
+  cloneRow.querySelectorAll('.chat-reply-embed').forEach(function(el) { el.remove(); });
+  cloneRow.querySelectorAll('.chat-bubble-reply').forEach(function(el) {
+    el.classList.remove('chat-bubble-reply', 'chat-bubble-full');
+  });
+  cloneRow.style.width = '';
+  cloneRow.style.maxWidth = '';
+}
 function chatEnsureCloneLabel(cloneRow, srcRow, msgArg) {
   if (!cloneRow) return;
   const msg = msgArg || (srcRow && srcRow._chatMsg) || {};
@@ -1066,6 +1077,7 @@ function showMsgPopup(row, msg, bubbleEl) {
   const cloneRow = snapshotSrc.cloneNode(true);
   cloneRow.classList.add('chat-popup-float-clone');
   cloneRow.style.pointerEvents = 'none';
+  chatStripReplyEmbed(cloneRow);
   // neutralize inline widths from fit-content measurements
   cloneRow.querySelectorAll('.chat-bubble, .vn-card').forEach(function(el) {
     el.style.width = '';
@@ -1817,7 +1829,7 @@ function chatSetReply(msgId) {
   clone.removeAttribute('id');
   clone.style.pointerEvents = 'none';
   clone.querySelectorAll('[id]').forEach(function(el) { el.removeAttribute('id'); });
-  clone.querySelectorAll('.chat-reply-embed').forEach(function(el) { el.remove(); });
+  chatStripReplyEmbed(clone);
   clone.querySelectorAll('video, audio').forEach(function(m) {
     try { m.pause(); } catch (e) {}
     m.removeAttribute('autoplay');
