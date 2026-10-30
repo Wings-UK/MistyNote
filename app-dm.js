@@ -773,11 +773,79 @@ function assignClusterClasses(container) {
     else if (prevSame && !nextSame) row.classList.add('cluster-bot');
   });
 }
+// ── Reply preview card inside a reply message ──
+function chatBuildReplyEmbed(msg) {
+  const replyId = String(msg.reply_to_id);
+  const embed = document.createElement('div');
+  embed.className = 'chat-reply-embed';
+  embed.dataset.replyId = replyId;
+
+  function fill(orig) {
+    embed.innerHTML = '';
+    const r = (orig && !orig.deleted_at) ? buildMessageEl(orig, null, { embed: true }) : null;
+    const card = r && r.firstElementChild;
+    if (!card) {
+      embed.classList.add('is-missing');
+      embed.innerHTML = '<div class="chat-reply-embed-missing">Original message unavailable</div>';
+      return;
+    }
+    embed.classList.remove('is-missing');
+    const origSent = orig.sender_id === currentUser?.id;
+    embed.classList.toggle('orig-sent', origSent);
+    embed.classList.toggle('orig-recv', !origSent);
+    // Inert copy: no duplicate ids, no inline handlers (tap = jump to original)
+    card.querySelectorAll('[id]').forEach(function(el) { el.removeAttribute('id'); });
+    card.querySelectorAll('[onclick]').forEach(function(el) { el.removeAttribute('onclick'); });
+    embed.appendChild(card);
+  }
+
+  const cached = msg.reply_to || _chatMsgCache.get(replyId);
+  if (cached) {
+    fill(cached);
+  } else {
+    embed.innerHTML = '<div class="chat-reply-embed-missing">Loading…</div>';
+    supabase.from('messages')
+      .select('id, type, content, media_url, media_duration, created_at, sender_id, deleted_at, sender:users!sender_id(id, username, avatar)')
+      .eq('id', replyId)
+      .maybeSingle()
+      .then(function(res) {
+        if (res && res.data) _chatMsgCache.set(replyId, res.data);
+        fill(res && res.data);
+      })
+      .catch(function() { fill(null); });
+  }
+
+  embed.addEventListener('click', function(e) {
+    e.stopPropagation();
+    const row = embed.closest('.chat-msg-row');
+    // Ignore the click that follows a long-press (popup just opened)
+    if (row && row._lpAt && Date.now() - row._lpAt < 900) return;
+    chatJumpToMessage(replyId);
+  });
+  return embed;
+}
+
+function chatJumpToMessage(id) {
+  const msgsEl = document.getElementById('chat-messages');
+  const target = msgsEl && msgsEl.querySelector('.chat-msg-row[data-msg-id="' + String(id).replace(/"/g, '') + '"]');
+  if (!target) { showToast('Original message not available'); return; }
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  target.classList.remove('chat-msg-flash');
+  void target.offsetWidth; // restart animation
+  target.classList.add('chat-msg-flash');
+  setTimeout(function() { target.classList.remove('chat-msg-flash'); }, 1600);
+}
+
 // ── Build a message element ──
-function buildMessageEl(msg, prevSenderId) {
+const _chatMsgCache = new Map(); // id -> message object (used to render reply previews)
+function buildMessageEl(msg, prevSenderId, opts) {
   if (!msg || msg.deleted_at) return null;
+  opts = opts || {};
+  if (msg.id && !opts.embed) _chatMsgCache.set(String(msg.id), msg);
   const isSent = msg.sender_id === currentUser?.id;
-  const isNewSender = !prevSenderId || prevSenderId !== msg.sender_id;
+  // A reply always shows its own Name/ME + time on top, like a fresh message
+  const isReply = !!msg.reply_to_id && !opts.embed;
+  const isNewSender = isReply || !prevSenderId || prevSenderId !== msg.sender_id;
   const row = document.createElement('div');
   row.className = `chat-msg-row ${isSent ? 'sent' : 'recv'}${isNewSender ? ' new-sender' : ' same-sender'}`;
   row.dataset.msgId = msg.id || '';
@@ -794,13 +862,8 @@ function buildMessageEl(msg, prevSenderId) {
   const content = msg.content || '';
   const timeHtml = ''; // time in label row
 
-  // Reply quote
-  let replyQuoteHtml = '';
-  if (msg.reply_to_id && msg.reply_to) {
-    const rName = msg.reply_to.sender_id === currentUser?.id ? 'You' : (msg.reply_to.sender?.username || 'Reply');
-    const rText = (msg.reply_to.content || 'Message').slice(0, 60);
-    replyQuoteHtml = `<div class="chat-reply-quote"><strong>${escHtml(rName)}</strong> ${escHtml(rText)}</div>`;
-  }
+  // Reply preview card is built below (chatBuildReplyEmbed)
+  const replyQuoteHtml = '';
 
   const bubble = document.createElement('div');
 
@@ -816,8 +879,8 @@ function buildMessageEl(msg, prevSenderId) {
       );
     }
     row.appendChild(vb);
-    applyChatBubbleWidth(row, vb);
-    try { attachTapPopup(row, msg); } catch (e) {}
+    if (!opts.embed) applyChatBubbleWidth(row, vb);
+    if (!opts.embed) { try { attachTapPopup(row, msg); } catch (e) {} }
     return row;
   } else if (type === 'image' || type === 'photo' || (msg.media_url && (type === 'image' || type === 'photo' || (!type || type === 'text') && /\.(jpe?g|png|gif|webp)/i.test(msg.media_url || '')))) {
     // only treat as image when type says so, or URL looks like an image
@@ -830,8 +893,8 @@ function buildMessageEl(msg, prevSenderId) {
   } else {
     const text = content;
     // 50px = single emoji only; 20px = emoji-only (no letters), any count; else normal
-    const singleEmoji = !replyQuoteHtml && typeof isSingleEmojiOnly === 'function' && isSingleEmojiOnly(text);
-    const emojiOnly = !replyQuoteHtml && !singleEmoji && typeof isEmojiOnlyMessage === 'function' && isEmojiOnlyMessage(text);
+    const singleEmoji = !isReply && typeof isSingleEmojiOnly === 'function' && isSingleEmojiOnly(text);
+    const emojiOnly = !isReply && !singleEmoji && typeof isEmojiOnlyMessage === 'function' && isEmojiOnlyMessage(text);
     if (singleEmoji) {
       bubble.className = 'chat-bubble chat-bubble-emoji';
       bubble.innerHTML = '<span class="chat-emoji-xl">' + text + '</span>';
@@ -859,9 +922,23 @@ function buildMessageEl(msg, prevSenderId) {
       '</div>'
     );
   }
+  // Reply: Name/ME · time on top, then the original card, then the reply text
+  if (isReply) {
+    const embed = chatBuildReplyEmbed(msg);
+    const lbl = bubble.querySelector(':scope > .chat-msg-label-row');
+    if (lbl) lbl.after(embed); else bubble.insertBefore(embed, bubble.firstChild);
+    bubble.classList.add('chat-bubble-reply', 'chat-bubble-full');
+  }
   row.appendChild(bubble);
-  applyChatBubbleWidth(row, bubble);
-  try { attachTapPopup(row, msg); } catch (e) {}
+  if (isReply) {
+    row.style.width = '100%';
+    row.style.maxWidth = '100%';
+    bubble.style.width = '100%';
+    bubble.style.maxWidth = '100%';
+  } else if (!opts.embed) {
+    applyChatBubbleWidth(row, bubble);
+  }
+  if (!opts.embed) { try { attachTapPopup(row, msg); } catch (e) {} }
   return row;
 }
 
@@ -908,6 +985,7 @@ function attachTapPopup(row, msg) {
     if (e.target.closest('a, button, .chat-reply-quote')) return;
     longPressTimer = setTimeout(() => {
       if (didScroll) return;
+      row._lpAt = Date.now();
       if (navigator.vibrate) navigator.vibrate(32);
       showMsgPopup(row, msg, bubble);
     }, LONG_PRESS_MS);
@@ -1739,6 +1817,7 @@ function chatSetReply(msgId) {
   clone.removeAttribute('id');
   clone.style.pointerEvents = 'none';
   clone.querySelectorAll('[id]').forEach(function(el) { el.removeAttribute('id'); });
+  clone.querySelectorAll('.chat-reply-embed').forEach(function(el) { el.remove(); });
   clone.querySelectorAll('video, audio').forEach(function(m) {
     try { m.pause(); } catch (e) {}
     m.removeAttribute('autoplay');
