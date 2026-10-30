@@ -1038,6 +1038,10 @@ function showMsgPopup(row, msg, bubbleEl) {
   const icSnap = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>';
   const icFlag = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>';
 
+  addOpt(icSnap, 'Chat Reply', function() {
+    if (typeof chatSetReply === 'function') chatSetReply(msg.id);
+    else showToast('Reply — coming soon');
+  });
   addOpt(icSave, 'Save in Chat', function() { showToast('Save in Chat — coming soon'); });
   addOpt(icCopy, 'Copy', function() {
     const t = msg.content || (msg.type === 'voice' ? 'Voice note' : '') || '';
@@ -1048,10 +1052,6 @@ function showMsgPopup(row, msg, bubbleEl) {
   });
   addOpt(icDel, 'Delete', function() { showToast('Delete — coming soon'); });
   addOpt(icFwd, 'Forward Message', function() { showToast('Forward — coming soon'); });
-  addOpt(icSnap, 'Snap Reply', function() {
-    if (typeof chatSetReply === 'function') chatSetReply(msg.id);
-    else showToast('Reply — coming soon');
-  });
   addOpt(icFlag, 'Report', function() { showToast('Report — coming soon'); });
 
   sheet.appendChild(list);
@@ -1684,28 +1684,78 @@ function chatPickEmoji(emoji) {
 
 
 function chatSetReply(msgId) {
-  const row = document.querySelector('.chat-msg-row[data-msg-id="' + msgId + '"]');
+  const row = document.querySelector('#page-chat .chat-msg-row[data-msg-id="' + msgId + '"]')
+           || document.querySelector('.chat-msg-row[data-msg-id="' + msgId + '"]');
   if (!row) return;
-  const bubble = row.querySelector('.chat-bubble, .vn-card');
-  if (!bubble) return;
+  const bubble = row.querySelector('.chat-bubble, .vn-card, .chat-voice-bubble, .chat-product-bubble, .chat-cash-bubble, .chat-order-bubble, .chat-offer-bubble');
   const isSent = row.classList.contains('sent');
   const name = isSent
     ? ((typeof currentProfile !== 'undefined' && currentProfile?.username) || 'You')
     : (activeChatUser?.username || 'them');
-  const imgEl = bubble.querySelector('.chat-bubble-img');
-  const previewText = imgEl ? '📷 Photo' : (bubble.textContent || '').trim().slice(0, 80);
+  const imgEl = row.querySelector('.chat-bubble-img');
+  const previewText = imgEl ? '📷 Photo' : ((bubble && bubble.textContent) || '').trim().slice(0, 80);
   const mediaUrl = imgEl ? imgEl.src : null;
   chatReplyTo = { id: msgId, senderName: name, content: previewText, mediaUrl: mediaUrl };
-  const bar = document.getElementById('chat-reply-bar');
-  const nameEl = document.getElementById('chat-reply-bar-name');
-  const textEl = document.getElementById('chat-reply-bar-text');
-  if (bar) bar.style.display = 'flex';
-  if (nameEl) nameEl.textContent = name;
-  if (textEl) textEl.textContent = previewText;
+
+  // Legacy text-only reply bar (if present in the HTML) stays hidden
+  const legacy = document.getElementById('chat-reply-bar');
+  if (legacy) legacy.style.display = 'none';
+
+  // Snapchat-style: full message card pinned on top of the input bar
+  const inputBar = document.getElementById('chat-input-bar');
+  if (!inputBar) return;
+  const old = document.getElementById('chat-reply-card');
+  if (old) old.remove();
+
+  const wrap = document.createElement('div');
+  wrap.className = 'chat-reply-card';
+  wrap.id = 'chat-reply-card';
+
+  const clone = row.cloneNode(true);
+  clone.classList.add('chat-reply-card-clone');
+  clone.removeAttribute('data-msg-id');
+  clone.removeAttribute('id');
+  clone.style.pointerEvents = 'none';
+  clone.querySelectorAll('[id]').forEach(function(el) { el.removeAttribute('id'); });
+  clone.querySelectorAll('video, audio').forEach(function(m) {
+    try { m.pause(); } catch (e) {}
+    m.removeAttribute('autoplay');
+  });
+  clone.querySelectorAll('.chat-bubble, .vn-card').forEach(function(el) {
+    el.style.width = '';
+    el.style.maxWidth = '';
+    el.style.minWidth = '';
+  });
+  wrap.appendChild(clone);
+
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'chat-reply-card-close';
+  close.setAttribute('aria-label', 'Cancel reply');
+  close.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+  close.addEventListener('click', function(e) {
+    e.stopPropagation();
+    chatCancelReply();
+  });
+  wrap.appendChild(close);
+
+  inputBar.insertBefore(wrap, inputBar.firstChild);
+
+  // Same half-screen / full-width bubble rule as the live chat
+  const cloneBubble = clone.querySelector('.chat-bubble:not(.chat-bubble-emoji)');
+  if (cloneBubble && typeof applyChatBubbleWidth === 'function') {
+    applyChatBubbleWidth(clone, cloneBubble);
+  }
+
+  // Keep the latest messages visible after the composer grows
+  const msgs = document.getElementById('chat-messages');
+  if (msgs) requestAnimationFrame(function() { msgs.scrollTop = msgs.scrollHeight; });
   document.getElementById('chat-input-field')?.focus();
 }
 function chatCancelReply() {
   chatReplyTo = null;
+  const card = document.getElementById('chat-reply-card');
+  if (card) card.remove();
   const bar = document.getElementById('chat-reply-bar');
   if (bar) bar.style.display = 'none';
 }
