@@ -1025,7 +1025,8 @@ function attachTapPopup(row, msg) {
       const imgEl = e.target.closest('.chat-bubble-img');
       if (imgEl) {
         e.preventDefault();
-        chatViewImage(msg.media_url || imgEl.src);
+        // open the exact photo that was tapped (media_url can hold several photos)
+        chatViewImage(imgEl.currentSrc || imgEl.src);
         return;
       }
     }
@@ -1226,6 +1227,7 @@ function chatViewImage(src) {
   overlay.id = 'chat-img-viewer';
   const img = document.createElement('img');
   img.className = 'chat-img-viewer-img';
+  img.referrerPolicy = 'no-referrer'; // same as the thumbnails, which load fine
   img.src = src;
   img.alt = 'Photo';
   img.onclick = (e) => e.stopPropagation();
