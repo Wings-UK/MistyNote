@@ -11018,3 +11018,12 @@ body.desktop-blocked #username-picker {
   font-size: 13px;
   color: #a39e97;
 }
+
+
+/* Reply previews of multi-photo messages: one photo + "and N more" */
+.chat-bubble-photos .chat-photo-more {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text3, #a39e97);
+}
