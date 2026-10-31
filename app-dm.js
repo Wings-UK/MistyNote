@@ -1879,8 +1879,12 @@ function chatImageSelected(input) {
   const good = [];
   let skipped = false;
   files.forEach(function(f) {
-    if (!f.type || !f.type.startsWith('image/')) { skipped = true; return; }
-    if (f.size > 10 * 1024 * 1024) { skipped = true; return; }
+    const name = (f.name || '').toLowerCase();
+    const looksImg = (f.type && f.type.startsWith('image/'))
+      || /\.(jpe?g|png|gif|webp|heic|heif|bmp)$/i.test(name)
+      || (!f.type && f.size > 0); // mobile often leaves type empty
+    if (!looksImg) { skipped = true; return; }
+    if (f.size > 12 * 1024 * 1024) { skipped = true; return; }
     good.push(f);
   });
   if (skipped) showToast('Some files skipped (images under 10MB only)');
@@ -2014,15 +2018,46 @@ async function chatSend(opts) {
     let urls;
     try {
       urls = await Promise.all(items.map(async function(it, i) {
-        const compressed = await compressChatImage(it.file);
-        const filename = currentUser.id + '-' + Date.now() + '-' + i + '.jpg';
-        return await uploadToR2(compressed, 'chat-images', filename);
+        let blob = it.file;
+        try {
+          if (typeof compressChatImage === 'function') {
+            blob = await compressChatImage(it.file);
+          }
+        } catch (ce) {
+          console.warn('[chat-image] compress', ce);
+          blob = it.file;
+        }
+        if (!blob) throw new Error('No image data');
+        // Ensure Blob/File has a type (Worker may reject empty type)
+        if (!(blob instanceof Blob)) throw new Error('Invalid image blob');
+        if (!blob.type) {
+          blob = new Blob([blob], { type: 'image/jpeg' });
+        }
+        const filename = (currentUser.id || 'u') + '-' + Date.now() + '-' + i + '.jpg';
+        // Same R2 path style as voice: folder prefix only
+        let url = null;
+        try {
+          url = await uploadToR2(blob, 'chat', filename);
+        } catch (e1) {
+          // Fallback folders if worker whitelist is strict
+          try {
+            url = await uploadToR2(blob, 'posts', filename);
+          } catch (e2) {
+            if (typeof uploadImageToR2 === 'function') {
+              url = await uploadImageToR2(blob, 'posts', filename);
+            } else {
+              throw e2;
+            }
+          }
+        }
+        if (!url) throw new Error('No public URL from upload');
+        return url;
       }));
-      if (urls.some(function(u) { return !u; })) throw new Error('missing url');
+      if (!urls || urls.some(function(u) { return !u; })) throw new Error('missing url');
     } catch (err) {
       console.warn('[chat-image] R2', err);
-      showToast('Image upload failed');
-      imgEl?.remove();
+      showToast((err && err.message) ? ('Upload: ' + err.message) : 'Image upload failed');
+      if (imgEl) imgEl.remove();
       return;
     }
     // Swap local previews for the hosted URLs
