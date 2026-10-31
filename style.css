@@ -10952,18 +10952,18 @@ body.desktop-blocked #username-picker {
 .chat-bubble-photos .chat-photo-grid {
   display: grid;
   gap: 6px;
-  grid-template-columns: 100px;
+  grid-template-columns: 150px;
   margin-top: 4px;
 }
 .chat-bubble-photos .chat-photo-grid.two,
 .chat-bubble-photos .chat-photo-grid.many {
-  grid-template-columns: repeat(2, 100px);
+  grid-template-columns: repeat(2, 150px);
 }
 .chat-bubble-photos .chat-bubble-img,
 #page-chat .chat-bubble-photos .chat-bubble-img {
   display: block;
-  width: 100px !important;
-  max-width: 100px !important;
+  width: 150px !important;
+  max-width: 150px !important;
   height: auto;
   max-height: none;
   border-radius: 6px !important;
@@ -10975,11 +10975,11 @@ body.desktop-blocked #username-picker {
 .chat-bubble-photos .chat-photo-grid.many .chat-bubble-img,
 #page-chat .chat-bubble-photos .chat-photo-grid.two .chat-bubble-img,
 #page-chat .chat-bubble-photos .chat-photo-grid.many .chat-bubble-img {
-  height: 100px !important;
+  height: 150px !important;
 }
 .chat-bubble-photos .chat-photo-grid.one .chat-bubble-img,
 #page-chat .chat-bubble-photos .chat-photo-grid.one .chat-bubble-img {
-  max-height: 150px !important;
+  max-height: 220px !important;
 }
 .chat-bubble-photos .chat-photo-caption {
   margin-top: 8px;
@@ -10993,8 +10993,8 @@ body.desktop-blocked #username-picker {
 }
 .chat-reply-embed .chat-bubble-photos .chat-bubble-img,
 #chat-input-bar .chat-reply-card .chat-bubble-photos .chat-bubble-img {
-  width: 100px !important;
-  max-width: 100px !important;
+  width: 150px !important;
+  max-width: 150px !important;
 }
 /* composer: "N photos" badge on the pending thumbnail */
 .chat-img-count {
@@ -11006,4 +11006,15 @@ body.desktop-blocked #username-picker {
   color: #fff;
   background: rgba(0,0,0,0.6);
   pointer-events: none;
+}
+
+.chat-bubble-photos .chat-bubble-img.broken {
+  background: #eceae5 !important;
+  object-fit: none;
+  min-height: 80px;
+}
+.chat-photo-missing {
+  padding: 12px 4px;
+  font-size: 13px;
+  color: #a39e97;
 }
