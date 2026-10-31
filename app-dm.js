@@ -657,6 +657,7 @@ function openChat(convId, otherUser) {
   if (inboxPreview) inboxPreview.classList.remove('unread');
   slideTo('chat', async () => {
     await loadChatMessages(convId);
+    chatRestoreOutbox(convId);
     subscribeToChat(convId);
     markConvRead(convId);
     subscribeToPresence(convId);
@@ -758,6 +759,7 @@ async function loadChatMessages(convId) {
   });
   msgsEl.scrollTop = msgsEl.scrollHeight;
   assignClusterClasses(msgsEl);
+  try { chatPrefetchVoiceIn(msgsEl, 20); } catch (e) {}
 }
 // ── Assign cluster classes for bubble shaping ──
 function assignClusterClasses(container) {
@@ -1883,6 +1885,7 @@ function chatPickEmoji(emoji) {
 
 
 function chatSetReply(msgId) {
+  if (String(msgId).indexOf('tmp-') === 0) { showToast('Wait until this message is sent'); return; }
   const row = document.querySelector('#page-chat .chat-msg-row[data-msg-id="' + msgId + '"]')
            || document.querySelector('.chat-msg-row[data-msg-id="' + msgId + '"]');
   if (!row) return;
@@ -2080,6 +2083,218 @@ function compressChatImage(file) {
   });
 }
 
+
+// ══════════════════════════════════════════
+// OUTBOX — every outgoing message is a "job" that can fail and be retried
+// (text, photos, voice). Failed messages stay on screen with Retry / Delete.
+// ══════════════════════════════════════════
+const chatOutbox = new Map();          // tmpId -> job
+let chatClientIdSupported = null;      // null = unknown, true/false after first insert
+const CHAT_INSERT_TIMEOUT = 20000;
+const CHAT_UPLOAD_TIMEOUT = 60000;
+
+function chatNewClientId() {
+  try { if (window.crypto && crypto.randomUUID) return crypto.randomUUID(); } catch (e) {}
+  return 'c' + Date.now().toString(16) + Math.random().toString(16).slice(2, 10);
+}
+function chatWithTimeout(promise, ms) {
+  return new Promise(function(resolve, reject) {
+    const t = setTimeout(function() { reject(new Error('timeout')); }, ms);
+    Promise.resolve(promise).then(
+      function(v) { clearTimeout(t); resolve(v); },
+      function(e) { clearTimeout(t); reject(e); }
+    );
+  });
+}
+function chatMakeJob(base) {
+  const job = Object.assign({
+    state: 'sending',
+    startedAt: new Date().toISOString(),
+    clientId: chatNewClientId(),
+    attempted: false,
+    urlsByIdx: [],
+  }, base);
+  job.id = job.tmpMsg.id;
+  chatOutbox.set(job.id, job);
+  return job;
+}
+function chatJobPayload(job) {
+  const p = {
+    conversation_id: job.convId,
+    sender_id: currentUser.id,
+    type: job.kind,
+    reply_to_id: job.replyId || null,
+  };
+  if (job.kind === 'text') { p.content = job.text; }
+  else if (job.kind === 'image') {
+    p.content = job.text || '';
+    p.media_url = job.urls.length > 1 ? JSON.stringify(job.urls) : job.urls[0];
+  } else if (job.kind === 'voice') {
+    p.content = '';
+    p.media_url = job.publicUrl;
+    p.media_duration = job.durationSec;
+  }
+  return p;
+}
+function chatJobPreview(job) {
+  if (job.kind === 'image') return (job.urls && job.urls.length > 1) ? '📷 ' + job.urls.length + ' photos' : '📷 Photo';
+  if (job.kind === 'voice') return '🎙 Voice note';
+  return job.text || '';
+}
+// Status line inside the bubble: faded while sending, red + Retry/Delete when failed
+function chatSetMsgStatus(job, state, err) {
+  job.state = state;
+  const el = job.el;
+  if (!el) return;
+  el.classList.toggle('chat-msg-pending', state === 'sending');
+  el.classList.toggle('chat-msg-failed', state === 'failed');
+  const host = el.querySelector('.chat-bubble');
+  if (!host) return;
+  const old = host.querySelector(':scope > .chat-msg-status');
+  if (old) old.remove();
+  if (state !== 'failed') return;
+  const offline = (typeof navigator !== 'undefined' && navigator.onLine === false);
+  const st = document.createElement('div');
+  st.className = 'chat-msg-status';
+  st.innerHTML =
+    '<span class="chat-msg-status-text">' + (offline ? 'No connection · not sent' : 'Not sent') + '</span>' +
+    '<button type="button" class="chat-msg-retry">Retry</button>' +
+    '<button type="button" class="chat-msg-discard">Delete</button>';
+  st.querySelector('.chat-msg-retry').addEventListener('click', function(e) {
+    e.stopPropagation(); chatRunJob(job);
+  });
+  st.querySelector('.chat-msg-discard').addEventListener('click', function(e) {
+    e.stopPropagation(); chatDiscardJob(job);
+  });
+  host.appendChild(st);
+}
+function chatDiscardJob(job) {
+  chatOutbox.delete(job.id);
+  if (job.el) job.el.remove();
+  if (job.kind === 'voice' && job.localUrl) { try { URL.revokeObjectURL(job.localUrl); } catch (e) {} }
+}
+// A failed attempt may still have reached the server (reply lost) — look for it before re-sending
+async function chatFindSentCopy(job, payload) {
+  try {
+    let q = supabase.from('messages').select('id, created_at')
+      .eq('conversation_id', job.convId).eq('sender_id', currentUser.id)
+      .eq('type', payload.type).gte('created_at', job.startedAt)
+      .order('created_at', { ascending: false }).limit(1);
+    if (payload.media_url) q = q.eq('media_url', payload.media_url);
+    else q = q.eq('content', payload.content || '');
+    const { data } = await chatWithTimeout(q, CHAT_INSERT_TIMEOUT);
+    return (data && data[0]) || null;
+  } catch (e) { return null; }
+}
+async function chatInsertJob(job) {
+  const payload = chatJobPayload(job);
+  if (job.attempted) {
+    const dup = await chatFindSentCopy(job, payload);
+    if (dup) return dup;
+  }
+  job.attempted = true;
+  const body = Object.assign({}, payload);
+  if (chatClientIdSupported !== false) body.client_id = job.clientId;
+  let res = await chatWithTimeout(supabase.from('messages').insert(body).select('id, created_at').maybeSingle(), CHAT_INSERT_TIMEOUT);
+  if (res.error && body.client_id && /client_id/i.test(res.error.message || '')) {
+    chatClientIdSupported = false;               // column not added yet — send without it
+    delete body.client_id;
+    res = await chatWithTimeout(supabase.from('messages').insert(body).select('id, created_at').maybeSingle(), CHAT_INSERT_TIMEOUT);
+  } else if (!res.error && body.client_id) {
+    chatClientIdSupported = true;
+  }
+  if (res.error) throw new Error(res.error.message || 'insert failed');
+  return res.data || {};
+}
+async function chatUploadPhotos(job) {
+  const items = job.items;
+  return await Promise.all(items.map(async function(it, i) {
+    if (job.urlsByIdx[i]) return job.urlsByIdx[i];          // already uploaded on an earlier attempt
+    let blob = it.file;
+    try { if (typeof compressChatImage === 'function') blob = await compressChatImage(it.file); }
+    catch (ce) { console.warn('[chat-image] compress', ce); blob = it.file; }
+    if (!blob) throw new Error('No image data');
+    const jpegBlob = (blob instanceof Blob && blob.type && blob.type.indexOf('image/') === 0)
+      ? blob : new Blob([blob], { type: 'image/jpeg' });
+    const filename = job.fileNames[i] || (job.fileNames[i] = (currentUser.id || 'u') + '-' + Date.now() + '-' + i + '.jpg');
+    const upFile = (typeof File === 'function') ? new File([jpegBlob], filename, { type: jpegBlob.type }) : jpegBlob;
+    let url = null, lastErr = null;
+    const folders = ['chat', 'posts'];
+    for (let f = 0; f < folders.length && !url; f++) {
+      try {
+        let cand = await uploadToR2(upFile, folders[f], filename);
+        if (!cand && typeof uploadImageToR2 === 'function') cand = await uploadImageToR2(upFile, folders[f], filename);
+        if (cand && await chatVerifyImageUrl(cand)) url = cand;
+        else { lastErr = new Error('Photo link not reachable'); console.warn('[chat-image] unreachable URL', cand); }
+      } catch (e1) { lastErr = e1; console.warn('[chat-image] upload to', folders[f], e1); }
+    }
+    if (!url) throw lastErr || new Error('Upload failed');
+    job.urlsByIdx[i] = url;
+    return url;
+  }));
+}
+async function chatRunJob(job) {
+  if (!job || job._running || !currentUser) return false;
+  job._running = true;
+  chatSetMsgStatus(job, 'sending');
+  try {
+    if (job.kind === 'image' && !job.urls) {
+      job.urls = await chatWithTimeout(chatUploadPhotos(job), CHAT_UPLOAD_TIMEOUT * 2);
+      if (!job.urls || job.urls.some(function(u) { return !u; })) throw new Error('missing url');
+      if (job.el) job.el.querySelectorAll('.chat-bubble-img').forEach(function(im, i) { if (job.urls[i]) im.src = job.urls[i]; });
+    }
+    if (job.kind === 'voice' && !job.publicUrl) {
+      job.publicUrl = await chatWithTimeout(uploadToR2(job.blob, 'chat-voice', job.filename), CHAT_UPLOAD_TIMEOUT);
+      if (!job.publicUrl) throw new Error('No public URL from upload');
+    }
+    const saved = await chatInsertJob(job);
+    // ── success ──
+    chatOutbox.delete(job.id);
+    const el = job.el;
+    if (el) {
+      el.classList.remove('chat-msg-pending', 'chat-msg-failed');
+      const st = el.querySelector('.chat-msg-status'); if (st) st.remove();
+      if (saved && saved.id) {
+        el.dataset.msgId = saved.id;
+        job.tmpMsg.id = saved.id;
+        if (saved.created_at) job.tmpMsg.created_at = saved.created_at;
+        _chatMsgCache.set(String(saved.id), job.tmpMsg);
+      }
+      if (job.kind === 'voice') {
+        const playBtn = el.querySelector('.vn-play, .chat-voice-play');
+        if (playBtn) playBtn.dataset.src = job.publicUrl;
+        const bub = el.querySelector('.chat-bubble');
+        if (bub) bub.setAttribute('data-voice-url', job.publicUrl);
+        const pl = el.querySelector('.vn-player'); if (pl) pl.setAttribute('data-voice-url', job.publicUrl);
+        // own voice note: keep the local recording so it plays instantly, never buffers
+        if (job.localUrl) chatVoiceCacheSet(job.publicUrl, job.localUrl, true);
+      }
+    }
+    try { updateInboxRow(job.convId, chatJobPreview(job), new Date().toISOString()); } catch (e) {}
+    try { markConvRead(job.convId); } catch (e) {}
+    job._running = false;
+    return true;
+  } catch (err) {
+    console.warn('[chat-send] failed', job.kind, err);
+    job._running = false;
+    chatSetMsgStatus(job, 'failed', err);
+    return false;
+  }
+}
+// Put unsent/failed messages back on screen when a chat is reopened
+function chatRestoreOutbox(convId) {
+  const msgsEl = document.getElementById('chat-messages');
+  if (!msgsEl) return;
+  chatOutbox.forEach(function(job) {
+    if (job.convId !== convId || !job.el) return;
+    if (!msgsEl.contains(job.el)) msgsEl.appendChild(job.el);
+  });
+  msgsEl.scrollTop = msgsEl.scrollHeight;
+}
+function chatRetryFailedJobs() {
+  chatOutbox.forEach(function(job) { if (job.state === 'failed') chatRunJob(job); });
+}
+
 async function chatSend(opts) {
   opts = opts || {};
   const field = document.getElementById('chat-input-field');
@@ -2125,74 +2340,12 @@ async function chatSend(opts) {
       msgsEl.appendChild(imgEl);
       msgsEl.scrollTop = msgsEl.scrollHeight;
     }
-    let urls;
-    try {
-      urls = await Promise.all(items.map(async function(it, i) {
-        let blob = it.file;
-        try {
-          if (typeof compressChatImage === 'function') {
-            blob = await compressChatImage(it.file);
-          }
-        } catch (ce) {
-          console.warn('[chat-image] compress', ce);
-          blob = it.file;
-        }
-        if (!blob) throw new Error('No image data');
-        // Always upload a real File with a name + image type, so the bucket
-        // stores it as a proper JPEG (a typeless blob can be saved but not rendered)
-        const jpegBlob = (blob instanceof Blob && blob.type && blob.type.indexOf('image/') === 0)
-          ? blob : new Blob([blob], { type: 'image/jpeg' });
-        const filename = (currentUser.id || 'u') + '-' + Date.now() + '-' + i + '.jpg';
-        const upFile = (typeof File === 'function')
-          ? new File([jpegBlob], filename, { type: jpegBlob.type }) : jpegBlob;
-        // Try each folder; only accept a URL that actually loads as an image.
-        // A dead link must never be saved — it would show as a grey/broken tile forever.
-        let url = null, lastErr = null;
-        const folders = ['chat', 'posts'];
-        for (let f = 0; f < folders.length && !url; f++) {
-          try {
-            let cand = await uploadToR2(upFile, folders[f], filename);
-            if (!cand && typeof uploadImageToR2 === 'function') cand = await uploadImageToR2(upFile, folders[f], filename);
-            if (cand && await chatVerifyImageUrl(cand)) url = cand;
-            else { lastErr = new Error('Photo link not reachable'); console.warn('[chat-image] unreachable URL', cand); }
-          } catch (e1) { lastErr = e1; console.warn('[chat-image] upload to', folders[f], e1); }
-        }
-        if (!url) throw lastErr || new Error('Upload failed');
-        if (!url) throw new Error('No public URL from upload');
-        return url;
-      }));
-      if (!urls || urls.some(function(u) { return !u; })) throw new Error('missing url');
-    } catch (err) {
-      console.warn('[chat-image] R2', err);
-      showToast((err && err.message) ? ('Upload: ' + err.message) : 'Image upload failed');
-      if (imgEl) imgEl.remove();
-      return;
-    }
-    // Swap local previews for the hosted URLs
-    imgEl?.querySelectorAll('.chat-bubble-img').forEach(function(el, i) { if (urls[i]) el.src = urls[i]; });
-    const msgPayload = {
-      conversation_id: activeChatId,
-      sender_id: currentUser.id,
-      type: 'image',
-      media_url: urls.length > 1 ? JSON.stringify(urls) : urls[0],
-      content: text || '',
-      reply_to_id: replySnapshot?.id || null,
-    };
-    // Never persist blob:/data: — refresh would show blank tiles
-    if (String(msgPayload.media_url).indexOf('blob:') >= 0 || String(msgPayload.media_url).indexOf('data:') >= 0) {
-      showToast('Upload incomplete — try again');
-      if (imgEl) imgEl.remove();
-      return;
-    }
-    const { error: insertErr } = await supabase.from('messages').insert(msgPayload);
-    if (insertErr) {
-      console.warn('[chat-image] insert', insertErr);
-      showToast(insertErr.message || 'Failed to send image');
-    }
-    else {
-      updateInboxRow(activeChatId, urls.length > 1 ? '📷 ' + urls.length + ' photos' : '📷 Photo', new Date().toISOString());
-      markConvRead(activeChatId);
-    }
+    const job = chatMakeJob({
+      kind: 'image', convId: activeChatId, el: imgEl, tmpMsg: tmpImgMsg,
+      items: items, text: text || '', replyId: replySnapshot?.id || null, fileNames: [],
+    });
+    updateInboxRow(activeChatId, items.length > 1 ? '📷 ' + items.length + ' photos' : '📷 Photo', tmpImgMsg.created_at);
+    chatRunJob(job);
     return;
   }
   // ── TEXT SEND ──
@@ -2212,20 +2365,46 @@ async function chatSend(opts) {
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
   updateInboxRow(activeChatId, text, tmpMsg.created_at);
-  const { error } = await supabase.from('messages').insert({
-    conversation_id: activeChatId,
-    sender_id: currentUser.id,
-    type: 'text',
-    content: text,
-    reply_to_id: replySnapshot?.id || null,
+  const job = chatMakeJob({
+    kind: 'text', convId: activeChatId, el: el, tmpMsg: tmpMsg,
+    text: text, replyId: replySnapshot?.id || null,
   });
-  if (error) showToast('Message failed to send');
-  markConvRead(activeChatId);
+  chatRunJob(job);
+}
+// ── Add a message from the other side (realtime OR catch-up) — never twice ──
+async function chatAppendIncoming(msg, convId) {
+  if (!msg || !msg.id) return;
+  const exists = function() {
+    return !!document.querySelector('#chat-messages .chat-msg-row[data-msg-id="' + msg.id + '"]');
+  };
+  if (exists()) return;
+  if (!msg.sender) {
+    try {
+      const { data: sender } = await supabase.from('users').select('id,username,avatar').eq('id', msg.sender_id).maybeSingle();
+      msg.sender = sender;
+    } catch (e) {}
+    if (exists()) return;
+  }
+  if (activeChatId !== convId) return;
+  const msgsEl = document.getElementById('chat-messages');
+  if (!msgsEl) return;
+  const lastRow = msgsEl.querySelector('.chat-msg-row:last-child');
+  const lastSenderId = lastRow
+    ? (lastRow.classList.contains('sent') ? currentUser?.id : activeChatUserId)
+    : null;
+  const el = buildMessageEl(msg, lastSenderId);
+  if (el) {
+    msgsEl.appendChild(el);
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+    if (msg.type === 'voice' && msg.media_url) chatPrefetchVoice(String(msg.media_url).replace(/"/g, ''));
+  }
+  markConvRead(convId);
+  updateInboxRow(convId, msg.content || (msg.type === 'voice' ? '🎙 Voice note' : msg.type === 'image' ? '📷 Photo' : ''), msg.created_at);
 }
 // ── Subscribe to realtime messages ──
 function subscribeToChat(convId) {
   if (msgRealtimeSub) supabase.removeChannel(msgRealtimeSub);
-  msgRealtimeSub = supabase
+  const sub = supabase
     .channel('chat-' + convId)
     // ── New message arrives ──
     .on('postgres_changes', {
@@ -2236,23 +2415,7 @@ function subscribeToChat(convId) {
     }, payload => {
       const msg = payload.new;
       if (msg.sender_id === currentUser?.id) return;
-      supabase.from('users').select('id,username,avatar').eq('id', msg.sender_id).maybeSingle()
-        .then(({ data: sender }) => {
-          msg.sender = sender;
-          const msgsEl = document.getElementById('chat-messages');
-          if (!msgsEl) return;
-          const lastRow = msgsEl.querySelector('.chat-msg-row:last-child');
-          const lastSenderId = lastRow
-            ? (lastRow.classList.contains('sent') ? currentUser?.id : activeChatUserId)
-            : null;
-          const el = buildMessageEl(msg, lastSenderId);
-          if (el) {
-            msgsEl.appendChild(el);
-            msgsEl.scrollTop = msgsEl.scrollHeight;
-          }
-          markConvRead(convId);
-          updateInboxRow(convId, msg.content || '', msg.created_at);
-        });
+      chatAppendIncoming(msg, convId);
     })
     // ── Other user read the chat → show Seen ──
     .on('postgres_changes', {
@@ -2267,7 +2430,14 @@ function subscribeToChat(convId) {
         showSeenIndicator();
       }
     })
-    .subscribe();
+    .subscribe(function(status) {
+      if (msgRealtimeSub !== sub) return;          // an old channel closing on purpose
+      if (status === 'SUBSCRIBED') return;
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        chatScheduleResync('channel-' + status, 3000);
+      }
+    });
+  msgRealtimeSub = sub;
 }
 // ── Update inbox row with latest message (real-time) ──
 // ── Show typing in inbox row ──
@@ -2303,10 +2473,12 @@ function updateInboxRow(convId, text, time) {
 }
 // ── Subscribe to inbox updates (new messages in any conversation) ──
 let inboxRealtimeSub = null;
+let inboxConvIds = [];
 function subscribeToInbox(convIds) {
   if (inboxRealtimeSub) supabase.removeChannel(inboxRealtimeSub);
   if (!convIds?.length) return;
-  inboxRealtimeSub = supabase
+  inboxConvIds = convIds;
+  const inboxSub = supabase
     .channel('inbox-updates')
     .on('postgres_changes', {
       event: 'UPDATE',
@@ -2345,7 +2517,13 @@ function subscribeToInbox(convIds) {
       const list = document.getElementById('msg-inbox-list');
       if (list && list.firstChild !== row) list.prepend(row);
     })
-    .subscribe();
+    .subscribe(function(status) {
+      if (inboxRealtimeSub !== inboxSub) return;
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        chatScheduleResync('inbox-' + status, 3000);
+      }
+    });
+  inboxRealtimeSub = inboxSub;
 }
 // ── Mark conversation as read ──
 async function markConvRead(convId) {
@@ -2773,44 +2951,73 @@ async function voiceSendDraft() {
     updateInboxRow(activeChatId, '🎙 Voice note', tmpMsg.created_at);
   }
 
-  showToast('Sending voice…');
-  let publicUrl = null;
+  const job = chatMakeJob({
+    kind: 'voice', convId: activeChatId, el: el, tmpMsg: tmpMsg,
+    blob: blob, durationSec: durationSec, localUrl: draft.url,
+    filename: (currentUser.id || 'u') + '-' + Date.now() + '.' + ext,
+  });
+  chatRunJob(job);
+}
+
+
+// ══════════════════════════════════════════
+// VOICE NOTES — download ahead of time so playback never stalls on the network
+// ══════════════════════════════════════════
+const chatVoiceCache = new Map();   // remote url -> blob: url (fully downloaded)
+const chatVoiceOwn = new Set();     // remote urls whose blob is the sender's own recording
+const chatVoiceBusy = new Set();    // downloads in progress
+const chatVoiceWarm = new Map();    // fallback: <audio preload> elements when CORS blocks fetch
+const CHAT_VOICE_CACHE_MAX = 40;
+function chatVoiceCacheSet(remote, local, own) {
+  if (!remote || !local) return;
+  chatVoiceCache.set(remote, local);
+  if (own) chatVoiceOwn.add(remote);
+  while (chatVoiceCache.size > CHAT_VOICE_CACHE_MAX) {
+    const oldest = chatVoiceCache.keys().next().value;
+    const lu = chatVoiceCache.get(oldest);
+    chatVoiceCache.delete(oldest);
+    if (!chatVoiceOwn.has(oldest)) { try { URL.revokeObjectURL(lu); } catch (e) {} }
+    chatVoiceOwn.delete(oldest);
+  }
+}
+async function chatPrefetchVoice(url) {
+  if (!url || url.indexOf('http') !== 0) return;
+  if (chatVoiceCache.has(url) || chatVoiceBusy.has(url) || chatVoiceWarm.has(url)) return;
+  chatVoiceBusy.add(url);
   try {
-    const filename = (currentUser.id || 'u') + '-' + Date.now() + '.' + ext;
-    publicUrl = await uploadToR2(blob, 'chat-voice', filename);
-  } catch (err) {
-    console.warn('[voice] R2', err);
-    showToast('Upload failed — try again');
-    if (el) el.remove();
-    try { URL.revokeObjectURL(draft.url); } catch (e) {}
-    return;
+    const res = await fetch(url, { cache: 'force-cache' });
+    if (!res.ok) throw new Error('http ' + res.status);
+    const blob = await res.blob();
+    if (!blob || !blob.size) throw new Error('empty');
+    chatVoiceCacheSet(url, URL.createObjectURL(blob), false);
+  } catch (e) {
+    // Bucket without CORS: let the browser at least buffer it in the background
+    try {
+      const a = new Audio();
+      a.preload = 'auto';
+      a.src = url;
+      chatVoiceWarm.set(url, a);
+    } catch (e2) {}
+  } finally {
+    chatVoiceBusy.delete(url);
   }
-
-  const payload = {
-    conversation_id: activeChatId,
-    sender_id: currentUser.id,
-    type: 'voice',
-    media_url: publicUrl,
-    media_duration: durationSec,
-    content: '',
-  };
-  const { error: insertErr } = await supabase.from('messages').insert(payload);
-  if (insertErr) {
-    console.warn('[voice] insert', insertErr);
-    showToast(insertErr.message || 'Could not save voice note');
-    if (el) el.remove();
-    return;
-  }
-
-  const playBtn = el && el.querySelector('.chat-voice-play');
-  if (playBtn) playBtn.dataset.src = publicUrl;
-  if (el) {
-    const bubble = el.querySelector('.chat-bubble');
-    if (bubble) bubble.setAttribute('data-voice-url', publicUrl);
-  }
-  try { URL.revokeObjectURL(draft.url); } catch (e) {}
-  if (typeof markConvRead === 'function') markConvRead(activeChatId);
-  showToast('Voice sent');
+}
+// newest voice notes first, a few at a time
+function chatPrefetchVoiceIn(root, limit) {
+  if (!root) return;
+  const urls = [];
+  root.querySelectorAll('.vn-play[data-src]').forEach(function(b) {
+    const u = b.dataset.src;
+    if (u && u.indexOf('http') === 0 && urls.indexOf(u) < 0) urls.push(u);
+  });
+  const queue = urls.slice(-(limit || 20)).reverse();
+  let active = 0;
+  (function pump() {
+    while (active < 3 && queue.length) {
+      active++;
+      chatPrefetchVoice(queue.shift()).finally(function() { active--; pump(); });
+    }
+  })();
 }
 
 function chatPlayVoice(btn, waveId) {
@@ -2875,7 +3082,12 @@ function chatPlayVoice(btn, waveId) {
     });
   }
 
-  const audio = new Audio(url);
+  // Prefer the fully-downloaded copy (instant, no buffering); else a pre-buffered element; else stream
+  const localCopy = chatVoiceCache.get(url);
+  let audio;
+  if (localCopy) audio = new Audio(localCopy);
+  else if (chatVoiceWarm.has(url)) { audio = chatVoiceWarm.get(url); chatVoiceWarm.delete(url); try { audio.currentTime = 0; } catch (e) {} }
+  else { audio = new Audio(url); chatPrefetchVoice(url); }
   audio.playbackRate = rate;
   _voiceAudio = audio;
   setPlayingUI(true);
@@ -3033,3 +3245,124 @@ document.addEventListener('focusin', function(e) {
 document.addEventListener('DOMContentLoaded', function() {
   try { rebuildChatComposer(true); } catch (e) {}
 });
+
+
+// ══════════════════════════════════════════
+// SESSION RESUME — come back from lost network / sleep without refreshing
+// Realtime does not replay what was missed, so on resume we re-subscribe,
+// fetch what arrived meanwhile, refresh the inbox and retry unsent messages.
+// ══════════════════════════════════════════
+const CHAT_CATCHUP_SELECT = `id, type, content, media_url, media_duration,
+  cash_amount, cash_currency, cash_note, cash_status,
+  product_id, offer_amount, offer_status,
+  order_status, reply_to_id, created_at, sender_id, status,
+  sender:users!sender_id(id, username, avatar)`;
+let _chatResyncTimer = null;
+let _chatResyncing = false;
+let _chatHiddenAt = 0;
+
+function chatNetBanner(text) {
+  let b = document.getElementById('chat-net-banner');
+  if (!text) { if (b) b.classList.remove('show'); return; }
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'chat-net-banner';
+    document.body.appendChild(b);
+  }
+  b.textContent = text;
+  void b.offsetWidth;
+  b.classList.add('show');
+}
+function chatScheduleResync(reason, delay) {
+  clearTimeout(_chatResyncTimer);
+  _chatResyncTimer = setTimeout(function() { chatResync(reason); }, delay == null ? 800 : delay);
+}
+// Messages that arrived while we were away, oldest first
+async function chatCatchUp(convId) {
+  const msgsEl = document.getElementById('chat-messages');
+  if (!msgsEl || !convId) return;
+  let newest = null;
+  msgsEl.querySelectorAll('.chat-msg-row[data-msg-id]').forEach(function(r) {
+    const id = r.dataset.msgId;
+    if (!id || id.indexOf('tmp-') === 0) return;
+    const m = _chatMsgCache.get(id);
+    if (m && m.created_at && (!newest || m.created_at > newest)) newest = m.created_at;
+  });
+  if (!newest) {                       // empty/demo chat → just reload it
+    await loadChatMessages(convId);
+    chatRestoreOutbox(convId);
+    return;
+  }
+  const { data, error } = await supabase.from('messages')
+    .select(CHAT_CATCHUP_SELECT)
+    .eq('conversation_id', convId)
+    .is('deleted_at', null)
+    .gt('created_at', newest)
+    .order('created_at', { ascending: true })
+    .limit(200);
+  if (error || !data || !data.length) return;
+  // my own unsent/failed messages may already exist on the server — don't show them twice
+  const hasPendingOwn = Array.from(chatOutbox.values()).some(function(j) { return j.convId === convId; });
+  for (let i = 0; i < data.length; i++) {
+    const m = data[i];
+    if (m.sender_id === currentUser.id && hasPendingOwn) continue;
+    await chatAppendIncoming(m, convId);
+  }
+  try { assignClusterClasses(msgsEl); } catch (e) {}
+}
+async function chatResync(reason) {
+  if (_chatResyncing || !currentUser) return;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+  _chatResyncing = true;
+  try {
+    // 1) live connections
+    if (activeChatId) {
+      const convId = activeChatId;
+      subscribeToChat(convId);
+      try { stopPresence(); subscribeToPresence(convId); wireChatTyping(); } catch (e) {}
+      await chatCatchUp(convId);
+      markConvRead(convId);
+    }
+    if (inboxConvIds && inboxConvIds.length) subscribeToInbox(inboxConvIds);
+    // 2) inbox list + unread dot
+    msgInboxLoaded = false;
+    const inboxPage = document.getElementById('page-messages');
+    if (inboxPage && inboxPage.classList.contains('active')) await loadMessages();
+    try { checkUnreadDmsOnStartup(); } catch (e) {}
+    // 3) anything that failed while offline
+    chatRetryFailedJobs();
+    chatNetBanner('');
+  } catch (e) {
+    console.warn('[resync]', reason, e);
+    chatScheduleResync('retry', 5000);
+  } finally {
+    _chatResyncing = false;
+  }
+}
+window.addEventListener('online', function() {
+  chatNetBanner('Back online — catching up…');
+  chatScheduleResync('online', 300);
+  setTimeout(function() { chatNetBanner(''); }, 2500);
+});
+window.addEventListener('offline', function() {
+  chatNetBanner('You’re offline — messages will send when you’re back');
+});
+document.addEventListener('visibilitychange', function() {
+  if (document.hidden) { _chatHiddenAt = Date.now(); return; }
+  // back to the tab / screen on: sockets are often dead after sleeping
+  if (_chatHiddenAt && Date.now() - _chatHiddenAt > 4000) chatScheduleResync('visible', 300);
+});
+window.addEventListener('pageshow', function(e) {
+  if (e.persisted) chatScheduleResync('pageshow', 300);
+});
+// Watchdog: if the live channel silently dropped, repair it
+setInterval(function() {
+  if (document.hidden || !currentUser) return;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+  const chatDead = activeChatId && msgRealtimeSub && msgRealtimeSub.state && msgRealtimeSub.state !== 'joined';
+  const inboxDead = inboxRealtimeSub && inboxRealtimeSub.state && inboxRealtimeSub.state !== 'joined';
+  if (chatDead || inboxDead) chatScheduleResync('watchdog', 200);
+}, 20000);
+if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+  setTimeout(function() { chatNetBanner('You’re offline — messages will send when you’re back'); }, 500);
+}
