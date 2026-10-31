@@ -884,13 +884,24 @@ function buildMessageEl(msg, prevSenderId, opts) {
     return row;
   } else if (type === 'image' || type === 'photo' || (msg.media_url && (type === 'image' || type === 'photo' || (!type || type === 'text') && /\.(jpe?g|png|gif|webp)/i.test(msg.media_url || '')))) {
     // only treat as image when type says so, or URL looks like an image
-    const photoUrls = chatParseMediaUrls(msg.media_url || content);
+    let photoUrls = chatParseMediaUrls(msg.media_url || content);
+    // Drop dead blob: URLs (only valid during the same session)
+    photoUrls = photoUrls.filter(function(u) {
+      return u && !String(u).startsWith('blob:') && !String(u).startsWith('data:');
+    });
     bubble.className = 'chat-bubble img-bubble chat-bubble-photos';
-    const gridCls = photoUrls.length === 1 ? 'one' : (photoUrls.length === 2 ? 'two' : 'many');
-    const caption = (msg.media_url && content) ? content : '';
-    bubble.innerHTML = `${replyQuoteHtml}<div class="chat-photo-grid ${gridCls}">` +
-      photoUrls.map(function(u) { return `<img class="chat-bubble-img" src="${escHtml(u)}" alt="photo" loading="lazy">`; }).join('') +
-      `</div>` + (caption ? `<div class="chat-photo-caption">${escHtml(caption)}</div>` : '');
+    if (!photoUrls.length) {
+      bubble.innerHTML = replyQuoteHtml + '<div class="chat-photo-missing">Photo unavailable — send again</div>';
+    } else {
+      const gridCls = photoUrls.length === 1 ? 'one' : (photoUrls.length === 2 ? 'two' : 'many');
+      const caption = (msg.media_url && content) ? content : '';
+      bubble.innerHTML = replyQuoteHtml + '<div class="chat-photo-grid ' + gridCls + '">' +
+        photoUrls.map(function(u) {
+          const safe = escHtml(u);
+          return '<img class="chat-bubble-img" src="' + safe + '" alt="photo" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.classList.add(\'broken\');this.alt=\'Failed to load\';">';
+        }).join('') +
+        '</div>' + (caption ? '<div class="chat-photo-caption">' + escHtml(caption) + '</div>' : '');
+    }
   } else if (type === 'gift' || type === 'mp_gift') {
     bubble.className = 'chat-bubble';
     bubble.innerHTML = `${replyQuoteHtml}🎁 ${escHtml(content || 'Sent MistyPoints')}`;
@@ -1940,12 +1951,27 @@ function chatCancelImage() {
 // media_url holds one URL, or a JSON array of URLs when a message has several photos
 function chatParseMediaUrls(v) {
   if (!v) return [];
-  if (Array.isArray(v)) return v.filter(Boolean);
-  const t = String(v).trim();
-  if (t.charAt(0) === '[') {
-    try { const arr = JSON.parse(t); if (Array.isArray(arr)) return arr.filter(Boolean); } catch (e) {}
+  if (Array.isArray(v)) return v.filter(Boolean).map(String);
+  let t = String(v).trim();
+  // Sometimes stored with extra quotes
+  if ((t.charAt(0) === '"' && t.charAt(t.length - 1) === '"') || (t.charAt(0) === "'" && t.charAt(t.length - 1) === "'")) {
+    try { t = JSON.parse(t); } catch (e) { t = t.slice(1, -1); }
+    t = String(t).trim();
   }
-  return [t];
+  if (t.charAt(0) === '[') {
+    try {
+      const arr = JSON.parse(t);
+      if (Array.isArray(arr)) return arr.filter(Boolean).map(String);
+    } catch (e) {
+      // try to extract http URLs if JSON is mangled
+      const found = t.match(/https?:\/\/[^\"\s\]]+/g);
+      if (found && found.length) return found;
+    }
+  }
+  if (/^https?:\/\//i.test(t) || t.indexOf('//') === 0) return [t];
+  // single path without protocol
+  if (t.indexOf('/') >= 0 && t.indexOf(' ') < 0) return [t];
+  return t ? [t] : [];
 }
 function compressChatImage(file) {
   return new Promise(function(resolve) {
@@ -2070,8 +2096,17 @@ async function chatSend(opts) {
       content: text || '',
       reply_to_id: replySnapshot?.id || null,
     };
+    // Never persist blob:/data: — refresh would show blank tiles
+    if (String(msgPayload.media_url).indexOf('blob:') >= 0 || String(msgPayload.media_url).indexOf('data:') >= 0) {
+      showToast('Upload incomplete — try again');
+      if (imgEl) imgEl.remove();
+      return;
+    }
     const { error: insertErr } = await supabase.from('messages').insert(msgPayload);
-    if (insertErr) showToast('Failed to send image');
+    if (insertErr) {
+      console.warn('[chat-image] insert', insertErr);
+      showToast(insertErr.message || 'Failed to send image');
+    }
     else {
       updateInboxRow(activeChatId, urls.length > 1 ? '📷 ' + urls.length + ' photos' : '📷 Photo', new Date().toISOString());
       markConvRead(activeChatId);
