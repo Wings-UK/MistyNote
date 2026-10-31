@@ -1965,6 +1965,7 @@ function chatVerifyImageUrl(url, timeoutMs) {
     let done = false;
     const finish = function(ok) { if (done) return; done = true; clearTimeout(t); resolve(ok); };
     const t = setTimeout(function() { finish(false); }, timeoutMs || 15000);
+    img.referrerPolicy = 'no-referrer'; // same as the thumbnails — hotlink rules can block a referrer
     img.onload = function() { finish(img.naturalWidth > 0); };
     img.onerror = function() { finish(false); };
     img.src = url;
@@ -2155,7 +2156,7 @@ function chatSetMsgStatus(job, state, err) {
   if (state !== 'failed') return;
   const offline = (typeof navigator !== 'undefined' && navigator.onLine === false);
   let reason = '';
-  if (err && err.message && !offline) reason = String(err.message).slice(0, 70);
+  if (err && err.message && !offline) reason = String(err.message).slice(0, 160);
   const st = document.createElement('div');
   st.className = 'chat-msg-status';
   st.innerHTML =
@@ -2228,17 +2229,24 @@ async function chatUploadPhotos(job) {
       ? blob : new Blob([blob], { type: 'image/jpeg' });
     const filename = job.fileNames[i] || (job.fileNames[i] = (currentUser.id || 'u') + '-' + Date.now() + '-' + i + '.jpg');
     const upFile = (typeof File === 'function') ? new File([jpegBlob], filename, { type: jpegBlob.type }) : jpegBlob;
-    let url = null, lastErr = null;
-    const folders = ['chat', 'posts'];
+    let url = null;
+    const errs = [];
+    const folders = ['chat', 'posts', 'chat-voice'];   // last one is the folder voice notes already use
     for (let f = 0; f < folders.length && !url; f++) {
       try {
         let cand = await uploadToR2(upFile, folders[f], filename);
         if (!cand && typeof uploadImageToR2 === 'function') cand = await uploadImageToR2(upFile, folders[f], filename);
-        if (cand && await chatVerifyImageUrl(cand)) url = cand;
-        else { lastErr = new Error('Photo link not reachable'); console.warn('[chat-image] unreachable URL', cand); }
-      } catch (e1) { lastErr = e1; console.warn('[chat-image] upload to', folders[f], e1); }
+        if (!cand) throw new Error('no link returned');
+        let ok = await chatVerifyImageUrl(cand);
+        if (!ok) { await new Promise(function(r) { setTimeout(r, 1200); }); ok = await chatVerifyImageUrl(cand); }
+        if (ok) url = cand;
+        else throw new Error('link not reachable');
+      } catch (e1) {
+        errs.push(folders[f] + ': ' + ((e1 && e1.message) || 'failed'));
+        console.warn('[chat-image] folder', folders[f], e1);
+      }
     }
-    if (!url) throw lastErr || new Error('Upload failed');
+    if (!url) throw new Error(errs.join(' | ') + ' (' + Math.round((upFile.size || 0) / 1024) + ' KB)');
     job.urlsByIdx[i] = url;
     return url;
   }));
