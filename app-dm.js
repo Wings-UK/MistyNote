@@ -1883,6 +1883,18 @@ function chatCancelReply() {
   const bar = document.getElementById('chat-reply-bar');
   if (bar) bar.style.display = 'none';
 }
+// Resolves true only if the URL loads as a real (non-empty) image
+function chatVerifyImageUrl(url, timeoutMs) {
+  return new Promise(function(resolve) {
+    const img = new Image();
+    let done = false;
+    const finish = function(ok) { if (done) return; done = true; clearTimeout(t); resolve(ok); };
+    const t = setTimeout(function() { finish(false); }, timeoutMs || 15000);
+    img.onload = function() { finish(img.naturalWidth > 0); };
+    img.onerror = function() { finish(false); };
+    img.src = url;
+  });
+}
 var CHAT_MAX_PHOTOS = 10;
 function chatImageSelected(input) {
   const files = Array.from((input && input.files) || []);
@@ -2054,28 +2066,26 @@ async function chatSend(opts) {
           blob = it.file;
         }
         if (!blob) throw new Error('No image data');
-        // Ensure Blob/File has a type (Worker may reject empty type)
-        if (!(blob instanceof Blob)) throw new Error('Invalid image blob');
-        if (!blob.type) {
-          blob = new Blob([blob], { type: 'image/jpeg' });
-        }
+        // Always upload a real File with a name + image type, so the bucket
+        // stores it as a proper JPEG (a typeless blob can be saved but not rendered)
+        const jpegBlob = (blob instanceof Blob && blob.type && blob.type.indexOf('image/') === 0)
+          ? blob : new Blob([blob], { type: 'image/jpeg' });
         const filename = (currentUser.id || 'u') + '-' + Date.now() + '-' + i + '.jpg';
-        // Same R2 path style as voice: folder prefix only
-        let url = null;
-        try {
-          url = await uploadToR2(blob, 'chat', filename);
-        } catch (e1) {
-          // Fallback folders if worker whitelist is strict
+        const upFile = (typeof File === 'function')
+          ? new File([jpegBlob], filename, { type: jpegBlob.type }) : jpegBlob;
+        // Try each folder; only accept a URL that actually loads as an image.
+        // A dead link must never be saved — it would show as a grey/broken tile forever.
+        let url = null, lastErr = null;
+        const folders = ['chat', 'posts'];
+        for (let f = 0; f < folders.length && !url; f++) {
           try {
-            url = await uploadToR2(blob, 'posts', filename);
-          } catch (e2) {
-            if (typeof uploadImageToR2 === 'function') {
-              url = await uploadImageToR2(blob, 'posts', filename);
-            } else {
-              throw e2;
-            }
-          }
+            let cand = await uploadToR2(upFile, folders[f], filename);
+            if (!cand && typeof uploadImageToR2 === 'function') cand = await uploadImageToR2(upFile, folders[f], filename);
+            if (cand && await chatVerifyImageUrl(cand)) url = cand;
+            else { lastErr = new Error('Photo link not reachable'); console.warn('[chat-image] unreachable URL', cand); }
+          } catch (e1) { lastErr = e1; console.warn('[chat-image] upload to', folders[f], e1); }
         }
+        if (!url) throw lastErr || new Error('Upload failed');
         if (!url) throw new Error('No public URL from upload');
         return url;
       }));
