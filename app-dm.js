@@ -886,9 +886,13 @@ function buildMessageEl(msg, prevSenderId, opts) {
     // only treat as image when type says so, or URL looks like an image
     let photoUrls = chatParseMediaUrls(msg.media_url || content);
     // Drop dead blob: URLs (only valid during the same session)
-    photoUrls = photoUrls.filter(function(u) {
-      return u && !String(u).startsWith('blob:') && !String(u).startsWith('data:');
-    });
+    // (a message still being sent — id "tmp-…" — legitimately shows local previews)
+    const isSending = String(msg.id || '').indexOf('tmp-') === 0;
+    if (!isSending) {
+      photoUrls = photoUrls.filter(function(u) {
+        return u && !String(u).startsWith('blob:') && !String(u).startsWith('data:');
+      });
+    }
     bubble.className = 'chat-bubble img-bubble chat-bubble-photos';
     if (!photoUrls.length) {
       bubble.innerHTML = replyQuoteHtml + '<div class="chat-photo-missing">Photo unavailable — send again</div>';
