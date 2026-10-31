@@ -2154,10 +2154,13 @@ function chatSetMsgStatus(job, state, err) {
   if (old) old.remove();
   if (state !== 'failed') return;
   const offline = (typeof navigator !== 'undefined' && navigator.onLine === false);
+  let reason = '';
+  if (err && err.message && !offline) reason = String(err.message).slice(0, 70);
   const st = document.createElement('div');
   st.className = 'chat-msg-status';
   st.innerHTML =
     '<span class="chat-msg-status-text">' + (offline ? 'No connection · not sent' : 'Not sent') + '</span>' +
+    (reason ? '<span class="chat-msg-status-why">' + escHtml(reason) + '</span>' : '') +
     '<button type="button" class="chat-msg-retry">Retry</button>' +
     '<button type="button" class="chat-msg-discard">Delete</button>';
   st.querySelector('.chat-msg-retry').addEventListener('click', function(e) {
@@ -2195,16 +2198,23 @@ async function chatInsertJob(job) {
   job.attempted = true;
   const body = Object.assign({}, payload);
   if (chatClientIdSupported !== false) body.client_id = job.clientId;
-  let res = await chatWithTimeout(supabase.from('messages').insert(body).select('id, created_at').maybeSingle(), CHAT_INSERT_TIMEOUT);
-  if (res.error && body.client_id && /client_id/i.test(res.error.message || '')) {
-    chatClientIdSupported = false;               // column not added yet — send without it
+  // Plain insert — exactly what worked before (no "return the row" requirement,
+  // which can be refused by row-level security on some setups)
+  const doInsert = function(b) { return chatWithTimeout(supabase.from('messages').insert(b), CHAT_INSERT_TIMEOUT); };
+  let res = await doInsert(body);
+  if (res.error && body.client_id) {
+    // Column missing / rejected → send without it, and remember
+    chatClientIdSupported = false;
     delete body.client_id;
-    res = await chatWithTimeout(supabase.from('messages').insert(body).select('id, created_at').maybeSingle(), CHAT_INSERT_TIMEOUT);
+    res = await doInsert(body);
   } else if (!res.error && body.client_id) {
     chatClientIdSupported = true;
   }
   if (res.error) throw new Error(res.error.message || 'insert failed');
-  return res.data || {};
+  // Best-effort: look up the real id so reply / long-press work on this message
+  let saved = null;
+  try { saved = await chatFindSentCopy(job, payload); } catch (e) {}
+  return saved || {};
 }
 async function chatUploadPhotos(job) {
   const items = job.items;
