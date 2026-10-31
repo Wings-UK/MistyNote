@@ -122,7 +122,7 @@ function chatActionBtnTap() {
       return;
     }
     const input = document.getElementById('chat-media-input');
-    if (input) input.click();
+    if (input) { input.multiple = true; input.click(); }
   } catch (err) {
     console.error('[chatActionBtnTap]', err);
     if (typeof showToast === 'function') showToast('Send failed — try again');
@@ -884,9 +884,13 @@ function buildMessageEl(msg, prevSenderId, opts) {
     return row;
   } else if (type === 'image' || type === 'photo' || (msg.media_url && (type === 'image' || type === 'photo' || (!type || type === 'text') && /\.(jpe?g|png|gif|webp)/i.test(msg.media_url || '')))) {
     // only treat as image when type says so, or URL looks like an image
-    bubble.className = 'chat-bubble img-bubble';
-    const imgSrc = msg.media_url || content;
-    bubble.innerHTML = `${replyQuoteHtml}<img class="chat-bubble-img" src="${escHtml(imgSrc)}" alt="photo" loading="lazy">`;
+    const photoUrls = chatParseMediaUrls(msg.media_url || content);
+    bubble.className = 'chat-bubble img-bubble chat-bubble-photos';
+    const gridCls = photoUrls.length === 1 ? 'one' : (photoUrls.length === 2 ? 'two' : 'many');
+    const caption = (msg.media_url && content) ? content : '';
+    bubble.innerHTML = `${replyQuoteHtml}<div class="chat-photo-grid ${gridCls}">` +
+      photoUrls.map(function(u) { return `<img class="chat-bubble-img" src="${escHtml(u)}" alt="photo" loading="lazy">`; }).join('') +
+      `</div>` + (caption ? `<div class="chat-photo-caption">${escHtml(caption)}</div>` : '');
   } else if (type === 'gift' || type === 'mp_gift') {
     bubble.className = 'chat-bubble';
     bubble.innerHTML = `${replyQuoteHtml}🎁 ${escHtml(content || 'Sent MistyPoints')}`;
@@ -1748,6 +1752,7 @@ function isEmojiOnlyMessage(str) {
 function applyChatBubbleWidth(row, bubble) {
   if (!row || !bubble) return;
   if (bubble.classList.contains('chat-bubble-emoji')) return; // 50px emoji stays compact
+  if (bubble.classList.contains('chat-bubble-photos')) return; // photo cards hug their 100px thumbnails
   requestAnimationFrame(function() {
     try {
       const half = Math.floor(window.innerWidth * 0.5);
@@ -1867,34 +1872,76 @@ function chatCancelReply() {
   const bar = document.getElementById('chat-reply-bar');
   if (bar) bar.style.display = 'none';
 }
+var CHAT_MAX_PHOTOS = 10;
 function chatImageSelected(input) {
-  const file = input && input.files && input.files[0];
-  if (!file) return;
-  if (!file.type || !file.type.startsWith('image/')) {
-    showToast('Please select an image');
-    return;
-  }
-  if (file.size > 10 * 1024 * 1024) {
-    showToast('Image must be under 10MB');
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    chatPendingImage = { file: file, dataUrl: e.target.result };
-    const bar = document.getElementById('chat-img-preview-bar');
-    const thumb = document.getElementById('chat-img-preview-thumb');
-    if (bar) bar.style.display = 'block';
-    if (thumb) thumb.src = e.target.result;
-    if (typeof syncChatActionBtn === 'function') syncChatActionBtn();
-  };
-  reader.readAsDataURL(file);
+  const files = Array.from((input && input.files) || []);
+  if (!files.length) return;
+  const good = [];
+  let skipped = false;
+  files.forEach(function(f) {
+    if (!f.type || !f.type.startsWith('image/')) { skipped = true; return; }
+    if (f.size > 10 * 1024 * 1024) { skipped = true; return; }
+    good.push(f);
+  });
+  if (skipped) showToast('Some files skipped (images under 10MB only)');
   input.value = '';
+  if (!good.length) return;
+  Promise.all(good.map(function(f) {
+    return new Promise(function(resolve) {
+      const r = new FileReader();
+      r.onload = function(e) { resolve({ file: f, dataUrl: e.target.result }); };
+      r.onerror = function() { resolve(null); };
+      r.readAsDataURL(f);
+    });
+  })).then(function(read) {
+    const prev = (chatPendingImage && chatPendingImage.items) || [];
+    let items = prev.concat(read.filter(Boolean));
+    if (items.length > CHAT_MAX_PHOTOS) {
+      items = items.slice(0, CHAT_MAX_PHOTOS);
+      showToast('Up to ' + CHAT_MAX_PHOTOS + ' photos per message');
+    }
+    if (!items.length) return;
+    // file/dataUrl mirror the first item so older checks keep working
+    chatPendingImage = { items: items, file: items[0].file, dataUrl: items[0].dataUrl };
+    chatUpdateImagePreview();
+    if (typeof syncChatActionBtn === 'function') syncChatActionBtn();
+  });
+}
+function chatUpdateImagePreview() {
+  const bar = document.getElementById('chat-img-preview-bar');
+  const thumb = document.getElementById('chat-img-preview-thumb');
+  const items = (chatPendingImage && chatPendingImage.items) || [];
+  if (bar) bar.style.display = items.length ? 'block' : 'none';
+  if (thumb && items.length) thumb.src = items[0].dataUrl;
+  const host = thumb && thumb.parentElement;
+  if (host) {
+    const old = host.querySelector('.chat-img-count');
+    if (old) old.remove();
+    if (items.length > 1) {
+      const badge = document.createElement('span');
+      badge.className = 'chat-img-count';
+      badge.textContent = items.length + ' photos';
+      host.appendChild(badge);
+    }
+  }
 }
 function chatCancelImage() {
   chatPendingImage = null;
   const bar = document.getElementById('chat-img-preview-bar');
   if (bar) bar.style.display = 'none';
+  const badge = document.querySelector('#chat-img-preview-bar .chat-img-count');
+  if (badge) badge.remove();
   if (typeof syncChatActionBtn === 'function') syncChatActionBtn();
+}
+// media_url holds one URL, or a JSON array of URLs when a message has several photos
+function chatParseMediaUrls(v) {
+  if (!v) return [];
+  if (Array.isArray(v)) return v.filter(Boolean);
+  const t = String(v).trim();
+  if (t.charAt(0) === '[') {
+    try { const arr = JSON.parse(t); if (Array.isArray(arr)) return arr.filter(Boolean); } catch (e) {}
+  }
+  return [t];
 }
 function compressChatImage(file) {
   return new Promise(function(resolve) {
@@ -1943,13 +1990,16 @@ async function chatSend(opts) {
   const msgsEl = document.getElementById('chat-messages');
   const lastRow = msgsEl?.querySelector('.chat-msg-row:last-child');
   const lastSenderId = lastRow ? (lastRow.classList.contains('sent') ? currentUser.id : activeChatUserId) : null;
-  // ── IMAGE SEND ──
+  // ── IMAGE SEND (one or many photos → R2 → one message) ──
   if (imageSnapshot) {
+    if (typeof uploadToR2 !== 'function') { showToast('Upload not ready'); return; }
+    const items = imageSnapshot.items || [{ file: imageSnapshot.file, dataUrl: imageSnapshot.dataUrl }];
+    const localUrls = items.map(function(it) { return it.dataUrl; });
     const tmpImgMsg = {
       id: 'tmp-img-' + Date.now(),
       type: 'image',
       content: text || '',
-      media_url: imageSnapshot.dataUrl, // optimistic local URL
+      media_url: localUrls.length > 1 ? JSON.stringify(localUrls) : localUrls[0], // optimistic local previews
       sender_id: currentUser.id,
       created_at: new Date().toISOString(),
       sender: currentProfile,
@@ -1961,39 +2011,34 @@ async function chatSend(opts) {
       msgsEl.appendChild(imgEl);
       msgsEl.scrollTop = msgsEl.scrollHeight;
     }
-    // Upload to Supabase Storage — compress first to fix landscape/HEIC issues
-    const compressed = await compressChatImage(imageSnapshot.file);
-    const path = `chat/${activeChatId}/${currentUser.id}-${Date.now()}.jpg`;
-    const { data: uploadData, error: uploadErr } = await supabase.storage
-      .from('media')
-      .upload(path, compressed, { contentType: 'image/jpeg', upsert: false });
-    if (uploadErr) {
+    let urls;
+    try {
+      urls = await Promise.all(items.map(async function(it, i) {
+        const compressed = await compressChatImage(it.file);
+        const filename = currentUser.id + '-' + Date.now() + '-' + i + '.jpg';
+        return await uploadToR2(compressed, 'chat-images', filename);
+      }));
+      if (urls.some(function(u) { return !u; })) throw new Error('missing url');
+    } catch (err) {
+      console.warn('[chat-image] R2', err);
       showToast('Image upload failed');
       imgEl?.remove();
       return;
     }
-    const { data: urlData } = supabase.storage.from('media').getPublicUrl(path);
-    const publicUrl = urlData.publicUrl;
-    if (!publicUrl) {
-      showToast('Could not get image URL');
-      imgEl?.remove();
-      return;
-    }
-    // Replace optimistic thumb with real URL
-    const thumbEl = imgEl?.querySelector('.chat-bubble-img');
-    if (thumbEl) thumbEl.src = publicUrl;
+    // Swap local previews for the hosted URLs
+    imgEl?.querySelectorAll('.chat-bubble-img').forEach(function(el, i) { if (urls[i]) el.src = urls[i]; });
     const msgPayload = {
       conversation_id: activeChatId,
       sender_id: currentUser.id,
       type: 'image',
-      media_url: publicUrl,
+      media_url: urls.length > 1 ? JSON.stringify(urls) : urls[0],
       content: text || '',
       reply_to_id: replySnapshot?.id || null,
     };
     const { error: insertErr } = await supabase.from('messages').insert(msgPayload);
     if (insertErr) showToast('Failed to send image');
     else {
-      updateInboxRow(activeChatId, '📷 Photo', new Date().toISOString());
+      updateInboxRow(activeChatId, urls.length > 1 ? '📷 ' + urls.length + ' photos' : '📷 Photo', new Date().toISOString());
       markConvRead(activeChatId);
     }
     return;
