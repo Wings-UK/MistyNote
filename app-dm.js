@@ -774,6 +774,22 @@ function assignClusterClasses(container) {
   });
 }
 // ── Reply preview card inside a reply message ──
+// Reply previews show one photo + "and N more" instead of the whole grid
+function chatCollapsePhotoGrids(root) {
+  if (!root) return;
+  root.querySelectorAll('.chat-photo-grid').forEach(function(grid) {
+    const imgs = grid.querySelectorAll('.chat-bubble-img');
+    if (imgs.length < 2) return;
+    const extra = imgs.length - 1;
+    for (let i = 1; i < imgs.length; i++) imgs[i].remove();
+    grid.classList.remove('two', 'many');
+    grid.classList.add('one');
+    const more = document.createElement('div');
+    more.className = 'chat-photo-more';
+    more.textContent = 'and ' + extra + ' more';
+    grid.parentNode.insertBefore(more, grid.nextSibling);
+  });
+}
 function chatBuildReplyEmbed(msg) {
   const replyId = String(msg.reply_to_id);
   const embed = document.createElement('div');
@@ -796,6 +812,7 @@ function chatBuildReplyEmbed(msg) {
     // Inert copy: no duplicate ids, no inline handlers (tap = jump to original)
     card.querySelectorAll('[id]').forEach(function(el) { el.removeAttribute('id'); });
     card.querySelectorAll('[onclick]').forEach(function(el) { el.removeAttribute('onclick'); });
+    chatCollapsePhotoGrids(card);
     embed.appendChild(card);
   }
 
@@ -997,6 +1014,7 @@ function attachTapPopup(row, msg) {
   const LONG_PRESS_MS = 420;
   row.addEventListener('touchstart', (e) => {
     didScroll = false;
+    row._lpFired = false;
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
     const bubble = e.target.closest('.chat-bubble, .chat-product-bubble, .chat-cash-bubble, .chat-order-bubble, .chat-offer-bubble, .chat-voice-bubble, .vn-card, .vn-player, .chat-bubble.img-bubble, .vn-card, .vn-player');
@@ -1005,6 +1023,7 @@ function attachTapPopup(row, msg) {
     longPressTimer = setTimeout(() => {
       if (didScroll) return;
       row._lpAt = Date.now();
+      row._lpFired = true; // the release after this long-press must not open the photo
       if (navigator.vibrate) navigator.vibrate(32);
       showMsgPopup(row, msg, bubble);
     }, LONG_PRESS_MS);
@@ -1020,6 +1039,7 @@ function attachTapPopup(row, msg) {
   row.addEventListener('touchend', (e) => {
     clearTimeout(longPressTimer);
     if (didScroll) return;
+    if (row._lpFired) { row._lpFired = false; if (e.cancelable) e.preventDefault(); return; }
     // Single tap on image → fullscreen viewer (not popup)
     if (msg.type === 'image') {
       const imgEl = e.target.closest('.chat-bubble-img');
@@ -1852,6 +1872,7 @@ function chatSetReply(msgId) {
   clone.style.pointerEvents = 'none';
   clone.querySelectorAll('[id]').forEach(function(el) { el.removeAttribute('id'); });
   chatStripReplyEmbed(clone);
+  chatCollapsePhotoGrids(clone);
   clone.querySelectorAll('video, audio').forEach(function(m) {
     try { m.pause(); } catch (e) {}
     m.removeAttribute('autoplay');
