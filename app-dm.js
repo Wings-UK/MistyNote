@@ -2247,6 +2247,7 @@ async function chatRunJob(job) {
   if (!job || job._running || !currentUser) return false;
   job._running = true;
   chatSetMsgStatus(job, 'sending');
+  let stage = 'Upload';
   try {
     if (job.kind === 'image' && !job.urls) {
       job.urls = await chatWithTimeout(chatUploadPhotos(job), CHAT_UPLOAD_TIMEOUT * 2);
@@ -2257,6 +2258,7 @@ async function chatRunJob(job) {
       job.publicUrl = await chatWithTimeout(uploadToR2(job.blob, 'chat-voice', job.filename), CHAT_UPLOAD_TIMEOUT);
       if (!job.publicUrl) throw new Error('No public URL from upload');
     }
+    stage = 'Save';
     const saved = await chatInsertJob(job);
     // ── success ──
     chatOutbox.delete(job.id);
@@ -2287,7 +2289,7 @@ async function chatRunJob(job) {
   } catch (err) {
     console.warn('[chat-send] failed', job.kind, err);
     job._running = false;
-    chatSetMsgStatus(job, 'failed', err);
+    chatSetMsgStatus(job, 'failed', new Error(stage + ': ' + ((err && err.message) || 'failed')));
     return false;
   }
 }
