@@ -774,20 +774,22 @@ function assignClusterClasses(container) {
   });
 }
 // ── Reply preview card inside a reply message ──
-// Reply previews show one photo + "and N more" instead of the whole grid
+// Previews (highlight + reply) show ONE square photo and a "+N" tile where the
+// second photo would sit, instead of the whole grid
 function chatCollapsePhotoGrids(root) {
   if (!root) return;
   root.querySelectorAll('.chat-photo-grid').forEach(function(grid) {
+    if (grid.querySelector('.chat-photo-more-tile')) return;
     const imgs = grid.querySelectorAll('.chat-bubble-img');
     if (imgs.length < 2) return;
     const extra = imgs.length - 1;
     for (let i = 1; i < imgs.length; i++) imgs[i].remove();
-    grid.classList.remove('two', 'many');
-    grid.classList.add('one');
-    const more = document.createElement('div');
-    more.className = 'chat-photo-more';
-    more.textContent = 'and ' + extra + ' more';
-    grid.parentNode.insertBefore(more, grid.nextSibling);
+    grid.classList.remove('one', 'many');
+    grid.classList.add('two');
+    const tile = document.createElement('div');
+    tile.className = 'chat-photo-more-tile';
+    tile.textContent = '+' + extra;
+    grid.appendChild(tile);
   });
 }
 function chatBuildReplyEmbed(msg) {
@@ -1118,6 +1120,7 @@ function showMsgPopup(row, msg, bubbleEl) {
   cloneRow.classList.add('chat-popup-float-clone');
   cloneRow.style.pointerEvents = 'none';
   chatStripReplyEmbed(cloneRow);
+  chatCollapsePhotoGrids(cloneRow);
   // neutralize inline widths from fit-content measurements
   cloneRow.querySelectorAll('.chat-bubble, .vn-card').forEach(function(el) {
     el.style.width = '';
@@ -1208,25 +1211,67 @@ function showMsgPopup(row, msg, bubbleEl) {
 
   sheet.appendChild(list);
   document.body.appendChild(sheet);
-  // Position the float ONCE, synchronously, before the browser paints.
-  // The sheet's final geometry is known without waiting for its slide-in:
-  // it is pinned to bottom:0, and offsetHeight ignores CSS transforms.
-  const sheetH = sheet.offsetHeight;
+  // Place the float from the sheet's REAL position (not an assumed one), so it
+  // stays correct when the keyboard is open or closing.
   const gap = 20, minTop = 12;
-  const maxFloatH = Math.max(60, window.innerHeight - sheetH - gap - minTop);
-  // Anchor by bottom edge so later size changes (images/fonts) can't shift it
-  floatEl.style.setProperty('left', '20px', 'important');
-  floatEl.style.setProperty('top', 'auto', 'important');
-  floatEl.style.setProperty('bottom', (sheetH + gap) + 'px', 'important');
-  floatEl.style.maxHeight = maxFloatH + 'px';
-  floatEl.style.overflow = 'hidden';
+  function placeFloat() {
+    if (!floatEl.isConnected || !sheet.isConnected) return;
+    let sheetTop;
+    if (sheet.classList.contains('open')) {
+      sheetTop = sheet.getBoundingClientRect().top;
+    } else {
+      // Not slid in yet: read the final spot with the transform neutralised.
+      // Done synchronously, so nothing is ever painted in between.
+      sheet.style.transition = 'none';
+      sheet.style.transform = 'none';
+      sheetTop = sheet.getBoundingClientRect().top;
+      sheet.style.transform = '';
+      void sheet.offsetHeight;
+      sheet.style.transition = '';
+    }
+    const layoutH = document.documentElement.clientHeight || window.innerHeight;
+    const vv = window.visualViewport;
+    const topLimit = (vv ? vv.offsetTop : 0) + minTop;
+    floatEl.style.setProperty('left', '20px', 'important');
+    floatEl.style.setProperty('top', 'auto', 'important');
+    floatEl.style.setProperty('bottom', Math.max(0, layoutH - sheetTop + gap) + 'px', 'important');
+    floatEl.style.maxHeight = Math.max(60, sheetTop - gap - topLimit) + 'px';
+    floatEl.style.overflow = 'hidden';
+  }
+  placeFloat();
   floatEl.classList.add('visible');
 
+  // Keyboard opening/closing while the popup is up → re-place the float
+  let rafId = 0;
+  const onVp = function() {
+    cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(placeFloat);
+  };
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', onVp);
+    window.visualViewport.addEventListener('scroll', onVp);
+  }
+  window.addEventListener('resize', onVp);
+  window._chatPopupVpCleanup = function() {
+    cancelAnimationFrame(rafId);
+    if (window.visualViewport) {
+      window.visualViewport.removeEventListener('resize', onVp);
+      window.visualViewport.removeEventListener('scroll', onVp);
+    }
+    window.removeEventListener('resize', onVp);
+    window._chatPopupVpCleanup = null;
+  };
+
   // Start the sheet slide-up on the next frame (transition needs a start state)
-  requestAnimationFrame(function() { sheet.classList.add('open'); });
+  requestAnimationFrame(function() {
+    sheet.classList.add('open');
+    // once the slide-in settles, re-check the final position
+    setTimeout(placeFloat, 320);
+  });
 }
 
 function closeMsgPopup() {
+  if (window._chatPopupVpCleanup) window._chatPopupVpCleanup();
   const backdrop = document.getElementById('chat-popup-backdrop');
   if (backdrop) {
     backdrop.classList.remove('visible');
