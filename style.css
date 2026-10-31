@@ -10926,7 +10926,7 @@ body.desktop-blocked #username-picker {
 
 
 /* ══════════════════════════════════════════
-   PHOTO MESSAGES — normal white chat card, 100px thumbnails
+   PHOTO MESSAGES — normal white chat card, 120px thumbnails
    1 photo = single · 2 photos = side by side · 3+ = 2 columns
    (unscoped so the highlight float and reply preview match the thread)
 ══════════════════════════════════════════ */
@@ -10952,18 +10952,18 @@ body.desktop-blocked #username-picker {
 .chat-bubble-photos .chat-photo-grid {
   display: grid;
   gap: 6px;
-  grid-template-columns: 150px;
+  grid-template-columns: 120px;
   margin-top: 4px;
 }
 .chat-bubble-photos .chat-photo-grid.two,
 .chat-bubble-photos .chat-photo-grid.many {
-  grid-template-columns: repeat(2, 150px);
+  grid-template-columns: repeat(2, 120px);
 }
 .chat-bubble-photos .chat-bubble-img,
 #page-chat .chat-bubble-photos .chat-bubble-img {
   display: block;
-  width: 150px !important;
-  max-width: 150px !important;
+  width: 120px !important;
+  max-width: 120px !important;
   height: auto;
   max-height: none;
   border-radius: 6px !important;
@@ -10975,26 +10975,26 @@ body.desktop-blocked #username-picker {
 .chat-bubble-photos .chat-photo-grid.many .chat-bubble-img,
 #page-chat .chat-bubble-photos .chat-photo-grid.two .chat-bubble-img,
 #page-chat .chat-bubble-photos .chat-photo-grid.many .chat-bubble-img {
-  height: 150px !important;
+  height: 120px !important;
 }
 .chat-bubble-photos .chat-photo-grid.one .chat-bubble-img,
 #page-chat .chat-bubble-photos .chat-photo-grid.one .chat-bubble-img {
-  max-height: 220px !important;
+  max-height: 180px !important;
 }
 .chat-bubble-photos .chat-photo-caption {
   margin-top: 8px;
   white-space: pre-wrap;
   word-break: break-word;
 }
-/* reply preview card: thumbnails keep 100px even though the card is full width */
+/* reply preview card: thumbnails keep 120px even though the card is full width */
 .chat-reply-embed .chat-bubble.chat-bubble-photos,
 #chat-input-bar .chat-reply-card .chat-bubble.chat-bubble-photos {
   width: 100% !important;
 }
 .chat-reply-embed .chat-bubble-photos .chat-bubble-img,
 #chat-input-bar .chat-reply-card .chat-bubble-photos .chat-bubble-img {
-  width: 150px !important;
-  max-width: 150px !important;
+  width: 120px !important;
+  max-width: 120px !important;
 }
 /* composer: "N photos" badge on the pending thumbnail */
 .chat-img-count {
