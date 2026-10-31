@@ -10923,3 +10923,87 @@ body.desktop-blocked #username-picker {
   flex: 1 1 0;       /* wave takes only the leftover space, bars are clipped */
   min-width: 0;
 }
+
+
+/* ══════════════════════════════════════════
+   PHOTO MESSAGES — normal white chat card, 100px thumbnails
+   1 photo = single · 2 photos = side by side · 3+ = 2 columns
+   (unscoped so the highlight float and reply preview match the thread)
+══════════════════════════════════════════ */
+.chat-bubble.chat-bubble-photos,
+#page-chat .chat-bubble.chat-bubble-photos {
+  display: block !important;
+  width: fit-content !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box;
+  padding: 5px 14px 12px !important;
+  border: 1px solid #efeeea !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+  overflow: hidden;
+}
+[data-theme="dark"] .chat-bubble.chat-bubble-photos,
+[data-theme="dark"] #page-chat .chat-bubble.chat-bubble-photos {
+  background: var(--surface) !important;
+  border-color: var(--border) !important;
+}
+.chat-bubble-photos .chat-photo-grid {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 100px;
+  margin-top: 4px;
+}
+.chat-bubble-photos .chat-photo-grid.two,
+.chat-bubble-photos .chat-photo-grid.many {
+  grid-template-columns: repeat(2, 100px);
+}
+.chat-bubble-photos .chat-bubble-img,
+#page-chat .chat-bubble-photos .chat-bubble-img {
+  display: block;
+  width: 100px !important;
+  max-width: 100px !important;
+  height: auto;
+  max-height: none;
+  border-radius: 6px !important;
+  object-fit: cover;
+  background: rgba(0,0,0,0.05);
+}
+/* side-by-side and grid cells are squares so rows line up */
+.chat-bubble-photos .chat-photo-grid.two .chat-bubble-img,
+.chat-bubble-photos .chat-photo-grid.many .chat-bubble-img,
+#page-chat .chat-bubble-photos .chat-photo-grid.two .chat-bubble-img,
+#page-chat .chat-bubble-photos .chat-photo-grid.many .chat-bubble-img {
+  height: 100px !important;
+}
+.chat-bubble-photos .chat-photo-grid.one .chat-bubble-img,
+#page-chat .chat-bubble-photos .chat-photo-grid.one .chat-bubble-img {
+  max-height: 150px !important;
+}
+.chat-bubble-photos .chat-photo-caption {
+  margin-top: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+/* reply preview card: thumbnails keep 100px even though the card is full width */
+.chat-reply-embed .chat-bubble.chat-bubble-photos,
+#chat-input-bar .chat-reply-card .chat-bubble.chat-bubble-photos {
+  width: 100% !important;
+}
+.chat-reply-embed .chat-bubble-photos .chat-bubble-img,
+#chat-input-bar .chat-reply-card .chat-bubble-photos .chat-bubble-img {
+  width: 100px !important;
+  max-width: 100px !important;
+}
+/* composer: "N photos" badge on the pending thumbnail */
+.chat-img-count {
+  position: absolute;
+  left: 4px; bottom: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px; font-weight: 700; line-height: 1.4;
+  color: #fff;
+  background: rgba(0,0,0,0.6);
+  pointer-events: none;
+}
