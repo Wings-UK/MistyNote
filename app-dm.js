@@ -773,8 +773,30 @@ function assignClusterClasses(container) {
     else if (prevSame && !nextSame) row.classList.add('cluster-bot');
   });
 }
-// Multi-photo messages in reply previews: show the first photo plus a small
-// "and N more" tile, so 8-10 photos never blow up the preview.
+// ── Send-state helpers (sending = faded, sent = normal, failed = pale then gone) ──
+const CHAT_NOT_SENT_MSG = 'Not sent: your network connection is bad';
+function chatSendFailMsg(err) {
+  const m = (err && err.message) ? String(err.message) : '';
+  if (!m || /fetch|network|load failed|timeout|offline|abort/i.test(m)) return CHAT_NOT_SENT_MSG;
+  return 'Not sent: please try again';
+}
+function chatMarkSending(row) {
+  if (row && row.classList) row.classList.add('msg-sending');
+}
+function chatMarkSent(row) {
+  if (!row || !row.classList) return;
+  row.classList.remove('msg-sending');
+}
+function chatMarkFailed(row, message) {
+  try { showToast(message || CHAT_NOT_SENT_MSG); } catch (e) {}
+  if (!row || !row.classList || !row.parentNode) return;
+  row.classList.remove('msg-sending');
+  row.style.setProperty('--msg-h', row.offsetHeight + 'px');
+  row.classList.add('msg-failed');
+  setTimeout(function() { if (row.parentNode) row.remove(); }, 1150);
+}
+// Multi-photo messages in reply previews and the highlight: show the first photo
+// plus a square "+N" tile, so 8-10 photos never blow up the preview.
 function chatCollapsePhotosForReply(root) {
   if (!root) return;
   root.querySelectorAll('.chat-photo-grid').forEach(function(grid) {
@@ -786,7 +808,8 @@ function chatCollapsePhotosForReply(root) {
     grid.classList.add('one', 'reply-collapsed');
     const more = document.createElement('div');
     more.className = 'chat-photo-more';
-    more.textContent = 'and ' + extra + ' more';
+    more.textContent = '+' + extra;
+    more.setAttribute('aria-label', extra + ' more photo' + (extra === 1 ? '' : 's'));
     grid.appendChild(more);
   });
 }
@@ -1121,6 +1144,8 @@ function showMsgPopup(row, msg, bubbleEl) {
   cloneRow.classList.add('chat-popup-float-clone');
   cloneRow.style.pointerEvents = 'none';
   chatStripReplyEmbed(cloneRow);
+  chatCollapsePhotosForReply(cloneRow);
+  cloneRow.classList.remove('msg-sending', 'msg-failed');
   // neutralize inline widths from fit-content measurements
   cloneRow.querySelectorAll('.chat-bubble, .vn-card').forEach(function(el) {
     el.style.width = '';
@@ -1211,19 +1236,39 @@ function showMsgPopup(row, msg, bubbleEl) {
 
   sheet.appendChild(list);
   document.body.appendChild(sheet);
-  // Position the float ONCE, synchronously, before the browser paints.
-  // The sheet's final geometry is known without waiting for its slide-in:
-  // it is pinned to bottom:0, and offsetHeight ignores CSS transforms.
-  const sheetH = sheet.offsetHeight;
-  const gap = 20, minTop = 12;
-  const maxFloatH = Math.max(60, window.innerHeight - sheetH - gap - minTop);
-  // Anchor by bottom edge so later size changes (images/fonts) can't shift it
-  floatEl.style.setProperty('left', '20px', 'important');
-  floatEl.style.setProperty('top', 'auto', 'important');
-  floatEl.style.setProperty('bottom', (sheetH + gap) + 'px', 'important');
-  floatEl.style.maxHeight = maxFloatH + 'px';
-  floatEl.style.overflow = 'hidden';
+  // Close the keyboard first (like WhatsApp) so the highlight sits where it does without one.
+  try {
+    const ae = document.activeElement;
+    if (ae && ae !== document.body && (/^(INPUT|TEXTAREA)$/.test(ae.tagName) || ae.isContentEditable)) ae.blur();
+  } catch (e) {}
+  // Layout against the VISUAL viewport so an open (or closing) keyboard never
+  // pushes the sheet and highlight on top of each other. Anchored by bottom edge.
+  function layoutPopup() {
+    if (!floatEl.isConnected || !sheet.isConnected) return;
+    const vv = window.visualViewport;
+    const viewH = vv ? vv.height : window.innerHeight;
+    const kb = vv ? Math.max(0, window.innerHeight - (vv.height + vv.offsetTop)) : 0;
+    sheet.style.bottom = kb + 'px';
+    const sheetH = sheet.offsetHeight; // ignores the slide-in transform
+    const gap = 20, minTop = 12;
+    const maxFloatH = Math.max(60, viewH - sheetH - gap - minTop);
+    floatEl.style.setProperty('left', '20px', 'important');
+    floatEl.style.setProperty('top', 'auto', 'important');
+    floatEl.style.setProperty('bottom', (kb + sheetH + gap) + 'px', 'important');
+    floatEl.style.maxHeight = maxFloatH + 'px';
+    floatEl.style.overflow = 'hidden';
+  }
+  layoutPopup();
   floatEl.classList.add('visible');
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', layoutPopup);
+    window.visualViewport.addEventListener('scroll', layoutPopup);
+    floatEl._vvCleanup = function() {
+      window.visualViewport.removeEventListener('resize', layoutPopup);
+      window.visualViewport.removeEventListener('scroll', layoutPopup);
+    };
+  }
+  setTimeout(layoutPopup, 350); // settle after the keyboard animation
 
   // Start the sheet slide-up on the next frame (transition needs a start state)
   requestAnimationFrame(function() { sheet.classList.add('open'); });
@@ -1236,7 +1281,10 @@ function closeMsgPopup() {
     setTimeout(function() { backdrop.remove(); }, 280);
   }
   const floatEl = document.getElementById('chat-popup-float-msg');
-  if (floatEl) floatEl.remove();
+  if (floatEl) {
+    if (floatEl._vvCleanup) { try { floatEl._vvCleanup(); } catch (e) {} }
+    floatEl.remove();
+  }
   const sheet = document.getElementById('chat-msg-popup');
   if (sheet) {
     sheet.classList.remove('open');
@@ -2071,6 +2119,7 @@ async function chatSend(opts) {
       msgsEl.appendChild(imgEl);
       msgsEl.scrollTop = msgsEl.scrollHeight;
     }
+    chatMarkSending(imgEl);
     let urls;
     try {
       urls = await Promise.all(items.map(async function(it, i) {
@@ -2112,11 +2161,7 @@ async function chatSend(opts) {
       if (!urls || urls.some(function(u) { return !u; })) throw new Error('missing url');
     } catch (err) {
       console.warn('[chat-image] R2', err);
-      const em = (err && err.message) ? err.message : '';
-      showToast(/failed to fetch|networkerror|load failed/i.test(em)
-        ? 'Upload failed: could not reach the upload server (check R2 worker URL / CORS)'
-        : (em ? ('Upload: ' + em) : 'Image upload failed'));
-      if (imgEl) imgEl.remove();
+      chatMarkFailed(imgEl, chatSendFailMsg(err));
       return;
     }
     // Swap local previews for the hosted URLs
@@ -2131,16 +2176,20 @@ async function chatSend(opts) {
     };
     // Never persist blob:/data: — refresh would show blank tiles
     if (String(msgPayload.media_url).indexOf('blob:') >= 0 || String(msgPayload.media_url).indexOf('data:') >= 0) {
-      showToast('Upload incomplete — try again');
-      if (imgEl) imgEl.remove();
+      chatMarkFailed(imgEl, 'Not sent: please try again');
       return;
     }
-    const { error: insertErr } = await supabase.from('messages').insert(msgPayload);
+    let insertErr = null;
+    try {
+      const r = await supabase.from('messages').insert(msgPayload);
+      insertErr = r.error;
+    } catch (ie) { insertErr = ie || new Error('network'); }
     if (insertErr) {
       console.warn('[chat-image] insert', insertErr);
-      showToast(insertErr.message || 'Failed to send image');
+      chatMarkFailed(imgEl, chatSendFailMsg(insertErr));
     }
     else {
+      chatMarkSent(imgEl);
       updateInboxRow(activeChatId, urls.length > 1 ? '📷 ' + urls.length + ' photos' : '📷 Photo', new Date().toISOString());
       markConvRead(activeChatId);
     }
@@ -2162,15 +2211,29 @@ async function chatSend(opts) {
     msgsEl.appendChild(el);
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
+  chatMarkSending(el);
   updateInboxRow(activeChatId, text, tmpMsg.created_at);
-  const { error } = await supabase.from('messages').insert({
-    conversation_id: activeChatId,
-    sender_id: currentUser.id,
-    type: 'text',
-    content: text,
-    reply_to_id: replySnapshot?.id || null,
-  });
-  if (error) showToast('Message failed to send');
+  let error = null;
+  try {
+    const r = await supabase.from('messages').insert({
+      conversation_id: activeChatId,
+      sender_id: currentUser.id,
+      type: 'text',
+      content: text,
+      reply_to_id: replySnapshot?.id || null,
+    });
+    error = r.error;
+  } catch (te) { error = te || new Error('network'); }
+  if (error) {
+    chatMarkFailed(el, chatSendFailMsg(error));
+    // Give the text back so nothing the person typed is lost
+    if (field && !field.value) {
+      field.value = text;
+      if (typeof syncChatActionBtn === 'function') syncChatActionBtn();
+    }
+  } else {
+    chatMarkSent(el);
+  }
   markConvRead(activeChatId);
 }
 // ── Subscribe to realtime messages ──
@@ -2720,6 +2783,7 @@ async function voiceSendDraft() {
     msgsEl.appendChild(el);
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
+  chatMarkSending(el);
   if (typeof updateInboxRow === 'function') {
     updateInboxRow(activeChatId, '🎙 Voice note', tmpMsg.created_at);
   }
@@ -2731,8 +2795,7 @@ async function voiceSendDraft() {
     publicUrl = await uploadToR2(blob, 'chat-voice', filename);
   } catch (err) {
     console.warn('[voice] R2', err);
-    showToast('Upload failed — try again');
-    if (el) el.remove();
+    chatMarkFailed(el, chatSendFailMsg(err));
     try { URL.revokeObjectURL(draft.url); } catch (e) {}
     return;
   }
@@ -2745,13 +2808,17 @@ async function voiceSendDraft() {
     media_duration: durationSec,
     content: '',
   };
-  const { error: insertErr } = await supabase.from('messages').insert(payload);
+  let insertErr = null;
+  try {
+    const r = await supabase.from('messages').insert(payload);
+    insertErr = r.error;
+  } catch (ve) { insertErr = ve || new Error('network'); }
   if (insertErr) {
     console.warn('[voice] insert', insertErr);
-    showToast(insertErr.message || 'Could not save voice note');
-    if (el) el.remove();
+    chatMarkFailed(el, chatSendFailMsg(insertErr));
     return;
   }
+  chatMarkSent(el);
 
   const playBtn = el && el.querySelector('.chat-voice-play');
   if (playBtn) playBtn.dataset.src = publicUrl;
