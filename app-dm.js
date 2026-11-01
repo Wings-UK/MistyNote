@@ -657,7 +657,6 @@ function openChat(convId, otherUser) {
   if (inboxPreview) inboxPreview.classList.remove('unread');
   slideTo('chat', async () => {
     await loadChatMessages(convId);
-    chatRestoreOutbox(convId);
     subscribeToChat(convId);
     markConvRead(convId);
     subscribeToPresence(convId);
@@ -759,7 +758,6 @@ async function loadChatMessages(convId) {
   });
   msgsEl.scrollTop = msgsEl.scrollHeight;
   assignClusterClasses(msgsEl);
-  try { chatPrefetchVoiceIn(msgsEl, 20); } catch (e) {}
 }
 // ── Assign cluster classes for bubble shaping ──
 function assignClusterClasses(container) {
@@ -776,24 +774,6 @@ function assignClusterClasses(container) {
   });
 }
 // ── Reply preview card inside a reply message ──
-// Previews (highlight + reply) show ONE square photo and a "+N" tile where the
-// second photo would sit, instead of the whole grid
-function chatCollapsePhotoGrids(root) {
-  if (!root) return;
-  root.querySelectorAll('.chat-photo-grid').forEach(function(grid) {
-    if (grid.querySelector('.chat-photo-more-tile')) return;
-    const imgs = grid.querySelectorAll('.chat-bubble-img');
-    if (imgs.length < 2) return;
-    const extra = imgs.length - 1;
-    for (let i = 1; i < imgs.length; i++) imgs[i].remove();
-    grid.classList.remove('one', 'many');
-    grid.classList.add('two');
-    const tile = document.createElement('div');
-    tile.className = 'chat-photo-more-tile';
-    tile.textContent = '+' + extra;
-    grid.appendChild(tile);
-  });
-}
 function chatBuildReplyEmbed(msg) {
   const replyId = String(msg.reply_to_id);
   const embed = document.createElement('div');
@@ -816,7 +796,6 @@ function chatBuildReplyEmbed(msg) {
     // Inert copy: no duplicate ids, no inline handlers (tap = jump to original)
     card.querySelectorAll('[id]').forEach(function(el) { el.removeAttribute('id'); });
     card.querySelectorAll('[onclick]').forEach(function(el) { el.removeAttribute('onclick'); });
-    chatCollapsePhotoGrids(card);
     embed.appendChild(card);
   }
 
@@ -907,13 +886,9 @@ function buildMessageEl(msg, prevSenderId, opts) {
     // only treat as image when type says so, or URL looks like an image
     let photoUrls = chatParseMediaUrls(msg.media_url || content);
     // Drop dead blob: URLs (only valid during the same session)
-    // (a message still being sent — id "tmp-…" — legitimately shows local previews)
-    const isSending = String(msg.id || '').indexOf('tmp-') === 0;
-    if (!isSending) {
-      photoUrls = photoUrls.filter(function(u) {
-        return u && !String(u).startsWith('blob:') && !String(u).startsWith('data:');
-      });
-    }
+    photoUrls = photoUrls.filter(function(u) {
+      return u && !String(u).startsWith('blob:') && !String(u).startsWith('data:');
+    });
     bubble.className = 'chat-bubble img-bubble chat-bubble-photos';
     if (!photoUrls.length) {
       bubble.innerHTML = replyQuoteHtml + '<div class="chat-photo-missing">Photo unavailable — send again</div>';
@@ -1018,7 +993,6 @@ function attachTapPopup(row, msg) {
   const LONG_PRESS_MS = 420;
   row.addEventListener('touchstart', (e) => {
     didScroll = false;
-    row._lpFired = false;
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
     const bubble = e.target.closest('.chat-bubble, .chat-product-bubble, .chat-cash-bubble, .chat-order-bubble, .chat-offer-bubble, .chat-voice-bubble, .vn-card, .vn-player, .chat-bubble.img-bubble, .vn-card, .vn-player');
@@ -1027,7 +1001,6 @@ function attachTapPopup(row, msg) {
     longPressTimer = setTimeout(() => {
       if (didScroll) return;
       row._lpAt = Date.now();
-      row._lpFired = true; // the release after this long-press must not open the photo
       if (navigator.vibrate) navigator.vibrate(32);
       showMsgPopup(row, msg, bubble);
     }, LONG_PRESS_MS);
@@ -1043,14 +1016,12 @@ function attachTapPopup(row, msg) {
   row.addEventListener('touchend', (e) => {
     clearTimeout(longPressTimer);
     if (didScroll) return;
-    if (row._lpFired) { row._lpFired = false; if (e.cancelable) e.preventDefault(); return; }
     // Single tap on image → fullscreen viewer (not popup)
     if (msg.type === 'image') {
       const imgEl = e.target.closest('.chat-bubble-img');
       if (imgEl) {
         e.preventDefault();
-        // open the exact photo that was tapped (media_url can hold several photos)
-        chatViewImage(imgEl.currentSrc || imgEl.src);
+        chatViewImage(msg.media_url || imgEl.src);
         return;
       }
     }
@@ -1122,7 +1093,6 @@ function showMsgPopup(row, msg, bubbleEl) {
   cloneRow.classList.add('chat-popup-float-clone');
   cloneRow.style.pointerEvents = 'none';
   chatStripReplyEmbed(cloneRow);
-  chatCollapsePhotoGrids(cloneRow);
   // neutralize inline widths from fit-content measurements
   cloneRow.querySelectorAll('.chat-bubble, .vn-card').forEach(function(el) {
     el.style.width = '';
@@ -1213,67 +1183,25 @@ function showMsgPopup(row, msg, bubbleEl) {
 
   sheet.appendChild(list);
   document.body.appendChild(sheet);
-  // Place the float from the sheet's REAL position (not an assumed one), so it
-  // stays correct when the keyboard is open or closing.
+  // Position the float ONCE, synchronously, before the browser paints.
+  // The sheet's final geometry is known without waiting for its slide-in:
+  // it is pinned to bottom:0, and offsetHeight ignores CSS transforms.
+  const sheetH = sheet.offsetHeight;
   const gap = 20, minTop = 12;
-  function placeFloat() {
-    if (!floatEl.isConnected || !sheet.isConnected) return;
-    let sheetTop;
-    if (sheet.classList.contains('open')) {
-      sheetTop = sheet.getBoundingClientRect().top;
-    } else {
-      // Not slid in yet: read the final spot with the transform neutralised.
-      // Done synchronously, so nothing is ever painted in between.
-      sheet.style.transition = 'none';
-      sheet.style.transform = 'none';
-      sheetTop = sheet.getBoundingClientRect().top;
-      sheet.style.transform = '';
-      void sheet.offsetHeight;
-      sheet.style.transition = '';
-    }
-    const layoutH = document.documentElement.clientHeight || window.innerHeight;
-    const vv = window.visualViewport;
-    const topLimit = (vv ? vv.offsetTop : 0) + minTop;
-    floatEl.style.setProperty('left', '20px', 'important');
-    floatEl.style.setProperty('top', 'auto', 'important');
-    floatEl.style.setProperty('bottom', Math.max(0, layoutH - sheetTop + gap) + 'px', 'important');
-    floatEl.style.maxHeight = Math.max(60, sheetTop - gap - topLimit) + 'px';
-    floatEl.style.overflow = 'hidden';
-  }
-  placeFloat();
+  const maxFloatH = Math.max(60, window.innerHeight - sheetH - gap - minTop);
+  // Anchor by bottom edge so later size changes (images/fonts) can't shift it
+  floatEl.style.setProperty('left', '20px', 'important');
+  floatEl.style.setProperty('top', 'auto', 'important');
+  floatEl.style.setProperty('bottom', (sheetH + gap) + 'px', 'important');
+  floatEl.style.maxHeight = maxFloatH + 'px';
+  floatEl.style.overflow = 'hidden';
   floatEl.classList.add('visible');
 
-  // Keyboard opening/closing while the popup is up → re-place the float
-  let rafId = 0;
-  const onVp = function() {
-    cancelAnimationFrame(rafId);
-    rafId = requestAnimationFrame(placeFloat);
-  };
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', onVp);
-    window.visualViewport.addEventListener('scroll', onVp);
-  }
-  window.addEventListener('resize', onVp);
-  window._chatPopupVpCleanup = function() {
-    cancelAnimationFrame(rafId);
-    if (window.visualViewport) {
-      window.visualViewport.removeEventListener('resize', onVp);
-      window.visualViewport.removeEventListener('scroll', onVp);
-    }
-    window.removeEventListener('resize', onVp);
-    window._chatPopupVpCleanup = null;
-  };
-
   // Start the sheet slide-up on the next frame (transition needs a start state)
-  requestAnimationFrame(function() {
-    sheet.classList.add('open');
-    // once the slide-in settles, re-check the final position
-    setTimeout(placeFloat, 320);
-  });
+  requestAnimationFrame(function() { sheet.classList.add('open'); });
 }
 
 function closeMsgPopup() {
-  if (window._chatPopupVpCleanup) window._chatPopupVpCleanup();
   const backdrop = document.getElementById('chat-popup-backdrop');
   if (backdrop) {
     backdrop.classList.remove('visible');
@@ -1294,7 +1222,6 @@ function chatViewImage(src) {
   overlay.id = 'chat-img-viewer';
   const img = document.createElement('img');
   img.className = 'chat-img-viewer-img';
-  img.referrerPolicy = 'no-referrer'; // same as the thumbnails, which load fine
   img.src = src;
   img.alt = 'Photo';
   img.onclick = (e) => e.stopPropagation();
@@ -1885,7 +1812,6 @@ function chatPickEmoji(emoji) {
 
 
 function chatSetReply(msgId) {
-  if (String(msgId).indexOf('tmp-') === 0) { showToast('Wait until this message is sent'); return; }
   const row = document.querySelector('#page-chat .chat-msg-row[data-msg-id="' + msgId + '"]')
            || document.querySelector('.chat-msg-row[data-msg-id="' + msgId + '"]');
   if (!row) return;
@@ -1920,7 +1846,6 @@ function chatSetReply(msgId) {
   clone.style.pointerEvents = 'none';
   clone.querySelectorAll('[id]').forEach(function(el) { el.removeAttribute('id'); });
   chatStripReplyEmbed(clone);
-  chatCollapsePhotoGrids(clone);
   clone.querySelectorAll('video, audio').forEach(function(m) {
     try { m.pause(); } catch (e) {}
     m.removeAttribute('autoplay');
@@ -1958,19 +1883,6 @@ function chatCancelReply() {
   const bar = document.getElementById('chat-reply-bar');
   if (bar) bar.style.display = 'none';
 }
-// Resolves true only if the URL loads as a real (non-empty) image
-function chatVerifyImageUrl(url, timeoutMs) {
-  return new Promise(function(resolve) {
-    const img = new Image();
-    let done = false;
-    const finish = function(ok) { if (done) return; done = true; clearTimeout(t); resolve(ok); };
-    const t = setTimeout(function() { finish(false); }, timeoutMs || 15000);
-    img.referrerPolicy = 'no-referrer'; // same as the thumbnails — hotlink rules can block a referrer
-    img.onload = function() { finish(img.naturalWidth > 0); };
-    img.onerror = function() { finish(false); };
-    img.src = url;
-  });
-}
 var CHAT_MAX_PHOTOS = 10;
 function chatImageSelected(input) {
   const files = Array.from((input && input.files) || []);
@@ -1983,10 +1895,10 @@ function chatImageSelected(input) {
       || /\.(jpe?g|png|gif|webp|heic|heif|bmp)$/i.test(name)
       || (!f.type && f.size > 0); // mobile often leaves type empty
     if (!looksImg) { skipped = true; return; }
-    if (f.size > 40 * 1024 * 1024) { skipped = true; return; }
+    if (f.size > 12 * 1024 * 1024) { skipped = true; return; }
     good.push(f);
   });
-  if (skipped) showToast('Some files couldn’t be added (photos only)');
+  if (skipped) showToast('Some files skipped (images under 10MB only)');
   input.value = '';
   if (!good.length) return;
   Promise.all(good.map(function(f) {
@@ -2061,334 +1973,27 @@ function chatParseMediaUrls(v) {
   if (t.indexOf('/') >= 0 && t.indexOf(' ') < 0) return [t];
   return t ? [t] : [];
 }
-// Shrinks any photo (small or huge) to a light JPEG: fixes phone rotation, flattens
-// transparency, and steps quality/size down until it is comfortably light to upload.
 function compressChatImage(file) {
-  const TARGET = 900 * 1024;           // ~900 KB is plenty for chat
-  function viaImg() {
-    return new Promise(function(resolve, reject) {
-      const img = new Image();
-      const url = URL.createObjectURL(file);
-      img.onload = function() { URL.revokeObjectURL(url); resolve(img); };
-      img.onerror = function() { URL.revokeObjectURL(url); reject(new Error('decode')); };
-      img.src = url;
-    });
-  }
-  function decode() {
-    if (window.createImageBitmap) {
-      return createImageBitmap(file, { imageOrientation: 'from-image' }).catch(function() { return viaImg(); });
-    }
-    return viaImg();
-  }
-  function encode(src, max, q) {
-    return new Promise(function(resolve) {
-      let w = src.width, h = src.height;
-      if (w > max || h > max) {
-        if (w >= h) { h = Math.round(h * max / w); w = max; } else { w = Math.round(w * max / h); h = max; }
+  return new Promise(function(resolve) {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = function() {
+      URL.revokeObjectURL(url);
+      const MAX = 1280;
+      let width = img.width, height = img.height;
+      if (width > MAX || height > MAX) {
+        if (width > height) { height = Math.round(height * MAX / width); width = MAX; }
+        else { width = Math.round(width * MAX / height); height = MAX; }
       }
       const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, w, h);
-      ctx.drawImage(src, 0, 0, w, h);
-      canvas.toBlob(function(blob) { resolve(blob); }, 'image/jpeg', q);
-    });
-  }
-  return decode().then(async function(src) {
-    let max = 1600, q = 0.82, blob = null;
-    for (let i = 0; i < 5; i++) {
-      blob = await encode(src, max, q);
-      if (blob && blob.size <= TARGET) break;
-      max = Math.round(max * 0.8);
-      q = Math.max(0.6, q - 0.05);
-    }
-    try { if (src.close) src.close(); } catch (e) {}
-    if (blob && blob.size <= file.size) return blob;
-    return blob && file.size > TARGET ? blob : file;
-  }).catch(function() {
-    return file;                        // could not decode (unusual format) — caller checks size
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      canvas.toBlob(function(blob) { resolve(blob || file); }, 'image/jpeg', 0.82);
+    };
+    img.onerror = function() { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
   });
-}
-
-
-// ══════════════════════════════════════════
-// OUTBOX — every outgoing message is a "job" that can fail and be retried
-// (text, photos, voice). Failed messages stay on screen with Retry / Delete.
-// ══════════════════════════════════════════
-const chatOutbox = new Map();          // tmpId -> job
-let chatClientIdSupported = null;      // null = unknown, true/false after first insert
-const CHAT_INSERT_TIMEOUT = 20000;
-const CHAT_UPLOAD_TIMEOUT = 60000;
-
-function chatNewClientId() {
-  try { if (window.crypto && crypto.randomUUID) return crypto.randomUUID(); } catch (e) {}
-  return 'c' + Date.now().toString(16) + Math.random().toString(16).slice(2, 10);
-}
-function chatWithTimeout(promise, ms) {
-  return new Promise(function(resolve, reject) {
-    const t = setTimeout(function() { reject(new Error('timeout')); }, ms);
-    Promise.resolve(promise).then(
-      function(v) { clearTimeout(t); resolve(v); },
-      function(e) { clearTimeout(t); reject(e); }
-    );
-  });
-}
-function chatMakeJob(base) {
-  const job = Object.assign({
-    state: 'sending',
-    startedAt: new Date().toISOString(),
-    clientId: chatNewClientId(),
-    attempted: false,
-    urlsByIdx: [],
-  }, base);
-  job.id = job.tmpMsg.id;
-  chatOutbox.set(job.id, job);
-  return job;
-}
-function chatJobPayload(job) {
-  const p = {
-    conversation_id: job.convId,
-    sender_id: currentUser.id,
-    type: job.kind,
-    reply_to_id: job.replyId || null,
-  };
-  if (job.kind === 'text') { p.content = job.text; }
-  else if (job.kind === 'image') {
-    p.content = job.text || '';
-    p.media_url = job.urls.length > 1 ? JSON.stringify(job.urls) : job.urls[0];
-  } else if (job.kind === 'voice') {
-    p.content = '';
-    p.media_url = job.publicUrl;
-    p.media_duration = job.durationSec;
-  }
-  return p;
-}
-function chatJobPreview(job) {
-  if (job.kind === 'image') return (job.urls && job.urls.length > 1) ? '📷 ' + job.urls.length + ' photos' : '📷 Photo';
-  if (job.kind === 'voice') return '🎙 Voice note';
-  return job.text || '';
-}
-// Friendly wording — raw technical errors only go to the console
-function chatFriendlyReason(job, stage, err) {
-  const offline = (typeof navigator !== 'undefined' && navigator.onLine === false);
-  if (offline) return 'No connection';
-  const m = String((err && err.message) || '').toLowerCase();
-  if (m.indexOf('timeout') >= 0) return 'Slow connection';
-  if (m.indexOf('too large') >= 0) return 'Photo is too large';
-  if (stage === 'Upload') return job.kind === 'voice' ? 'Couldn’t upload voice note' : 'Couldn’t upload photo';
-  return 'Couldn’t send';
-}
-const CHAT_ICON_WARN = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 7.5v5.5M12 16.6v.1"/></svg>';
-const CHAT_ICON_RETRY = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>';
-// Status inside the bubble: "Sending…" while in flight, a calm "Try again" card if it fails
-function chatSetMsgStatus(job, state, reason) {
-  job.state = state;
-  const el = job.el;
-  if (!el) return;
-  el.classList.toggle('chat-msg-pending', state === 'sending');
-  el.classList.toggle('chat-msg-failed', state === 'failed');
-  const host = el.querySelector('.chat-bubble');
-  if (!host) return;
-  const old = host.querySelector(':scope > .chat-msg-status');
-  if (old) old.remove();
-  clearTimeout(job._noteTimer);
-  if (state === 'sending') {
-    // only show "Sending…" if it is taking a moment (no flicker on instant sends)
-    job._noteTimer = setTimeout(function() {
-      if (job.state !== 'sending' || host.querySelector(':scope > .chat-msg-status')) return;
-      const n = document.createElement('div');
-      n.className = 'chat-msg-status is-sending';
-      n.innerHTML = '<span class="chat-msg-spinner"></span><span class="chat-msg-status-text">Sending…</span>';
-      host.appendChild(n);
-    }, 700);
-    return;
-  }
-  if (state !== 'failed') return;
-  const st = document.createElement('div');
-  st.className = 'chat-msg-status is-failed';
-  st.setAttribute('role', 'alert');
-  st.innerHTML =
-    '<span class="chat-msg-status-icon">' + CHAT_ICON_WARN + '</span>' +
-    '<span class="chat-msg-status-text">' + escHtml(reason || 'Couldn’t send') + '</span>' +
-    '<span class="chat-msg-status-actions">' +
-      '<button type="button" class="chat-msg-retry">' + CHAT_ICON_RETRY + 'Try again</button>' +
-      '<button type="button" class="chat-msg-discard">Delete</button>' +
-    '</span>';
-  st.querySelector('.chat-msg-retry').addEventListener('click', function(e) {
-    e.stopPropagation(); chatRunJob(job);
-  });
-  st.querySelector('.chat-msg-discard').addEventListener('click', function(e) {
-    e.stopPropagation(); chatDiscardJob(job);
-  });
-  host.appendChild(st);
-}
-function chatDiscardJob(job) {
-  chatOutbox.delete(job.id);
-  if (job.el) job.el.remove();
-  if (job.kind === 'voice' && job.localUrl) { try { URL.revokeObjectURL(job.localUrl); } catch (e) {} }
-}
-// A failed attempt may still have reached the server (reply lost) — look for it before re-sending
-async function chatFindSentCopy(job, payload) {
-  try {
-    let q = supabase.from('messages').select('id, created_at')
-      .eq('conversation_id', job.convId).eq('sender_id', currentUser.id)
-      .eq('type', payload.type).gte('created_at', job.startedAt)
-      .order('created_at', { ascending: false }).limit(1);
-    if (payload.media_url) q = q.eq('media_url', payload.media_url);
-    else q = q.eq('content', payload.content || '');
-    const { data } = await chatWithTimeout(q, CHAT_INSERT_TIMEOUT);
-    return (data && data[0]) || null;
-  } catch (e) { return null; }
-}
-async function chatInsertJob(job) {
-  const payload = chatJobPayload(job);
-  if (job.attempted) {
-    const dup = await chatFindSentCopy(job, payload);
-    if (dup) return dup;
-  }
-  job.attempted = true;
-  const body = Object.assign({}, payload);
-  if (chatClientIdSupported !== false) body.client_id = job.clientId;
-  // Plain insert — exactly what worked before (no "return the row" requirement,
-  // which can be refused by row-level security on some setups)
-  const doInsert = function(b) { return chatWithTimeout(supabase.from('messages').insert(b), CHAT_INSERT_TIMEOUT); };
-  let res = await doInsert(body);
-  if (res.error && body.client_id) {
-    // Column missing / rejected → send without it, and remember
-    chatClientIdSupported = false;
-    delete body.client_id;
-    res = await doInsert(body);
-  } else if (!res.error && body.client_id) {
-    chatClientIdSupported = true;
-  }
-  if (res.error) throw new Error(res.error.message || 'insert failed');
-  // Best-effort: look up the real id so reply / long-press work on this message
-  let saved = null;
-  try { saved = await chatFindSentCopy(job, payload); } catch (e) {}
-  return saved || {};
-}
-function chatSleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
-async function chatUploadPhotos(job) {
-  const items = job.items;
-  return await Promise.all(items.map(async function(it, i) {
-    if (job.urlsByIdx[i]) return job.urlsByIdx[i];          // already uploaded on an earlier attempt
-    if (!it.prepared) {                                      // shrink once, reuse on retries
-      let blob = it.file;
-      try { blob = await compressChatImage(it.file); } catch (ce) { blob = it.file; }
-      if (!blob) throw new Error('No image data');
-      if (blob === it.file && it.file.size > 12 * 1024 * 1024) throw new Error('Photo too large to prepare');
-      it.prepared = (blob instanceof Blob && blob.type && blob.type.indexOf('image/') === 0)
-        ? blob : new Blob([blob], { type: 'image/jpeg' });
-    }
-    const jpegBlob = it.prepared;
-    const filename = job.fileNames[i] || (job.fileNames[i] = (currentUser.id || 'u') + '-' + Date.now() + '-' + i + '.jpg');
-    const upFile = (typeof File === 'function') ? new File([jpegBlob], filename, { type: jpegBlob.type }) : jpegBlob;
-    const perTry = 30000 + Math.round((upFile.size || 0) / 1024) * 60;   // bigger file → more time
-    let url = null, firstUploaded = null;
-    // main folder gets a second chance for hiccups, the others one try each
-    const plan = ['chat', 'chat', 'posts', 'chat-voice'];
-    for (let f = 0; f < plan.length && !url; f++) {
-      try {
-        let cand = await chatWithTimeout(uploadToR2(upFile, plan[f], filename), perTry);
-        if (!cand && typeof uploadImageToR2 === 'function') cand = await chatWithTimeout(uploadImageToR2(upFile, plan[f], filename), perTry);
-        if (!cand) throw new Error('no link returned');
-        if (!firstUploaded) firstUploaded = cand;
-        if (await chatVerifyImageUrl(cand, 12000)) url = cand;
-        else console.warn('[chat-image] link did not preview yet', cand);
-      } catch (e1) {
-        console.warn('[chat-image] attempt', f, plan[f], e1);
-        if (f === 0 || f === 1) await chatSleep(700 * (f + 1));
-      }
-      // the file did upload and the server gave us a link: stop re-uploading
-      if (!url && firstUploaded && f >= 1) url = firstUploaded;
-    }
-    if (!url) url = firstUploaded;
-    if (!url) throw new Error('upload failed');
-    job.urlsByIdx[i] = url;
-    return url;
-  }));
-}
-// One full attempt; throws on failure. Finished stages are remembered, so a retry
-// never re-uploads a photo / voice note that already made it.
-async function chatAttemptJob(job) {
-  if (job.kind === 'image' && !job.urls) {
-    job._stage = 'Upload';
-    const urls = await chatWithTimeout(chatUploadPhotos(job), 5 * 60 * 1000);
-    if (!urls || urls.some(function(u) { return !u; })) throw new Error('missing url');
-    job.urls = urls;
-    if (job.el) job.el.querySelectorAll('.chat-bubble-img').forEach(function(im, i) { if (urls[i]) im.src = urls[i]; });
-  }
-  if (job.kind === 'voice' && !job.publicUrl) {
-    job._stage = 'Upload';
-    const u = await chatWithTimeout(uploadToR2(job.blob, 'chat-voice', job.filename), CHAT_UPLOAD_TIMEOUT);
-    if (!u) throw new Error('No public URL from upload');
-    job.publicUrl = u;
-  }
-  job._stage = 'Save';
-  return await chatInsertJob(job);
-}
-function chatJobSucceeded(job, saved) {
-  clearTimeout(job._noteTimer);
-  chatOutbox.delete(job.id);
-  const el = job.el;
-  if (el) {
-    el.classList.remove('chat-msg-pending', 'chat-msg-failed');
-    const st = el.querySelector('.chat-msg-status'); if (st) st.remove();
-    if (saved && saved.id) {
-      el.dataset.msgId = saved.id;
-      job.tmpMsg.id = saved.id;
-      if (saved.created_at) job.tmpMsg.created_at = saved.created_at;
-      _chatMsgCache.set(String(saved.id), job.tmpMsg);
-    }
-    if (job.kind === 'voice') {
-      const playBtn = el.querySelector('.vn-play, .chat-voice-play');
-      if (playBtn) playBtn.dataset.src = job.publicUrl;
-      const bub = el.querySelector('.chat-bubble');
-      if (bub) bub.setAttribute('data-voice-url', job.publicUrl);
-      const pl = el.querySelector('.vn-player'); if (pl) pl.setAttribute('data-voice-url', job.publicUrl);
-      // own voice note: keep the local recording so it plays instantly, never buffers
-      if (job.localUrl) chatVoiceCacheSet(job.publicUrl, job.localUrl, true);
-    }
-  }
-  try { updateInboxRow(job.convId, chatJobPreview(job), new Date().toISOString()); } catch (e) {}
-  try { markConvRead(job.convId); } catch (e) {}
-}
-async function chatRunJob(job) {
-  if (!job || job._running || !currentUser) return false;
-  job._running = true;
-  chatSetMsgStatus(job, 'sending');
-  const MAX_AUTO = 3;                       // quietly try up to 3 times before bothering the user
-  let lastErr = null;
-  for (let attempt = 0; attempt < MAX_AUTO; attempt++) {
-    try {
-      const saved = await chatAttemptJob(job);
-      chatJobSucceeded(job, saved);
-      job._running = false;
-      return true;
-    } catch (err) {
-      lastErr = err;
-      console.warn('[chat-send] attempt ' + (attempt + 1) + ' failed (' + job.kind + ', ' + job._stage + ')', err);
-      if (typeof navigator !== 'undefined' && navigator.onLine === false) break;   // no network: wait for it
-      if (attempt < MAX_AUTO - 1) await chatSleep(1500 * (attempt + 1));
-    }
-  }
-  job._running = false;
-  chatSetMsgStatus(job, 'failed', chatFriendlyReason(job, job._stage, lastErr));
-  return false;
-}
-// Put unsent/failed messages back on screen when a chat is reopened
-function chatRestoreOutbox(convId) {
-  const msgsEl = document.getElementById('chat-messages');
-  if (!msgsEl) return;
-  chatOutbox.forEach(function(job) {
-    if (job.convId !== convId || !job.el) return;
-    if (!msgsEl.contains(job.el)) msgsEl.appendChild(job.el);
-  });
-  msgsEl.scrollTop = msgsEl.scrollHeight;
-}
-function chatRetryFailedJobs() {
-  chatOutbox.forEach(function(job) { if (job.state === 'failed') chatRunJob(job); });
 }
 
 async function chatSend(opts) {
@@ -2436,12 +2041,76 @@ async function chatSend(opts) {
       msgsEl.appendChild(imgEl);
       msgsEl.scrollTop = msgsEl.scrollHeight;
     }
-    const job = chatMakeJob({
-      kind: 'image', convId: activeChatId, el: imgEl, tmpMsg: tmpImgMsg,
-      items: items, text: text || '', replyId: replySnapshot?.id || null, fileNames: [],
-    });
-    updateInboxRow(activeChatId, items.length > 1 ? '📷 ' + items.length + ' photos' : '📷 Photo', tmpImgMsg.created_at);
-    chatRunJob(job);
+    let urls;
+    try {
+      urls = await Promise.all(items.map(async function(it, i) {
+        let blob = it.file;
+        try {
+          if (typeof compressChatImage === 'function') {
+            blob = await compressChatImage(it.file);
+          }
+        } catch (ce) {
+          console.warn('[chat-image] compress', ce);
+          blob = it.file;
+        }
+        if (!blob) throw new Error('No image data');
+        // Ensure Blob/File has a type (Worker may reject empty type)
+        if (!(blob instanceof Blob)) throw new Error('Invalid image blob');
+        if (!blob.type) {
+          blob = new Blob([blob], { type: 'image/jpeg' });
+        }
+        const filename = (currentUser.id || 'u') + '-' + Date.now() + '-' + i + '.jpg';
+        // Same R2 path style as voice: folder prefix only
+        let url = null;
+        try {
+          url = await uploadToR2(blob, 'chat', filename);
+        } catch (e1) {
+          // Fallback folders if worker whitelist is strict
+          try {
+            url = await uploadToR2(blob, 'posts', filename);
+          } catch (e2) {
+            if (typeof uploadImageToR2 === 'function') {
+              url = await uploadImageToR2(blob, 'posts', filename);
+            } else {
+              throw e2;
+            }
+          }
+        }
+        if (!url) throw new Error('No public URL from upload');
+        return url;
+      }));
+      if (!urls || urls.some(function(u) { return !u; })) throw new Error('missing url');
+    } catch (err) {
+      console.warn('[chat-image] R2', err);
+      showToast((err && err.message) ? ('Upload: ' + err.message) : 'Image upload failed');
+      if (imgEl) imgEl.remove();
+      return;
+    }
+    // Swap local previews for the hosted URLs
+    imgEl?.querySelectorAll('.chat-bubble-img').forEach(function(el, i) { if (urls[i]) el.src = urls[i]; });
+    const msgPayload = {
+      conversation_id: activeChatId,
+      sender_id: currentUser.id,
+      type: 'image',
+      media_url: urls.length > 1 ? JSON.stringify(urls) : urls[0],
+      content: text || '',
+      reply_to_id: replySnapshot?.id || null,
+    };
+    // Never persist blob:/data: — refresh would show blank tiles
+    if (String(msgPayload.media_url).indexOf('blob:') >= 0 || String(msgPayload.media_url).indexOf('data:') >= 0) {
+      showToast('Upload incomplete — try again');
+      if (imgEl) imgEl.remove();
+      return;
+    }
+    const { error: insertErr } = await supabase.from('messages').insert(msgPayload);
+    if (insertErr) {
+      console.warn('[chat-image] insert', insertErr);
+      showToast(insertErr.message || 'Failed to send image');
+    }
+    else {
+      updateInboxRow(activeChatId, urls.length > 1 ? '📷 ' + urls.length + ' photos' : '📷 Photo', new Date().toISOString());
+      markConvRead(activeChatId);
+    }
     return;
   }
   // ── TEXT SEND ──
@@ -2461,46 +2130,20 @@ async function chatSend(opts) {
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
   updateInboxRow(activeChatId, text, tmpMsg.created_at);
-  const job = chatMakeJob({
-    kind: 'text', convId: activeChatId, el: el, tmpMsg: tmpMsg,
-    text: text, replyId: replySnapshot?.id || null,
+  const { error } = await supabase.from('messages').insert({
+    conversation_id: activeChatId,
+    sender_id: currentUser.id,
+    type: 'text',
+    content: text,
+    reply_to_id: replySnapshot?.id || null,
   });
-  chatRunJob(job);
-}
-// ── Add a message from the other side (realtime OR catch-up) — never twice ──
-async function chatAppendIncoming(msg, convId) {
-  if (!msg || !msg.id) return;
-  const exists = function() {
-    return !!document.querySelector('#chat-messages .chat-msg-row[data-msg-id="' + msg.id + '"]');
-  };
-  if (exists()) return;
-  if (!msg.sender) {
-    try {
-      const { data: sender } = await supabase.from('users').select('id,username,avatar').eq('id', msg.sender_id).maybeSingle();
-      msg.sender = sender;
-    } catch (e) {}
-    if (exists()) return;
-  }
-  if (activeChatId !== convId) return;
-  const msgsEl = document.getElementById('chat-messages');
-  if (!msgsEl) return;
-  const lastRow = msgsEl.querySelector('.chat-msg-row:last-child');
-  const lastSenderId = lastRow
-    ? (lastRow.classList.contains('sent') ? currentUser?.id : activeChatUserId)
-    : null;
-  const el = buildMessageEl(msg, lastSenderId);
-  if (el) {
-    msgsEl.appendChild(el);
-    msgsEl.scrollTop = msgsEl.scrollHeight;
-    if (msg.type === 'voice' && msg.media_url) chatPrefetchVoice(String(msg.media_url).replace(/"/g, ''));
-  }
-  markConvRead(convId);
-  updateInboxRow(convId, msg.content || (msg.type === 'voice' ? '🎙 Voice note' : msg.type === 'image' ? '📷 Photo' : ''), msg.created_at);
+  if (error) showToast('Message failed to send');
+  markConvRead(activeChatId);
 }
 // ── Subscribe to realtime messages ──
 function subscribeToChat(convId) {
   if (msgRealtimeSub) supabase.removeChannel(msgRealtimeSub);
-  const sub = supabase
+  msgRealtimeSub = supabase
     .channel('chat-' + convId)
     // ── New message arrives ──
     .on('postgres_changes', {
@@ -2511,7 +2154,23 @@ function subscribeToChat(convId) {
     }, payload => {
       const msg = payload.new;
       if (msg.sender_id === currentUser?.id) return;
-      chatAppendIncoming(msg, convId);
+      supabase.from('users').select('id,username,avatar').eq('id', msg.sender_id).maybeSingle()
+        .then(({ data: sender }) => {
+          msg.sender = sender;
+          const msgsEl = document.getElementById('chat-messages');
+          if (!msgsEl) return;
+          const lastRow = msgsEl.querySelector('.chat-msg-row:last-child');
+          const lastSenderId = lastRow
+            ? (lastRow.classList.contains('sent') ? currentUser?.id : activeChatUserId)
+            : null;
+          const el = buildMessageEl(msg, lastSenderId);
+          if (el) {
+            msgsEl.appendChild(el);
+            msgsEl.scrollTop = msgsEl.scrollHeight;
+          }
+          markConvRead(convId);
+          updateInboxRow(convId, msg.content || '', msg.created_at);
+        });
     })
     // ── Other user read the chat → show Seen ──
     .on('postgres_changes', {
@@ -2526,14 +2185,7 @@ function subscribeToChat(convId) {
         showSeenIndicator();
       }
     })
-    .subscribe(function(status) {
-      if (msgRealtimeSub !== sub) return;          // an old channel closing on purpose
-      if (status === 'SUBSCRIBED') return;
-      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-        chatScheduleResync('channel-' + status, 3000);
-      }
-    });
-  msgRealtimeSub = sub;
+    .subscribe();
 }
 // ── Update inbox row with latest message (real-time) ──
 // ── Show typing in inbox row ──
@@ -2569,12 +2221,10 @@ function updateInboxRow(convId, text, time) {
 }
 // ── Subscribe to inbox updates (new messages in any conversation) ──
 let inboxRealtimeSub = null;
-let inboxConvIds = [];
 function subscribeToInbox(convIds) {
   if (inboxRealtimeSub) supabase.removeChannel(inboxRealtimeSub);
   if (!convIds?.length) return;
-  inboxConvIds = convIds;
-  const inboxSub = supabase
+  inboxRealtimeSub = supabase
     .channel('inbox-updates')
     .on('postgres_changes', {
       event: 'UPDATE',
@@ -2613,13 +2263,7 @@ function subscribeToInbox(convIds) {
       const list = document.getElementById('msg-inbox-list');
       if (list && list.firstChild !== row) list.prepend(row);
     })
-    .subscribe(function(status) {
-      if (inboxRealtimeSub !== inboxSub) return;
-      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-        chatScheduleResync('inbox-' + status, 3000);
-      }
-    });
-  inboxRealtimeSub = inboxSub;
+    .subscribe();
 }
 // ── Mark conversation as read ──
 async function markConvRead(convId) {
@@ -3047,73 +2691,44 @@ async function voiceSendDraft() {
     updateInboxRow(activeChatId, '🎙 Voice note', tmpMsg.created_at);
   }
 
-  const job = chatMakeJob({
-    kind: 'voice', convId: activeChatId, el: el, tmpMsg: tmpMsg,
-    blob: blob, durationSec: durationSec, localUrl: draft.url,
-    filename: (currentUser.id || 'u') + '-' + Date.now() + '.' + ext,
-  });
-  chatRunJob(job);
-}
-
-
-// ══════════════════════════════════════════
-// VOICE NOTES — download ahead of time so playback never stalls on the network
-// ══════════════════════════════════════════
-const chatVoiceCache = new Map();   // remote url -> blob: url (fully downloaded)
-const chatVoiceOwn = new Set();     // remote urls whose blob is the sender's own recording
-const chatVoiceBusy = new Set();    // downloads in progress
-const chatVoiceWarm = new Map();    // fallback: <audio preload> elements when CORS blocks fetch
-const CHAT_VOICE_CACHE_MAX = 40;
-function chatVoiceCacheSet(remote, local, own) {
-  if (!remote || !local) return;
-  chatVoiceCache.set(remote, local);
-  if (own) chatVoiceOwn.add(remote);
-  while (chatVoiceCache.size > CHAT_VOICE_CACHE_MAX) {
-    const oldest = chatVoiceCache.keys().next().value;
-    const lu = chatVoiceCache.get(oldest);
-    chatVoiceCache.delete(oldest);
-    if (!chatVoiceOwn.has(oldest)) { try { URL.revokeObjectURL(lu); } catch (e) {} }
-    chatVoiceOwn.delete(oldest);
-  }
-}
-async function chatPrefetchVoice(url) {
-  if (!url || url.indexOf('http') !== 0) return;
-  if (chatVoiceCache.has(url) || chatVoiceBusy.has(url) || chatVoiceWarm.has(url)) return;
-  chatVoiceBusy.add(url);
+  showToast('Sending voice…');
+  let publicUrl = null;
   try {
-    const res = await fetch(url, { cache: 'force-cache' });
-    if (!res.ok) throw new Error('http ' + res.status);
-    const blob = await res.blob();
-    if (!blob || !blob.size) throw new Error('empty');
-    chatVoiceCacheSet(url, URL.createObjectURL(blob), false);
-  } catch (e) {
-    // Bucket without CORS: let the browser at least buffer it in the background
-    try {
-      const a = new Audio();
-      a.preload = 'auto';
-      a.src = url;
-      chatVoiceWarm.set(url, a);
-    } catch (e2) {}
-  } finally {
-    chatVoiceBusy.delete(url);
+    const filename = (currentUser.id || 'u') + '-' + Date.now() + '.' + ext;
+    publicUrl = await uploadToR2(blob, 'chat-voice', filename);
+  } catch (err) {
+    console.warn('[voice] R2', err);
+    showToast('Upload failed — try again');
+    if (el) el.remove();
+    try { URL.revokeObjectURL(draft.url); } catch (e) {}
+    return;
   }
-}
-// newest voice notes first, a few at a time
-function chatPrefetchVoiceIn(root, limit) {
-  if (!root) return;
-  const urls = [];
-  root.querySelectorAll('.vn-play[data-src]').forEach(function(b) {
-    const u = b.dataset.src;
-    if (u && u.indexOf('http') === 0 && urls.indexOf(u) < 0) urls.push(u);
-  });
-  const queue = urls.slice(-(limit || 20)).reverse();
-  let active = 0;
-  (function pump() {
-    while (active < 3 && queue.length) {
-      active++;
-      chatPrefetchVoice(queue.shift()).finally(function() { active--; pump(); });
-    }
-  })();
+
+  const payload = {
+    conversation_id: activeChatId,
+    sender_id: currentUser.id,
+    type: 'voice',
+    media_url: publicUrl,
+    media_duration: durationSec,
+    content: '',
+  };
+  const { error: insertErr } = await supabase.from('messages').insert(payload);
+  if (insertErr) {
+    console.warn('[voice] insert', insertErr);
+    showToast(insertErr.message || 'Could not save voice note');
+    if (el) el.remove();
+    return;
+  }
+
+  const playBtn = el && el.querySelector('.chat-voice-play');
+  if (playBtn) playBtn.dataset.src = publicUrl;
+  if (el) {
+    const bubble = el.querySelector('.chat-bubble');
+    if (bubble) bubble.setAttribute('data-voice-url', publicUrl);
+  }
+  try { URL.revokeObjectURL(draft.url); } catch (e) {}
+  if (typeof markConvRead === 'function') markConvRead(activeChatId);
+  showToast('Voice sent');
 }
 
 function chatPlayVoice(btn, waveId) {
@@ -3178,12 +2793,7 @@ function chatPlayVoice(btn, waveId) {
     });
   }
 
-  // Prefer the fully-downloaded copy (instant, no buffering); else a pre-buffered element; else stream
-  const localCopy = chatVoiceCache.get(url);
-  let audio;
-  if (localCopy) audio = new Audio(localCopy);
-  else if (chatVoiceWarm.has(url)) { audio = chatVoiceWarm.get(url); chatVoiceWarm.delete(url); try { audio.currentTime = 0; } catch (e) {} }
-  else { audio = new Audio(url); chatPrefetchVoice(url); }
+  const audio = new Audio(url);
   audio.playbackRate = rate;
   _voiceAudio = audio;
   setPlayingUI(true);
@@ -3341,124 +2951,3 @@ document.addEventListener('focusin', function(e) {
 document.addEventListener('DOMContentLoaded', function() {
   try { rebuildChatComposer(true); } catch (e) {}
 });
-
-
-// ══════════════════════════════════════════
-// SESSION RESUME — come back from lost network / sleep without refreshing
-// Realtime does not replay what was missed, so on resume we re-subscribe,
-// fetch what arrived meanwhile, refresh the inbox and retry unsent messages.
-// ══════════════════════════════════════════
-const CHAT_CATCHUP_SELECT = `id, type, content, media_url, media_duration,
-  cash_amount, cash_currency, cash_note, cash_status,
-  product_id, offer_amount, offer_status,
-  order_status, reply_to_id, created_at, sender_id, status,
-  sender:users!sender_id(id, username, avatar)`;
-let _chatResyncTimer = null;
-let _chatResyncing = false;
-let _chatHiddenAt = 0;
-
-function chatNetBanner(text) {
-  let b = document.getElementById('chat-net-banner');
-  if (!text) { if (b) b.classList.remove('show'); return; }
-  if (!b) {
-    b = document.createElement('div');
-    b.id = 'chat-net-banner';
-    document.body.appendChild(b);
-  }
-  b.textContent = text;
-  void b.offsetWidth;
-  b.classList.add('show');
-}
-function chatScheduleResync(reason, delay) {
-  clearTimeout(_chatResyncTimer);
-  _chatResyncTimer = setTimeout(function() { chatResync(reason); }, delay == null ? 800 : delay);
-}
-// Messages that arrived while we were away, oldest first
-async function chatCatchUp(convId) {
-  const msgsEl = document.getElementById('chat-messages');
-  if (!msgsEl || !convId) return;
-  let newest = null;
-  msgsEl.querySelectorAll('.chat-msg-row[data-msg-id]').forEach(function(r) {
-    const id = r.dataset.msgId;
-    if (!id || id.indexOf('tmp-') === 0) return;
-    const m = _chatMsgCache.get(id);
-    if (m && m.created_at && (!newest || m.created_at > newest)) newest = m.created_at;
-  });
-  if (!newest) {                       // empty/demo chat → just reload it
-    await loadChatMessages(convId);
-    chatRestoreOutbox(convId);
-    return;
-  }
-  const { data, error } = await supabase.from('messages')
-    .select(CHAT_CATCHUP_SELECT)
-    .eq('conversation_id', convId)
-    .is('deleted_at', null)
-    .gt('created_at', newest)
-    .order('created_at', { ascending: true })
-    .limit(200);
-  if (error || !data || !data.length) return;
-  // my own unsent/failed messages may already exist on the server — don't show them twice
-  const hasPendingOwn = Array.from(chatOutbox.values()).some(function(j) { return j.convId === convId; });
-  for (let i = 0; i < data.length; i++) {
-    const m = data[i];
-    if (m.sender_id === currentUser.id && hasPendingOwn) continue;
-    await chatAppendIncoming(m, convId);
-  }
-  try { assignClusterClasses(msgsEl); } catch (e) {}
-}
-async function chatResync(reason) {
-  if (_chatResyncing || !currentUser) return;
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
-  _chatResyncing = true;
-  try {
-    // 1) live connections
-    if (activeChatId) {
-      const convId = activeChatId;
-      subscribeToChat(convId);
-      try { stopPresence(); subscribeToPresence(convId); wireChatTyping(); } catch (e) {}
-      await chatCatchUp(convId);
-      markConvRead(convId);
-    }
-    if (inboxConvIds && inboxConvIds.length) subscribeToInbox(inboxConvIds);
-    // 2) inbox list + unread dot
-    msgInboxLoaded = false;
-    const inboxPage = document.getElementById('page-messages');
-    if (inboxPage && inboxPage.classList.contains('active')) await loadMessages();
-    try { checkUnreadDmsOnStartup(); } catch (e) {}
-    // 3) anything that failed while offline
-    chatRetryFailedJobs();
-    chatNetBanner('');
-  } catch (e) {
-    console.warn('[resync]', reason, e);
-    chatScheduleResync('retry', 5000);
-  } finally {
-    _chatResyncing = false;
-  }
-}
-window.addEventListener('online', function() {
-  chatNetBanner('Back online — catching up…');
-  chatScheduleResync('online', 300);
-  setTimeout(function() { chatNetBanner(''); }, 2500);
-});
-window.addEventListener('offline', function() {
-  chatNetBanner('You’re offline — messages will send when you’re back');
-});
-document.addEventListener('visibilitychange', function() {
-  if (document.hidden) { _chatHiddenAt = Date.now(); return; }
-  // back to the tab / screen on: sockets are often dead after sleeping
-  if (_chatHiddenAt && Date.now() - _chatHiddenAt > 4000) chatScheduleResync('visible', 300);
-});
-window.addEventListener('pageshow', function(e) {
-  if (e.persisted) chatScheduleResync('pageshow', 300);
-});
-// Watchdog: if the live channel silently dropped, repair it
-setInterval(function() {
-  if (document.hidden || !currentUser) return;
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
-  const chatDead = activeChatId && msgRealtimeSub && msgRealtimeSub.state && msgRealtimeSub.state !== 'joined';
-  const inboxDead = inboxRealtimeSub && inboxRealtimeSub.state && inboxRealtimeSub.state !== 'joined';
-  if (chatDead || inboxDead) chatScheduleResync('watchdog', 200);
-}, 20000);
-if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-  setTimeout(function() { chatNetBanner('You’re offline — messages will send when you’re back'); }, 500);
-}
