@@ -886,8 +886,12 @@ function buildMessageEl(msg, prevSenderId, opts) {
     // only treat as image when type says so, or URL looks like an image
     let photoUrls = chatParseMediaUrls(msg.media_url || content);
     // Drop dead blob: URLs (only valid during the same session)
+    // (but keep them for optimistic in-flight messages, which use local previews)
+    const isPendingLocal = String(msg.id || '').indexOf('tmp-img-') === 0;
     photoUrls = photoUrls.filter(function(u) {
-      return u && !String(u).startsWith('blob:') && !String(u).startsWith('data:');
+      if (!u) return false;
+      if (isPendingLocal) return true;
+      return !String(u).startsWith('blob:') && !String(u).startsWith('data:');
     });
     bubble.className = 'chat-bubble img-bubble chat-bubble-photos';
     if (!photoUrls.length) {
@@ -2082,7 +2086,10 @@ async function chatSend(opts) {
       if (!urls || urls.some(function(u) { return !u; })) throw new Error('missing url');
     } catch (err) {
       console.warn('[chat-image] R2', err);
-      showToast((err && err.message) ? ('Upload: ' + err.message) : 'Image upload failed');
+      const em = (err && err.message) ? err.message : '';
+      showToast(/failed to fetch|networkerror|load failed/i.test(em)
+        ? 'Upload failed: could not reach the upload server (check R2 worker URL / CORS)'
+        : (em ? ('Upload: ' + em) : 'Image upload failed'));
       if (imgEl) imgEl.remove();
       return;
     }
