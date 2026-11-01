@@ -1983,10 +1983,10 @@ function chatImageSelected(input) {
       || /\.(jpe?g|png|gif|webp|heic|heif|bmp)$/i.test(name)
       || (!f.type && f.size > 0); // mobile often leaves type empty
     if (!looksImg) { skipped = true; return; }
-    if (f.size > 12 * 1024 * 1024) { skipped = true; return; }
+    if (f.size > 40 * 1024 * 1024) { skipped = true; return; }
     good.push(f);
   });
-  if (skipped) showToast('Some files skipped (images under 10MB only)');
+  if (skipped) showToast('Some files couldn’t be added (photos only)');
   input.value = '';
   if (!good.length) return;
   Promise.all(good.map(function(f) {
@@ -2061,26 +2061,53 @@ function chatParseMediaUrls(v) {
   if (t.indexOf('/') >= 0 && t.indexOf(' ') < 0) return [t];
   return t ? [t] : [];
 }
+// Shrinks any photo (small or huge) to a light JPEG: fixes phone rotation, flattens
+// transparency, and steps quality/size down until it is comfortably light to upload.
 function compressChatImage(file) {
-  return new Promise(function(resolve) {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = function() {
-      URL.revokeObjectURL(url);
-      const MAX = 1280;
-      let width = img.width, height = img.height;
-      if (width > MAX || height > MAX) {
-        if (width > height) { height = Math.round(height * MAX / width); width = MAX; }
-        else { width = Math.round(width * MAX / height); height = MAX; }
+  const TARGET = 900 * 1024;           // ~900 KB is plenty for chat
+  function viaImg() {
+    return new Promise(function(resolve, reject) {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = function() { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = function() { URL.revokeObjectURL(url); reject(new Error('decode')); };
+      img.src = url;
+    });
+  }
+  function decode() {
+    if (window.createImageBitmap) {
+      return createImageBitmap(file, { imageOrientation: 'from-image' }).catch(function() { return viaImg(); });
+    }
+    return viaImg();
+  }
+  function encode(src, max, q) {
+    return new Promise(function(resolve) {
+      let w = src.width, h = src.height;
+      if (w > max || h > max) {
+        if (w >= h) { h = Math.round(h * max / w); w = max; } else { w = Math.round(w * max / h); h = max; }
       }
       const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-      canvas.toBlob(function(blob) { resolve(blob || file); }, 'image/jpeg', 0.82);
-    };
-    img.onerror = function() { URL.revokeObjectURL(url); resolve(file); };
-    img.src = url;
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(src, 0, 0, w, h);
+      canvas.toBlob(function(blob) { resolve(blob); }, 'image/jpeg', q);
+    });
+  }
+  return decode().then(async function(src) {
+    let max = 1600, q = 0.82, blob = null;
+    for (let i = 0; i < 5; i++) {
+      blob = await encode(src, max, q);
+      if (blob && blob.size <= TARGET) break;
+      max = Math.round(max * 0.8);
+      q = Math.max(0.6, q - 0.05);
+    }
+    try { if (src.close) src.close(); } catch (e) {}
+    if (blob && blob.size <= file.size) return blob;
+    return blob && file.size > TARGET ? blob : file;
+  }).catch(function() {
+    return file;                        // could not decode (unusual format) — caller checks size
   });
 }
 
@@ -2142,8 +2169,20 @@ function chatJobPreview(job) {
   if (job.kind === 'voice') return '🎙 Voice note';
   return job.text || '';
 }
-// Status line inside the bubble: faded while sending, red + Retry/Delete when failed
-function chatSetMsgStatus(job, state, err) {
+// Friendly wording — raw technical errors only go to the console
+function chatFriendlyReason(job, stage, err) {
+  const offline = (typeof navigator !== 'undefined' && navigator.onLine === false);
+  if (offline) return 'No connection';
+  const m = String((err && err.message) || '').toLowerCase();
+  if (m.indexOf('timeout') >= 0) return 'Slow connection';
+  if (m.indexOf('too large') >= 0) return 'Photo is too large';
+  if (stage === 'Upload') return job.kind === 'voice' ? 'Couldn’t upload voice note' : 'Couldn’t upload photo';
+  return 'Couldn’t send';
+}
+const CHAT_ICON_WARN = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 7.5v5.5M12 16.6v.1"/></svg>';
+const CHAT_ICON_RETRY = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>';
+// Status inside the bubble: "Sending…" while in flight, a calm "Try again" card if it fails
+function chatSetMsgStatus(job, state, reason) {
   job.state = state;
   const el = job.el;
   if (!el) return;
@@ -2153,17 +2192,29 @@ function chatSetMsgStatus(job, state, err) {
   if (!host) return;
   const old = host.querySelector(':scope > .chat-msg-status');
   if (old) old.remove();
+  clearTimeout(job._noteTimer);
+  if (state === 'sending') {
+    // only show "Sending…" if it is taking a moment (no flicker on instant sends)
+    job._noteTimer = setTimeout(function() {
+      if (job.state !== 'sending' || host.querySelector(':scope > .chat-msg-status')) return;
+      const n = document.createElement('div');
+      n.className = 'chat-msg-status is-sending';
+      n.innerHTML = '<span class="chat-msg-spinner"></span><span class="chat-msg-status-text">Sending…</span>';
+      host.appendChild(n);
+    }, 700);
+    return;
+  }
   if (state !== 'failed') return;
-  const offline = (typeof navigator !== 'undefined' && navigator.onLine === false);
-  let reason = '';
-  if (err && err.message && !offline) reason = String(err.message).slice(0, 160);
   const st = document.createElement('div');
-  st.className = 'chat-msg-status';
+  st.className = 'chat-msg-status is-failed';
+  st.setAttribute('role', 'alert');
   st.innerHTML =
-    '<span class="chat-msg-status-text">' + (offline ? 'No connection · not sent' : 'Not sent') + '</span>' +
-    (reason ? '<span class="chat-msg-status-why">' + escHtml(reason) + '</span>' : '') +
-    '<button type="button" class="chat-msg-retry">Retry</button>' +
-    '<button type="button" class="chat-msg-discard">Delete</button>';
+    '<span class="chat-msg-status-icon">' + CHAT_ICON_WARN + '</span>' +
+    '<span class="chat-msg-status-text">' + escHtml(reason || 'Couldn’t send') + '</span>' +
+    '<span class="chat-msg-status-actions">' +
+      '<button type="button" class="chat-msg-retry">' + CHAT_ICON_RETRY + 'Try again</button>' +
+      '<button type="button" class="chat-msg-discard">Delete</button>' +
+    '</span>';
   st.querySelector('.chat-msg-retry').addEventListener('click', function(e) {
     e.stopPropagation(); chatRunJob(job);
   });
@@ -2217,89 +2268,114 @@ async function chatInsertJob(job) {
   try { saved = await chatFindSentCopy(job, payload); } catch (e) {}
   return saved || {};
 }
+function chatSleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
 async function chatUploadPhotos(job) {
   const items = job.items;
   return await Promise.all(items.map(async function(it, i) {
     if (job.urlsByIdx[i]) return job.urlsByIdx[i];          // already uploaded on an earlier attempt
-    let blob = it.file;
-    try { if (typeof compressChatImage === 'function') blob = await compressChatImage(it.file); }
-    catch (ce) { console.warn('[chat-image] compress', ce); blob = it.file; }
-    if (!blob) throw new Error('No image data');
-    const jpegBlob = (blob instanceof Blob && blob.type && blob.type.indexOf('image/') === 0)
-      ? blob : new Blob([blob], { type: 'image/jpeg' });
+    if (!it.prepared) {                                      // shrink once, reuse on retries
+      let blob = it.file;
+      try { blob = await compressChatImage(it.file); } catch (ce) { blob = it.file; }
+      if (!blob) throw new Error('No image data');
+      if (blob === it.file && it.file.size > 12 * 1024 * 1024) throw new Error('Photo too large to prepare');
+      it.prepared = (blob instanceof Blob && blob.type && blob.type.indexOf('image/') === 0)
+        ? blob : new Blob([blob], { type: 'image/jpeg' });
+    }
+    const jpegBlob = it.prepared;
     const filename = job.fileNames[i] || (job.fileNames[i] = (currentUser.id || 'u') + '-' + Date.now() + '-' + i + '.jpg');
     const upFile = (typeof File === 'function') ? new File([jpegBlob], filename, { type: jpegBlob.type }) : jpegBlob;
-    let url = null;
-    const errs = [];
-    const folders = ['chat', 'posts', 'chat-voice'];   // last one is the folder voice notes already use
-    for (let f = 0; f < folders.length && !url; f++) {
+    const perTry = 30000 + Math.round((upFile.size || 0) / 1024) * 60;   // bigger file → more time
+    let url = null, firstUploaded = null;
+    // main folder gets a second chance for hiccups, the others one try each
+    const plan = ['chat', 'chat', 'posts', 'chat-voice'];
+    for (let f = 0; f < plan.length && !url; f++) {
       try {
-        let cand = await uploadToR2(upFile, folders[f], filename);
-        if (!cand && typeof uploadImageToR2 === 'function') cand = await uploadImageToR2(upFile, folders[f], filename);
+        let cand = await chatWithTimeout(uploadToR2(upFile, plan[f], filename), perTry);
+        if (!cand && typeof uploadImageToR2 === 'function') cand = await chatWithTimeout(uploadImageToR2(upFile, plan[f], filename), perTry);
         if (!cand) throw new Error('no link returned');
-        let ok = await chatVerifyImageUrl(cand);
-        if (!ok) { await new Promise(function(r) { setTimeout(r, 1200); }); ok = await chatVerifyImageUrl(cand); }
-        if (ok) url = cand;
-        else throw new Error('link not reachable');
+        if (!firstUploaded) firstUploaded = cand;
+        if (await chatVerifyImageUrl(cand, 12000)) url = cand;
+        else console.warn('[chat-image] link did not preview yet', cand);
       } catch (e1) {
-        errs.push(folders[f] + ': ' + ((e1 && e1.message) || 'failed'));
-        console.warn('[chat-image] folder', folders[f], e1);
+        console.warn('[chat-image] attempt', f, plan[f], e1);
+        if (f === 0 || f === 1) await chatSleep(700 * (f + 1));
       }
+      // the file did upload and the server gave us a link: stop re-uploading
+      if (!url && firstUploaded && f >= 1) url = firstUploaded;
     }
-    if (!url) throw new Error(errs.join(' | ') + ' (' + Math.round((upFile.size || 0) / 1024) + ' KB)');
+    if (!url) url = firstUploaded;
+    if (!url) throw new Error('upload failed');
     job.urlsByIdx[i] = url;
     return url;
   }));
+}
+// One full attempt; throws on failure. Finished stages are remembered, so a retry
+// never re-uploads a photo / voice note that already made it.
+async function chatAttemptJob(job) {
+  if (job.kind === 'image' && !job.urls) {
+    job._stage = 'Upload';
+    const urls = await chatWithTimeout(chatUploadPhotos(job), 5 * 60 * 1000);
+    if (!urls || urls.some(function(u) { return !u; })) throw new Error('missing url');
+    job.urls = urls;
+    if (job.el) job.el.querySelectorAll('.chat-bubble-img').forEach(function(im, i) { if (urls[i]) im.src = urls[i]; });
+  }
+  if (job.kind === 'voice' && !job.publicUrl) {
+    job._stage = 'Upload';
+    const u = await chatWithTimeout(uploadToR2(job.blob, 'chat-voice', job.filename), CHAT_UPLOAD_TIMEOUT);
+    if (!u) throw new Error('No public URL from upload');
+    job.publicUrl = u;
+  }
+  job._stage = 'Save';
+  return await chatInsertJob(job);
+}
+function chatJobSucceeded(job, saved) {
+  clearTimeout(job._noteTimer);
+  chatOutbox.delete(job.id);
+  const el = job.el;
+  if (el) {
+    el.classList.remove('chat-msg-pending', 'chat-msg-failed');
+    const st = el.querySelector('.chat-msg-status'); if (st) st.remove();
+    if (saved && saved.id) {
+      el.dataset.msgId = saved.id;
+      job.tmpMsg.id = saved.id;
+      if (saved.created_at) job.tmpMsg.created_at = saved.created_at;
+      _chatMsgCache.set(String(saved.id), job.tmpMsg);
+    }
+    if (job.kind === 'voice') {
+      const playBtn = el.querySelector('.vn-play, .chat-voice-play');
+      if (playBtn) playBtn.dataset.src = job.publicUrl;
+      const bub = el.querySelector('.chat-bubble');
+      if (bub) bub.setAttribute('data-voice-url', job.publicUrl);
+      const pl = el.querySelector('.vn-player'); if (pl) pl.setAttribute('data-voice-url', job.publicUrl);
+      // own voice note: keep the local recording so it plays instantly, never buffers
+      if (job.localUrl) chatVoiceCacheSet(job.publicUrl, job.localUrl, true);
+    }
+  }
+  try { updateInboxRow(job.convId, chatJobPreview(job), new Date().toISOString()); } catch (e) {}
+  try { markConvRead(job.convId); } catch (e) {}
 }
 async function chatRunJob(job) {
   if (!job || job._running || !currentUser) return false;
   job._running = true;
   chatSetMsgStatus(job, 'sending');
-  let stage = 'Upload';
-  try {
-    if (job.kind === 'image' && !job.urls) {
-      job.urls = await chatWithTimeout(chatUploadPhotos(job), CHAT_UPLOAD_TIMEOUT * 2);
-      if (!job.urls || job.urls.some(function(u) { return !u; })) throw new Error('missing url');
-      if (job.el) job.el.querySelectorAll('.chat-bubble-img').forEach(function(im, i) { if (job.urls[i]) im.src = job.urls[i]; });
+  const MAX_AUTO = 3;                       // quietly try up to 3 times before bothering the user
+  let lastErr = null;
+  for (let attempt = 0; attempt < MAX_AUTO; attempt++) {
+    try {
+      const saved = await chatAttemptJob(job);
+      chatJobSucceeded(job, saved);
+      job._running = false;
+      return true;
+    } catch (err) {
+      lastErr = err;
+      console.warn('[chat-send] attempt ' + (attempt + 1) + ' failed (' + job.kind + ', ' + job._stage + ')', err);
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) break;   // no network: wait for it
+      if (attempt < MAX_AUTO - 1) await chatSleep(1500 * (attempt + 1));
     }
-    if (job.kind === 'voice' && !job.publicUrl) {
-      job.publicUrl = await chatWithTimeout(uploadToR2(job.blob, 'chat-voice', job.filename), CHAT_UPLOAD_TIMEOUT);
-      if (!job.publicUrl) throw new Error('No public URL from upload');
-    }
-    stage = 'Save';
-    const saved = await chatInsertJob(job);
-    // ── success ──
-    chatOutbox.delete(job.id);
-    const el = job.el;
-    if (el) {
-      el.classList.remove('chat-msg-pending', 'chat-msg-failed');
-      const st = el.querySelector('.chat-msg-status'); if (st) st.remove();
-      if (saved && saved.id) {
-        el.dataset.msgId = saved.id;
-        job.tmpMsg.id = saved.id;
-        if (saved.created_at) job.tmpMsg.created_at = saved.created_at;
-        _chatMsgCache.set(String(saved.id), job.tmpMsg);
-      }
-      if (job.kind === 'voice') {
-        const playBtn = el.querySelector('.vn-play, .chat-voice-play');
-        if (playBtn) playBtn.dataset.src = job.publicUrl;
-        const bub = el.querySelector('.chat-bubble');
-        if (bub) bub.setAttribute('data-voice-url', job.publicUrl);
-        const pl = el.querySelector('.vn-player'); if (pl) pl.setAttribute('data-voice-url', job.publicUrl);
-        // own voice note: keep the local recording so it plays instantly, never buffers
-        if (job.localUrl) chatVoiceCacheSet(job.publicUrl, job.localUrl, true);
-      }
-    }
-    try { updateInboxRow(job.convId, chatJobPreview(job), new Date().toISOString()); } catch (e) {}
-    try { markConvRead(job.convId); } catch (e) {}
-    job._running = false;
-    return true;
-  } catch (err) {
-    console.warn('[chat-send] failed', job.kind, err);
-    job._running = false;
-    chatSetMsgStatus(job, 'failed', new Error(stage + ': ' + ((err && err.message) || 'failed')));
-    return false;
   }
+  job._running = false;
+  chatSetMsgStatus(job, 'failed', chatFriendlyReason(job, job._stage, lastErr));
+  return false;
 }
 // Put unsent/failed messages back on screen when a chat is reopened
 function chatRestoreOutbox(convId) {
