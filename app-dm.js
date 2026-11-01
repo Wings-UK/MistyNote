@@ -1025,7 +1025,8 @@ function attachTapPopup(row, msg) {
       const imgEl = e.target.closest('.chat-bubble-img');
       if (imgEl) {
         e.preventDefault();
-        chatViewImage(msg.media_url || imgEl.src);
+        // Open the exact photo tapped (media_url may be a JSON list of several photos)
+        chatViewImage(imgEl.currentSrc || imgEl.src);
         return;
       }
     }
@@ -1226,6 +1227,7 @@ function chatViewImage(src) {
   overlay.id = 'chat-img-viewer';
   const img = document.createElement('img');
   img.className = 'chat-img-viewer-img';
+  img.referrerPolicy = 'no-referrer'; // same as thumbnails, so R2 accepts it
   img.src = src;
   img.alt = 'Photo';
   img.onclick = (e) => e.stopPropagation();
