@@ -11198,43 +11198,48 @@ body.desktop-blocked #username-picker {
    MESSAGE REACTIONS — under-bubble pills
 ══════════════════════════════════════════ */
 #page-chat .chat-msg-row.has-reactions {
-  margin-bottom: 4px;
+  /* bottom spacing lives on the reaction bar (previous 4px + 1px) */
+  margin-bottom: 0;
 }
 .chat-reaction-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  margin-top: 7px;
-  padding: 0 2px;
+  gap: 5px;
+  margin-top: 2px;    /* under the message card */
+  margin-bottom: 5px; /* previous 4px + 1px extra before next message */
+  padding: 0;
   max-width: 100%;
   animation: chatReactionBarIn 0.22s ease both;
 }
 .chat-reaction-bar[hidden] { display: none !important; }
 @keyframes chatReactionBarIn {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(3px); }
   to   { opacity: 1; transform: none; }
 }
+/* No fill — only a thin ring so the emoji stays the focus */
 .chat-reaction-pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  height: 28px;
-  padding: 0 9px;
+  gap: 3px;
+  height: 26px;
+  padding: 0 7px;
   border-radius: 999px;
-  border: 1px solid #e4e1db;
-  background: rgba(255,255,255,0.92);
+  border: 1px solid #e8e5df;
+  background: transparent;
   color: var(--text, #111);
   box-shadow: none;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s, border-color 0.15s;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.15s;
 }
 .chat-reaction-pill:active { transform: scale(0.94); }
+/* Your reaction: purple outline only — no background fill */
 .chat-reaction-pill.is-mine {
-  border-color: rgba(108, 71, 255, 0.35);
-  background: rgba(108, 71, 255, 0.10);
+  border-color: var(--accent, #6c47ff);
+  background: transparent;
+  box-shadow: 0 0 0 1px rgba(108, 71, 255, 0.12);
 }
 .chat-reaction-pill.pop {
   animation: chatReactionPop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -11249,7 +11254,7 @@ body.desktop-blocked #username-picker {
   line-height: 1;
 }
 .chat-reaction-count {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 650;
   color: var(--text2, #5a5754);
   font-variant-numeric: tabular-nums;
@@ -11264,10 +11269,11 @@ body.desktop-blocked #username-picker {
   padding: 0 2px;
 }
 [data-theme="dark"] .chat-reaction-pill {
-  background: rgba(26,26,29,0.92);
-  border-color: rgba(255,255,255,0.12);
+  background: transparent;
+  border-color: rgba(255,255,255,0.16);
 }
 [data-theme="dark"] .chat-reaction-pill.is-mine {
-  background: rgba(108, 71, 255, 0.18);
-  border-color: rgba(108, 71, 255, 0.4);
+  background: transparent;
+  border-color: var(--accent, #6c47ff);
+  box-shadow: 0 0 0 1px rgba(108, 71, 255, 0.2);
 }
