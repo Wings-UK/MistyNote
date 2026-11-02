@@ -763,6 +763,8 @@ async function loadChatMessages(convId) {
   });
   msgsEl.scrollTop = msgsEl.scrollHeight;
   assignClusterClasses(msgsEl);
+  chatHydrateReactions(msgsEl);
+  subscribeChatReactions(convId);
 }
 // ── Assign cluster classes for bubble shaping ──
 function assignClusterClasses(container) {
@@ -918,6 +920,220 @@ function chatJumpToMessage(id) {
 
 // ── Build a message element ──
 const _chatMsgCache = new Map(); // id -> message object (used to render reply previews)
+
+// ══════════════════════════════════════════
+// MESSAGE REACTIONS (1 per user per message)
+// ══════════════════════════════════════════
+const _chatReactionsByMsg = new Map(); // msgId -> [{emoji, user_id, username?}]
+let _chatReactionSub = null;
+
+function chatReactionHaptic() {
+  try {
+    if (navigator.vibrate) navigator.vibrate(12);
+  } catch (e) {}
+}
+
+function chatAggregateReactions(list) {
+  const map = new Map(); // emoji -> { emoji, count, mine, users: [] }
+  (list || []).forEach(function(r) {
+    if (!r || !r.emoji) return;
+    const key = r.emoji;
+    let g = map.get(key);
+    if (!g) {
+      g = { emoji: key, count: 0, mine: false, users: [] };
+      map.set(key, g);
+    }
+    g.count += 1;
+    g.users.push(r.user_id);
+    if (currentUser && r.user_id === currentUser.id) g.mine = true;
+  });
+  return Array.from(map.values()).sort(function(a, b) {
+    if (b.count !== a.count) return b.count - a.count;
+    return a.emoji.localeCompare(b.emoji);
+  });
+}
+
+function chatBuildReactionPill(msgId, list) {
+  const wrap = document.createElement('div');
+  wrap.className = 'chat-reaction-bar';
+  wrap.dataset.msgId = msgId || '';
+  const groups = chatAggregateReactions(list);
+  if (!groups.length) {
+    wrap.hidden = true;
+    return wrap;
+  }
+  wrap.hidden = false;
+  const show = groups.slice(0, 3);
+  const extra = groups.length - show.length;
+  show.forEach(function(g) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'chat-reaction-pill' + (g.mine ? ' is-mine' : '');
+    btn.dataset.emoji = g.emoji;
+    btn.setAttribute('aria-label', g.emoji + ' ' + g.count);
+    btn.innerHTML =
+      '<span class="chat-reaction-emoji">' + g.emoji + '</span>' +
+      (g.count > 1 ? '<span class="chat-reaction-count">' + g.count + '</span>' : '');
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      chatToggleReaction(msgId, g.emoji);
+    });
+    wrap.appendChild(btn);
+  });
+  if (extra > 0) {
+    const more = document.createElement('span');
+    more.className = 'chat-reaction-more-count';
+    more.textContent = '+' + extra;
+    wrap.appendChild(more);
+  }
+  return wrap;
+}
+
+function chatApplyReactionsToRow(row, msgId, list) {
+  if (!row) return;
+  _chatReactionsByMsg.set(String(msgId), list || []);
+  let bar = row.querySelector(':scope > .chat-reaction-bar');
+  const fresh = chatBuildReactionPill(msgId, list);
+  if (bar) bar.replaceWith(fresh);
+  else row.appendChild(fresh);
+  row.classList.toggle('has-reactions', !fresh.hidden);
+}
+
+async function chatFetchReactions(msgIds) {
+  if (!msgIds || !msgIds.length) return {};
+  const ids = msgIds.map(String).filter(function(id) {
+    return id && id.indexOf('tmp-') !== 0;
+  });
+  if (!ids.length) return {};
+  try {
+    const { data, error } = await supabase
+      .from('message_reactions')
+      .select('message_id, user_id, emoji, created_at')
+      .in('message_id', ids);
+    if (error) {
+      console.warn('[reactions] fetch', error);
+      return {};
+    }
+    const by = {};
+    (data || []).forEach(function(r) {
+      const mid = String(r.message_id);
+      if (!by[mid]) by[mid] = [];
+      by[mid].push(r);
+    });
+    return by;
+  } catch (e) {
+    console.warn('[reactions] fetch', e);
+    return {};
+  }
+}
+
+async function chatHydrateReactions(container) {
+  if (!container) return;
+  const rows = Array.from(container.querySelectorAll('.chat-msg-row[data-msg-id]'));
+  const ids = rows.map(function(r) { return r.dataset.msgId; }).filter(Boolean);
+  const by = await chatFetchReactions(ids);
+  rows.forEach(function(row) {
+    const id = row.dataset.msgId;
+    if (!id) return;
+    chatApplyReactionsToRow(row, id, by[id] || []);
+  });
+}
+
+async function chatToggleReaction(msgId, emoji) {
+  if (!currentUser || !msgId || !emoji) return;
+  if (String(msgId).indexOf('tmp-') === 0) {
+    showToast('Wait until the message sends');
+    return;
+  }
+  chatReactionHaptic();
+  const mid = String(msgId);
+  const list = (_chatReactionsByMsg.get(mid) || []).slice();
+  const mineIdx = list.findIndex(function(r) {
+    return r.user_id === currentUser.id;
+  });
+  const mine = mineIdx >= 0 ? list[mineIdx] : null;
+
+  // Optimistic
+  if (mine && mine.emoji === emoji) {
+    list.splice(mineIdx, 1);
+  } else if (mine) {
+    list[mineIdx] = { message_id: mid, user_id: currentUser.id, emoji: emoji };
+  } else {
+    list.push({ message_id: mid, user_id: currentUser.id, emoji: emoji });
+  }
+  const row = document.querySelector('.chat-msg-row[data-msg-id="' + mid.replace(/"/g, '') + '"]');
+  chatApplyReactionsToRow(row, mid, list);
+  const pill = row && row.querySelector('.chat-reaction-pill[data-emoji="' + emoji + '"]');
+  if (pill) {
+    pill.classList.remove('pop');
+    void pill.offsetWidth;
+    pill.classList.add('pop');
+  }
+
+  try {
+    if (mine && mine.emoji === emoji) {
+      const { error } = await supabase
+        .from('message_reactions')
+        .delete()
+        .eq('message_id', mid)
+        .eq('user_id', currentUser.id);
+      if (error) throw error;
+    } else if (mine) {
+      const { error } = await supabase
+        .from('message_reactions')
+        .update({ emoji: emoji })
+        .eq('message_id', mid)
+        .eq('user_id', currentUser.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('message_reactions')
+        .insert({ message_id: mid, user_id: currentUser.id, emoji: emoji });
+      if (error) throw error;
+    }
+  } catch (err) {
+    console.warn('[reactions] save', err);
+    showToast(err.message || 'Could not save reaction');
+    // Re-fetch truth
+    const by = await chatFetchReactions([mid]);
+    chatApplyReactionsToRow(row, mid, by[mid] || []);
+  }
+}
+
+function chatPickReaction(msgId, emoji) {
+  closeMsgPopup();
+  chatToggleReaction(msgId, emoji);
+}
+
+function subscribeChatReactions(convId) {
+  try {
+    if (_chatReactionSub) {
+      supabase.removeChannel(_chatReactionSub);
+      _chatReactionSub = null;
+    }
+  } catch (e) {}
+  if (!convId) return;
+  _chatReactionSub = supabase
+    .channel('msg-reactions-' + convId)
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'message_reactions',
+    }, function(payload) {
+      const row = payload.new || payload.old;
+      if (!row || !row.message_id) return;
+      const mid = String(row.message_id);
+      const el = document.querySelector('.chat-msg-row[data-msg-id="' + mid.replace(/"/g, '') + '"]');
+      if (!el) return;
+      chatFetchReactions([mid]).then(function(by) {
+        chatApplyReactionsToRow(el, mid, by[mid] || []);
+      });
+    })
+    .subscribe();
+}
+
+
 function buildMessageEl(msg, prevSenderId, opts) {
   if (!msg || msg.deleted_at) return null;
   opts = opts || {};
@@ -960,7 +1176,14 @@ function buildMessageEl(msg, prevSenderId, opts) {
     }
     row.appendChild(vb);
     if (!opts.embed) applyChatBubbleWidth(row, vb);
-    if (!opts.embed) { try { attachTapPopup(row, msg); } catch (e) {} }
+    if (!opts.embed) {
+      try { attachTapPopup(row, msg); } catch (e) {}
+      if (msg.id) {
+        const rb = chatBuildReactionPill(msg.id, msg._reactions || _chatReactionsByMsg.get(String(msg.id)) || []);
+        row.appendChild(rb);
+        row.classList.toggle('has-reactions', !rb.hidden);
+      }
+    }
     return row;
   } else if (type === 'image' || type === 'photo' || (msg.media_url && (type === 'image' || type === 'photo' || (!type || type === 'text') && /\.(jpe?g|png|gif|webp)/i.test(msg.media_url || '')))) {
     // only treat as image when type says so, or URL looks like an image
@@ -1055,7 +1278,14 @@ function buildMessageEl(msg, prevSenderId, opts) {
   } else if (!opts.embed) {
     applyChatBubbleWidth(row, bubble);
   }
-  if (!opts.embed) { try { attachTapPopup(row, msg); } catch (e) {} }
+  if (!opts.embed) {
+    try { attachTapPopup(row, msg); } catch (e) {}
+    if (msg.id) {
+      const rb = chatBuildReactionPill(msg.id, msg._reactions || _chatReactionsByMsg.get(String(msg.id)) || []);
+      row.appendChild(rb);
+      row.classList.toggle('has-reactions', !rb.hidden);
+    }
+  }
   return row;
 }
 
@@ -1243,8 +1473,7 @@ function showMsgPopup(row, msg, bubbleEl) {
     b.className = 'chat-msg-reaction-btn';
     b.textContent = em;
     b.addEventListener('click', function() {
-      showToast('Reaction — coming soon');
-      closeMsgPopup();
+      chatPickReaction(msg.id, em);
     });
     reactions.appendChild(b);
   });
@@ -1253,8 +1482,17 @@ function showMsgPopup(row, msg, bubbleEl) {
   moreR.className = 'chat-msg-reaction-more';
   moreR.textContent = '+';
   moreR.addEventListener('click', function() {
-    showToast('More reactions — coming soon');
-    closeMsgPopup();
+    // Expand strip slightly with more common emoji
+    const extra = ['🙏','😢','😍','👏','💯','😭','😡','🤝'];
+    extra.forEach(function(em) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chat-msg-reaction-btn';
+      b.textContent = em;
+      b.addEventListener('click', function() { chatPickReaction(msg.id, em); });
+      reactions.insertBefore(b, moreR);
+    });
+    moreR.remove();
   });
   reactions.appendChild(moreR);
   sheet.appendChild(reactions);
