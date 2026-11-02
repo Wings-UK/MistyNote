@@ -716,6 +716,7 @@ function closeMessagesInbox() {
 async function loadChatMessages(convId) {
   const msgsEl = document.getElementById('chat-messages');
   if (!msgsEl) return;
+  chatLastServerAt = null;
   const { data: messages, error } = await supabase
     .from('messages')
     .select(`id, type, content, media_url, media_duration,
@@ -739,6 +740,10 @@ async function loadChatMessages(convId) {
   }
   // Reverse so oldest is at top, newest at bottom
   const ordered = [...messages].reverse();
+  chatLastServerAt = null;
+  ordered.forEach(function(m) {
+    if (m.sender_id !== currentUser?.id && m.created_at && (!chatLastServerAt || m.created_at > chatLastServerAt)) chatLastServerAt = m.created_at;
+  });
   let lastDate = null;
   let lastSenderId = null;
   ordered.forEach((msg, idx) => {
@@ -772,6 +777,40 @@ function assignClusterClasses(container) {
     else if (prevSame && nextSame)  row.classList.add('cluster-mid');
     else if (prevSame && !nextSame) row.classList.add('cluster-bot');
   });
+}
+// ── Voice notes: download once, then play from the local copy (no mid-play stalls) ──
+const _voiceBlobCache = new Map();   // remote url -> local blob: url
+const _voiceLoading   = new Set();
+const _voiceQueue     = [];
+let   _voiceActiveDl  = 0;
+function chatCacheVoiceBlob(remoteUrl, blob) {
+  try {
+    if (!remoteUrl || !blob || _voiceBlobCache.has(remoteUrl)) return;
+    _voiceBlobCache.set(remoteUrl, URL.createObjectURL(blob));
+    if (_voiceBlobCache.size > 60) { // keep memory bounded
+      const oldest = _voiceBlobCache.keys().next().value;
+      try { URL.revokeObjectURL(_voiceBlobCache.get(oldest)); } catch (e) {}
+      _voiceBlobCache.delete(oldest);
+    }
+  } catch (e) {}
+}
+function chatPreloadVoice(url) {
+  if (!url || !/^https?:/i.test(url)) return;
+  if (_voiceBlobCache.has(url) || _voiceLoading.has(url)) return;
+  _voiceLoading.add(url);
+  _voiceQueue.push(url);
+  chatVoiceDrain();
+}
+function chatVoiceDrain() {
+  while (_voiceActiveDl < 2 && _voiceQueue.length) {
+    const url = _voiceQueue.shift();
+    _voiceActiveDl++;
+    fetch(url, { mode: 'cors' })
+      .then(function(r) { if (!r.ok) throw new Error('http ' + r.status); return r.blob(); })
+      .then(function(b) { chatCacheVoiceBlob(url, b); })
+      .catch(function() { /* silently fall back to streaming */ })
+      .then(function() { _voiceLoading.delete(url); _voiceActiveDl--; chatVoiceDrain(); });
+  }
 }
 // ── Send-state helpers (sending = faded, sent = normal, failed = pale then gone) ──
 const CHAT_NOT_SENT_MSG = 'Not sent: your network connection is bad';
@@ -1532,6 +1571,7 @@ function buildVoiceBubble(msg, isSent, timeStr) {
   const bubble = document.createElement('div');
   bubble.className = 'chat-bubble chat-bubble-voice';
   if (url) bubble.setAttribute('data-voice-url', url);
+  chatPreloadVoice(url);
 
   bubble.innerHTML =
     '<div class="vn-player" data-voice-url="' + url + '">' +
@@ -2236,9 +2276,82 @@ async function chatSend(opts) {
   }
   markConvRead(activeChatId);
 }
+// ── Catch up on messages missed while offline / backgrounded (no UI change) ──
+let chatLastServerAt = null;   // created_at of the newest server message shown
+let _chatCatchUpBusy = false;
+async function chatCatchUp() {
+  if (_chatCatchUpBusy || !activeChatId || !currentUser) return;
+  const page = document.getElementById('page-chat');
+  const msgsEl = document.getElementById('chat-messages');
+  if (!page || !page.classList.contains('active') || !msgsEl) return;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+  const convId = activeChatId;
+  _chatCatchUpBusy = true;
+  try {
+    let q = supabase
+      .from('messages')
+      .select(`id, type, content, media_url, media_duration,
+               cash_amount, cash_currency, cash_note, cash_status,
+               product_id, offer_amount, offer_status,
+               order_status, reply_to_id, created_at, sender_id, status,
+               sender:users!sender_id(id, username, avatar)`)
+      .eq('conversation_id', convId)
+      .neq('sender_id', currentUser.id)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: true })
+      .limit(100);
+    if (chatLastServerAt) q = q.gt('created_at', chatLastServerAt);
+    const { data, error } = await q;
+    if (error || !data || !data.length) return;
+    if (activeChatId !== convId) return; // switched chats while fetching
+    let added = 0, lastText = '', lastTime = null;
+    data.forEach(function(msg) {
+      if (!chatLastServerAt || msg.created_at > chatLastServerAt) chatLastServerAt = msg.created_at;
+      if (msgsEl.querySelector('.chat-msg-row[data-msg-id="' + String(msg.id).replace(/"/g, '') + '"]')) return;
+      const lastRow = msgsEl.querySelector('.chat-msg-row:last-child');
+      const lastSenderId = lastRow
+        ? (lastRow.classList.contains('sent') ? currentUser.id : activeChatUserId)
+        : null;
+      const el = buildMessageEl(msg, lastSenderId);
+      if (el) { msgsEl.appendChild(el); added++; lastText = msg.content || ''; lastTime = msg.created_at; }
+    });
+    if (added) {
+      msgsEl.scrollTop = msgsEl.scrollHeight;
+      try { markConvRead(convId); } catch (e) {}
+      try { updateInboxRow(convId, lastText, lastTime); } catch (e) {}
+    }
+  } catch (e) {
+    console.warn('[chat] catch-up', e);
+  } finally {
+    _chatCatchUpBusy = false;
+  }
+}
+(function initChatCatchUpTriggers() {
+  function soon(ms) { setTimeout(chatCatchUp, ms || 0); }
+  window.addEventListener('online', function() {
+    // Re-open the realtime channel if it did not recover by itself, then catch up
+    setTimeout(function() {
+      try {
+        if (activeChatId && (!msgRealtimeSub || (msgRealtimeSub.state && msgRealtimeSub.state !== 'joined'))) {
+          subscribeToChat(activeChatId);
+        }
+      } catch (e) {}
+      chatCatchUp();
+    }, 1200);
+  });
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') soon(300);
+  });
+  window.addEventListener('pageshow', function() { soon(300); });
+  // Safety net: if the socket silently died, this still picks messages up
+  setInterval(function() {
+    if (document.visibilityState === 'visible') chatCatchUp();
+  }, 20000);
+})();
 // ── Subscribe to realtime messages ──
 function subscribeToChat(convId) {
   if (msgRealtimeSub) supabase.removeChannel(msgRealtimeSub);
+  let _seenSubscribed = false;
   msgRealtimeSub = supabase
     .channel('chat-' + convId)
     // ── New message arrives ──
@@ -2255,6 +2368,7 @@ function subscribeToChat(convId) {
           msg.sender = sender;
           const msgsEl = document.getElementById('chat-messages');
           if (!msgsEl) return;
+          if (msgsEl.querySelector('.chat-msg-row[data-msg-id="' + String(msg.id).replace(/"/g, '') + '"]')) return;
           const lastRow = msgsEl.querySelector('.chat-msg-row:last-child');
           const lastSenderId = lastRow
             ? (lastRow.classList.contains('sent') ? currentUser?.id : activeChatUserId)
@@ -2281,7 +2395,13 @@ function subscribeToChat(convId) {
         showSeenIndicator();
       }
     })
-    .subscribe();
+    .subscribe(function(status) {
+      if (status === 'SUBSCRIBED') {
+        // A re-subscribe after a drop: fetch what we missed meanwhile
+        if (_seenSubscribed) chatCatchUp();
+        _seenSubscribed = true;
+      }
+    });
 }
 // ── Update inbox row with latest message (real-time) ──
 // ── Show typing in inbox row ──
@@ -2793,6 +2913,7 @@ async function voiceSendDraft() {
   try {
     const filename = (currentUser.id || 'u') + '-' + Date.now() + '.' + ext;
     publicUrl = await uploadToR2(blob, 'chat-voice', filename);
+    chatCacheVoiceBlob(publicUrl, blob); // sender already has the audio: play instantly
   } catch (err) {
     console.warn('[voice] R2', err);
     chatMarkFailed(el, chatSendFailMsg(err));
@@ -2893,7 +3014,9 @@ function chatPlayVoice(btn, waveId) {
     });
   }
 
-  const audio = new Audio(url);
+  const audio = new Audio(_voiceBlobCache.get(url) || url);
+  if (!_voiceBlobCache.has(url)) chatPreloadVoice(url); // next play is local
+  audio.preload = 'auto';
   audio.playbackRate = rate;
   _voiceAudio = audio;
   setPlayingUI(true);
