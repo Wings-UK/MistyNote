@@ -11090,3 +11090,40 @@ body.desktop-blocked #username-picker {
   .chat-msg-row .chat-bubble { transition: none; }
   .chat-msg-row.msg-failed { animation-duration: 0.01s !important; }
 }
+
+/* ══════════════════════════════════════════
+   TOAST — minimal floating card (replaces the black pill everywhere)
+   No close button: the app hides it on its own after a few seconds.
+══════════════════════════════════════════ */
+.toast {
+  display: block;
+  box-sizing: border-box;
+  width: calc(100vw - 32px);
+  max-width: 420px;
+  min-width: 0;
+  padding: 18px 22px;
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border2);
+  box-shadow: 0 6px 22px rgba(0,0,0,0.16), 0 1px 4px rgba(0,0,0,0.08);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: 0;
+  white-space: normal;
+  text-align: left;
+  transform: translateX(-50%) translateY(14px);
+  transition: opacity 0.25s ease, transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+.toast.show {
+  transform: translateX(-50%) translateY(0);
+}
+.toast::before { content: none; }
+[data-theme="dark"] .toast {
+  border-color: var(--border);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.55), 0 1px 4px rgba(0,0,0,0.35);
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast, .toast.show { transition: opacity 0.2s ease; }
+}
