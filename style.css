@@ -11277,3 +11277,115 @@ body.desktop-blocked #username-picker {
   border-color: var(--accent, #6c47ff);
   box-shadow: 0 0 0 1px rgba(108, 71, 255, 0.2);
 }
+
+
+/* ══════════════════════════════════════════
+   DELETE MESSAGE — Snap-style dialog + tombstone
+══════════════════════════════════════════ */
+.chat-deleted-divider {
+  /* same base as .chat-date-divider */
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  padding: 0 12px;
+}
+.chat-deleted-divider::before,
+.chat-deleted-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.chat-deleted-divider span {
+  font-size: 11px;
+  color: var(--text3);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  background: #f7f6f2;
+  padding: 3px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+}
+[data-theme="dark"] .chat-deleted-divider span {
+  background: var(--bg);
+}
+
+.chat-delete-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 22px;
+  background: rgba(0, 0, 0, 0.42);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+.chat-delete-overlay.open { opacity: 1; }
+.chat-delete-card {
+  width: min(100%, 320px);
+  background: #ffffff;
+  border-radius: 22px;
+  padding: 26px 20px 18px;
+  text-align: center;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.22);
+  transform: scale(0.94) translateY(8px);
+  transition: transform 0.22s cubic-bezier(0.34, 1.2, 0.64, 1);
+}
+.chat-delete-overlay.open .chat-delete-card {
+  transform: scale(1) translateY(0);
+}
+.chat-delete-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111;
+  letter-spacing: -0.2px;
+  margin-bottom: 8px;
+}
+.chat-delete-sub {
+  font-size: 14px;
+  line-height: 1.45;
+  color: #6b6b6b;
+  margin-bottom: 20px;
+  padding: 0 6px;
+}
+.chat-delete-btn {
+  display: block;
+  width: 100%;
+  border: none;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: 650;
+  font-family: var(--font);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.chat-delete-btn.primary {
+  background: #3a3a3e;
+  color: #fff;
+}
+.chat-delete-btn.primary:active { opacity: 0.9; }
+.chat-delete-btn.ghost {
+  background: transparent;
+  color: #111;
+  font-weight: 600;
+  margin-bottom: 2px;
+  padding: 12px 16px;
+}
+.chat-delete-btn.ghost:active { opacity: 0.65; }
+[data-theme="dark"] .chat-delete-card {
+  background: #1c1c1f;
+}
+[data-theme="dark"] .chat-delete-title { color: #f2f2f0; }
+[data-theme="dark"] .chat-delete-sub { color: #a0a09c; }
+[data-theme="dark"] .chat-delete-btn.primary {
+  background: #4a4a50;
+}
+[data-theme="dark"] .chat-delete-btn.ghost { color: #f2f2f0; }
