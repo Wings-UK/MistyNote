@@ -722,10 +722,9 @@ async function loadChatMessages(convId) {
     .select(`id, type, content, media_url, media_duration,
              cash_amount, cash_currency, cash_note, cash_status,
              product_id, offer_amount, offer_status,
-             order_status, reply_to_id, created_at, sender_id, status,
+             order_status, reply_to_id, created_at, sender_id, status, deleted_at,
              sender:users!sender_id(id, username, avatar)`)
     .eq('conversation_id', convId)
-    .is('deleted_at', null)
     .order('created_at', { ascending: false })
     .limit(500);
   if (error) {
@@ -759,7 +758,8 @@ async function loadChatMessages(convId) {
     }
     const el = buildMessageEl(msg, lastSenderId);
     if (el) msgsEl.appendChild(el);
-    lastSenderId = msg.sender_id;
+    if (!msg.deleted_at) lastSenderId = msg.sender_id;
+    else lastSenderId = null;
   });
   msgsEl.scrollTop = msgsEl.scrollHeight;
   assignClusterClasses(msgsEl);
@@ -1134,9 +1134,26 @@ function subscribeChatReactions(convId) {
 }
 
 
+function buildDeletedMessageEl(msg) {
+  const isMine = msg && currentUser && msg.sender_id === currentUser.id;
+  const name = (msg && msg.sender && msg.sender.username)
+    || (activeChatUser && activeChatUser.username)
+    || 'Someone';
+  const text = isMine ? 'You deleted a message' : (name + ' deleted a message');
+  const el = document.createElement('div');
+  el.className = 'chat-date-divider chat-deleted-divider';
+  el.dataset.msgId = (msg && msg.id) ? String(msg.id) : '';
+  el.innerHTML = '<span>' + escHtml(text) + '</span>';
+  return el;
+}
+
 function buildMessageEl(msg, prevSenderId, opts) {
-  if (!msg || msg.deleted_at) return null;
+  if (!msg) return null;
   opts = opts || {};
+  if (msg.deleted_at) {
+    if (opts.embed) return null;
+    return buildDeletedMessageEl(msg);
+  }
   if (msg.id && !opts.embed) _chatMsgCache.set(String(msg.id), msg);
   const isSent = msg.sender_id === currentUser?.id;
   // A reply always shows its own Name/ME + time on top, like a fresh message
@@ -1412,6 +1429,103 @@ function chatEnsureCloneLabel(cloneRow, srcRow, msgArg) {
     '</div>'
   );
 }
+
+// ── Delete message (for everyone) ──
+function chatConfirmDeleteMessage(msg) {
+  if (!msg || !msg.id) return;
+  if (String(msg.id).indexOf('tmp-') === 0) {
+    showToast('Message still sending');
+    return;
+  }
+  // Only the sender can delete
+  if (!currentUser || msg.sender_id !== currentUser.id) {
+    showToast('You can only delete your own messages');
+    return;
+  }
+  closeMsgPopup();
+  chatShowDeleteDialog(msg);
+}
+
+function chatShowDeleteDialog(msg) {
+  const existing = document.getElementById('chat-delete-dialog');
+  if (existing) existing.remove();
+
+  const wrap = document.createElement('div');
+  wrap.id = 'chat-delete-dialog';
+  wrap.className = 'chat-delete-overlay';
+  wrap.innerHTML =
+    '<div class="chat-delete-card" role="dialog" aria-modal="true" aria-labelledby="chat-delete-title">' +
+      '<div class="chat-delete-title" id="chat-delete-title">Delete Message?</div>' +
+      '<div class="chat-delete-sub">This removes the message for everyone in the chat.</div>' +
+      '<button type="button" class="chat-delete-btn primary" id="chat-delete-confirm">Delete Message</button>' +
+      '<button type="button" class="chat-delete-btn ghost" id="chat-delete-cancel">Cancel</button>' +
+    '</div>';
+  document.body.appendChild(wrap);
+  requestAnimationFrame(function() { wrap.classList.add('open'); });
+
+  function close() {
+    wrap.classList.remove('open');
+    setTimeout(function() { wrap.remove(); }, 200);
+  }
+  wrap.addEventListener('click', function(e) {
+    if (e.target === wrap) close();
+  });
+  wrap.querySelector('#chat-delete-cancel').addEventListener('click', close);
+  wrap.querySelector('#chat-delete-confirm').addEventListener('click', function() {
+    close();
+    chatDeleteMessage(msg);
+  });
+}
+
+async function chatDeleteMessage(msg) {
+  if (!msg || !msg.id || !currentUser) return;
+  const mid = String(msg.id);
+  const row = document.querySelector('.chat-msg-row[data-msg-id="' + mid.replace(/"/g, '') + '"]')
+    || document.querySelector('.chat-deleted-divider[data-msg-id="' + mid.replace(/"/g, '') + '"]');
+
+  // Optimistic: swap to deleted placeholder
+  const tomb = buildDeletedMessageEl({
+    id: mid,
+    sender_id: currentUser.id,
+    sender: { username: 'You' },
+    deleted_at: new Date().toISOString(),
+  });
+  if (row && row.parentNode) {
+    row.replaceWith(tomb);
+  }
+
+  try {
+    const { error } = await supabase
+      .from('messages')
+      .update({
+        deleted_at: new Date().toISOString(),
+        content: '',
+        media_url: null,
+        type: 'text',
+      })
+      .eq('id', mid)
+      .eq('sender_id', currentUser.id);
+    if (error) throw error;
+  } catch (err) {
+    console.warn('[delete]', err);
+    showToast(err.message || 'Could not delete');
+    // Reload truth
+    if (activeChatId) loadChatMessages(activeChatId);
+  }
+}
+
+function chatReplaceRowWithDeleted(msg) {
+  if (!msg || !msg.id) return;
+  const mid = String(msg.id);
+  const el = document.querySelector('.chat-msg-row[data-msg-id="' + mid.replace(/"/g, '') + '"]')
+    || document.querySelector('.chat-deleted-divider[data-msg-id="' + mid.replace(/"/g, '') + '"]');
+  if (!el || !el.parentNode) return;
+  if (el.classList.contains('chat-deleted-divider')) return;
+  const tomb = buildDeletedMessageEl(msg);
+  el.replaceWith(tomb);
+}
+
+
 function showMsgPopup(row, msg, bubbleEl) {
   closeMsgPopup();
   const isSent = row.classList.contains('sent');
@@ -1534,7 +1648,7 @@ function showMsgPopup(row, msg, bubbleEl) {
       navigator.clipboard.writeText(t).then(function() { showToast('Copied'); }).catch(function() { showToast('Could not copy'); });
     } else showToast('Could not copy');
   });
-  addOpt(icDel, 'Delete', function() { showToast('Delete — coming soon'); });
+  addOpt(icDel, 'Delete', function() { chatConfirmDeleteMessage(msg); });
   addOpt(icFwd, 'Forward Message', function() { showToast('Forward — coming soon'); });
   addOpt(icFlag, 'Report', function() { showToast('Report — coming soon'); });
 
@@ -2836,6 +2950,23 @@ function subscribeToChat(convId) {
           markConvRead(convId);
           updateInboxRow(convId, msg.content || '', msg.created_at);
         });
+    })
+    // ── Message updated (e.g. deleted) ──
+    .on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'messages',
+      filter: `conversation_id=eq.${convId}`,
+    }, payload => {
+      const msg = payload.new;
+      if (!msg) return;
+      if (msg.deleted_at) {
+        // Attach sender name when possible for the placeholder
+        if (!msg.sender && msg.sender_id === activeChatUserId && activeChatUser) {
+          msg.sender = activeChatUser;
+        }
+        chatReplaceRowWithDeleted(msg);
+      }
     })
     // ── Other user read the chat → show Seen ──
     .on('postgres_changes', {
