@@ -1643,13 +1643,26 @@ function showMsgPopup(row, msg, bubbleEl) {
     if (typeof chatSetReply === 'function') chatSetReply(msg.id);
     else showToast('Reply — coming soon');
   });
-  // Edit only for own text-like messages
-  const canEdit = currentUser && msg.sender_id === currentUser.id
-    && !msg.deleted_at
-    && String(msg.id || '').indexOf('tmp-') !== 0
-    && (!msg.type || msg.type === 'text' || msg.type === 'emoji');
+  // Edit: own text messages only (use .sent as source of truth — IDs can mismatch types)
+  const liveMsg = (row && row._chatMsg) ? row._chatMsg : msg;
+  const uid = (typeof currentUser !== 'undefined' && currentUser && currentUser.id)
+    ? String(currentUser.id)
+    : (typeof window !== 'undefined' && window.currentUser && window.currentUser.id)
+      ? String(window.currentUser.id) : '';
+  const senderId = String((liveMsg && liveMsg.sender_id) || row.dataset.senderId || '');
+  const msgType = String((liveMsg && liveMsg.type) || msg.type || 'text').toLowerCase();
+  const isOwn = !!(row && row.classList.contains('sent')) || (uid && senderId && uid === senderId);
+  const isTextish = !msgType || msgType === 'text' || msgType === 'emoji' || msgType === 'null' || msgType === 'undefined';
+  const notMedia = !(row && (
+    row.querySelector('.chat-bubble-photos, .chat-bubble-video, .chat-bubble-voice, .vn-player, .vn-card')
+  ));
+  const canEdit = isOwn && isTextish && notMedia
+    && !(liveMsg && liveMsg.deleted_at)
+    && String((liveMsg && liveMsg.id) || msg.id || '').indexOf('tmp-') !== 0;
   if (canEdit) {
-    addOpt(icEdit, 'Edit Message', function() { chatStartEdit(msg); });
+    addOpt(icEdit, 'Edit Message', function() {
+      chatStartEdit(liveMsg || msg);
+    });
   }
   addOpt(icCopy, 'Copy', function() {
     const t = msg.content || (msg.type === 'voice' ? 'Voice note' : '') || '';
@@ -2434,13 +2447,20 @@ function chatCancelEdit() {
 }
 
 function chatStartEdit(msg) {
-  if (!msg || !msg.id || !currentUser) return;
-  if (msg.sender_id !== currentUser.id) {
+  if (!msg || !msg.id) return;
+  const uid = currentUser && currentUser.id ? String(currentUser.id)
+    : (window.currentUser && window.currentUser.id ? String(window.currentUser.id) : '');
+  if (!uid) { showToast('Sign in to edit'); return; }
+  // Allow if sender matches OR the row is marked sent (ID type mismatches happen)
+  const row = document.querySelector('.chat-msg-row[data-msg-id="' + String(msg.id).replace(/"/g, '') + '"]');
+  const isOwn = (msg.sender_id && String(msg.sender_id) === uid)
+    || (row && row.classList.contains('sent'));
+  if (!isOwn) {
     showToast('You can only edit your own messages');
     return;
   }
-  const type = msg.type || 'text';
-  if (type !== 'text' && type !== 'emoji') {
+  const type = String(msg.type || 'text').toLowerCase();
+  if (type && type !== 'text' && type !== 'emoji' && type !== 'null') {
     showToast('Only text messages can be edited');
     return;
   }
