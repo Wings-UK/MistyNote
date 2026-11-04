@@ -162,6 +162,7 @@ let msgTypingTimer     = null;
 let msgInboxLoaded     = false;
 let chatPendingImage   = null;  // { file, dataUrl } — MUST exist before chatSend
 let chatReplyTo        = null;  // { id, senderName, content, mediaUrl }
+let chatEditTarget     = null;  // { id, originalContent } — text edit in progress
 // ── Helpers ──
 function msgTimeSince(iso) {
   const diff = (Date.now() - new Date(iso)) / 1000;
@@ -722,7 +723,7 @@ async function loadChatMessages(convId) {
     .select(`id, type, content, media_url, media_duration,
              cash_amount, cash_currency, cash_note, cash_status,
              product_id, offer_amount, offer_status,
-             order_status, reply_to_id, created_at, sender_id, status, deleted_at,
+             order_status, reply_to_id, created_at, sender_id, status, deleted_at, edited_at,
              sender:users!sender_id(id, username, avatar)`)
     .eq('conversation_id', convId)
     .order('created_at', { ascending: false })
@@ -1165,11 +1166,12 @@ function buildMessageEl(msg, prevSenderId, opts) {
   row.dataset.senderId = msg.sender_id || '';
 
   const timeStr = msg.created_at ? msgFormatTime(msg.created_at) : '';
+  const editedMark = msg.edited_at ? ' <span class="chat-edited-mark">· edited</span>' : '';
   const label = isSent ? 'ME' : (msg.sender?.username || activeChatUser?.username || 'Them');
 
   const labelRow = document.createElement('div');
   labelRow.className = 'chat-msg-label-row';
-  labelRow.innerHTML = `<span class="chat-msg-label">${escHtml(label)}</span><span class="chat-msg-time">${timeStr}</span>`;
+  labelRow.innerHTML = `<span class="chat-msg-label">${escHtml(label)}</span><span class="chat-msg-time">${timeStr}${editedMark}</span>`;
 
   const type = msg.type || 'text';
   const content = msg.content || '';
@@ -1629,18 +1631,26 @@ function showMsgPopup(row, msg, bubbleEl) {
     list.appendChild(btn);
   }
 
-  const icSave = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+  // Reply arrow (curved) + pencil for Edit
+  const icReply = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 00-4-4H4"/></svg>';
+  const icEdit = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>';
   const icCopy = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>';
   const icDel  = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>';
   const icFwd  = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 004 4h12"/></svg>';
-  const icSnap = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>';
   const icFlag = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>';
 
-  addOpt(icSnap, 'Chat Reply', function() {
+  addOpt(icReply, 'Reply', function() {
     if (typeof chatSetReply === 'function') chatSetReply(msg.id);
     else showToast('Reply — coming soon');
   });
-  addOpt(icSave, 'Save in Chat', function() { showToast('Save in Chat — coming soon'); });
+  // Edit only for own text-like messages
+  const canEdit = currentUser && msg.sender_id === currentUser.id
+    && !msg.deleted_at
+    && String(msg.id || '').indexOf('tmp-') !== 0
+    && (!msg.type || msg.type === 'text' || msg.type === 'emoji');
+  if (canEdit) {
+    addOpt(icEdit, 'Edit Message', function() { chatStartEdit(msg); });
+  }
   addOpt(icCopy, 'Copy', function() {
     const t = msg.content || (msg.type === 'voice' ? 'Voice note' : '') || '';
     if (!t) { showToast('Nothing to copy'); return; }
@@ -2342,6 +2352,7 @@ function chatPickEmoji(emoji) {
 
 
 function chatSetReply(msgId) {
+  try { if (typeof chatCancelEdit === 'function') chatCancelEdit(); } catch (e) {}
   const row = document.querySelector('#page-chat .chat-msg-row[data-msg-id="' + msgId + '"]')
            || document.querySelector('.chat-msg-row[data-msg-id="' + msgId + '"]');
   if (!row) return;
@@ -2408,6 +2419,191 @@ function chatSetReply(msgId) {
   if (msgs) requestAnimationFrame(function() { msgs.scrollTop = msgs.scrollHeight; });
   document.getElementById('chat-input-field')?.focus();
 }
+
+function chatCancelEdit() {
+  chatEditTarget = null;
+  const bar = document.getElementById('chat-edit-bar');
+  if (bar) bar.remove();
+  const field = document.getElementById('chat-input-field');
+  if (field) {
+    field.value = '';
+    field.style.height = 'auto';
+    field.placeholder = 'Send a chat';
+  }
+  if (typeof syncChatActionBtn === 'function') syncChatActionBtn();
+}
+
+function chatStartEdit(msg) {
+  if (!msg || !msg.id || !currentUser) return;
+  if (msg.sender_id !== currentUser.id) {
+    showToast('You can only edit your own messages');
+    return;
+  }
+  const type = msg.type || 'text';
+  if (type !== 'text' && type !== 'emoji') {
+    showToast('Only text messages can be edited');
+    return;
+  }
+  // Cancel reply / pending media if any
+  try { if (typeof chatCancelReply === 'function') chatCancelReply(); } catch (e) {}
+  try { if (typeof chatCancelImage === 'function') chatCancelImage(); } catch (e) {}
+  chatEditTarget = { id: String(msg.id), originalContent: msg.content || '' };
+
+  const inputBar = document.getElementById('chat-input-bar');
+  if (inputBar) {
+    const old = document.getElementById('chat-edit-bar');
+    if (old) old.remove();
+    const bar = document.createElement('div');
+    bar.id = 'chat-edit-bar';
+    bar.className = 'chat-edit-bar';
+    bar.innerHTML =
+      '<div class="chat-edit-bar-accent"></div>' +
+      '<div class="chat-edit-bar-body">' +
+        '<div class="chat-edit-bar-name">Edit message</div>' +
+        '<div class="chat-edit-bar-text">' + escHtml((msg.content || '').slice(0, 80)) + '</div>' +
+      '</div>' +
+      '<button type="button" class="chat-edit-bar-close" aria-label="Cancel edit">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>' +
+      '</button>';
+    bar.querySelector('.chat-edit-bar-close').addEventListener('click', function(e) {
+      e.stopPropagation();
+      chatCancelEdit();
+    });
+    inputBar.insertBefore(bar, inputBar.firstChild);
+  }
+
+  const field = document.getElementById('chat-input-field');
+  if (field) {
+    field.value = msg.content || '';
+    field.placeholder = 'Edit message';
+    field.style.height = 'auto';
+    if (typeof chatInputResize === 'function') chatInputResize(field);
+    field.focus();
+    try {
+      const len = field.value.length;
+      field.setSelectionRange(len, len);
+    } catch (e) {}
+  }
+  if (typeof syncChatActionBtn === 'function') syncChatActionBtn();
+  const msgs = document.getElementById('chat-messages');
+  if (msgs) requestAnimationFrame(function() { msgs.scrollTop = msgs.scrollHeight; });
+}
+
+async function chatSaveEdit(newText) {
+  if (!chatEditTarget || !currentUser) return false;
+  const mid = chatEditTarget.id;
+  const text = String(newText || '').trim();
+  if (!text) {
+    showToast('Message cannot be empty');
+    return true; // handled
+  }
+  if (text === (chatEditTarget.originalContent || '').trim()) {
+    chatCancelEdit();
+    return true;
+  }
+
+  // Optimistic UI
+  const row = document.querySelector('.chat-msg-row[data-msg-id="' + mid.replace(/"/g, '') + '"]');
+  if (row) {
+    const bubble = row.querySelector('.chat-bubble:not(.chat-bubble-voice)');
+    if (bubble) {
+      // Keep label row if present
+      const label = bubble.querySelector(':scope > .chat-msg-label-row');
+      const embed = bubble.querySelector(':scope > .chat-reply-embed');
+      bubble.className = 'chat-bubble';
+      bubble.textContent = '';
+      if (label) bubble.appendChild(label);
+      if (embed) bubble.appendChild(embed);
+      if (typeof linkifyText === 'function') {
+        const span = document.createElement('div');
+        span.className = 'chat-bubble-text';
+        span.innerHTML = linkifyText(text);
+        bubble.appendChild(span);
+      } else {
+        bubble.appendChild(document.createTextNode(text));
+      }
+      // edited mark on time
+      const timeEl = bubble.querySelector('.chat-msg-time') || row.querySelector('.chat-msg-time');
+      if (timeEl && !timeEl.querySelector('.chat-edited-mark')) {
+        const mark = document.createElement('span');
+        mark.className = 'chat-edited-mark';
+        mark.textContent = ' · edited';
+        timeEl.appendChild(mark);
+      }
+    }
+    if (row._chatMsg) {
+      row._chatMsg.content = text;
+      row._chatMsg.edited_at = new Date().toISOString();
+    }
+  }
+
+  const target = chatEditTarget;
+  chatCancelEdit();
+
+  try {
+    let error = null;
+    // Prefer setting edited_at when the column exists
+    let r = await supabase
+      .from('messages')
+      .update({ content: text, edited_at: new Date().toISOString() })
+      .eq('id', mid)
+      .eq('sender_id', currentUser.id);
+    error = r.error;
+    if (error && /edited_at/i.test(String(error.message || error.details || ''))) {
+      r = await supabase
+        .from('messages')
+        .update({ content: text })
+        .eq('id', mid)
+        .eq('sender_id', currentUser.id);
+      error = r.error;
+    }
+    if (error) throw error;
+  } catch (err) {
+    console.warn('[edit]', err);
+    showToast(err.message || 'Could not edit');
+    if (activeChatId) loadChatMessages(activeChatId);
+  }
+  return true;
+}
+
+function chatApplyEditedMessage(msg) {
+  if (!msg || !msg.id || msg.deleted_at) return;
+  const mid = String(msg.id);
+  const row = document.querySelector('.chat-msg-row[data-msg-id="' + mid.replace(/"/g, '') + '"]');
+  if (!row) return;
+  const bubble = row.querySelector('.chat-bubble:not(.chat-bubble-voice)');
+  if (!bubble) return;
+  const type = msg.type || 'text';
+  if (type !== 'text' && type !== 'emoji') return;
+  const text = msg.content || '';
+  const label = bubble.querySelector(':scope > .chat-msg-label-row');
+  const embed = bubble.querySelector(':scope > .chat-reply-embed');
+  bubble.className = 'chat-bubble';
+  bubble.textContent = '';
+  if (label) bubble.appendChild(label);
+  if (embed) bubble.appendChild(embed);
+  if (typeof linkifyText === 'function') {
+    const span = document.createElement('div');
+    span.className = 'chat-bubble-text';
+    span.innerHTML = linkifyText(text);
+    bubble.appendChild(span);
+  } else {
+    bubble.appendChild(document.createTextNode(text));
+  }
+  const timeEl = bubble.querySelector('.chat-msg-time') || row.querySelector('.chat-msg-time');
+  if (timeEl && msg.edited_at && !timeEl.querySelector('.chat-edited-mark')) {
+    const mark = document.createElement('span');
+    mark.className = 'chat-edited-mark';
+    mark.textContent = ' · edited';
+    timeEl.appendChild(mark);
+  }
+  if (row._chatMsg) {
+    row._chatMsg.content = text;
+    row._chatMsg.edited_at = msg.edited_at || row._chatMsg.edited_at;
+  }
+}
+
+
 function chatCancelReply() {
   chatReplyTo = null;
   const card = document.getElementById('chat-reply-card');
@@ -2683,6 +2879,13 @@ async function chatSend(opts) {
   opts = opts || {};
   const field = document.getElementById('chat-input-field');
   const text  = field?.value?.trim();
+  // Editing existing message
+  if (chatEditTarget) {
+    if (typeof chatSaveEdit === 'function') {
+      await chatSaveEdit(text);
+    }
+    return;
+  }
   const hasImage = !!(typeof chatPendingImage !== 'undefined' && chatPendingImage);
   if (!text && !hasImage) return;
   if (!activeChatId || !currentUser) return;
@@ -2966,6 +3169,8 @@ function subscribeToChat(convId) {
           msg.sender = activeChatUser;
         }
         chatReplaceRowWithDeleted(msg);
+      } else if (msg.content != null) {
+        chatApplyEditedMessage(msg);
       }
     })
     // ── Other user read the chat → show Seen ──
