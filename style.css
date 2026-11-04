@@ -11217,16 +11217,16 @@ body.desktop-blocked #username-picker {
   from { opacity: 0; transform: translateY(3px); }
   to   { opacity: 1; transform: none; }
 }
-/* No fill — only a thin ring so the emoji stays the focus */
+/* Others: bare emoji only — no fill, no outline */
 .chat-reaction-pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 3px;
   height: 26px;
-  padding: 0 7px;
+  padding: 0 4px;
   border-radius: 999px;
-  border: 1px solid #e8e5df;
+  border: 1px solid transparent;
   background: transparent;
   color: var(--text, #111);
   box-shadow: none;
@@ -11235,11 +11235,12 @@ body.desktop-blocked #username-picker {
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.15s;
 }
 .chat-reaction-pill:active { transform: scale(0.94); }
-/* Your reaction: purple outline only — no background fill */
+/* Your reaction: thin grey outline (no fill) so you can tell it's yours */
 .chat-reaction-pill.is-mine {
-  border-color: var(--accent, #6c47ff);
+  border-color: #e8e5df;
   background: transparent;
-  box-shadow: 0 0 0 1px rgba(108, 71, 255, 0.12);
+  box-shadow: none;
+  padding: 0 7px;
 }
 .chat-reaction-pill.pop {
   animation: chatReactionPop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -11270,12 +11271,12 @@ body.desktop-blocked #username-picker {
 }
 [data-theme="dark"] .chat-reaction-pill {
   background: transparent;
-  border-color: rgba(255,255,255,0.16);
+  border-color: transparent;
 }
 [data-theme="dark"] .chat-reaction-pill.is-mine {
   background: transparent;
-  border-color: var(--accent, #6c47ff);
-  box-shadow: 0 0 0 1px rgba(108, 71, 255, 0.2);
+  border-color: rgba(255,255,255,0.22);
+  box-shadow: none;
 }
 
 
