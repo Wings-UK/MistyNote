@@ -11389,3 +11389,56 @@ body.desktop-blocked #username-picker {
   background: #4a4a50;
 }
 [data-theme="dark"] .chat-delete-btn.ghost { color: #f2f2f0; }
+
+
+/* ══════════════════════════════════════════
+   EDIT MESSAGE BAR + edited mark
+══════════════════════════════════════════ */
+.chat-edit-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 10px 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(108, 71, 255, 0.08);
+  border: 1px solid rgba(108, 71, 255, 0.18);
+}
+.chat-edit-bar-accent {
+  width: 3px;
+  align-self: stretch;
+  border-radius: 3px;
+  background: var(--accent, #6c47ff);
+  flex-shrink: 0;
+}
+.chat-edit-bar-body { flex: 1; min-width: 0; }
+.chat-edit-bar-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent, #6c47ff);
+  margin-bottom: 2px;
+}
+.chat-edit-bar-text {
+  font-size: 13px;
+  color: var(--text2, #5a5754);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chat-edit-bar-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text2);
+  flex-shrink: 0;
+}
+.chat-edit-bar-close:active { background: var(--border); }
+.chat-edited-mark {
+  font-weight: 500;
+  font-size: 10px;
+  opacity: 0.75;
+  letter-spacing: 0;
+}
