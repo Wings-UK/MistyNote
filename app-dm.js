@@ -829,6 +829,26 @@ function chatMarkSent(row) {
   if (!row || !row.classList) return;
   row.classList.remove('msg-sending');
 }
+/** After insert: swap optimistic tmp- id for the real server id so Edit/Delete/React work immediately */
+function chatPromoteTempRow(row, realId, extra) {
+  if (!row || !realId) return;
+  const oldId = row.dataset.msgId || '';
+  const rid = String(realId);
+  row.dataset.msgId = rid;
+  if (row._chatMsg) {
+    row._chatMsg.id = rid;
+    if (extra) {
+      if (extra.created_at) row._chatMsg.created_at = extra.created_at;
+      if (extra.type) row._chatMsg.type = extra.type;
+    }
+  }
+  try {
+    if (typeof _chatMsgCache !== 'undefined' && _chatMsgCache) {
+      if (oldId) _chatMsgCache.delete(String(oldId));
+      if (row._chatMsg) _chatMsgCache.set(rid, row._chatMsg);
+    }
+  } catch (e) {}
+}
 function chatMarkFailed(row, message) {
   try { showToast(message || CHAT_NOT_SENT_MSG); } catch (e) {}
   if (!row || !row.classList || !row.parentNode) return;
@@ -2881,15 +2901,18 @@ async function chatSendVideo(item, text, replySnapshot, lastSenderId, msgsEl) {
     reply_to_id: replySnapshot?.id || null,
   };
   let insertErr = null;
+  let insertedVid = null;
   try {
-    const r = await supabase.from('messages').insert(payload);
+    const r = await supabase.from('messages').insert(payload).select('id, created_at').single();
     insertErr = r.error;
+    insertedVid = r.data;
   } catch (ie) { insertErr = ie || new Error('network'); }
   if (insertErr) {
     console.warn('[chat-video] insert', insertErr);
     chatMarkFailed(el, chatSendFailMsg(insertErr));
     return;
   }
+  if (insertedVid && insertedVid.id) chatPromoteTempRow(el, insertedVid.id, insertedVid);
   chatMarkSent(el);
   try { updateInboxRow(activeChatId, '🎥 Video', new Date().toISOString()); } catch (e) {}
   try { markConvRead(activeChatId); } catch (e) {}
@@ -3012,15 +3035,18 @@ async function chatSend(opts) {
       return;
     }
     let insertErr = null;
+    let insertedImg = null;
     try {
-      const r = await supabase.from('messages').insert(msgPayload);
+      const r = await supabase.from('messages').insert(msgPayload).select('id, created_at').single();
       insertErr = r.error;
+      insertedImg = r.data;
     } catch (ie) { insertErr = ie || new Error('network'); }
     if (insertErr) {
       console.warn('[chat-image] insert', insertErr);
       chatMarkFailed(imgEl, chatSendFailMsg(insertErr));
     }
     else {
+      if (insertedImg && insertedImg.id) chatPromoteTempRow(imgEl, insertedImg.id, insertedImg);
       chatMarkSent(imgEl);
       updateInboxRow(activeChatId, urls.length > 1 ? '📷 ' + urls.length + ' photos' : '📷 Photo', new Date().toISOString());
       markConvRead(activeChatId);
@@ -3046,6 +3072,7 @@ async function chatSend(opts) {
   chatMarkSending(el);
   updateInboxRow(activeChatId, text, tmpMsg.created_at);
   let error = null;
+  let inserted = null;
   try {
     const r = await supabase.from('messages').insert({
       conversation_id: activeChatId,
@@ -3053,8 +3080,9 @@ async function chatSend(opts) {
       type: 'text',
       content: text,
       reply_to_id: replySnapshot?.id || null,
-    });
+    }).select('id, created_at, type, content, sender_id').single();
     error = r.error;
+    inserted = r.data;
   } catch (te) { error = te || new Error('network'); }
   if (error) {
     chatMarkFailed(el, chatSendFailMsg(error));
@@ -3064,6 +3092,7 @@ async function chatSend(opts) {
       if (typeof syncChatActionBtn === 'function') syncChatActionBtn();
     }
   } else {
+    if (inserted && inserted.id) chatPromoteTempRow(el, inserted.id, inserted);
     chatMarkSent(el);
   }
   markConvRead(activeChatId);
@@ -3741,16 +3770,20 @@ async function voiceSendDraft() {
     content: '',
   };
   let insertErr = null;
+  let insertedVoice = null;
   try {
-    const r = await supabase.from('messages').insert(payload);
+    const r = await supabase.from('messages').insert(payload).select('id, created_at').single();
     insertErr = r.error;
+    insertedVoice = r.data;
   } catch (ve) { insertErr = ve || new Error('network'); }
   if (insertErr) {
     console.warn('[voice] insert', insertErr);
     chatMarkFailed(el, chatSendFailMsg(insertErr));
     return;
   }
+  if (insertedVoice && insertedVoice.id) chatPromoteTempRow(el, insertedVoice.id, insertedVoice);
   chatMarkSent(el);
+
 
   const playBtn = el && el.querySelector('.chat-voice-play');
   if (playBtn) playBtn.dataset.src = publicUrl;
