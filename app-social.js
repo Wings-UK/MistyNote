@@ -524,12 +524,16 @@ async function renderMyProfile() {
           : `<div class="prf-cover-gradient"></div>`}
         <div class="prf-cover-bar">
           <div></div>
-          <div class="prf-cover-actions"></div>
+          <div class="prf-cover-actions" onclick="event.stopPropagation()">
+            <button type="button" class="prf-cover-action-btn" onclick="event.stopPropagation();pickProfileMedia('cover')" title="Change cover" aria-label="Change cover">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            </button>
+          </div>
         </div>
       </div>
       <!-- AVATAR ROW -->
       <div class="prf-avatar-row">
-        <div class="prf-avatar-wrap" title="View profile photo" onclick="viewProfilePhoto('${escHtml(profile.avatar||`https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(profile.id)}`)}','avatar','${escHtml(profile.username||'')}')" style="cursor:pointer">
+        <div class="prf-avatar-wrap" title="Change profile photo" onclick="pickProfileMedia('avatar')" style="cursor:pointer">
           <div class="prf-avatar-ring"></div>
           <img class="prf-avatar" src="${escHtml(profile.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(profile.id)}`)}" onerror="this.src='https://api.dicebear.com/7.x/adventurer/svg?seed=${escHtml(profile.id)}'" alt="">
         </div>
@@ -4757,3 +4761,310 @@ function _initDpSwiper(postId, total) {
   // Initial transition
   track.style.transition = 'transform 0.3s cubic-bezier(0.25,0.46,0.45,0.94)';
 }
+
+
+/* ═══════════════════════════════════════════
+   EDIT PROFILE + AVATAR / COVER → R2
+═══════════════════════════════════════════ */
+let _epAvatarFile = null;
+let _epCoverFile = null;
+let _epAvatarPreviewUrl = null;
+let _epCoverPreviewUrl = null;
+
+function viewProfilePhoto(url, kind, username) {
+  if (!url) {
+    if (kind === 'cover' || kind === 'avatar') {
+      // Own empty photo → open picker if logged in
+      if (typeof currentUser !== 'undefined' && currentUser) {
+        try { pickProfileMedia(kind === 'cover' ? 'cover' : 'avatar'); } catch (e) {}
+      }
+    }
+    return;
+  }
+  // Simple lightbox
+  const existing = document.getElementById('prf-photo-lightbox');
+  if (existing) existing.remove();
+  const lb = document.createElement('div');
+  lb.id = 'prf-photo-lightbox';
+  lb.style.cssText = 'position:fixed;inset:0;z-index:10060;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:16px;';
+  lb.innerHTML = '<img src="' + String(url).replace(/"/g, '&quot;') + '" alt="" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;">';
+  lb.addEventListener('click', function() { lb.remove(); });
+  document.body.appendChild(lb);
+}
+
+function pickProfileMedia(kind) {
+  if (!currentUser) { showToast('Sign in first'); return; }
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.style.display = 'none';
+  document.body.appendChild(input);
+  input.addEventListener('change', async function() {
+    const file = input.files && input.files[0];
+    input.remove();
+    if (!file) return;
+    await uploadProfileMedia(kind, file);
+  });
+  input.click();
+}
+
+async function uploadProfileMedia(kind, file) {
+  if (!file || !currentUser) return;
+  if (typeof uploadToR2 !== 'function' && typeof uploadImageToR2 !== 'function') {
+    showToast('Upload not ready');
+    return;
+  }
+  showToast(kind === 'cover' ? 'Uploading cover…' : 'Uploading photo…');
+  try {
+    let blob = file;
+    try {
+      if (typeof compressImageFile === 'function') {
+        const c = await compressImageFile(file, kind === 'cover' ? 1600 : 800, 0.85);
+        if (c) blob = c;
+      } else if (typeof uploadImageToR2 === 'function' && kind === 'avatar') {
+        // uploadImageToR2 compresses internally
+      }
+    } catch (ce) { blob = file; }
+
+    const ext = 'jpg';
+    const folder = kind === 'cover' ? 'covers' : 'avatars';
+    const filename = currentUser.id + '-' + Date.now() + '.' + ext;
+    let url;
+    if (typeof uploadImageToR2 === 'function') {
+      url = await uploadImageToR2(blob, folder, filename);
+    } else {
+      url = await uploadToR2(blob, folder, filename);
+    }
+    if (!url) throw new Error('No URL returned');
+
+    const patch = kind === 'cover' ? { cover: url } : { avatar: url };
+    const { error } = await supabase.from('users').update(patch).eq('id', currentUser.id);
+    if (error) throw error;
+
+    if (currentProfile) {
+      if (kind === 'cover') currentProfile.cover = url;
+      else currentProfile.avatar = url;
+    }
+    showToast(kind === 'cover' ? 'Cover updated' : 'Photo updated');
+    try { if (typeof updateNavAvatar === 'function') updateNavAvatar(); } catch (e) {}
+    try { if (typeof renderMyProfile === 'function') renderMyProfile(); } catch (e) {}
+    try { if (typeof loadMyProfile === 'function') loadMyProfile(); } catch (e) {}
+  } catch (err) {
+    console.warn('[profile-media]', err);
+    showToast(err.message || 'Upload failed');
+  }
+}
+
+function closeEditProfile() {
+  const m = document.getElementById('edit-profile-modal');
+  if (m) m.remove();
+  if (_epAvatarPreviewUrl) { try { URL.revokeObjectURL(_epAvatarPreviewUrl); } catch (e) {} }
+  if (_epCoverPreviewUrl) { try { URL.revokeObjectURL(_epCoverPreviewUrl); } catch (e) {} }
+  _epAvatarFile = null;
+  _epCoverFile = null;
+  _epAvatarPreviewUrl = null;
+  _epCoverPreviewUrl = null;
+}
+
+function openEditProfile() {
+  if (!currentUser) { showToast('Sign in first'); return; }
+  closeEditProfile();
+  const p = currentProfile || {};
+  const avatarSrc = p.avatar || ('https://api.dicebear.com/7.x/adventurer/svg?seed=' + (p.id || currentUser.id));
+  const coverSrc = p.cover || '';
+
+  const modal = document.createElement('div');
+  modal.id = 'edit-profile-modal';
+  modal.className = 'ep-overlay';
+  modal.innerHTML =
+    '<div class="ep-sheet" role="dialog" aria-modal="true">' +
+      '<div class="ep-head">' +
+        '<button type="button" class="ep-x" onclick="closeEditProfile()" aria-label="Close">✕</button>' +
+        '<div class="ep-title">Edit profile</div>' +
+        '<button type="button" class="ep-save" id="ep-save-btn">Save</button>' +
+      '</div>' +
+      '<div class="ep-body">' +
+        '<div class="ep-cover-wrap" id="ep-cover-wrap">' +
+          (coverSrc
+            ? '<img id="ep-cover-img" class="ep-cover-img" src="' + escHtml(coverSrc) + '" alt="">'
+            : '<div id="ep-cover-img" class="ep-cover-placeholder">Tap to add cover</div>') +
+          '<button type="button" class="ep-cover-cam" id="ep-cover-btn" aria-label="Change cover">' +
+            '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>' +
+          '</button>' +
+        '</div>' +
+        '<div class="ep-avatar-row">' +
+          '<div class="ep-avatar-wrap" id="ep-avatar-btn">' +
+            '<img id="ep-avatar-img" class="ep-avatar-img" src="' + escHtml(avatarSrc) + '" alt="">' +
+            '<div class="ep-avatar-cam">' +
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<label class="ep-label">Username</label>' +
+        '<input class="ep-input" id="ep-username" maxlength="30" value="' + escHtml(p.username || '') + '" autocomplete="username">' +
+        '<label class="ep-label">Bio</label>' +
+        '<textarea class="ep-input ep-textarea" id="ep-bio" maxlength="160" rows="3" placeholder="About you">' + escHtml(p.bio || '') + '</textarea>' +
+        '<label class="ep-label">Location</label>' +
+        '<input class="ep-input" id="ep-location" maxlength="60" value="' + escHtml(p.location || '') + '" placeholder="City">' +
+      '</div>' +
+      '<input type="file" id="ep-avatar-file" accept="image/*" hidden>' +
+      '<input type="file" id="ep-cover-file" accept="image/*" hidden>' +
+    '</div>';
+
+  document.body.appendChild(modal);
+  requestAnimationFrame(function() { modal.classList.add('open'); });
+
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal) closeEditProfile();
+  });
+
+  const avFile = modal.querySelector('#ep-avatar-file');
+  const cvFile = modal.querySelector('#ep-cover-file');
+  modal.querySelector('#ep-avatar-btn').addEventListener('click', function() { avFile.click(); });
+  modal.querySelector('#ep-cover-btn').addEventListener('click', function() { cvFile.click(); });
+  modal.querySelector('#ep-cover-wrap').addEventListener('click', function(e) {
+    if (e.target.closest('#ep-cover-btn')) return;
+    cvFile.click();
+  });
+
+  avFile.addEventListener('change', function() {
+    const f = avFile.files && avFile.files[0];
+    if (!f) return;
+    _epAvatarFile = f;
+    if (_epAvatarPreviewUrl) try { URL.revokeObjectURL(_epAvatarPreviewUrl); } catch (e) {}
+    _epAvatarPreviewUrl = URL.createObjectURL(f);
+    const img = modal.querySelector('#ep-avatar-img');
+    if (img) img.src = _epAvatarPreviewUrl;
+  });
+  cvFile.addEventListener('change', function() {
+    const f = cvFile.files && cvFile.files[0];
+    if (!f) return;
+    _epCoverFile = f;
+    if (_epCoverPreviewUrl) try { URL.revokeObjectURL(_epCoverPreviewUrl); } catch (e) {}
+    _epCoverPreviewUrl = URL.createObjectURL(f);
+    const wrap = modal.querySelector('#ep-cover-wrap');
+    let img = modal.querySelector('#ep-cover-img');
+    if (img && img.tagName === 'IMG') {
+      img.src = _epCoverPreviewUrl;
+    } else if (wrap) {
+      wrap.innerHTML =
+        '<img id="ep-cover-img" class="ep-cover-img" src="' + _epCoverPreviewUrl + '" alt="">' +
+        '<button type="button" class="ep-cover-cam" id="ep-cover-btn" aria-label="Change cover">' +
+          '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>' +
+        '</button>';
+      modal.querySelector('#ep-cover-btn').addEventListener('click', function(e) {
+        e.stopPropagation();
+        cvFile.click();
+      });
+    }
+  });
+
+  modal.querySelector('#ep-save-btn').addEventListener('click', saveEditProfile);
+}
+
+async function saveEditProfile() {
+  if (!currentUser) return;
+  const btn = document.getElementById('ep-save-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  const username = (document.getElementById('ep-username')?.value || '').trim();
+  const bio = (document.getElementById('ep-bio')?.value || '').trim();
+  const location = (document.getElementById('ep-location')?.value || '').trim();
+
+  if (!username || username.length < 2) {
+    showToast('Username too short');
+    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+    return;
+  }
+
+  try {
+    let avatarUrl = null;
+    let coverUrl = null;
+
+    if (_epAvatarFile) {
+      let blob = _epAvatarFile;
+      try {
+        if (typeof compressImageFile === 'function') {
+          const c = await compressImageFile(_epAvatarFile, 800, 0.85);
+          if (c) blob = c;
+        }
+      } catch (e) {}
+      const name = currentUser.id + '-' + Date.now() + '.jpg';
+      if (typeof uploadImageToR2 === 'function') avatarUrl = await uploadImageToR2(blob, 'avatars', name);
+      else avatarUrl = await uploadToR2(blob, 'avatars', name);
+    }
+    if (_epCoverFile) {
+      let blob = _epCoverFile;
+      try {
+        if (typeof compressImageFile === 'function') {
+          const c = await compressImageFile(_epCoverFile, 1600, 0.85);
+          if (c) blob = c;
+        }
+      } catch (e) {}
+      const name = currentUser.id + '-' + Date.now() + '.jpg';
+      if (typeof uploadImageToR2 === 'function') coverUrl = await uploadImageToR2(blob, 'covers', name);
+      else coverUrl = await uploadToR2(blob, 'covers', name);
+    }
+
+    const patch = { username: username, bio: bio, location: location };
+    if (avatarUrl) patch.avatar = avatarUrl;
+    if (coverUrl) patch.cover = coverUrl;
+
+    const { error } = await supabase.from('users').update(patch).eq('id', currentUser.id);
+    if (error) throw error;
+
+    if (currentProfile) {
+      currentProfile.username = username;
+      currentProfile.bio = bio;
+      currentProfile.location = location;
+      if (avatarUrl) currentProfile.avatar = avatarUrl;
+      if (coverUrl) currentProfile.cover = coverUrl;
+    }
+
+    closeEditProfile();
+    showToast('Profile updated');
+    try { if (typeof updateNavAvatar === 'function') updateNavAvatar(); } catch (e) {}
+    try { if (typeof loadMyProfile === 'function') loadMyProfile(); } catch (e) {}
+    try { if (typeof renderMyProfile === 'function') renderMyProfile(); } catch (e) {}
+  } catch (err) {
+    console.warn('[edit-profile]', err);
+    showToast(err.message || 'Could not save');
+    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+  }
+}
+
+// Minimal styles for edit profile sheet
+(function injectEditProfileStyles() {
+  if (document.getElementById('ep-styles')) return;
+  const s = document.createElement('style');
+  s.id = 'ep-styles';
+  s.textContent = `
+  .ep-overlay{position:fixed;inset:0;z-index:10040;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;opacity:0;transition:opacity .2s}
+  .ep-overlay.open{opacity:1}
+  .ep-sheet{width:100%;max-width:480px;max-height:92vh;overflow:auto;background:#fff;border-radius:18px 18px 0 0;padding:0 0 24px;transform:translateY(12px);transition:transform .22s}
+  .ep-overlay.open .ep-sheet{transform:translateY(0)}
+  .ep-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;position:sticky;top:0;background:#fff;z-index:2;border-bottom:1px solid #eee}
+  .ep-title{font-weight:700;font-size:16px}
+  .ep-x{border:none;background:transparent;font-size:18px;padding:6px 10px;cursor:pointer}
+  .ep-save{border:none;background:var(--accent,#6C47FF);color:#fff;font-weight:650;border-radius:999px;padding:8px 16px;font-size:14px;cursor:pointer}
+  .ep-save:disabled{opacity:.6}
+  .ep-body{padding:0 16px 8px}
+  .ep-cover-wrap{position:relative;height:120px;border-radius:12px;overflow:hidden;background:linear-gradient(135deg,#6C47FF,#a855f7);margin-top:12px;cursor:pointer}
+  .ep-cover-img{width:100%;height:100%;object-fit:cover;display:block}
+  .ep-cover-placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:600}
+  .ep-cover-cam{position:absolute;right:10px;bottom:10px;width:36px;height:36px;border-radius:50%;border:none;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .ep-avatar-row{display:flex;margin-top:-32px;padding-left:8px;position:relative;z-index:1}
+  .ep-avatar-wrap{position:relative;width:72px;height:72px;border-radius:50%;cursor:pointer}
+  .ep-avatar-img{width:72px;height:72px;border-radius:50%;object-fit:cover;border:3px solid #fff;background:#eee;display:block}
+  .ep-avatar-cam{position:absolute;right:0;bottom:0;width:26px;height:26px;border-radius:50%;background:var(--accent,#6C47FF);display:flex;align-items:center;justify-content:center;border:2px solid #fff}
+  .ep-label{display:block;font-size:12px;font-weight:650;color:#666;margin:14px 0 6px}
+  .ep-input{width:100%;box-sizing:border-box;border:1px solid #e6e3de;border-radius:12px;padding:12px 14px;font-size:15px;font-family:inherit;background:#faf9f7}
+  .ep-textarea{resize:vertical;min-height:72px}
+  [data-theme="dark"] .ep-sheet{background:#1c1c1f}
+  [data-theme="dark"] .ep-head{background:#1c1c1f;border-color:#333}
+  [data-theme="dark"] .ep-title,[data-theme="dark"] .ep-x{color:#f2f2f0}
+  [data-theme="dark"] .ep-input{background:#2a2a2e;border-color:#3a3a40;color:#f2f2f0}
+  [data-theme="dark"] .ep-label{color:#a0a09c}
+  .prf-cover-action-btn{width:36px;height:36px;border-radius:50%;border:none;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;cursor:pointer}
+  `;
+  document.head.appendChild(s);
+})();
