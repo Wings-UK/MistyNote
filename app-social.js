@@ -4792,66 +4792,171 @@ function viewProfilePhoto(url, kind, username) {
   document.body.appendChild(lb);
 }
 
+/* ── Robust profile image pipeline → R2 ─────────────────────────
+   snapshot bytes → decode (EXIF-safe) → resize → JPEG → upload w/ retry
+─────────────────────────────────────────────────────────────── */
+const _PM_CFG = { avatar: { max: 800, q: 0.86 }, cover: { max: 1600, q: 0.85 } };
+const _pmBusy = { avatar: false, cover: false };
+
+function _pmSleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
+
+function _pmTimeout(promise, ms, msg) {
+  return new Promise(function(resolve, reject) {
+    const t = setTimeout(function() { reject(new Error(msg || 'Timed out')); }, ms);
+    promise.then(function(v) { clearTimeout(t); resolve(v); },
+                 function(e) { clearTimeout(t); reject(e); });
+  });
+}
+
+// Copy file bytes into memory right away. Android content:// / cloud-backed
+// files can become unreadable a moment after the picker closes.
+async function _pmSnapshot(file) {
+  try {
+    const buf = await file.arrayBuffer();
+    return new Blob([buf], { type: file.type || 'image/jpeg' });
+  } catch (e) { return file; }
+}
+
+async function _pmDecode(blob) {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bmp = await createImageBitmap(blob, { imageOrientation: 'from-image' });
+      return { src: bmp, w: bmp.width, h: bmp.height, done: function() { try { bmp.close(); } catch (e) {} } };
+    } catch (e) {}
+    try {
+      const bmp2 = await createImageBitmap(blob);
+      return { src: bmp2, w: bmp2.width, h: bmp2.height, done: function() { try { bmp2.close(); } catch (e) {} } };
+    } catch (e) {}
+  }
+  // <img> fallback (older WebViews)
+  return await new Promise(function(resolve, reject) {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = function() {
+      resolve({ src: img, w: img.naturalWidth, h: img.naturalHeight,
+                done: function() { try { URL.revokeObjectURL(url); } catch (e) {} } });
+    };
+    img.onerror = function() {
+      try { URL.revokeObjectURL(url); } catch (e) {}
+      reject(new Error('decode failed'));
+    };
+    img.src = url;
+  });
+}
+
+async function _pmPrepare(file, kind) {
+  const cfg = _PM_CFG[kind] || _PM_CFG.avatar;
+  const blob = await _pmSnapshot(file);
+  let dec;
+  try {
+    dec = await _pmTimeout(_pmDecode(blob), 20000, 'Image took too long to read');
+  } catch (e) {
+    // Could not decode (e.g. HEIC on a non-Safari browser). Send the original if it is a safe type + size.
+    if (/^image\/(jpeg|png|webp)$/.test(blob.type) && blob.size <= 8 * 1024 * 1024) return blob;
+    throw new Error('Could not read that image. Try a JPG or PNG.');
+  }
+  try {
+    const scale = Math.min(1, cfg.max / Math.max(dec.w || 1, dec.h || 1));
+    const w = Math.max(1, Math.round(dec.w * scale));
+    const h = Math.max(1, Math.round(dec.h * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas not supported');
+    ctx.fillStyle = '#fff';            // PNG transparency → white, not black
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(dec.src, 0, 0, w, h);
+    let out = await new Promise(function(res) { canvas.toBlob(res, 'image/jpeg', cfg.q); });
+    if (!out) {                         // toBlob can return null on low-memory devices
+      const dataUrl = canvas.toDataURL('image/jpeg', cfg.q);
+      out = await (await fetch(dataUrl)).blob();
+    }
+    canvas.width = canvas.height = 0;   // release canvas memory (iOS limit)
+    if (!out || !out.size) throw new Error('Could not process image');
+    return out;
+  } finally {
+    dec.done();
+  }
+}
+
+async function _pmUploadR2(blob, folder, filename) {
+  const fns = [];
+  if (typeof uploadImageToR2 === 'function') fns.push(uploadImageToR2);
+  if (typeof uploadToR2 === 'function') fns.push(uploadToR2);
+  if (!fns.length) throw new Error('Upload not ready');
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new Error('You are offline');
+
+  // attempt 1 + 2 use the primary helper, attempt 3 falls back to the other one if present
+  const plan = [fns[0], fns[0], fns[1] || fns[0]];
+  let lastErr;
+  for (let i = 0; i < plan.length; i++) {
+    try {
+      const url = await _pmTimeout(Promise.resolve(plan[i](blob, folder, filename)), 45000, 'Upload timed out');
+      if (typeof url === 'string' && /^https?:\/\//i.test(url)) return url;
+      throw new Error('Upload returned no URL');
+    } catch (e) {
+      lastErr = e;
+      console.warn('[profile-media] upload attempt ' + (i + 1) + ' failed:', e);
+      if (i < plan.length - 1) await _pmSleep(700 * (i + 1));
+    }
+  }
+  throw lastErr || new Error('Upload failed');
+}
+
+// prepare + upload one image, return the public R2 URL
+async function _pmProcessAndUpload(kind, file) {
+  const blob = await _pmPrepare(file, kind);
+  const folder = kind === 'cover' ? 'covers' : 'avatars';
+  const filename = currentUser.id + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7) + '.jpg';
+  return await _pmUploadR2(blob, folder, filename);
+}
+
 function pickProfileMedia(kind) {
   if (!currentUser) { showToast('Sign in first'); return; }
+  if (_pmBusy[kind]) { showToast('Still uploading…'); return; }
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/*';
-  input.style.display = 'none';
+  input.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';
   document.body.appendChild(input);
-  input.addEventListener('change', async function() {
+  let handled = false;
+  input.addEventListener('change', function() {
+    if (handled) return;
+    handled = true;
     const file = input.files && input.files[0];
-    input.remove();
-    if (!file) return;
-    await uploadProfileMedia(kind, file);
+    // keep the input in the DOM until we've read the file; remove afterwards
+    uploadProfileMedia(kind, file).finally(function() { input.remove(); });
   });
+  // cleanup if the picker is cancelled
+  input.addEventListener('cancel', function() { input.remove(); });
   input.click();
 }
 
 async function uploadProfileMedia(kind, file) {
   if (!file || !currentUser) return;
-  if (typeof uploadToR2 !== 'function' && typeof uploadImageToR2 !== 'function') {
-    showToast('Upload not ready');
-    return;
-  }
-  showToast(kind === 'cover' ? 'Uploading cover…' : 'Uploading photo…');
+  if (_pmBusy[kind]) return;
+  _pmBusy[kind] = true;
+  showToast(kind === 'cover' ? 'Uploading cover…' : 'Uploading photo…', 8000);
   try {
-    let blob = file;
-    try {
-      if (typeof compressImageFile === 'function') {
-        const c = await compressImageFile(file, kind === 'cover' ? 1600 : 800, 0.85);
-        if (c) blob = c;
-      } else if (typeof uploadImageToR2 === 'function' && kind === 'avatar') {
-        // uploadImageToR2 compresses internally
-      }
-    } catch (ce) { blob = file; }
-
-    const ext = 'jpg';
-    const folder = kind === 'cover' ? 'covers' : 'avatars';
-    const filename = currentUser.id + '-' + Date.now() + '.' + ext;
-    let url;
-    if (typeof uploadImageToR2 === 'function') {
-      url = await uploadImageToR2(blob, folder, filename);
-    } else {
-      url = await uploadToR2(blob, folder, filename);
-    }
-    if (!url) throw new Error('No URL returned');
+    const url = await _pmProcessAndUpload(kind, file);
 
     const patch = kind === 'cover' ? { cover: url } : { avatar: url };
     const { error } = await supabase.from('users').update(patch).eq('id', currentUser.id);
-    if (error) throw error;
+    if (error) throw new Error('Saved the image but could not update your profile. Try again.');
 
     if (currentProfile) {
       if (kind === 'cover') currentProfile.cover = url;
       else currentProfile.avatar = url;
     }
-    showToast(kind === 'cover' ? 'Cover updated' : 'Photo updated');
-    try { if (typeof updateNavAvatar === 'function') updateNavAvatar(); } catch (e) {}
-    try { if (typeof renderMyProfile === 'function') renderMyProfile(); } catch (e) {}
-    try { if (typeof loadMyProfile === 'function') loadMyProfile(); } catch (e) {}
+    showToast(kind === 'cover' ? 'Cover updated ✓' : 'Photo updated ✓');
+    try { updateNavAvatar(); } catch (e) {}
+    // renderMyProfile() already calls loadMyProfile() — calling both caused a double fetch/re-render
+    try { await renderMyProfile(); } catch (e) { console.warn('[profile-media] re-render', e); }
   } catch (err) {
     console.warn('[profile-media]', err);
-    showToast(err.message || 'Upload failed');
+    showToast((err && err.message) || 'Upload failed', 4000);
+  } finally {
+    _pmBusy[kind] = false;
   }
 }
 
@@ -4979,30 +5084,19 @@ async function saveEditProfile() {
   try {
     let avatarUrl = null;
     let coverUrl = null;
+    const failed = [];
 
-    if (_epAvatarFile) {
-      let blob = _epAvatarFile;
-      try {
-        if (typeof compressImageFile === 'function') {
-          const c = await compressImageFile(_epAvatarFile, 800, 0.85);
-          if (c) blob = c;
-        }
-      } catch (e) {}
-      const name = currentUser.id + '-' + Date.now() + '.jpg';
-      if (typeof uploadImageToR2 === 'function') avatarUrl = await uploadImageToR2(blob, 'avatars', name);
-      else avatarUrl = await uploadToR2(blob, 'avatars', name);
-    }
-    if (_epCoverFile) {
-      let blob = _epCoverFile;
-      try {
-        if (typeof compressImageFile === 'function') {
-          const c = await compressImageFile(_epCoverFile, 1600, 0.85);
-          if (c) blob = c;
-        }
-      } catch (e) {}
-      const name = currentUser.id + '-' + Date.now() + '.jpg';
-      if (typeof uploadImageToR2 === 'function') coverUrl = await uploadImageToR2(blob, 'covers', name);
-      else coverUrl = await uploadToR2(blob, 'covers', name);
+    // upload both in parallel; one failing must not lose the other
+    const jobs = [];
+    if (_epAvatarFile) jobs.push(_pmProcessAndUpload('avatar', _epAvatarFile)
+      .then(function(u) { avatarUrl = u; }).catch(function(e) { console.warn('[edit-profile] avatar', e); failed.push('photo'); }));
+    if (_epCoverFile) jobs.push(_pmProcessAndUpload('cover', _epCoverFile)
+      .then(function(u) { coverUrl = u; }).catch(function(e) { console.warn('[edit-profile] cover', e); failed.push('cover'); }));
+    if (jobs.length) await Promise.all(jobs);
+
+    // if every selected image failed, stay open so the user can retry
+    if (jobs.length && failed.length === jobs.length) {
+      throw new Error('Could not upload your ' + failed.join(' and ') + '. Check your connection and try again.');
     }
 
     const patch = { username: username, bio: bio, location: location };
@@ -5021,10 +5115,9 @@ async function saveEditProfile() {
     }
 
     closeEditProfile();
-    showToast('Profile updated');
-    try { if (typeof updateNavAvatar === 'function') updateNavAvatar(); } catch (e) {}
-    try { if (typeof loadMyProfile === 'function') loadMyProfile(); } catch (e) {}
-    try { if (typeof renderMyProfile === 'function') renderMyProfile(); } catch (e) {}
+    showToast(failed.length ? ('Saved, but your ' + failed.join(' and ') + ' did not upload') : 'Profile updated', failed.length ? 4000 : undefined);
+    try { updateNavAvatar(); } catch (e) {}
+    try { renderMyProfile(); } catch (e) {}
   } catch (err) {
     console.warn('[edit-profile]', err);
     showToast(err.message || 'Could not save');
