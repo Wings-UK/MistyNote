@@ -292,6 +292,31 @@ function injectProfileStyles() {
       cursor:pointer; border:none; transition:background .15s;
     }
     .prf-cover-action-btn:active { background:rgba(0,0,0,.55); }
+    /* Cover camera — bottom center of cover (not under top-right icons) */
+    .prf-cover-edit {
+      position:absolute;
+      left:50%;
+      bottom:14px;
+      transform:translateX(-50%);
+      z-index:5;
+      width:40px;
+      height:40px;
+      border-radius:50%;
+      border:none;
+      background:rgba(0,0,0,0.55);
+      backdrop-filter:blur(10px);
+      -webkit-backdrop-filter:blur(10px);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+      box-shadow:0 2px 10px rgba(0,0,0,0.25);
+      transition:transform .15s, background .15s;
+    }
+    .prf-cover-edit:active {
+      transform:translateX(-50%) scale(0.94);
+      background:rgba(0,0,0,0.7);
+    }
     /* ── AVATAR ROW — sits between cover and identity ── */
     .prf-avatar-row {
       display:flex; justify-content:space-between; align-items:flex-end;
@@ -524,12 +549,11 @@ async function renderMyProfile() {
           : `<div class="prf-cover-gradient"></div>`}
         <div class="prf-cover-bar">
           <div></div>
-          <div class="prf-cover-actions" onclick="event.stopPropagation()">
-            <button type="button" class="prf-cover-action-btn" onclick="event.stopPropagation();pickProfileMedia('cover')" title="Change cover" aria-label="Change cover">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
-            </button>
-          </div>
+          <div class="prf-cover-actions" onclick="event.stopPropagation()"></div>
         </div>
+        <button type="button" class="prf-cover-edit" onclick="event.stopPropagation();pickProfileMedia('cover')" title="Change cover photo" aria-label="Change cover photo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        </button>
       </div>
       <!-- AVATAR ROW -->
       <div class="prf-avatar-row">
