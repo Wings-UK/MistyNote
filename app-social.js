@@ -4763,220 +4763,173 @@ function _initDpSwiper(postId, total) {
 }
 
 
+
 /* ═══════════════════════════════════════════
    EDIT PROFILE + AVATAR / COVER → R2
 ═══════════════════════════════════════════ */
-let _epAvatarFile = null;
-let _epCoverFile = null;
+let _epAvatarBlob = null;   // { blob, name } snapped immediately (mobile-safe)
+let _epCoverBlob = null;
 let _epAvatarPreviewUrl = null;
 let _epCoverPreviewUrl = null;
+let _epUploading = false;
 
 function viewProfilePhoto(url, kind, username) {
   if (!url) {
-    if (kind === 'cover' || kind === 'avatar') {
-      // Own empty photo → open picker if logged in
-      if (typeof currentUser !== 'undefined' && currentUser) {
-        try { pickProfileMedia(kind === 'cover' ? 'cover' : 'avatar'); } catch (e) {}
-      }
+    if ((kind === 'cover' || kind === 'avatar') && typeof currentUser !== 'undefined' && currentUser) {
+      try { pickProfileMedia(kind); } catch (e) {}
     }
     return;
   }
-  // Simple lightbox
   const existing = document.getElementById('prf-photo-lightbox');
   if (existing) existing.remove();
   const lb = document.createElement('div');
   lb.id = 'prf-photo-lightbox';
   lb.style.cssText = 'position:fixed;inset:0;z-index:10060;background:rgba(0,0,0,.92);display:flex;align-items:center;justify-content:center;padding:16px;';
-  lb.innerHTML = '<img src="' + String(url).replace(/"/g, '&quot;') + '" alt="" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;">';
+  const safe = String(url).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  lb.innerHTML = '<img src="' + safe + '" alt="" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;">';
   lb.addEventListener('click', function() { lb.remove(); });
   document.body.appendChild(lb);
 }
 
-/* ── Robust profile image pipeline → R2 ─────────────────────────
-   snapshot bytes → decode (EXIF-safe) → resize → JPEG → upload w/ retry
-─────────────────────────────────────────────────────────────── */
-const _PM_CFG = { avatar: { max: 800, q: 0.86 }, cover: { max: 1600, q: 0.85 } };
-const _pmBusy = { avatar: false, cover: false };
-
-function _pmSleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
-
-function _pmTimeout(promise, ms, msg) {
-  return new Promise(function(resolve, reject) {
-    const t = setTimeout(function() { reject(new Error(msg || 'Timed out')); }, ms);
-    promise.then(function(v) { clearTimeout(t); resolve(v); },
-                 function(e) { clearTimeout(t); reject(e); });
-  });
-}
-
-// Copy file bytes into memory right away. Android content:// / cloud-backed
-// files can become unreadable a moment after the picker closes.
-async function _pmSnapshot(file) {
+/** Read file into a durable Blob so mobile Chrome cannot revoke it after the picker closes */
+async function epSnapshotImage(file) {
+  if (!file) return null;
+  try {
+    if (typeof snapshotFile === 'function') {
+      const snap = await snapshotFile(file);
+      if (snap && snap.blob) return { blob: snap.blob, name: snap.name || file.name || 'photo.jpg' };
+    }
+  } catch (e) {}
   try {
     const buf = await file.arrayBuffer();
-    return new Blob([buf], { type: file.type || 'image/jpeg' });
-  } catch (e) { return file; }
-}
-
-async function _pmDecode(blob) {
-  if (typeof createImageBitmap === 'function') {
-    try {
-      const bmp = await createImageBitmap(blob, { imageOrientation: 'from-image' });
-      return { src: bmp, w: bmp.width, h: bmp.height, done: function() { try { bmp.close(); } catch (e) {} } };
-    } catch (e) {}
-    try {
-      const bmp2 = await createImageBitmap(blob);
-      return { src: bmp2, w: bmp2.width, h: bmp2.height, done: function() { try { bmp2.close(); } catch (e) {} } };
-    } catch (e) {}
-  }
-  // <img> fallback (older WebViews)
-  return await new Promise(function(resolve, reject) {
-    const url = URL.createObjectURL(blob);
-    const img = new Image();
-    img.onload = function() {
-      resolve({ src: img, w: img.naturalWidth, h: img.naturalHeight,
-                done: function() { try { URL.revokeObjectURL(url); } catch (e) {} } });
+    const type = file.type || 'image/jpeg';
+    return {
+      blob: new Blob([buf], { type: type }),
+      name: file.name || ('photo_' + Date.now() + '.jpg'),
     };
-    img.onerror = function() {
-      try { URL.revokeObjectURL(url); } catch (e) {}
-      reject(new Error('decode failed'));
-    };
-    img.src = url;
-  });
-}
-
-async function _pmPrepare(file, kind) {
-  const cfg = _PM_CFG[kind] || _PM_CFG.avatar;
-  const blob = await _pmSnapshot(file);
-  let dec;
-  try {
-    dec = await _pmTimeout(_pmDecode(blob), 20000, 'Image took too long to read');
   } catch (e) {
-    // Could not decode (e.g. HEIC on a non-Safari browser). Send the original if it is a safe type + size.
-    if (/^image\/(jpeg|png|webp)$/.test(blob.type) && blob.size <= 8 * 1024 * 1024) return blob;
-    throw new Error('Could not read that image. Try a JPG or PNG.');
-  }
-  try {
-    const scale = Math.min(1, cfg.max / Math.max(dec.w || 1, dec.h || 1));
-    const w = Math.max(1, Math.round(dec.w * scale));
-    const h = Math.max(1, Math.round(dec.h * scale));
-    const canvas = document.createElement('canvas');
-    canvas.width = w; canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('Canvas not supported');
-    ctx.fillStyle = '#fff';            // PNG transparency → white, not black
-    ctx.fillRect(0, 0, w, h);
-    ctx.drawImage(dec.src, 0, 0, w, h);
-    let out = await new Promise(function(res) { canvas.toBlob(res, 'image/jpeg', cfg.q); });
-    if (!out) {                         // toBlob can return null on low-memory devices
-      const dataUrl = canvas.toDataURL('image/jpeg', cfg.q);
-      out = await (await fetch(dataUrl)).blob();
-    }
-    canvas.width = canvas.height = 0;   // release canvas memory (iOS limit)
-    if (!out || !out.size) throw new Error('Could not process image');
-    return out;
-  } finally {
-    dec.done();
+    // Last resort — may fail on some mobile browsers later
+    return { blob: file, name: file.name || ('photo_' + Date.now() + '.jpg') };
   }
 }
 
-async function _pmUploadR2(blob, folder, filename) {
-  const fns = [];
-  if (typeof uploadImageToR2 === 'function') fns.push(uploadImageToR2);
-  if (typeof uploadToR2 === 'function') fns.push(uploadToR2);
-  if (!fns.length) throw new Error('Upload not ready');
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new Error('You are offline');
-
-  // attempt 1 + 2 use the primary helper, attempt 3 falls back to the other one if present
-  const plan = [fns[0], fns[0], fns[1] || fns[0]];
-  let lastErr;
-  for (let i = 0; i < plan.length; i++) {
+async function epUploadImage(blobOrFile, folder, filename) {
+  if (!blobOrFile) throw new Error('No image');
+  if (typeof uploadImageToR2 === 'function') {
+    return await uploadImageToR2(blobOrFile, folder, filename);
+  }
+  if (typeof uploadToR2 === 'function') {
+    let blob = blobOrFile;
     try {
-      const url = await _pmTimeout(Promise.resolve(plan[i](blob, folder, filename)), 45000, 'Upload timed out');
-      if (typeof url === 'string' && /^https?:\/\//i.test(url)) return url;
-      throw new Error('Upload returned no URL');
-    } catch (e) {
-      lastErr = e;
-      console.warn('[profile-media] upload attempt ' + (i + 1) + ' failed:', e);
-      if (i < plan.length - 1) await _pmSleep(700 * (i + 1));
-    }
+      if (typeof compressImageFile === 'function') {
+        const c = await compressImageFile(blobOrFile, folder === 'covers' ? 1600 : 800, 0.85);
+        if (c) blob = c;
+      }
+    } catch (e) {}
+    return await uploadToR2(blob, folder, filename);
   }
-  throw lastErr || new Error('Upload failed');
-}
-
-// prepare + upload one image, return the public R2 URL
-async function _pmProcessAndUpload(kind, file) {
-  const blob = await _pmPrepare(file, kind);
-  const folder = kind === 'cover' ? 'covers' : 'avatars';
-  const filename = currentUser.id + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7) + '.jpg';
-  return await _pmUploadR2(blob, folder, filename);
+  throw new Error('Upload not ready');
 }
 
 function pickProfileMedia(kind) {
   if (!currentUser) { showToast('Sign in first'); return; }
-  if (_pmBusy[kind]) { showToast('Still uploading…'); return; }
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/*';
-  input.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';
+  input.setAttribute('accept', 'image/*');
+  input.style.position = 'fixed';
+  input.style.left = '-9999px';
   document.body.appendChild(input);
-  let handled = false;
-  input.addEventListener('change', function() {
-    if (handled) return;
-    handled = true;
+  input.addEventListener('change', async function() {
     const file = input.files && input.files[0];
-    // keep the input in the DOM until we've read the file; remove afterwards
-    uploadProfileMedia(kind, file).finally(function() { input.remove(); });
+    try { input.remove(); } catch (e) {}
+    if (!file) return;
+    await uploadProfileMedia(kind, file);
   });
-  // cleanup if the picker is cancelled
-  input.addEventListener('cancel', function() { input.remove(); });
-  input.click();
+  // iOS sometimes needs a tick
+  setTimeout(function() { try { input.click(); } catch (e) { showToast('Could not open gallery'); } }, 10);
 }
 
 async function uploadProfileMedia(kind, file) {
   if (!file || !currentUser) return;
-  if (_pmBusy[kind]) return;
-  _pmBusy[kind] = true;
-  showToast(kind === 'cover' ? 'Uploading cover…' : 'Uploading photo…', 8000);
+  if (_epUploading) return;
+  _epUploading = true;
+  showToast(kind === 'cover' ? 'Uploading cover…' : 'Uploading photo…');
   try {
-    const url = await _pmProcessAndUpload(kind, file);
+    const snap = await epSnapshotImage(file);
+    if (!snap || !snap.blob) throw new Error('Could not read image');
+    const folder = kind === 'cover' ? 'covers' : 'avatars';
+    const filename = String(currentUser.id) + '-' + Date.now() + '.jpg';
+    let url;
+    try {
+      url = await epUploadImage(snap.blob, folder, filename);
+    } catch (e1) {
+      // Worker may not whitelist "covers" — fall back to posts folder
+      if (folder === 'covers') {
+        console.warn('[profile-media] covers folder failed, trying posts', e1);
+        url = await epUploadImage(snap.blob, 'posts', filename);
+      } else {
+        throw e1;
+      }
+    }
+    if (!url) throw new Error('No URL returned');
 
     const patch = kind === 'cover' ? { cover: url } : { avatar: url };
     const { error } = await supabase.from('users').update(patch).eq('id', currentUser.id);
-    if (error) throw new Error('Saved the image but could not update your profile. Try again.');
+    if (error) throw error;
 
-    if (currentProfile) {
+    if (typeof currentProfile !== 'undefined' && currentProfile) {
       if (kind === 'cover') currentProfile.cover = url;
       else currentProfile.avatar = url;
     }
-    showToast(kind === 'cover' ? 'Cover updated ✓' : 'Photo updated ✓');
-    try { updateNavAvatar(); } catch (e) {}
-    // renderMyProfile() already calls loadMyProfile() — calling both caused a double fetch/re-render
-    try { await renderMyProfile(); } catch (e) { console.warn('[profile-media] re-render', e); }
+    showToast(kind === 'cover' ? 'Cover updated' : 'Photo updated');
+    try { if (typeof updateNavAvatar === 'function') updateNavAvatar(); } catch (e) {}
+    // Refresh profile UI without full navigation jank
+    try {
+      if (typeof loadMyProfile === 'function') await loadMyProfile();
+      else if (typeof renderMyProfile === 'function') await renderMyProfile();
+    } catch (e) {}
   } catch (err) {
     console.warn('[profile-media]', err);
-    showToast((err && err.message) || 'Upload failed', 4000);
+    showToast((err && err.message) ? err.message : 'Upload failed');
   } finally {
-    _pmBusy[kind] = false;
+    _epUploading = false;
   }
 }
 
 function closeEditProfile() {
   const m = document.getElementById('edit-profile-modal');
-  if (m) m.remove();
+  if (m) {
+    m.classList.remove('open');
+    setTimeout(function() { try { m.remove(); } catch (e) {} }, 200);
+  }
   if (_epAvatarPreviewUrl) { try { URL.revokeObjectURL(_epAvatarPreviewUrl); } catch (e) {} }
   if (_epCoverPreviewUrl) { try { URL.revokeObjectURL(_epCoverPreviewUrl); } catch (e) {} }
-  _epAvatarFile = null;
-  _epCoverFile = null;
+  _epAvatarBlob = null;
+  _epCoverBlob = null;
   _epAvatarPreviewUrl = null;
   _epCoverPreviewUrl = null;
 }
 
 function openEditProfile() {
   if (!currentUser) { showToast('Sign in first'); return; }
-  closeEditProfile();
-  const p = currentProfile || {};
-  const avatarSrc = p.avatar || ('https://api.dicebear.com/7.x/adventurer/svg?seed=' + (p.id || currentUser.id));
+  // Don't call full closeEditProfile wipe before open — just remove old modal
+  const old = document.getElementById('edit-profile-modal');
+  if (old) old.remove();
+  _epAvatarBlob = null;
+  _epCoverBlob = null;
+  if (_epAvatarPreviewUrl) { try { URL.revokeObjectURL(_epAvatarPreviewUrl); } catch (e) {} }
+  if (_epCoverPreviewUrl) { try { URL.revokeObjectURL(_epCoverPreviewUrl); } catch (e) {} }
+  _epAvatarPreviewUrl = null;
+  _epCoverPreviewUrl = null;
+
+  const p = (typeof currentProfile !== 'undefined' && currentProfile) ? currentProfile : {};
+  const avatarSrc = p.avatar || ('https://api.dicebear.com/7.x/adventurer/svg?seed=' + encodeURIComponent(p.id || currentUser.id));
   const coverSrc = p.cover || '';
+  const esc = (typeof escHtml === 'function') ? escHtml : function(t) {
+    return String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  };
 
   const modal = document.createElement('div');
   modal.id = 'edit-profile-modal';
@@ -4984,36 +4937,37 @@ function openEditProfile() {
   modal.innerHTML =
     '<div class="ep-sheet" role="dialog" aria-modal="true">' +
       '<div class="ep-head">' +
-        '<button type="button" class="ep-x" onclick="closeEditProfile()" aria-label="Close">✕</button>' +
+        '<button type="button" class="ep-x" id="ep-close-btn" aria-label="Close">✕</button>' +
         '<div class="ep-title">Edit profile</div>' +
         '<button type="button" class="ep-save" id="ep-save-btn">Save</button>' +
       '</div>' +
       '<div class="ep-body">' +
         '<div class="ep-cover-wrap" id="ep-cover-wrap">' +
           (coverSrc
-            ? '<img id="ep-cover-img" class="ep-cover-img" src="' + escHtml(coverSrc) + '" alt="">'
-            : '<div id="ep-cover-img" class="ep-cover-placeholder">Tap to add cover</div>') +
+            ? '<img id="ep-cover-img" class="ep-cover-img" src="' + esc(coverSrc) + '" alt="">'
+            : '<div id="ep-cover-ph" class="ep-cover-placeholder">Tap to add cover photo</div>') +
           '<button type="button" class="ep-cover-cam" id="ep-cover-btn" aria-label="Change cover">' +
             '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>' +
           '</button>' +
         '</div>' +
         '<div class="ep-avatar-row">' +
-          '<div class="ep-avatar-wrap" id="ep-avatar-btn">' +
-            '<img id="ep-avatar-img" class="ep-avatar-img" src="' + escHtml(avatarSrc) + '" alt="">' +
-            '<div class="ep-avatar-cam">' +
+          '<button type="button" class="ep-avatar-wrap" id="ep-avatar-btn" aria-label="Change photo">' +
+            '<img id="ep-avatar-img" class="ep-avatar-img" src="' + esc(avatarSrc) + '" alt="">' +
+            '<span class="ep-avatar-cam">' +
               '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>' +
-            '</div>' +
-          '</div>' +
+            '</span>' +
+          '</button>' +
         '</div>' +
-        '<label class="ep-label">Username</label>' +
-        '<input class="ep-input" id="ep-username" maxlength="30" value="' + escHtml(p.username || '') + '" autocomplete="username">' +
-        '<label class="ep-label">Bio</label>' +
-        '<textarea class="ep-input ep-textarea" id="ep-bio" maxlength="160" rows="3" placeholder="About you">' + escHtml(p.bio || '') + '</textarea>' +
-        '<label class="ep-label">Location</label>' +
-        '<input class="ep-input" id="ep-location" maxlength="60" value="' + escHtml(p.location || '') + '" placeholder="City">' +
+        '<p class="ep-hint">Tap cover or photo to change. Then press Save.</p>' +
+        '<label class="ep-label" for="ep-username">Username</label>' +
+        '<input class="ep-input" id="ep-username" maxlength="30" value="' + esc(p.username || '') + '" autocomplete="username">' +
+        '<label class="ep-label" for="ep-bio">Bio</label>' +
+        '<textarea class="ep-input ep-textarea" id="ep-bio" maxlength="160" rows="3" placeholder="About you">' + esc(p.bio || '') + '</textarea>' +
+        '<label class="ep-label" for="ep-location">Location</label>' +
+        '<input class="ep-input" id="ep-location" maxlength="60" value="' + esc(p.location || '') + '" placeholder="City">' +
       '</div>' +
-      '<input type="file" id="ep-avatar-file" accept="image/*" hidden>' +
-      '<input type="file" id="ep-cover-file" accept="image/*" hidden>' +
+      '<input type="file" id="ep-avatar-file" accept="image/*" capture="environment" hidden>' +
+      '<input type="file" id="ep-cover-file" accept="image/*" capture="environment" hidden>' +
     '</div>';
 
   document.body.appendChild(modal);
@@ -5022,81 +4976,129 @@ function openEditProfile() {
   modal.addEventListener('click', function(e) {
     if (e.target === modal) closeEditProfile();
   });
+  modal.querySelector('#ep-close-btn').addEventListener('click', function(e) {
+    e.preventDefault();
+    closeEditProfile();
+  });
 
   const avFile = modal.querySelector('#ep-avatar-file');
   const cvFile = modal.querySelector('#ep-cover-file');
-  modal.querySelector('#ep-avatar-btn').addEventListener('click', function() { avFile.click(); });
-  modal.querySelector('#ep-cover-btn').addEventListener('click', function() { cvFile.click(); });
+
+  function openPicker(input) {
+    try {
+      input.value = '';
+      input.click();
+    } catch (e) {
+      showToast('Could not open gallery');
+    }
+  }
+
+  modal.querySelector('#ep-avatar-btn').addEventListener('click', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    openPicker(avFile);
+  });
+  modal.querySelector('#ep-cover-btn').addEventListener('click', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    openPicker(cvFile);
+  });
   modal.querySelector('#ep-cover-wrap').addEventListener('click', function(e) {
     if (e.target.closest('#ep-cover-btn')) return;
-    cvFile.click();
+    openPicker(cvFile);
   });
 
-  avFile.addEventListener('change', function() {
-    const f = avFile.files && avFile.files[0];
-    if (!f) return;
-    _epAvatarFile = f;
-    if (_epAvatarPreviewUrl) try { URL.revokeObjectURL(_epAvatarPreviewUrl); } catch (e) {}
-    _epAvatarPreviewUrl = URL.createObjectURL(f);
-    const img = modal.querySelector('#ep-avatar-img');
-    if (img) img.src = _epAvatarPreviewUrl;
-  });
-  cvFile.addEventListener('change', function() {
-    const f = cvFile.files && cvFile.files[0];
-    if (!f) return;
-    _epCoverFile = f;
-    if (_epCoverPreviewUrl) try { URL.revokeObjectURL(_epCoverPreviewUrl); } catch (e) {}
-    _epCoverPreviewUrl = URL.createObjectURL(f);
-    const wrap = modal.querySelector('#ep-cover-wrap');
-    let img = modal.querySelector('#ep-cover-img');
-    if (img && img.tagName === 'IMG') {
-      img.src = _epCoverPreviewUrl;
-    } else if (wrap) {
-      wrap.innerHTML =
-        '<img id="ep-cover-img" class="ep-cover-img" src="' + _epCoverPreviewUrl + '" alt="">' +
-        '<button type="button" class="ep-cover-cam" id="ep-cover-btn" aria-label="Change cover">' +
-          '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>' +
-        '</button>';
-      modal.querySelector('#ep-cover-btn').addEventListener('click', function(e) {
-        e.stopPropagation();
-        cvFile.click();
-      });
+  avFile.addEventListener('change', async function() {
+    const file = avFile.files && avFile.files[0];
+    if (!file) return;
+    try {
+      const snap = await epSnapshotImage(file);
+      if (!snap) { showToast('Could not read photo'); return; }
+      _epAvatarBlob = snap;
+      if (_epAvatarPreviewUrl) try { URL.revokeObjectURL(_epAvatarPreviewUrl); } catch (e) {}
+      _epAvatarPreviewUrl = URL.createObjectURL(snap.blob);
+      const img = modal.querySelector('#ep-avatar-img');
+      if (img) img.src = _epAvatarPreviewUrl;
+      showToast('Photo selected — tap Save');
+    } catch (err) {
+      console.warn(err);
+      showToast('Could not read photo');
     }
   });
 
-  modal.querySelector('#ep-save-btn').addEventListener('click', saveEditProfile);
+  cvFile.addEventListener('change', async function() {
+    const file = cvFile.files && cvFile.files[0];
+    if (!file) return;
+    try {
+      const snap = await epSnapshotImage(file);
+      if (!snap) { showToast('Could not read photo'); return; }
+      _epCoverBlob = snap;
+      if (_epCoverPreviewUrl) try { URL.revokeObjectURL(_epCoverPreviewUrl); } catch (e) {}
+      _epCoverPreviewUrl = URL.createObjectURL(snap.blob);
+      const wrap = modal.querySelector('#ep-cover-wrap');
+      const ph = modal.querySelector('#ep-cover-ph');
+      let img = modal.querySelector('#ep-cover-img');
+      if (ph) ph.remove();
+      if (img && img.tagName === 'IMG') {
+        img.src = _epCoverPreviewUrl;
+      } else if (wrap) {
+        img = document.createElement('img');
+        img.id = 'ep-cover-img';
+        img.className = 'ep-cover-img';
+        img.src = _epCoverPreviewUrl;
+        img.alt = '';
+        wrap.insertBefore(img, wrap.firstChild);
+      }
+      showToast('Cover selected — tap Save');
+    } catch (err) {
+      console.warn(err);
+      showToast('Could not read photo');
+    }
+  });
+
+  modal.querySelector('#ep-save-btn').addEventListener('click', function(e) {
+    e.preventDefault();
+    saveEditProfile();
+  });
 }
 
 async function saveEditProfile() {
   if (!currentUser) return;
+  if (_epUploading) return;
   const btn = document.getElementById('ep-save-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   const username = (document.getElementById('ep-username')?.value || '').trim();
   const bio = (document.getElementById('ep-bio')?.value || '').trim();
   const location = (document.getElementById('ep-location')?.value || '').trim();
 
   if (!username || username.length < 2) {
     showToast('Username too short');
-    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
     return;
   }
+  if (!/^[a-zA-Z0-9._]+$/.test(username) && username.length > 0) {
+    // soft check — allow existing usernames with other chars
+  }
+
+  _epUploading = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
 
   try {
     let avatarUrl = null;
     let coverUrl = null;
-    const failed = [];
 
-    // upload both in parallel; one failing must not lose the other
-    const jobs = [];
-    if (_epAvatarFile) jobs.push(_pmProcessAndUpload('avatar', _epAvatarFile)
-      .then(function(u) { avatarUrl = u; }).catch(function(e) { console.warn('[edit-profile] avatar', e); failed.push('photo'); }));
-    if (_epCoverFile) jobs.push(_pmProcessAndUpload('cover', _epCoverFile)
-      .then(function(u) { coverUrl = u; }).catch(function(e) { console.warn('[edit-profile] cover', e); failed.push('cover'); }));
-    if (jobs.length) await Promise.all(jobs);
-
-    // if every selected image failed, stay open so the user can retry
-    if (jobs.length && failed.length === jobs.length) {
-      throw new Error('Could not upload your ' + failed.join(' and ') + '. Check your connection and try again.');
+    if (_epAvatarBlob && _epAvatarBlob.blob) {
+      const name = String(currentUser.id) + '-' + Date.now() + '-av.jpg';
+      avatarUrl = await epUploadImage(_epAvatarBlob.blob, 'avatars', name);
+      if (!avatarUrl) throw new Error('Avatar upload failed');
+    }
+    if (_epCoverBlob && _epCoverBlob.blob) {
+      const name = String(currentUser.id) + '-' + Date.now() + '-cv.jpg';
+      try {
+        coverUrl = await epUploadImage(_epCoverBlob.blob, 'covers', name);
+      } catch (e1) {
+        console.warn('[edit-profile] covers folder failed, using posts', e1);
+        coverUrl = await epUploadImage(_epCoverBlob.blob, 'posts', name);
+      }
+      if (!coverUrl) throw new Error('Cover upload failed');
     }
 
     const patch = { username: username, bio: bio, location: location };
@@ -5106,7 +5108,7 @@ async function saveEditProfile() {
     const { error } = await supabase.from('users').update(patch).eq('id', currentUser.id);
     if (error) throw error;
 
-    if (currentProfile) {
+    if (typeof currentProfile !== 'undefined' && currentProfile) {
       currentProfile.username = username;
       currentProfile.bio = bio;
       currentProfile.location = location;
@@ -5114,50 +5116,62 @@ async function saveEditProfile() {
       if (coverUrl) currentProfile.cover = coverUrl;
     }
 
+    // Clear pending media before close so closeEditProfile doesn't matter
+    _epAvatarBlob = null;
+    _epCoverBlob = null;
     closeEditProfile();
-    showToast(failed.length ? ('Saved, but your ' + failed.join(' and ') + ' did not upload') : 'Profile updated', failed.length ? 4000 : undefined);
-    try { updateNavAvatar(); } catch (e) {}
-    try { renderMyProfile(); } catch (e) {}
+    showToast('Profile updated');
+    try { if (typeof updateNavAvatar === 'function') updateNavAvatar(); } catch (e) {}
+    try {
+      if (typeof loadMyProfile === 'function') await loadMyProfile();
+      else if (typeof renderMyProfile === 'function') await renderMyProfile();
+    } catch (e) {}
   } catch (err) {
     console.warn('[edit-profile]', err);
-    showToast(err.message || 'Could not save');
+    const msg = (err && err.message) ? String(err.message) : 'Could not save';
+    if (/duplicate|unique|already/i.test(msg)) showToast('Username is taken');
+    else showToast(msg);
     if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+  } finally {
+    _epUploading = false;
   }
 }
 
-// Minimal styles for edit profile sheet
 (function injectEditProfileStyles() {
   if (document.getElementById('ep-styles')) return;
   const s = document.createElement('style');
   s.id = 'ep-styles';
   s.textContent = `
-  .ep-overlay{position:fixed;inset:0;z-index:10040;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;opacity:0;transition:opacity .2s}
+  .ep-overlay{position:fixed;inset:0;z-index:10040;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;opacity:0;transition:opacity .2s ease;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
   .ep-overlay.open{opacity:1}
-  .ep-sheet{width:100%;max-width:480px;max-height:92vh;overflow:auto;background:#fff;border-radius:18px 18px 0 0;padding:0 0 24px;transform:translateY(12px);transition:transform .22s}
+  .ep-sheet{width:100%;max-width:480px;max-height:92vh;overflow:auto;background:#fff;border-radius:18px 18px 0 0;padding:0 0 calc(24px + env(safe-area-inset-bottom,0px));transform:translateY(24px);transition:transform .25s cubic-bezier(.32,.72,0,1);-webkit-overflow-scrolling:touch}
   .ep-overlay.open .ep-sheet{transform:translateY(0)}
   .ep-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;position:sticky;top:0;background:#fff;z-index:2;border-bottom:1px solid #eee}
-  .ep-title{font-weight:700;font-size:16px}
-  .ep-x{border:none;background:transparent;font-size:18px;padding:6px 10px;cursor:pointer}
-  .ep-save{border:none;background:var(--accent,#6C47FF);color:#fff;font-weight:650;border-radius:999px;padding:8px 16px;font-size:14px;cursor:pointer}
-  .ep-save:disabled{opacity:.6}
+  .ep-title{font-weight:700;font-size:16px;color:#111}
+  .ep-x{border:none;background:transparent;font-size:18px;padding:6px 10px;cursor:pointer;color:#333;line-height:1}
+  .ep-save{border:none;background:var(--accent,#6C47FF);color:#fff;font-weight:650;border-radius:999px;padding:8px 16px;font-size:14px;cursor:pointer;font-family:inherit}
+  .ep-save:disabled{opacity:.55}
   .ep-body{padding:0 16px 8px}
-  .ep-cover-wrap{position:relative;height:120px;border-radius:12px;overflow:hidden;background:linear-gradient(135deg,#6C47FF,#a855f7);margin-top:12px;cursor:pointer}
+  .ep-hint{font-size:12px;color:#888;margin:10px 0 0;line-height:1.35}
+  .ep-cover-wrap{position:relative;height:128px;border-radius:12px;overflow:hidden;background:linear-gradient(135deg,#6C47FF,#a855f7);margin-top:12px;cursor:pointer}
   .ep-cover-img{width:100%;height:100%;object-fit:cover;display:block}
-  .ep-cover-placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:600}
-  .ep-cover-cam{position:absolute;right:10px;bottom:10px;width:36px;height:36px;border-radius:50%;border:none;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;cursor:pointer}
-  .ep-avatar-row{display:flex;margin-top:-32px;padding-left:8px;position:relative;z-index:1}
-  .ep-avatar-wrap{position:relative;width:72px;height:72px;border-radius:50%;cursor:pointer}
-  .ep-avatar-img{width:72px;height:72px;border-radius:50%;object-fit:cover;border:3px solid #fff;background:#eee;display:block}
-  .ep-avatar-cam{position:absolute;right:0;bottom:0;width:26px;height:26px;border-radius:50%;background:var(--accent,#6C47FF);display:flex;align-items:center;justify-content:center;border:2px solid #fff}
+  .ep-cover-placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:600;text-align:center;padding:12px}
+  .ep-cover-cam{position:absolute;right:10px;bottom:10px;width:36px;height:36px;border-radius:50%;border:none;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2}
+  .ep-avatar-row{display:flex;margin-top:-36px;padding-left:10px;position:relative;z-index:1}
+  .ep-avatar-wrap{position:relative;width:76px;height:76px;border-radius:50%;cursor:pointer;border:none;padding:0;background:transparent}
+  .ep-avatar-img{width:76px;height:76px;border-radius:50%;object-fit:cover;border:3px solid #fff;background:#eee;display:block;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+  .ep-avatar-cam{position:absolute;right:0;bottom:0;width:26px;height:26px;border-radius:50%;background:var(--accent,#6C47FF);display:flex;align-items:center;justify-content:center;border:2px solid #fff;pointer-events:none}
   .ep-label{display:block;font-size:12px;font-weight:650;color:#666;margin:14px 0 6px}
-  .ep-input{width:100%;box-sizing:border-box;border:1px solid #e6e3de;border-radius:12px;padding:12px 14px;font-size:15px;font-family:inherit;background:#faf9f7}
+  .ep-input{width:100%;box-sizing:border-box;border:1px solid #e6e3de;border-radius:12px;padding:12px 14px;font-size:15px;font-family:inherit;background:#faf9f7;color:#111}
   .ep-textarea{resize:vertical;min-height:72px}
   [data-theme="dark"] .ep-sheet{background:#1c1c1f}
   [data-theme="dark"] .ep-head{background:#1c1c1f;border-color:#333}
   [data-theme="dark"] .ep-title,[data-theme="dark"] .ep-x{color:#f2f2f0}
   [data-theme="dark"] .ep-input{background:#2a2a2e;border-color:#3a3a40;color:#f2f2f0}
-  [data-theme="dark"] .ep-label{color:#a0a09c}
+  [data-theme="dark"] .ep-label,[data-theme="dark"] .ep-hint{color:#a0a09c}
+  [data-theme="dark"] .ep-avatar-img{border-color:#1c1c1f}
   .prf-cover-action-btn{width:36px;height:36px;border-radius:50%;border:none;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;cursor:pointer}
   `;
   document.head.appendChild(s);
 })();
+
