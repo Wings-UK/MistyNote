@@ -751,6 +751,7 @@ async function loadChatMessages(convId) {
     if (msgDate !== lastDate) {
       const divider = document.createElement('div');
       divider.className = 'chat-date-divider';
+      divider.dataset.date = msgDate;
       const today = new Date().toDateString();
       const yesterday = new Date(Date.now() - 86400000).toDateString();
       divider.innerHTML = `<span>${msgDate === today ? 'Today' : msgDate === yesterday ? 'Yesterday' : new Date(msg.created_at).toLocaleDateString('en-GB', {day:'numeric',month:'short'})}</span>`;
@@ -758,7 +759,11 @@ async function loadChatMessages(convId) {
       lastDate = msgDate;
     }
     const el = buildMessageEl(msg, lastSenderId);
-    if (el) msgsEl.appendChild(el);
+    if (el) {
+      // Keep a cheap timestamp on the row so later date checks are reliable
+      if (msg.created_at) el.dataset.createdAt = msg.created_at;
+      msgsEl.appendChild(el);
+    }
     if (!msg.deleted_at) lastSenderId = msg.sender_id;
     else lastSenderId = null;
   });
@@ -767,6 +772,68 @@ async function loadChatMessages(convId) {
   chatHydrateReactions(msgsEl);
   subscribeChatReactions(convId);
 }
+
+/**
+ * Ensure a date divider appears before a message when its calendar day
+ * differs from the last message already in the chat.
+ * Used by realtime inserts, catch-up, and optimistic sends so that the
+ * first message after midnight (or after a multi-day gap) always starts
+ * under a fresh "Today" / "Yesterday" / "12 Nov" heading.
+ */
+function chatEnsureDateDivider(msgsEl, msg) {
+  if (!msgsEl || !msg || !msg.created_at) return;
+
+  const msgDate = new Date(msg.created_at).toDateString();
+  const today = new Date().toDateString();
+  const yesterday = new Date(Date.now() - 86400000).toDateString();
+
+  // Find the most recent message row (ignore pure dividers / deleted placeholders)
+  const rows = msgsEl.querySelectorAll('.chat-msg-row');
+  const lastRow = rows.length ? rows[rows.length - 1] : null;
+
+  let lastDate = null;
+  if (lastRow) {
+    // Prefer the message object we attached
+    const prevMsg = lastRow._chatMsg;
+    if (prevMsg && prevMsg.created_at) {
+      lastDate = new Date(prevMsg.created_at).toDateString();
+    } else if (lastRow.dataset.createdAt) {
+      lastDate = new Date(lastRow.dataset.createdAt).toDateString();
+    } else {
+      // Walk backwards looking for a date divider that already has data-date
+      let el = lastRow.previousElementSibling;
+      while (el) {
+        if (el.classList.contains('chat-date-divider') && el.dataset.date) {
+          lastDate = el.dataset.date;
+          break;
+        }
+        if (el.classList.contains('chat-msg-row') && el._chatMsg && el._chatMsg.created_at) {
+          lastDate = new Date(el._chatMsg.created_at).toDateString();
+          break;
+        }
+        el = el.previousElementSibling;
+      }
+    }
+  }
+
+  // Same calendar day → nothing to do
+  if (msgDate === lastDate) return;
+
+  // Avoid duplicate "Today" if one was already inserted for this day
+  const existing = msgsEl.querySelector('.chat-date-divider[data-date="' + msgDate + '"]');
+  if (existing) return;
+
+  const divider = document.createElement('div');
+  divider.className = 'chat-date-divider';
+  divider.dataset.date = msgDate;
+  const label =
+    msgDate === today     ? 'Today' :
+    msgDate === yesterday ? 'Yesterday' :
+    new Date(msg.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  divider.innerHTML = '<span>' + label + '</span>';
+  msgsEl.appendChild(divider);
+}
+
 // ── Assign cluster classes for bubble shaping ──
 function assignClusterClasses(container) {
   const rows = Array.from(container.querySelectorAll('.chat-msg-row'));
@@ -2866,8 +2933,11 @@ async function chatSendVideo(item, text, replySnapshot, lastSenderId, msgsEl) {
     reply_to_id: replySnapshot?.id || null,
     _replySnapshot: replySnapshot,
   };
+  // First message after midnight / multi-day gap gets a fresh date heading
+  chatEnsureDateDivider(msgsEl, tmpVid);
   const el = buildMessageEl(tmpVid, lastSenderId);
   if (el && msgsEl) {
+    if (tmpVid.created_at) el.dataset.createdAt = tmpVid.created_at;
     msgsEl.appendChild(el);
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
@@ -2969,8 +3039,11 @@ async function chatSend(opts) {
       reply_to_id: replySnapshot?.id || null,
       _replySnapshot: replySnapshot,
     };
+    // First message after midnight / multi-day gap gets a fresh date heading
+    chatEnsureDateDivider(msgsEl, tmpImgMsg);
     const imgEl = buildMessageEl(tmpImgMsg, lastSenderId);
     if (imgEl && msgsEl) {
+      if (tmpImgMsg.created_at) imgEl.dataset.createdAt = tmpImgMsg.created_at;
       msgsEl.appendChild(imgEl);
       msgsEl.scrollTop = msgsEl.scrollHeight;
     }
@@ -3064,8 +3137,11 @@ async function chatSend(opts) {
     reply_to_id: replySnapshot?.id || null,
     _replySnapshot: replySnapshot,
   };
+  // First message after midnight / multi-day gap gets a fresh date heading
+  chatEnsureDateDivider(msgsEl, tmpMsg);
   const el = buildMessageEl(tmpMsg, lastSenderId);
   if (el && msgsEl) {
+    if (tmpMsg.created_at) el.dataset.createdAt = tmpMsg.created_at;
     msgsEl.appendChild(el);
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
@@ -3133,8 +3209,16 @@ async function chatCatchUp() {
       const lastSenderId = lastRow
         ? (lastRow.classList.contains('sent') ? currentUser.id : activeChatUserId)
         : null;
+      // First message of a new day gets its own date heading
+      chatEnsureDateDivider(msgsEl, msg);
       const el = buildMessageEl(msg, lastSenderId);
-      if (el) { msgsEl.appendChild(el); added++; lastText = msg.content || ''; lastTime = msg.created_at; }
+      if (el) {
+        if (msg.created_at) el.dataset.createdAt = msg.created_at;
+        msgsEl.appendChild(el);
+        added++;
+        lastText = msg.content || '';
+        lastTime = msg.created_at;
+      }
     });
     if (added) {
       msgsEl.scrollTop = msgsEl.scrollHeight;
@@ -3194,8 +3278,11 @@ function subscribeToChat(convId) {
           const lastSenderId = lastRow
             ? (lastRow.classList.contains('sent') ? currentUser?.id : activeChatUserId)
             : null;
+          // Insert "Today" / date heading when this is the first message of a new calendar day
+          chatEnsureDateDivider(msgsEl, msg);
           const el = buildMessageEl(msg, lastSenderId);
           if (el) {
+            if (msg.created_at) el.dataset.createdAt = msg.created_at;
             msgsEl.appendChild(el);
             msgsEl.scrollTop = msgsEl.scrollHeight;
           }
@@ -3738,8 +3825,11 @@ async function voiceSendDraft() {
     created_at: new Date().toISOString(),
     sender: typeof currentProfile !== 'undefined' ? currentProfile : null,
   };
+  // First message after midnight / multi-day gap gets a fresh date heading
+  chatEnsureDateDivider(msgsEl, tmpMsg);
   const el = buildMessageEl(tmpMsg, lastSenderId);
   if (el && msgsEl) {
+    if (tmpMsg.created_at) el.dataset.createdAt = tmpMsg.created_at;
     msgsEl.appendChild(el);
     msgsEl.scrollTop = msgsEl.scrollHeight;
   }
