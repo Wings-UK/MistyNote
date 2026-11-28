@@ -292,30 +292,42 @@ function injectProfileStyles() {
       cursor:pointer; border:none; transition:background .15s;
     }
     .prf-cover-action-btn:active { background:rgba(0,0,0,.55); }
-    /* Cover camera — bottom center of cover (not under top-right icons) */
+    /* Cover camera — bottom center, soft glass */
     .prf-cover-edit {
       position:absolute;
       left:50%;
-      bottom:14px;
+      bottom:16px;
       transform:translateX(-50%);
-      z-index:5;
-      width:40px;
-      height:40px;
+      z-index:6;
+      width:36px;
+      height:36px;
       border-radius:50%;
-      border:none;
-      background:rgba(0,0,0,0.55);
-      backdrop-filter:blur(10px);
-      -webkit-backdrop-filter:blur(10px);
+      border:1px solid rgba(255,255,255,0.35);
+      background:rgba(255,255,255,0.18);
+      backdrop-filter:blur(12px);
+      -webkit-backdrop-filter:blur(12px);
       display:flex;
       align-items:center;
       justify-content:center;
       cursor:pointer;
-      box-shadow:0 2px 10px rgba(0,0,0,0.25);
-      transition:transform .15s, background .15s;
+      box-shadow:none;
+      opacity:0.85;
+      transition:transform .15s, background .15s, opacity .15s;
+      padding:0;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .prf-cover-edit svg {
+      opacity:0.92;
+      pointer-events:none;
     }
     .prf-cover-edit:active {
       transform:translateX(-50%) scale(0.94);
-      background:rgba(0,0,0,0.7);
+      background:rgba(255,255,255,0.28);
+      opacity:1;
+    }
+    .prf-cover-edit.is-uploading {
+      opacity:0.5;
+      pointer-events:none;
     }
     /* ── AVATAR ROW — sits between cover and identity ── */
     .prf-avatar-row {
@@ -551,8 +563,8 @@ async function renderMyProfile() {
           <div></div>
           <div class="prf-cover-actions" onclick="event.stopPropagation()"></div>
         </div>
-        <button type="button" class="prf-cover-edit" onclick="event.stopPropagation();pickProfileMedia('cover')" title="Change cover photo" aria-label="Change cover photo">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        <button type="button" class="prf-cover-edit" id="prf-cover-edit-btn" onclick="event.stopPropagation();pickProfileMedia('cover')" title="Change cover photo" aria-label="Change cover photo">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.95)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
         </button>
       </div>
       <!-- AVATAR ROW -->
@@ -4857,46 +4869,79 @@ async function epUploadImage(blobOrFile, folder, filename) {
 
 function pickProfileMedia(kind) {
   if (!currentUser) { showToast('Sign in first'); return; }
+  if (_epUploading) { showToast('Still uploading…'); return; }
+
   const input = document.createElement('input');
   input.type = 'file';
-  input.accept = 'image/*';
+  input.accept = 'image/*,image/jpeg,image/png,image/webp,image/heic,image/heif';
   input.setAttribute('accept', 'image/*');
-  input.style.position = 'fixed';
-  input.style.left = '-9999px';
+  // Keep in DOM until change fires (required on some Android WebViews)
+  input.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:0.01;z-index:99999;';
   document.body.appendChild(input);
+
+  let handled = false;
+  const cleanup = function() {
+    setTimeout(function() { try { input.remove(); } catch (e) {} }, 1500);
+  };
+
   input.addEventListener('change', async function() {
+    if (handled) return;
+    handled = true;
     const file = input.files && input.files[0];
-    try { input.remove(); } catch (e) {}
+    cleanup();
     if (!file) return;
     await uploadProfileMedia(kind, file);
   });
-  // iOS sometimes needs a tick
-  setTimeout(function() { try { input.click(); } catch (e) { showToast('Could not open gallery'); } }, 10);
+
+  // If user cancels, still remove the input later
+  window.addEventListener('focus', function onFocus() {
+    window.removeEventListener('focus', onFocus);
+    setTimeout(function() {
+      if (!handled) cleanup();
+    }, 800);
+  }, { once: true });
+
+  try {
+    input.click();
+  } catch (e) {
+    cleanup();
+    showToast('Could not open gallery');
+  }
 }
 
 async function uploadProfileMedia(kind, file) {
   if (!file || !currentUser) return;
   if (_epUploading) return;
   _epUploading = true;
+
+  const btn = document.getElementById('prf-cover-edit-btn');
+  if (btn && kind === 'cover') btn.classList.add('is-uploading');
+
   showToast(kind === 'cover' ? 'Uploading cover…' : 'Uploading photo…');
   try {
+    // Snapshot immediately — mobile File handles go stale
     const snap = await epSnapshotImage(file);
-    if (!snap || !snap.blob) throw new Error('Could not read image');
-    const folder = kind === 'cover' ? 'covers' : 'avatars';
-    const filename = String(currentUser.id) + '-' + Date.now() + '.jpg';
-    let url;
-    try {
-      url = await epUploadImage(snap.blob, folder, filename);
-    } catch (e1) {
-      // Worker may not whitelist "covers" — fall back to posts folder
-      if (folder === 'covers') {
-        console.warn('[profile-media] covers folder failed, trying posts', e1);
-        url = await epUploadImage(snap.blob, 'posts', filename);
-      } else {
-        throw e1;
+    if (!snap || !snap.blob || !snap.blob.size) {
+      throw new Error('Could not read that image. Try another photo.');
+    }
+
+    const filename = String(currentUser.id) + '-' + Date.now() + (kind === 'cover' ? '-cover.jpg' : '-avatar.jpg');
+    let url = null;
+    const folders = kind === 'cover'
+      ? ['covers', 'posts', 'avatars']  // try covers first, then safe fallbacks
+      : ['avatars', 'posts'];
+
+    let lastErr = null;
+    for (const folder of folders) {
+      try {
+        url = await epUploadImage(snap.blob, folder, filename);
+        if (url) break;
+      } catch (e) {
+        lastErr = e;
+        console.warn('[profile-media] folder', folder, e);
       }
     }
-    if (!url) throw new Error('No URL returned');
+    if (!url) throw lastErr || new Error('Upload failed');
 
     const patch = kind === 'cover' ? { cover: url } : { avatar: url };
     const { error } = await supabase.from('users').update(patch).eq('id', currentUser.id);
@@ -4906,18 +4951,40 @@ async function uploadProfileMedia(kind, file) {
       if (kind === 'cover') currentProfile.cover = url;
       else currentProfile.avatar = url;
     }
+
+    // Optimistic UI: update cover image on page without waiting full reload
+    if (kind === 'cover') {
+      const wrap = document.querySelector('#my-profile-content .prf-cover') || document.querySelector('.prf-cover');
+      if (wrap) {
+        let img = wrap.querySelector('.prf-cover-img');
+        const grad = wrap.querySelector('.prf-cover-gradient');
+        if (grad) grad.remove();
+        if (!img) {
+          img = document.createElement('img');
+          img.className = 'prf-cover-img';
+          img.alt = '';
+          wrap.insertBefore(img, wrap.firstChild);
+        }
+        img.src = url;
+        wrap.style.cursor = 'pointer';
+      }
+    } else {
+      try { if (typeof updateNavAvatar === 'function') updateNavAvatar(); } catch (e) {}
+      document.querySelectorAll('.prf-avatar').forEach(function(el) { el.src = url; });
+    }
+
     showToast(kind === 'cover' ? 'Cover updated' : 'Photo updated');
     try { if (typeof updateNavAvatar === 'function') updateNavAvatar(); } catch (e) {}
-    // Refresh profile UI without full navigation jank
     try {
       if (typeof loadMyProfile === 'function') await loadMyProfile();
       else if (typeof renderMyProfile === 'function') await renderMyProfile();
     } catch (e) {}
   } catch (err) {
     console.warn('[profile-media]', err);
-    showToast((err && err.message) ? err.message : 'Upload failed');
+    showToast((err && err.message) ? String(err.message) : 'Upload failed');
   } finally {
     _epUploading = false;
+    if (btn) btn.classList.remove('is-uploading');
   }
 }
 
