@@ -262,15 +262,30 @@ function updateNavAvatar() {
 // PROFILE — Original MistyNote DNA, elevated
 // ══════════════════════════════════════════
 function injectProfileStyles() {
-  if (document.getElementById('prf-styles')) return;
+  // v2: cover camera uses dark glass + bottom vignette (visible on light/empty covers)
+  const existing = document.getElementById('prf-styles');
+  if (existing) {
+    if (existing.dataset.v === '2') return;
+    existing.remove(); // replace outdated styles from previous session
+  }
   const s = document.createElement('style');
   s.id = 'prf-styles';
+  s.dataset.v = '2';
   s.textContent = `
     .prf-wrap { display:flex; flex-direction:column; padding-bottom:120px; }
     /* ── COVER ── */
-    .prf-cover { position:relative; width:100%; height:190px; overflow:hidden; flex-shrink:0; }
+    .prf-cover { position:relative; width:100%; height:190px; overflow:hidden; flex-shrink:0; background:#1a1228; }
     .prf-cover-img { width:100%; height:100%; object-fit:cover; display:block; }
     .prf-cover-gradient { width:100%; height:100%; background:linear-gradient(135deg,#6C47FF 0%,#a855f7 50%,#ff3b5c 100%); }
+    /* Soft bottom vignette so the camera control is never on pure white */
+    .prf-cover::after {
+      content:'';
+      position:absolute; left:0; right:0; bottom:0;
+      height:80px;
+      background:linear-gradient(to top, rgba(0,0,0,0.42), transparent);
+      pointer-events:none;
+      z-index:3;
+    }
     /* ── TOP BAR OVER COVER ── */
     .prf-cover-bar {
       position:absolute; top:0; left:0; right:0;
@@ -292,37 +307,37 @@ function injectProfileStyles() {
       cursor:pointer; border:none; transition:background .15s;
     }
     .prf-cover-action-btn:active { background:rgba(0,0,0,.55); }
-    /* Cover camera — bottom center, soft glass */
+    /* Cover camera — dark frosted glass so it stays visible on light OR dark covers */
     .prf-cover-edit {
       position:absolute;
       left:50%;
       bottom:16px;
       transform:translateX(-50%);
       z-index:6;
-      width:36px;
-      height:36px;
+      width:40px;
+      height:40px;
       border-radius:50%;
-      border:1px solid rgba(255,255,255,0.35);
-      background:rgba(255,255,255,0.18);
+      border:1.5px solid rgba(255,255,255,0.45);
+      background:rgba(0,0,0,0.48);
       backdrop-filter:blur(12px);
       -webkit-backdrop-filter:blur(12px);
       display:flex;
       align-items:center;
       justify-content:center;
       cursor:pointer;
-      box-shadow:none;
-      opacity:0.85;
+      box-shadow:0 2px 12px rgba(0,0,0,0.28);
+      opacity:0.96;
       transition:transform .15s, background .15s, opacity .15s;
       padding:0;
       -webkit-tap-highlight-color:transparent;
     }
     .prf-cover-edit svg {
-      opacity:0.92;
+      opacity:1;
       pointer-events:none;
     }
     .prf-cover-edit:active {
       transform:translateX(-50%) scale(0.94);
-      background:rgba(255,255,255,0.28);
+      background:rgba(0,0,0,0.62);
       opacity:1;
     }
     .prf-cover-edit.is-uploading {
